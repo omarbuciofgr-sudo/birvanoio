@@ -12,7 +12,7 @@ const Footer = () => {
           {/* Logo & Description */}
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center mb-4">
-              <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto" />
+              <img src={brivanoLogo} alt="Brivano" className="h-28 w-auto" />
             </Link>
             <p className="text-muted-foreground max-w-sm">
               AI-powered B2B lead generation. Fresh, verified data delivered weekly 
