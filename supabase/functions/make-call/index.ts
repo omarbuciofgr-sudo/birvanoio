@@ -11,6 +11,9 @@ interface CallRequest {
   leadId: string;
 }
 
+const e164Regex = /^\+[1-9]\d{1,14}$/;
+const isE164 = (value: string) => e164Regex.test(value);
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,7 +31,24 @@ serve(async (req) => {
     const { to, leadId }: CallRequest = await req.json();
 
     if (!to) {
-      throw new Error("Missing required field: to");
+      return new Response(
+        JSON.stringify({ error: "Missing required field: to" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!isE164(to)) {
+      return new Response(
+        JSON.stringify({ error: "Phone number must be in E.164 format (example: +15551234567)." }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!isE164(twilioPhone)) {
+      return new Response(
+        JSON.stringify({ error: "Configured Twilio phone number must be in E.164 format." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     // Get the user from the authorization header
@@ -72,7 +92,11 @@ serve(async (req) => {
 
     if (!twilioResponse.ok) {
       console.error("Twilio error:", twilioData);
-      throw new Error(twilioData.message || "Failed to initiate call");
+      const status = typeof twilioData?.status === "number" ? twilioData.status : 500;
+      return new Response(
+        JSON.stringify({ error: twilioData.message || "Failed to initiate call", code: twilioData.code }),
+        { status, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     console.log("Call initiated successfully:", twilioData.sid);
