@@ -39,7 +39,7 @@ serve(async (req) => {
     );
 
     let clientId = "system";
-    let senderEmail = "onboarding@resend.dev"; // Default Resend sender
+    const senderEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
 
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
