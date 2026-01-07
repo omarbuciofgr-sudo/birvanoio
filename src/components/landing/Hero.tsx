@@ -27,7 +27,7 @@ const Hero = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8 animate-fade-in">
             <Zap className="w-4 h-4 text-primary" />
-            <span className="text-sm text-primary font-medium">AI-Powered Lead Generation</span>
+            <span className="text-sm text-primary font-medium">Leads + CRM in One Platform</span>
           </div>
 
           {/* Headline */}
@@ -35,9 +35,9 @@ const Hero = () => {
             className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 animate-fade-in"
             style={{ animationDelay: "0.1s" }}
           >
-            <span className="text-foreground">Maximize Your</span>
+            <span className="text-foreground">Your Team.</span>
             <br />
-            <span className="gradient-text">Business Potential</span>
+            <span className="gradient-text">Your Leads. Your CRM.</span>
           </h1>
 
           {/* Subheadline */}
@@ -45,8 +45,8 @@ const Hero = () => {
             className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-in"
             style={{ animationDelay: "0.2s" }}
           >
-            Brivano powers your pipeline with verified, source-linked B2B data every week. 
-            AI-enhanced lead generation built for every niche, every market, everywhere.
+            Brivano delivers verified B2B leads directly into a powerful CRM built for sales teams of any size. 
+            From solo reps to enterprise agencies — close more deals with less effort.
           </p>
 
           {/* CTA Buttons */}
@@ -79,15 +79,15 @@ const Hero = () => {
           >
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Target className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Verified Data</span>
+              <span className="text-sm text-muted-foreground">Verified Leads</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Shield className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Exclusive Lists</span>
+              <span className="text-sm text-muted-foreground">Built-in CRM</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Zap className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Weekly Delivery</span>
+              <span className="text-sm text-muted-foreground">AI-Powered Tools</span>
             </div>
           </div>
         </div>

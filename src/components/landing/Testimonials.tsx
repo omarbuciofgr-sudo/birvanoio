@@ -2,19 +2,24 @@ import { Quote } from "lucide-react";
 
 const testimonials = [
   {
-    quote: "We closed 3 new accounts in 30 days. The data was fresh and actually picked up.",
+    quote: "We closed 3 new accounts in 30 days. The CRM keeps my team organized and the leads are actually picking up.",
     author: "Sales Director",
-    company: "Real Estate Agency",
+    company: "Real Estate Brokerage",
   },
   {
-    quote: "Booked 9 meetings in two weeks from one city list.",
+    quote: "Finally, a platform built for sales teams. My reps went from juggling 5 tools to just using Brivano.",
+    author: "VP of Sales",
+    company: "Insurance Agency",
+  },
+  {
+    quote: "The AI recaps save us hours every week. Our follow-up game has never been stronger.",
     author: "SDR Manager",
     company: "SaaS Startup",
   },
   {
-    quote: "We tested their warm-appointments package—5 shows in 3 weeks. Way easier for my closers to focus on deals.",
+    quote: "We started with 2 seats and now have 15 reps on the platform. It scales perfectly with our growth.",
     author: "CEO",
-    company: "Insurance Brokerage",
+    company: "Marketing Agency",
   },
 ];
 
@@ -27,15 +32,15 @@ const Testimonials = () => {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            What Our <span className="gradient-text">Clients Say</span>
+            Trusted by Teams <span className="gradient-text">Big and Small</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Real results from businesses using Brivano to power their pipelines.
+            From solo reps to enterprise sales teams — see why businesses choose Brivano.
           </p>
         </div>
 
         {/* Testimonials Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {testimonials.map((testimonial, index) => (
             <div
               key={index}

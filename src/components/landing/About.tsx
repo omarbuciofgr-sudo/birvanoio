@@ -14,20 +14,18 @@ const About = () => {
             </h2>
             <div className="space-y-6 text-muted-foreground text-lg leading-relaxed">
               <p>
-                At Brivano, we believe business growth starts with better data.
+                At Brivano, we believe sales teams deserve better than recycled databases and clunky tools.
               </p>
               <p>
-                What began as a small project to help local companies find real decision-makers 
-                has evolved into a nationwide lead-generation powerhouse — powered by automation, 
-                accuracy, and integrity.
+                We built an all-in-one platform that delivers fresh, verified leads directly into a CRM 
+                designed for how modern teams actually work — with built-in calling, texting, email, and AI.
               </p>
               <p>
-                Every dataset we deliver is built from verified public sources, enriched through 
-                automation, and manually checked for accuracy.
+                Whether you are a solo rep building your book of business or an enterprise agency 
+                managing hundreds of accounts, Brivano scales with you.
               </p>
               <p className="text-foreground font-medium">
-                We're not another database — we're your partner in discovering the businesses 
-                you actually want to work with.
+                We are not just a lead provider — we are the platform your team uses to turn prospects into customers.
               </p>
             </div>
           </div>
@@ -58,9 +56,9 @@ const About = () => {
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                 <TrendingUp className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="font-display text-xl font-semibold text-foreground mb-2">Growth</h3>
+              <h3 className="font-display text-xl font-semibold text-foreground mb-2">Scalability</h3>
               <p className="text-muted-foreground">
-                We scale with you — from 100 leads a month to thousands across multiple cities.
+                From 1 seat to 100+ — our per-seat pricing and enterprise features grow with your team.
               </p>
             </div>
           </div>
