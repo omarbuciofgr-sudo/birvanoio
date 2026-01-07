@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      conversation_logs: {
+        Row: {
+          client_id: string
+          content: string | null
+          created_at: string
+          direction: string | null
+          duration_seconds: number | null
+          id: string
+          lead_id: string
+          subject: string | null
+          type: string
+        }
+        Insert: {
+          client_id: string
+          content?: string | null
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          lead_id: string
+          subject?: string | null
+          type: string
+        }
+        Update: {
+          client_id?: string
+          content?: string | null
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          lead_id?: string
+          subject?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           business_name: string
