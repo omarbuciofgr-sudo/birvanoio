@@ -16,28 +16,13 @@ const ProductDemo = () => {
           </p>
         </div>
 
-        {/* Dashboard Screenshot */}
+        {/* Dashboard Screenshot - Full Width */}
         <div className="relative">
           {/* Glow effect behind image */}
           <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-3xl scale-95" />
           
-          {/* Browser frame */}
-          <div className="relative bg-card border border-border rounded-2xl overflow-hidden shadow-2xl shadow-primary/10">
-            {/* Browser header */}
-            <div className="flex items-center gap-2 px-4 py-3 bg-secondary/50 border-b border-border">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                <div className="w-3 h-3 rounded-full bg-green-500/80" />
-              </div>
-              <div className="flex-1 mx-4">
-                <div className="bg-background/50 rounded-md px-4 py-1.5 text-sm text-muted-foreground max-w-md mx-auto text-center">
-                  app.brivano.com/leads
-                </div>
-              </div>
-            </div>
-            
-            {/* Screenshot */}
+          {/* Screenshot with subtle border */}
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-primary/10 border border-border/50">
             <img 
               src={dashboardMockup} 
               alt="Brivano CRM Dashboard showing lead management interface" 
