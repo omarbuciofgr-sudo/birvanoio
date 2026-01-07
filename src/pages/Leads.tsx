@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { CommunicationPanel } from "@/components/leads/CommunicationPanel";
+import { CSVImportDialog } from "@/components/leads/CSVImportDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Search, ExternalLink, Download, Filter } from "lucide-react";
+import { Search, ExternalLink, Download, Filter, Upload } from "lucide-react";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -51,6 +52,7 @@ const Leads = () => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -202,10 +204,16 @@ const Leads = () => {
               {filteredLeads.length} of {leads.length} leads
             </p>
           </div>
-          <Button onClick={exportLeads} variant="outline" className="gap-2">
-            <Download className="w-4 h-4" />
-            Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="gap-2">
+              <Upload className="w-4 h-4" />
+              Import CSV
+            </Button>
+            <Button onClick={exportLeads} variant="outline" className="gap-2">
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -447,6 +455,13 @@ const Leads = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* CSV Import Dialog */}
+        <CSVImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onImportComplete={fetchLeads}
+        />
       </div>
     </DashboardLayout>
   );
