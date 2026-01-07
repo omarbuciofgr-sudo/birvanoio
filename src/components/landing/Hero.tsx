@@ -35,9 +35,9 @@ const Hero = () => {
             className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 animate-fade-in"
             style={{ animationDelay: "0.1s" }}
           >
-            <span className="text-foreground">Your Team.</span>
+            <span className="gradient-text">Fresh Leads Delivered.</span>
             <br />
-            <span className="gradient-text">Your Leads. Your CRM.</span>
+            <span className="text-foreground">CRM Built In.</span>
           </h1>
 
           {/* Subheadline */}

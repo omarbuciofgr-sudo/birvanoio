@@ -28,8 +28,8 @@ const services = [
   },
   {
     icon: Building2,
-    title: "Enterprise Ready",
-    description: "Dedicated account managers, API access, custom integrations, and zip-level exclusivity for agencies and large teams.",
+    title: "Scales With You",
+    description: "From solo reps to large agencies — get dedicated support, API access, and custom integrations as you grow.",
   },
 ];
 
