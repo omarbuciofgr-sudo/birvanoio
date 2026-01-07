@@ -31,6 +31,8 @@ interface ConversationLog {
   content: string | null;
   duration_seconds: number | null;
   created_at: string;
+  recording_url: string | null;
+  call_sid: string | null;
 }
 
 interface CommunicationPanelProps {
@@ -226,18 +228,16 @@ export function CommunicationPanel({
     }
   };
 
-  const handleGenerateRecap = async () => {
+  const handleGenerateRecap = async (recordingUrl?: string) => {
     setRecapDialogOpen(true);
     setIsGeneratingRecap(true);
     setRecapEmail("");
     setRecapSms("");
 
     try {
-      // For demo, we'll use a placeholder recording URL
-      // In production, you'd get this from the conversation_logs or a stored recording
       const { data, error } = await supabase.functions.invoke("generate-call-recap", {
         body: { 
-          recordingUrl: "https://api.twilio.com/placeholder", 
+          recordingUrl: recordingUrl || null, 
           leadName: leadName || "Contact",
           businessName: businessName || "the company"
         },
@@ -253,6 +253,12 @@ export function CommunicationPanel({
     } finally {
       setIsGeneratingRecap(false);
     }
+  };
+
+  // Get the most recent call with a recording
+  const getLatestRecordingUrl = () => {
+    const callWithRecording = logs.find(log => log.type === "call" && log.recording_url);
+    return callWithRecording?.recording_url || null;
   };
 
   const sendRecapEmail = async () => {
@@ -510,7 +516,7 @@ export function CommunicationPanel({
             <Button variant="ghost" onClick={() => setRecapDialogOpen(false)}>
               Close
             </Button>
-            <Button variant="outline" onClick={handleGenerateRecap} disabled={isGeneratingRecap}>
+            <Button variant="outline" onClick={() => handleGenerateRecap(getLatestRecordingUrl() || undefined)} disabled={isGeneratingRecap}>
               <Sparkles className="w-4 h-4 mr-2" />
               Regenerate
             </Button>
@@ -557,7 +563,7 @@ export function CommunicationPanel({
         <Button
           variant="secondary"
           size="sm"
-          onClick={handleGenerateRecap}
+          onClick={() => handleGenerateRecap(getLatestRecordingUrl() || undefined)}
           className="w-full gap-2"
         >
           <Sparkles className="w-4 h-4" />
