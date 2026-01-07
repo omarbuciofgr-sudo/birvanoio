@@ -1,11 +1,12 @@
 import { Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 const plans = [
   {
     name: "Starter",
-    price: "$49",
-    period: "/seat/month",
+    monthlyPrice: 49,
+    yearlyPrice: 39,
     description: "Perfect for solo reps or small teams just getting started.",
     features: [
       "50 leads per seat/month",
@@ -18,8 +19,8 @@ const plans = [
   },
   {
     name: "Growth",
-    price: "$99",
-    period: "/seat/month",
+    monthlyPrice: 99,
+    yearlyPrice: 79,
     description: "For growing teams that need more leads and smarter tools.",
     features: [
       "150 leads per seat/month",
@@ -32,8 +33,8 @@ const plans = [
   },
   {
     name: "Scale",
-    price: "$149",
-    period: "/seat/month",
+    monthlyPrice: 149,
+    yearlyPrice: 119,
     description: "For agencies and teams that need volume and exclusivity.",
     features: [
       "300 leads per seat/month",
@@ -47,6 +48,8 @@ const plans = [
 ];
 
 const Pricing = () => {
+  const [isYearly, setIsYearly] = useState(false);
+  
   const scrollToContact = () => {
     document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
   };
@@ -61,9 +64,38 @@ const Pricing = () => {
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
             Choose Your <span className="gradient-text">Plan</span>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-8">
             Scale your lead generation with plans designed for every stage of growth.
           </p>
+          
+          {/* Billing Toggle */}
+          <div className="inline-flex items-center gap-4 p-1.5 rounded-full bg-card border border-border">
+            <button
+              onClick={() => setIsYearly(false)}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                !isYearly
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setIsYearly(true)}
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+                isYearly
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Yearly
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                isYearly ? "bg-primary-foreground/20" : "bg-primary/10 text-primary"
+              }`}>
+                Save 20%
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Pricing Cards */}
@@ -95,9 +127,14 @@ const Pricing = () => {
 
               <div className="mb-8">
                 <span className="font-display text-5xl font-bold text-foreground">
-                  {plan.price}
+                  ${isYearly ? plan.yearlyPrice : plan.monthlyPrice}
                 </span>
-                <span className="text-muted-foreground">{plan.period}</span>
+                <span className="text-muted-foreground">/seat/month</span>
+                {isYearly && (
+                  <div className="text-sm text-primary mt-1">
+                    Billed annually (${plan.yearlyPrice * 12}/seat/year)
+                  </div>
+                )}
               </div>
 
               <ul className="space-y-4 mb-8">
