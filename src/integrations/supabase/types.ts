@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       conversation_logs: {
         Row: {
+          call_sid: string | null
           client_id: string
           content: string | null
           created_at: string
@@ -23,10 +24,12 @@ export type Database = {
           duration_seconds: number | null
           id: string
           lead_id: string
+          recording_url: string | null
           subject: string | null
           type: string
         }
         Insert: {
+          call_sid?: string | null
           client_id: string
           content?: string | null
           created_at?: string
@@ -34,10 +37,12 @@ export type Database = {
           duration_seconds?: number | null
           id?: string
           lead_id: string
+          recording_url?: string | null
           subject?: string | null
           type: string
         }
         Update: {
+          call_sid?: string | null
           client_id?: string
           content?: string | null
           created_at?: string
@@ -45,6 +50,7 @@ export type Database = {
           duration_seconds?: number | null
           id?: string
           lead_id?: string
+          recording_url?: string | null
           subject?: string | null
           type?: string
         }

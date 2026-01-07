@@ -104,7 +104,7 @@ serve(async (req) => {
 
     console.log("Call initiated successfully:", twilioData.sid);
 
-    // Log the conversation
+    // Log the conversation with call_sid for recording callback matching
     if (leadId) {
       const { error: logError } = await supabase.from("conversation_logs").insert({
         lead_id: leadId,
@@ -112,6 +112,7 @@ serve(async (req) => {
         type: "call",
         direction: "outbound",
         content: "Call initiated via Twilio",
+        call_sid: twilioData.sid,
       });
 
       if (logError) {

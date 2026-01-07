@@ -27,45 +27,42 @@ serve(async (req) => {
 
     const { recordingUrl, leadName, businessName }: RecapRequest = await req.json();
 
-    if (!recordingUrl) {
-      return new Response(
-        JSON.stringify({ error: "Missing recordingUrl" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    console.log("Fetching transcription for recording:", recordingUrl);
-
-    // Fetch the transcription from Twilio (they auto-generate it)
-    // The transcription URL is the recording URL with /Transcriptions appended
-    const transcriptionUrl = `${recordingUrl}/Transcriptions.json`;
-    const credentials = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
-
     let transcriptionText = "";
-    
-    try {
-      const transcriptionResponse = await fetch(transcriptionUrl, {
-        headers: {
-          "Authorization": `Basic ${credentials}`,
-        },
-      });
+
+    // Only fetch transcription if we have a valid recording URL
+    if (recordingUrl && !recordingUrl.includes("placeholder")) {
+      console.log("Fetching transcription for recording:", recordingUrl);
+
+      // Fetch the transcription from Twilio (they auto-generate it)
+      const transcriptionUrl = `${recordingUrl}/Transcriptions.json`;
+      const credentials = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
       
-      if (transcriptionResponse.ok) {
-        const transcriptionData = await transcriptionResponse.json();
-        if (transcriptionData.transcriptions?.length > 0) {
-          // Fetch the actual transcription text
-          const transcriptDetailUrl = transcriptionData.transcriptions[0].uri.replace('.json', '/Transcriptions.json');
-          const detailResponse = await fetch(`https://api.twilio.com${transcriptDetailUrl}`, {
-            headers: { "Authorization": `Basic ${credentials}` },
-          });
-          if (detailResponse.ok) {
-            const detail = await detailResponse.json();
-            transcriptionText = detail.transcription_text || "";
+      try {
+        const transcriptionResponse = await fetch(transcriptionUrl, {
+          headers: {
+            "Authorization": `Basic ${credentials}`,
+          },
+        });
+        
+        if (transcriptionResponse.ok) {
+          const transcriptionData = await transcriptionResponse.json();
+          if (transcriptionData.transcriptions?.length > 0) {
+            // Fetch the actual transcription text
+            const transcriptDetailUrl = transcriptionData.transcriptions[0].uri.replace('.json', '/Transcriptions.json');
+            const detailResponse = await fetch(`https://api.twilio.com${transcriptDetailUrl}`, {
+              headers: { "Authorization": `Basic ${credentials}` },
+            });
+            if (detailResponse.ok) {
+              const detail = await detailResponse.json();
+              transcriptionText = detail.transcription_text || "";
+            }
           }
         }
+      } catch (e) {
+        console.log("Could not fetch Twilio transcription:", e);
       }
-    } catch (e) {
-      console.log("Could not fetch Twilio transcription, will use placeholder:", e);
+    } else {
+      console.log("No recording URL provided, generating generic recap");
     }
 
     // If no transcription available, use a placeholder for demo

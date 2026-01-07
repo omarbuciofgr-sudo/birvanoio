@@ -33,12 +33,7 @@ serve(async (req) => {
       recordingStatus,
     });
 
-    if (recordingStatus === "completed" && recordingUrl) {
-      // Find the conversation log with this call SID and update it with recording info
-      // Since we don't store callSid directly, we'll update the most recent call log
-      // In production, you'd want to store the callSid when creating the log
-      
-      // For now, log the recording info - the URL can be accessed with .mp3 or .wav extension
+    if (recordingStatus === "completed" && recordingUrl && callSid) {
       const fullRecordingUrl = `${recordingUrl}.mp3`;
       
       console.log("Recording completed:", {
@@ -47,8 +42,20 @@ serve(async (req) => {
         duration: recordingDuration,
       });
 
-      // You could store this in a recordings table or update the conversation_logs
-      // For now we just acknowledge receipt
+      // Update the conversation log with the recording URL
+      const { data, error: updateError } = await supabase
+        .from("conversation_logs")
+        .update({ 
+          recording_url: fullRecordingUrl,
+          duration_seconds: parseInt(recordingDuration) || null,
+        })
+        .eq("call_sid", callSid);
+
+      if (updateError) {
+        console.error("Error updating conversation log with recording:", updateError);
+      } else {
+        console.log("Successfully updated conversation log with recording URL");
+      }
     }
 
     return new Response(
