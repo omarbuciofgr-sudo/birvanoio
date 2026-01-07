@@ -76,6 +76,9 @@ serve(async (req) => {
     const formData = new URLSearchParams();
     formData.append("To", to);
     formData.append("From", twilioPhone);
+    // Enable call recording
+    formData.append("Record", "true");
+    formData.append("RecordingStatusCallback", `${Deno.env.get("SUPABASE_URL")}/functions/v1/recording-callback`);
     // TwiML that says a message - you can customize this
     formData.append("Twiml", `<Response><Say>Hello, this is a call from your CRM. Please hold while we connect you.</Say><Pause length="60"/></Response>`);
 
