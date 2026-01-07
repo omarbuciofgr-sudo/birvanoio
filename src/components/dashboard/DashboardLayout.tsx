@@ -54,9 +54,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-border">
+          <div className="flex items-center justify-between h-20 px-6 border-b border-border">
             <Link to="/" className="flex items-center">
-              <img src={brivanoLogo} alt="Brivano" className="h-12 w-auto" />
+              <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto" />
             </Link>
             <button
               className="lg:hidden text-muted-foreground"
