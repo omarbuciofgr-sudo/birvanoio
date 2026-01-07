@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   LayoutDashboard,
   Users,
@@ -127,6 +128,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex-1" />
+            <ThemeToggle />
           </div>
         </header>
 

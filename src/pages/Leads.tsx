@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { CommunicationPanel } from "@/components/leads/CommunicationPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Search, ExternalLink, Download, Filter } from "lucide-react";
 import { z } from "zod";
@@ -318,113 +320,130 @@ const Leads = () => {
 
         {/* Lead Detail Dialog */}
         <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
-          <DialogContent className="bg-card border-border max-w-2xl">
+          <DialogContent className="bg-card border-border max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display text-2xl">
                 {selectedLead?.business_name}
               </DialogTitle>
             </DialogHeader>
 
-            {selectedLead && (
-              <div className="space-y-6">
-                {/* Contact Info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact</p>
-                    <p className="text-foreground">{selectedLead.contact_name || "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="text-foreground">{selectedLead.email || "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="text-foreground">{selectedLead.phone || "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Location</p>
-                    <p className="text-foreground">
-                      {selectedLead.city}, {selectedLead.state} {selectedLead.zip_code}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Source URL */}
-                {selectedLead.source_url && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Source</p>
-                    <a
-                      href={selectedLead.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline inline-flex items-center gap-1"
-                    >
-                      {selectedLead.source_url} <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
-
-                {/* Status */}
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Status</p>
-                  <Select
-                    value={selectedLead.status}
-                    onValueChange={(value: LeadStatus) =>
-                      updateLeadStatus(selectedLead.id, value)
-                    }
-                    disabled={isUpdating}
-                  >
-                    <SelectTrigger className="w-48 bg-secondary/50 border-border">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Notes</p>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Add notes about this lead..."
-                    rows={4}
-                    className="bg-secondary/50 border-border resize-none"
-                  />
-                  <Button
-                    onClick={updateLeadNotes}
-                    disabled={isUpdating || notes === (selectedLead.notes || "")}
-                    className="mt-2"
-                    size="sm"
-                  >
-                    Save Notes
-                  </Button>
-                </div>
-
-                {/* Timestamps */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Added</p>
-                    <p className="text-sm text-foreground">
-                      {new Date(selectedLead.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  {selectedLead.contacted_at && (
+            {selectedLead && user && (
+              <Tabs defaultValue="details" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="communication">Communication</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="details" className="space-y-6 mt-4">
+                  {/* Contact Info */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-muted-foreground">First Contacted</p>
-                      <p className="text-sm text-foreground">
-                        {new Date(selectedLead.contacted_at).toLocaleDateString()}
+                      <p className="text-sm text-muted-foreground">Contact</p>
+                      <p className="text-foreground">{selectedLead.contact_name || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Email</p>
+                      <p className="text-foreground">{selectedLead.email || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Phone</p>
+                      <p className="text-foreground">{selectedLead.phone || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Location</p>
+                      <p className="text-foreground">
+                        {selectedLead.city}, {selectedLead.state} {selectedLead.zip_code}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Source URL */}
+                  {selectedLead.source_url && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Source</p>
+                      <a
+                        href={selectedLead.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        {selectedLead.source_url} <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   )}
-                </div>
-              </div>
+
+                  {/* Status */}
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Status</p>
+                    <Select
+                      value={selectedLead.status}
+                      onValueChange={(value: LeadStatus) =>
+                        updateLeadStatus(selectedLead.id, value)
+                      }
+                      disabled={isUpdating}
+                    >
+                      <SelectTrigger className="w-48 bg-secondary/50 border-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Notes</p>
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add notes about this lead..."
+                      rows={4}
+                      className="bg-secondary/50 border-border resize-none"
+                    />
+                    <Button
+                      onClick={updateLeadNotes}
+                      disabled={isUpdating || notes === (selectedLead.notes || "")}
+                      className="mt-2"
+                      size="sm"
+                    >
+                      Save Notes
+                    </Button>
+                  </div>
+
+                  {/* Timestamps */}
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Added</p>
+                      <p className="text-sm text-foreground">
+                        {new Date(selectedLead.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {selectedLead.contacted_at && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">First Contacted</p>
+                        <p className="text-sm text-foreground">
+                          {new Date(selectedLead.contacted_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="communication" className="mt-4">
+                  <CommunicationPanel
+                    leadId={selectedLead.id}
+                    clientId={user.id}
+                    leadEmail={selectedLead.email}
+                    leadPhone={selectedLead.phone}
+                    leadName={selectedLead.contact_name}
+                  />
+                </TabsContent>
+              </Tabs>
             )}
           </DialogContent>
         </Dialog>

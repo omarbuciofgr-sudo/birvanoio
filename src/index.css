@@ -8,63 +8,64 @@
 
 @layer base {
   :root {
-    /* Dark premium palette */
-    --background: 220 20% 4%;
-    --foreground: 210 20% 98%;
+    /* Light premium palette */
+    --background: 0 0% 100%;
+    --foreground: 220 20% 10%;
 
-    --card: 220 20% 7%;
-    --card-foreground: 210 20% 98%;
+    --card: 0 0% 98%;
+    --card-foreground: 220 20% 10%;
 
-    --popover: 220 20% 7%;
-    --popover-foreground: 210 20% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
 
     /* Electric cyan accent */
-    --primary: 190 100% 50%;
-    --primary-foreground: 220 20% 4%;
+    --primary: 190 100% 40%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 20% 12%;
-    --secondary-foreground: 210 20% 98%;
+    --secondary: 220 15% 94%;
+    --secondary-foreground: 220 20% 10%;
 
-    --muted: 220 15% 15%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
 
-    --accent: 190 100% 50%;
-    --accent-foreground: 220 20% 4%;
+    --accent: 190 100% 40%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 190 100% 50%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 190 100% 40%;
 
     --radius: 0.75rem;
 
     /* Brivano custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(190 100% 50%) 0%, hsl(210 100% 60%) 100%);
-    --gradient-dark: linear-gradient(180deg, hsl(220 20% 4%) 0%, hsl(220 25% 8%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(220 20% 10%) 0%, hsl(220 20% 6%) 100%);
-    --glow-primary: 0 0 40px hsl(190 100% 50% / 0.3);
-    --glow-subtle: 0 0 60px hsl(190 100% 50% / 0.15);
+    --gradient-primary: linear-gradient(135deg, hsl(190 100% 40%) 0%, hsl(210 100% 50%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 15% 97%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(220 15% 97%) 100%);
+    --glow-primary: 0 0 40px hsl(190 100% 40% / 0.2);
+    --glow-subtle: 0 0 60px hsl(190 100% 40% / 0.1);
 
     /* Status colors */
-    --status-new: 190 100% 50%;
-    --status-contacted: 45 100% 50%;
-    --status-qualified: 280 100% 60%;
-    --status-converted: 145 70% 50%;
+    --status-new: 190 100% 40%;
+    --status-contacted: 45 100% 45%;
+    --status-qualified: 280 100% 55%;
+    --status-converted: 145 70% 45%;
     --status-lost: 0 72% 51%;
 
-    --sidebar-background: 220 20% 6%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 190 100% 50%;
-    --sidebar-primary-foreground: 220 20% 4%;
-    --sidebar-accent: 220 15% 12%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 220 15% 15%;
-    --sidebar-ring: 190 100% 50%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 220 20% 20%;
+    --sidebar-primary: 190 100% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 94%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 15% 90%;
+    --sidebar-ring: 190 100% 40%;
   }
 
   .dark {
+    /* Dark premium palette */
     --background: 220 20% 4%;
     --foreground: 210 20% 98%;
 
@@ -92,6 +93,20 @@
     --border: 220 15% 18%;
     --input: 220 15% 18%;
     --ring: 190 100% 50%;
+
+    /* Brivano custom tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(190 100% 50%) 0%, hsl(210 100% 60%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(220 20% 4%) 0%, hsl(220 25% 8%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(220 20% 10%) 0%, hsl(220 20% 6%) 100%);
+    --glow-primary: 0 0 40px hsl(190 100% 50% / 0.3);
+    --glow-subtle: 0 0 60px hsl(190 100% 50% / 0.15);
+
+    /* Status colors */
+    --status-new: 190 100% 50%;
+    --status-contacted: 45 100% 50%;
+    --status-qualified: 280 100% 60%;
+    --status-converted: 145 70% 50%;
+    --status-lost: 0 72% 51%;
 
     --sidebar-background: 220 20% 6%;
     --sidebar-foreground: 210 20% 90%;
