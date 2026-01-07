@@ -12,6 +12,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import brivanoLogo from "@/assets/brivano-logo.png";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -54,11 +55,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-border">
-            <Link to="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="font-display font-bold text-primary-foreground text-sm">B</span>
-              </div>
-              <span className="font-display font-bold text-lg text-foreground">BRIVANO</span>
+            <Link to="/" className="flex items-center">
+              <img src={brivanoLogo} alt="Brivano" className="h-12 w-auto" />
             </Link>
             <button
               className="lg:hidden text-muted-foreground"
