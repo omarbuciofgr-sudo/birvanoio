@@ -32,7 +32,7 @@ const Testimonials = () => {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Trusted by Teams <span className="gradient-text">Big and Small</span>
+            Trusted by Teams <span className="gradient-text">Big and Small</span> and More
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             From solo reps to enterprise sales teams — see why businesses choose Brivano.
