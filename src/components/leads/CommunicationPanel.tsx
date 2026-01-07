@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send } from "lucide-react";
+import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ interface CommunicationPanelProps {
   leadEmail: string | null;
   leadPhone: string | null;
   leadName: string | null;
+  businessName?: string | null;
 }
 
 type LogType = "call" | "email" | "sms" | "note";
@@ -61,6 +62,7 @@ export function CommunicationPanel({
   leadEmail,
   leadPhone,
   leadName,
+  businessName,
 }: CommunicationPanelProps) {
   const [logs, setLogs] = useState<ConversationLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,8 +73,12 @@ export function CommunicationPanel({
   // Dialog states
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [recapDialogOpen, setRecapDialogOpen] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
+  const [isGeneratingRecap, setIsGeneratingRecap] = useState(false);
+  const [recapEmail, setRecapEmail] = useState("");
+  const [recapSms, setRecapSms] = useState("");
   const [emailBody, setEmailBody] = useState("");
   
   const [newLog, setNewLog] = useState<{
@@ -220,6 +226,89 @@ export function CommunicationPanel({
     }
   };
 
+  const handleGenerateRecap = async () => {
+    setRecapDialogOpen(true);
+    setIsGeneratingRecap(true);
+    setRecapEmail("");
+    setRecapSms("");
+
+    try {
+      // For demo, we'll use a placeholder recording URL
+      // In production, you'd get this from the conversation_logs or a stored recording
+      const { data, error } = await supabase.functions.invoke("generate-call-recap", {
+        body: { 
+          recordingUrl: "https://api.twilio.com/placeholder", 
+          leadName: leadName || "Contact",
+          businessName: businessName || "the company"
+        },
+      });
+
+      if (error) throw error;
+
+      setRecapEmail(data.emailContent || "");
+      setRecapSms(data.smsContent || "");
+    } catch (err: any) {
+      console.error("Recap error:", err);
+      toast.error(err.message || "Failed to generate recap");
+    } finally {
+      setIsGeneratingRecap(false);
+    }
+  };
+
+  const sendRecapEmail = async () => {
+    if (!leadEmail || !recapEmail) {
+      toast.error("Missing email content");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      // Extract subject from email content if present
+      const lines = recapEmail.split('\n');
+      let subject = `Call Follow-up - ${leadName || "Lead"}`;
+      let body = recapEmail;
+      
+      if (lines[0]?.toLowerCase().startsWith('subject:')) {
+        subject = lines[0].replace(/^subject:\s*/i, '').trim();
+        body = lines.slice(1).join('\n').trim();
+      }
+
+      const { error } = await supabase.functions.invoke("send-email", {
+        body: { to: leadEmail, subject, body, leadId },
+      });
+
+      if (error) throw error;
+      toast.success("Recap email sent!");
+      fetchLogs();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send email");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const sendRecapSms = async () => {
+    if (!leadPhone || !recapSms) {
+      toast.error("Missing SMS content");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const { error } = await supabase.functions.invoke("send-sms", {
+        body: { to: leadPhone, message: recapSms, leadId },
+      });
+
+      if (error) throw error;
+      toast.success("Recap SMS sent!");
+      fetchLogs();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send SMS");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const saveLog = async () => {
     const validation = logSchema.safeParse(newLog);
     if (!validation.success) {
@@ -347,9 +436,91 @@ export function CommunicationPanel({
         </DialogContent>
       </Dialog>
 
+      {/* Recap Dialog */}
+      <Dialog open={recapDialogOpen} onOpenChange={setRecapDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              AI-Generated Call Recap
+            </DialogTitle>
+          </DialogHeader>
+          
+          {isGeneratingRecap ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Generating recap with AI...</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Email Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Follow-up Email
+                  </label>
+                  <Button 
+                    size="sm" 
+                    onClick={sendRecapEmail}
+                    disabled={isSending || !leadEmail || !recapEmail}
+                  >
+                    {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                    Send Email
+                  </Button>
+                </div>
+                <Textarea
+                  value={recapEmail}
+                  onChange={(e) => setRecapEmail(e.target.value)}
+                  rows={8}
+                  placeholder="Email content will appear here..."
+                  className="font-mono text-sm"
+                />
+              </div>
+
+              {/* SMS Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    Follow-up SMS
+                    <span className="text-xs text-muted-foreground">({recapSms.length}/160)</span>
+                  </label>
+                  <Button 
+                    size="sm" 
+                    onClick={sendRecapSms}
+                    disabled={isSending || !leadPhone || !recapSms}
+                  >
+                    {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                    Send SMS
+                  </Button>
+                </div>
+                <Textarea
+                  value={recapSms}
+                  onChange={(e) => setRecapSms(e.target.value)}
+                  rows={2}
+                  placeholder="SMS content will appear here..."
+                  maxLength={160}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRecapDialogOpen(false)}>
+              Close
+            </Button>
+            <Button variant="outline" onClick={handleGenerateRecap} disabled={isGeneratingRecap}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-4">
         {/* Quick Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -381,6 +552,17 @@ export function CommunicationPanel({
             SMS
           </Button>
         </div>
+
+        {/* Generate Recap Button */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleGenerateRecap}
+          className="w-full gap-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          Generate AI Recap
+        </Button>
 
       {/* Add Log Button */}
       {!isAdding && (
