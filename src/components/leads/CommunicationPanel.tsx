@@ -44,6 +44,9 @@ interface CommunicationPanelProps {
 type LogType = "call" | "email" | "sms" | "note";
 type LogDirection = "inbound" | "outbound";
 
+const e164Regex = /^\+[1-9]\d{1,14}$/;
+const isE164 = (value: string) => e164Regex.test(value);
+
 const logSchema = z.object({
   type: z.enum(["call", "email", "sms", "note"]),
   direction: z.enum(["inbound", "outbound"]).optional(),
@@ -109,7 +112,11 @@ export function CommunicationPanel({
       toast.error("No phone number available");
       return;
     }
-    
+
+    if (!isE164(leadPhone)) {
+      toast.error("Lead phone must be in E.164 format (example: +15551234567)");
+      return;
+    }
     setIsSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("make-call", {
@@ -168,12 +175,28 @@ export function CommunicationPanel({
       toast.error("No phone number available");
       return;
     }
+
+    if (!isE164(leadPhone)) {
+      toast.error("Lead phone must be in E.164 format (example: +15551234567)");
+      return;
+    }
+
     setSmsMessage("");
     setSmsDialogOpen(true);
   };
 
   const sendSMS = async () => {
-    if (!leadPhone || !smsMessage) {
+    if (!leadPhone) {
+      toast.error("No phone number available");
+      return;
+    }
+
+    if (!isE164(leadPhone)) {
+      toast.error("Lead phone must be in E.164 format (example: +15551234567)");
+      return;
+    }
+
+    if (!smsMessage) {
       toast.error("Please enter a message");
       return;
     }
