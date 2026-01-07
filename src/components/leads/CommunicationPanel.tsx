@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, Mail, MessageSquare, Clock, Plus } from "lucide-react";
+import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -56,6 +63,14 @@ export function CommunicationPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  
+  // Dialog states
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
   
   const [newLog, setNewLog] = useState<{
     type: LogType;
@@ -89,14 +104,27 @@ export function CommunicationPanel({
     setIsLoading(false);
   };
 
-  const handleCall = () => {
+  const handleCall = async () => {
     if (!leadPhone) {
       toast.error("No phone number available");
       return;
     }
-    window.open(`tel:${leadPhone}`, "_self");
-    setNewLog({ ...newLog, type: "call", direction: "outbound" });
-    setIsAdding(true);
+    
+    setIsSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("make-call", {
+        body: { to: leadPhone, leadId },
+      });
+      
+      if (error) throw error;
+      toast.success("Call initiated successfully");
+      fetchLogs();
+    } catch (err: any) {
+      console.error("Call error:", err);
+      toast.error(err.message || "Failed to initiate call");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleEmail = () => {
@@ -104,10 +132,35 @@ export function CommunicationPanel({
       toast.error("No email address available");
       return;
     }
-    const subject = encodeURIComponent(`Following up - ${leadName || "Lead"}`);
-    window.open(`mailto:${leadEmail}?subject=${subject}`, "_self");
-    setNewLog({ ...newLog, type: "email", direction: "outbound" });
-    setIsAdding(true);
+    setEmailSubject(`Following up - ${leadName || "Lead"}`);
+    setEmailBody("");
+    setEmailDialogOpen(true);
+  };
+
+  const sendEmail = async () => {
+    if (!leadEmail || !emailSubject || !emailBody) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    
+    setIsSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-email", {
+        body: { to: leadEmail, subject: emailSubject, body: emailBody, leadId },
+      });
+      
+      if (error) throw error;
+      toast.success("Email sent successfully");
+      setEmailDialogOpen(false);
+      setEmailSubject("");
+      setEmailBody("");
+      fetchLogs();
+    } catch (err: any) {
+      console.error("Email error:", err);
+      toast.error(err.message || "Failed to send email");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleSMS = () => {
@@ -115,9 +168,33 @@ export function CommunicationPanel({
       toast.error("No phone number available");
       return;
     }
-    window.open(`sms:${leadPhone}`, "_self");
-    setNewLog({ ...newLog, type: "sms", direction: "outbound" });
-    setIsAdding(true);
+    setSmsMessage("");
+    setSmsDialogOpen(true);
+  };
+
+  const sendSMS = async () => {
+    if (!leadPhone || !smsMessage) {
+      toast.error("Please enter a message");
+      return;
+    }
+    
+    setIsSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-sms", {
+        body: { to: leadPhone, message: smsMessage, leadId },
+      });
+      
+      if (error) throw error;
+      toast.success("SMS sent successfully");
+      setSmsDialogOpen(false);
+      setSmsMessage("");
+      fetchLogs();
+    } catch (err: any) {
+      console.error("SMS error:", err);
+      toast.error(err.message || "Failed to send SMS");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const saveLog = async () => {
@@ -189,40 +266,98 @@ export function CommunicationPanel({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Quick Actions */}
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCall}
-          disabled={!leadPhone}
-          className="flex-1 gap-2"
-        >
-          <Phone className="w-4 h-4" />
-          Call
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleEmail}
-          disabled={!leadEmail}
-          className="flex-1 gap-2"
-        >
-          <Mail className="w-4 h-4" />
-          Email
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSMS}
-          disabled={!leadPhone}
-          className="flex-1 gap-2"
-        >
-          <MessageSquare className="w-4 h-4" />
-          SMS
-        </Button>
-      </div>
+    <>
+      {/* SMS Dialog */}
+      <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send SMS to {leadName || leadPhone}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              placeholder="Type your message..."
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSmsDialogOpen(false)} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button onClick={sendSMS} disabled={isSending || !smsMessage}>
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Send SMS
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Dialog */}
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send Email to {leadName || leadEmail}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Subject"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+            />
+            <Textarea
+              placeholder="Type your message..."
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+              rows={6}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmailDialogOpen(false)} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button onClick={sendEmail} disabled={isSending || !emailSubject || !emailBody}>
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-4">
+        {/* Quick Actions */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCall}
+            disabled={!leadPhone || isSending}
+            className="flex-1 gap-2"
+          >
+            {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
+            Call
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEmail}
+            disabled={!leadEmail}
+            className="flex-1 gap-2"
+          >
+            <Mail className="w-4 h-4" />
+            Email
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSMS}
+            disabled={!leadPhone}
+            className="flex-1 gap-2"
+          >
+            <MessageSquare className="w-4 h-4" />
+            SMS
+          </Button>
+        </div>
 
       {/* Add Log Button */}
       {!isAdding && (
@@ -359,8 +494,9 @@ export function CommunicationPanel({
               </div>
             ))}
           </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
