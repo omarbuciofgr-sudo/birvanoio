@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { CallDialog } from "./CallDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -76,6 +77,7 @@ export function CommunicationPanel({
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [recapDialogOpen, setRecapDialogOpen] = useState(false);
+  const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [isGeneratingRecap, setIsGeneratingRecap] = useState(false);
@@ -125,21 +127,27 @@ export function CommunicationPanel({
       toast.error("Lead phone must be in E.164 format (example: +15551234567)");
       return;
     }
-    setIsSending(true);
+    
+    // Open the call dialog immediately for visual feedback
+    setCallDialogOpen(true);
+    
     try {
       const { data, error } = await supabase.functions.invoke("make-call", {
         body: { to: leadPhone, leadId },
       });
       
       if (error) throw error;
-      toast.success("Call initiated successfully");
-      fetchLogs();
+      // Call initiated - dialog will show status
     } catch (err: any) {
       console.error("Call error:", err);
       toast.error(err.message || "Failed to initiate call");
-    } finally {
-      setIsSending(false);
+      setCallDialogOpen(false);
     }
+  };
+
+  const handleEndCall = () => {
+    fetchLogs();
+    toast.success("Call ended");
   };
 
   const handleEmail = () => {
@@ -385,6 +393,15 @@ export function CommunicationPanel({
 
   return (
     <>
+      {/* Call Dialog */}
+      <CallDialog
+        open={callDialogOpen}
+        onOpenChange={setCallDialogOpen}
+        leadName={leadName}
+        leadPhone={leadPhone}
+        onEndCall={handleEndCall}
+      />
+
       {/* SMS Dialog */}
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
         <DialogContent>
