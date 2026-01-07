@@ -29,7 +29,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Search, ExternalLink, Download, Filter } from "lucide-react";
+import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+
+const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 type LeadStatus = Database["public"]["Enums"]["lead_status"];
@@ -126,18 +129,25 @@ const Leads = () => {
   const updateLeadNotes = async () => {
     if (!selectedLead) return;
     
+    // Validate notes before submitting
+    const validation = notesSchema.safeParse(notes);
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
+      return;
+    }
+    
     setIsUpdating(true);
     const { error } = await supabase
       .from("leads")
-      .update({ notes })
+      .update({ notes: notes.trim() || null })
       .eq("id", selectedLead.id);
 
     if (error) {
-      toast.error("Failed to save notes");
+      toast.error("Failed to save notes. Please try again.");
     } else {
       toast.success("Notes saved");
       fetchLeads();
-      setSelectedLead({ ...selectedLead, notes });
+      setSelectedLead({ ...selectedLead, notes: notes.trim() || null });
     }
     setIsUpdating(false);
   };
