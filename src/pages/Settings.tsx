@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
+import { z } from "zod";
+
+const profileSchema = z.object({
+  first_name: z.string().trim().max(100, "First name must be less than 100 characters").optional().or(z.literal("")),
+  last_name: z.string().trim().max(100, "Last name must be less than 100 characters").optional().or(z.literal("")),
+  company_name: z.string().trim().max(200, "Company name must be less than 200 characters").optional().or(z.literal("")),
+});
 
 const Settings = () => {
   const { user, loading } = useAuth();
@@ -47,14 +54,26 @@ const Settings = () => {
   };
 
   const handleSave = async () => {
+    // Validate profile data before submitting
+    const validation = profileSchema.safeParse(profile);
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      toast.error(firstError.message);
+      return;
+    }
+
     setIsSaving(true);
     const { error } = await supabase
       .from("profiles")
-      .update(profile)
+      .update({
+        first_name: profile.first_name.trim() || null,
+        last_name: profile.last_name.trim() || null,
+        company_name: profile.company_name.trim() || null,
+      })
       .eq("user_id", user?.id);
 
     if (error) {
-      toast.error("Failed to save profile");
+      toast.error("Failed to save profile. Please try again.");
     } else {
       toast.success("Profile updated!");
     }

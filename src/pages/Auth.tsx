@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 
-const emailSchema = z.string().email("Please enter a valid email address");
+const emailSchema = z.string().trim().email("Please enter a valid email address").max(255, "Email must be less than 255 characters");
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters");
+const nameSchema = z.string().trim().max(100, "Name must be less than 100 characters");
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -55,9 +56,19 @@ const Auth = () => {
     if (!isLogin) {
       if (!firstName.trim()) {
         newErrors.firstName = "First name is required";
+      } else {
+        const firstNameResult = nameSchema.safeParse(firstName);
+        if (!firstNameResult.success) {
+          newErrors.firstName = firstNameResult.error.errors[0].message;
+        }
       }
       if (!lastName.trim()) {
         newErrors.lastName = "Last name is required";
+      } else {
+        const lastNameResult = nameSchema.safeParse(lastName);
+        if (!lastNameResult.success) {
+          newErrors.lastName = lastNameResult.error.errors[0].message;
+        }
       }
     }
 
@@ -100,8 +111,13 @@ const Auth = () => {
         toast.error("This email is already registered. Try signing in instead.");
       } else if (error.message?.includes("Invalid login credentials")) {
         toast.error("Invalid email or password. Please try again.");
+      } else if (error.message?.includes("Email rate limit exceeded")) {
+        toast.error("Too many attempts. Please try again later.");
+      } else if (error.message?.includes("Password should be at least")) {
+        toast.error("Password must be at least 8 characters.");
       } else {
-        toast.error(error.message || "An error occurred");
+        // Generic message for unexpected errors - don't expose system details
+        toast.error("Unable to process your request. Please try again or contact support.");
       }
     } finally {
       setIsLoading(false);
