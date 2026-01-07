@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.recording-callback]
 verify_jwt = false
+
+[functions.generate-call-recap]
+verify_jwt = false
