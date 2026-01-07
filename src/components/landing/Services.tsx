@@ -1,25 +1,35 @@
-import { Database, Users, Lock, Package } from "lucide-react";
+import { Database, Users, Lock, Phone, Sparkles, Building2 } from "lucide-react";
 
 const services = [
   {
     icon: Database,
-    title: "Intelligent Data Sourcing",
-    description: "Our proprietary scrapers collect live data from verified public sources - business registrations, chamber events, industry directories, and local listings - ensuring every lead is up to date and relevant to your exact niche.",
+    title: "Fresh, Verified Leads",
+    description: "Our proprietary scrapers collect live data from verified public sources. Every lead includes contact info, source URL, and is manually verified for accuracy.",
+  },
+  {
+    icon: Phone,
+    title: "All-in-One CRM",
+    description: "Call, text, and email leads directly from your dashboard. Track conversations, log notes, and never lose context on a deal again.",
+  },
+  {
+    icon: Sparkles,
+    title: "AI-Powered Recaps",
+    description: "After every call, our AI generates follow-up emails and texts automatically. Spend less time on admin, more time closing.",
   },
   {
     icon: Users,
-    title: "Human Quality Control",
-    description: "Every dataset goes through manual QC to confirm accuracy. We verify emails, phone numbers, source URL, and point of contact details so your team can trust the data they're calling.",
+    title: "Built for Teams",
+    description: "Per-seat pricing that scales with your organization. Whether you have 2 reps or 200, everyone gets the tools they need.",
   },
   {
     icon: Lock,
-    title: "Exclusivity & Customization",
-    description: "No recycled lists. You choose your cities, industries, and search filters. No matter what niche we can find it. Your leads are exclusively yours.",
+    title: "Exclusive Data",
+    description: "No recycled lists. Choose your cities, industries, and filters. Your leads are exclusively yours — not shared with competitors.",
   },
   {
-    icon: Package,
-    title: "Add-On Services",
-    description: "From multi-city searches to full exclusivity, our exports fit right into your CRM (CSV, JSON) and even done-for-you appointment setting. Brivano adapts to your growth strategy.",
+    icon: Building2,
+    title: "Enterprise Ready",
+    description: "Dedicated account managers, API access, custom integrations, and zip-level exclusivity for agencies and large teams.",
   },
 ];
 
@@ -32,15 +42,15 @@ const Services = () => {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Our Process & <span className="gradient-text">Capabilities</span>
+            Everything You Need to <span className="gradient-text">Close Deals</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            We don't sell databases — we deliver fresh intelligence tailored to your business needs.
+            Leads, CRM, and AI tools — all in one platform designed for sales teams that want results.
           </p>
         </div>
 
         {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {services.map((service, index) => (
             <div
               key={service.title}
@@ -62,9 +72,9 @@ const Services = () => {
 
         {/* Bottom CTA */}
         <div className="mt-16 text-center">
-          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-card border border-border">
-            <span className="text-muted-foreground">Works with any B2B niche:</span>
-            <span className="text-foreground font-medium">Real Estate • Healthcare • Insurance • SaaS • And More</span>
+          <div className="inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-full bg-card border border-border">
+            <span className="text-muted-foreground">Trusted by teams in:</span>
+            <span className="text-foreground font-medium">Real Estate • Insurance • SaaS • Healthcare • Agencies</span>
           </div>
         </div>
       </div>
