@@ -74,7 +74,7 @@ const Services = () => {
         <div className="mt-16 text-center">
           <div className="inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-full bg-card border border-border">
             <span className="text-muted-foreground">Trusted by teams in:</span>
-            <span className="text-foreground font-medium">Real Estate • Insurance • SaaS • Healthcare • Agencies</span>
+            <span className="text-foreground font-medium">Real Estate • Insurance • SaaS • Healthcare • Agencies • and More</span>
           </div>
         </div>
       </div>
