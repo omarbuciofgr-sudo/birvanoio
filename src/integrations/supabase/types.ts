@@ -362,6 +362,7 @@ export type Database = {
           ended_at: string | null
           id: string
           lead_id: string
+          recording_url: string | null
           script_template: string | null
           started_at: string | null
           status: string
@@ -376,6 +377,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           lead_id: string
+          recording_url?: string | null
           script_template?: string | null
           started_at?: string | null
           status?: string
@@ -390,6 +392,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           lead_id?: string
+          recording_url?: string | null
           script_template?: string | null
           started_at?: string | null
           status?: string

@@ -32,9 +32,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Phone, Mic, Play, Pause, Clock, CheckCircle, XCircle, AlertCircle, Bot, Wand2, Loader2, Settings } from "lucide-react";
+import { Phone, Mic, Play, Pause, Clock, CheckCircle, XCircle, AlertCircle, Bot, Wand2, Loader2, Settings, Volume2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ElevenLabsVoiceAgent } from "@/components/voice/ElevenLabsVoiceAgent";
+import { AudioRecordingPlayer } from "@/components/leads/AudioRecordingPlayer";
 
 interface VoiceCall {
   id: string;
@@ -46,6 +47,7 @@ interface VoiceCall {
   call_summary: string | null;
   call_outcome: string | null;
   duration_seconds: number | null;
+  recording_url: string | null;
   started_at: string | null;
   ended_at: string | null;
   created_at: string;
@@ -340,8 +342,13 @@ const VoiceAgent = () => {
                             {status.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDuration(call.duration_seconds)}
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            {formatDuration(call.duration_seconds)}
+                            {call.recording_url && (
+                              <Volume2 className="w-3 h-3 text-primary" />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {call.call_outcome ? (
@@ -517,6 +524,19 @@ const VoiceAgent = () => {
                   <p className="font-medium">{selectedCall.call_outcome || "—"}</p>
                 </div>
               </div>
+
+              {/* Recording Playback */}
+              {selectedCall.recording_url && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Call Recording</p>
+                  <div className="p-3 bg-secondary/50 rounded-lg">
+                    <AudioRecordingPlayer 
+                      recordingUrl={selectedCall.recording_url}
+                      duration={selectedCall.duration_seconds}
+                    />
+                  </div>
+                </div>
+              )}
 
               {selectedCall.script_template && (
                 <div>
