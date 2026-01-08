@@ -7,9 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Phone, Mail, Info } from "lucide-react";
+import { Phone, Mail, Info, User, Zap, MessageSquare, Clock } from "lucide-react";
+import { WebhookIntegrations } from "@/components/integrations/WebhookIntegrations";
+import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
+import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 
 // E.164 phone number validation (optional field)
 const e164Regex = /^\+[1-9]\d{1,14}$/;
@@ -115,156 +119,195 @@ const Settings = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 max-w-2xl">
+      <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="font-display text-3xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">Manage your account preferences.</p>
+          <p className="text-muted-foreground">Manage your account and integrations.</p>
         </div>
 
-        {/* Profile Settings */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Profile</CardTitle>
-            <CardDescription>Update your personal information.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  First Name
-                </label>
-                <Input
-                  value={profile.first_name}
-                  onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
-                  className="bg-secondary/50 border-border"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Last Name
-                </label>
-                <Input
-                  value={profile.last_name}
-                  onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
-                  className="bg-secondary/50 border-border"
-                />
-              </div>
-            </div>
+        <Tabs defaultValue="profile" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="profile" className="gap-2">
+              <User className="w-4 h-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Templates
+            </TabsTrigger>
+            <TabsTrigger value="scheduled" className="gap-2">
+              <Clock className="w-4 h-4" />
+              Scheduled
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="gap-2">
+              <Zap className="w-4 h-4" />
+              Integrations
+            </TabsTrigger>
+          </TabsList>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Company Name
-              </label>
-              <Input
-                value={profile.company_name}
-                onChange={(e) => setProfile({ ...profile, company_name: e.target.value })}
-                placeholder="Your company name"
-                className="bg-secondary/50 border-border"
-              />
-            </div>
+          {/* Profile Tab */}
+          <TabsContent value="profile" className="space-y-6 max-w-2xl">
+            {/* Profile Settings */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Profile</CardTitle>
+                <CardDescription>Update your personal information.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      First Name
+                    </label>
+                    <Input
+                      value={profile.first_name}
+                      onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
+                      className="bg-secondary/50 border-border"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Last Name
+                    </label>
+                    <Input
+                      value={profile.last_name}
+                      onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
+                      className="bg-secondary/50 border-border"
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Email
-              </label>
-              <Input
-                value={user.email || ""}
-                disabled
-                className="bg-secondary/50 border-border opacity-50"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Contact support to change your email address.
-              </p>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Company Name
+                  </label>
+                  <Input
+                    value={profile.company_name}
+                    onChange={(e) => setProfile({ ...profile, company_name: e.target.value })}
+                    placeholder="Your company name"
+                    className="bg-secondary/50 border-border"
+                  />
+                </div>
 
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
-          </CardContent>
-        </Card>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Email
+                  </label>
+                  <Input
+                    value={user.email || ""}
+                    disabled
+                    className="bg-secondary/50 border-border opacity-50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Contact support to change your email address.
+                  </p>
+                </div>
 
-        {/* Communication Settings */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <Phone className="w-5 h-5" />
-              Communication Settings
-            </CardTitle>
-            <CardDescription>
-              Set up your personal phone number and email so leads see your contact info when you reach out.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Personal Phone Number */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">
-                Your Phone Number
-              </label>
-              <Input
-                value={profile.twilio_phone_number}
-                onChange={(e) => setProfile({ ...profile, twilio_phone_number: e.target.value })}
-                placeholder="+15551234567"
-                className="bg-secondary/50 border-border"
-              />
-              <div className="flex items-start gap-2 p-3 rounded-md bg-secondary/30 border border-border">
-                <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                  Enter your personal or business phone number in international format (e.g., +15551234567 for US, +447911123456 for UK). 
-                  This number will appear as the caller ID when you call or text leads — perfect for realtors and professionals who want leads to recognize them.
-                </p>
-              </div>
-            </div>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </CardContent>
+            </Card>
 
-            <Separator />
+            {/* Communication Settings */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <Phone className="w-5 h-5" />
+                  Communication Settings
+                </CardTitle>
+                <CardDescription>
+                  Set up your personal phone number and email so leads see your contact info when you reach out.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Personal Phone Number */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    Your Phone Number
+                  </label>
+                  <Input
+                    value={profile.twilio_phone_number}
+                    onChange={(e) => setProfile({ ...profile, twilio_phone_number: e.target.value })}
+                    placeholder="+15551234567"
+                    className="bg-secondary/50 border-border"
+                  />
+                  <div className="flex items-start gap-2 p-3 rounded-md bg-secondary/30 border border-border">
+                    <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Enter your personal or business phone number in international format (e.g., +15551234567 for US, +447911123456 for UK). 
+                      This number will appear as the caller ID when you call or text leads — perfect for realtors and professionals who want leads to recognize them.
+                    </p>
+                  </div>
+                </div>
 
-            {/* Sender Email */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Your Email Address
-              </label>
-              <Input
-                value={profile.sender_email}
-                onChange={(e) => setProfile({ ...profile, sender_email: e.target.value })}
-                placeholder="you@yourdomain.com"
-                className="bg-secondary/50 border-border"
-              />
-              <div className="flex items-start gap-2 p-3 rounded-md bg-secondary/30 border border-border">
-                <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                  Enter your personal or business email address. Leads will see this as the sender when you email them, 
-                  building trust and brand recognition. Domain verification may be required for deliverability.
-                </p>
-              </div>
-            </div>
+                <Separator />
 
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Communication Settings"}
-            </Button>
-          </CardContent>
-        </Card>
+                {/* Sender Email */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Your Email Address
+                  </label>
+                  <Input
+                    value={profile.sender_email}
+                    onChange={(e) => setProfile({ ...profile, sender_email: e.target.value })}
+                    placeholder="you@yourdomain.com"
+                    className="bg-secondary/50 border-border"
+                  />
+                  <div className="flex items-start gap-2 p-3 rounded-md bg-secondary/30 border border-border">
+                    <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Enter your personal or business email address. Leads will see this as the sender when you email them, 
+                      building trust and brand recognition. Domain verification may be required for deliverability.
+                    </p>
+                  </div>
+                </div>
 
-        {/* Subscription Info */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Subscription</CardTitle>
-            <CardDescription>Your current plan and billing information.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-              <div>
-                <p className="font-medium text-foreground">Current Plan</p>
-                <p className="text-sm text-muted-foreground">
-                  Contact us to upgrade or manage your subscription.
-                </p>
-              </div>
-              <Button variant="outline" asChild>
-                <a href="mailto:hello@brivano.io">Contact Support</a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Communication Settings"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Subscription Info */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Subscription</CardTitle>
+                <CardDescription>Your current plan and billing information.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                  <div>
+                    <p className="font-medium text-foreground">Current Plan</p>
+                    <p className="text-sm text-muted-foreground">
+                      Contact us to upgrade or manage your subscription.
+                    </p>
+                  </div>
+                  <Button variant="outline" asChild>
+                    <a href="mailto:hello@brivano.io">Contact Support</a>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Templates Tab */}
+          <TabsContent value="templates">
+            <MessageTemplatesLibrary userId={user.id} />
+          </TabsContent>
+
+          {/* Scheduled Tab */}
+          <TabsContent value="scheduled">
+            <ScheduledMessages userId={user.id} />
+          </TabsContent>
+
+          {/* Integrations Tab */}
+          <TabsContent value="integrations" className="space-y-6">
+            <WebhookIntegrations userId={user.id} />
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

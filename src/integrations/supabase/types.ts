@@ -227,61 +227,118 @@ export type Database = {
           business_name: string
           city: string | null
           client_id: string
+          company_size: string | null
           contact_name: string | null
           contacted_at: string | null
           converted_at: string | null
           created_at: string
           email: string | null
+          estimated_revenue: string | null
           id: string
           industry: string | null
           lead_score: number | null
+          linkedin_url: string | null
           notes: string | null
           phone: string | null
+          social_profiles: Json | null
           source_url: string | null
           state: string | null
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
+          website: string | null
           zip_code: string | null
         }
         Insert: {
           business_name: string
           city?: string | null
           client_id: string
+          company_size?: string | null
           contact_name?: string | null
           contacted_at?: string | null
           converted_at?: string | null
           created_at?: string
           email?: string | null
+          estimated_revenue?: string | null
           id?: string
           industry?: string | null
           lead_score?: number | null
+          linkedin_url?: string | null
           notes?: string | null
           phone?: string | null
+          social_profiles?: Json | null
           source_url?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
+          website?: string | null
           zip_code?: string | null
         }
         Update: {
           business_name?: string
           city?: string | null
           client_id?: string
+          company_size?: string | null
           contact_name?: string | null
           contacted_at?: string | null
           converted_at?: string | null
           created_at?: string
           email?: string | null
+          estimated_revenue?: string | null
           id?: string
           industry?: string | null
           lead_score?: number | null
+          linkedin_url?: string | null
           notes?: string | null
           phone?: string | null
+          social_profiles?: Json | null
           source_url?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
+          website?: string | null
           zip_code?: string | null
+        }
+        Relationships: []
+      }
+      message_templates: {
+        Row: {
+          body: string
+          category: string | null
+          client_id: string
+          created_at: string
+          id: string
+          is_shared: boolean
+          name: string
+          subject: string | null
+          type: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          body: string
+          category?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          is_shared?: boolean
+          name: string
+          subject?: string | null
+          type: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          body?: string
+          category?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_shared?: boolean
+          name?: string
+          subject?: string | null
+          type?: string
+          updated_at?: string
+          usage_count?: number
         }
         Relationships: []
       }
@@ -329,6 +386,91 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      scheduled_messages: {
+        Row: {
+          body: string
+          client_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          lead_id: string
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          subject: string | null
+          type: string
+        }
+        Insert: {
+          body: string
+          client_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id: string
+          scheduled_for: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          type: string
+        }
+        Update: {
+          body?: string
+          client_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          assigned_to: string
+          id: string
+          lead_id: string
+          notes: string | null
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by: string
+          assigned_to: string
+          id?: string
+          lead_id: string
+          notes?: string | null
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          assigned_to?: string
+          id?: string
+          lead_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_assignments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -406,6 +548,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      webhook_integrations: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          last_triggered_at: string | null
+          name: string
+          trigger_event: string
+          webhook_url: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+          name: string
+          trigger_event: string
+          webhook_url: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+          name?: string
+          trigger_event?: string
+          webhook_url?: string
+        }
+        Relationships: []
       }
     }
     Views: {
