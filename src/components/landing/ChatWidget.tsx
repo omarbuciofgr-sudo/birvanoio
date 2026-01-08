@@ -46,7 +46,7 @@ const ChatWidget = () => {
     setMessages(prev => [...prev, tempMessage]);
 
     try {
-      // Save to database
+      // Save to database - notifications are handled server-side via database trigger
       const { error } = await supabase
         .from('chat_messages')
         .insert({
@@ -55,12 +55,14 @@ const ChatWidget = () => {
           message: messageText
         });
 
-      if (error) throw error;
-
-      // Send notification email
-      await supabase.functions.invoke('chat-notification', {
-        body: { message: messageText, sessionId }
-      });
+      if (error) {
+        // Check for rate limit violation
+        if (error.message?.includes('rate') || error.code === '23514') {
+          toast.error("Too many messages. Please wait a moment before sending another.");
+          return;
+        }
+        throw error;
+      }
 
       toast.success("Message sent! We'll get back to you shortly.");
     } catch (error) {
