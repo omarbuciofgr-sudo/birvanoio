@@ -6,6 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Sanitize error messages to avoid leaking internal details
+const sanitizeError = (error: any, operation: string): { message: string; status: number } => {
+  console.error(`Error in ${operation}:`, error);
+  return { message: `Failed to ${operation}. Please try again or contact support.`, status: 500 };
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -63,10 +69,10 @@ serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
-    console.error("Error in recording-callback:", error);
+    const { message, status } = sanitizeError(error, "process recording callback");
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      JSON.stringify({ error: message }),
+      { status, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });

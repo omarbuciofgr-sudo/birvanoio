@@ -1,15 +1,38 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://esm.sh/zod@3.22.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface RecapRequest {
-  recordingUrl: string;
-  leadName: string;
-  businessName: string;
-}
+// Input validation schema
+const recapSchema = z.object({
+  recordingUrl: z.string().url("Invalid recording URL").optional().or(z.literal("")),
+  leadName: z.string().max(100, "Lead name too long").optional().default(""),
+  businessName: z.string().max(200, "Business name too long").optional().default(""),
+});
+
+// Sanitize error messages to avoid leaking internal details
+const sanitizeError = (error: any, operation: string): { message: string; status: number } => {
+  console.error(`Error in ${operation}:`, error);
+
+  const errorMessage = error?.message?.toLowerCase() || "";
+
+  if (errorMessage.includes("not configured") || errorMessage.includes("api key")) {
+    return { message: "Service temporarily unavailable", status: 503 };
+  }
+
+  if (errorMessage.includes("rate limit") || errorMessage.includes("too many")) {
+    return { message: "Too many requests, please try again later", status: 429 };
+  }
+
+  if (errorMessage.includes("credits") || errorMessage.includes("exhausted")) {
+    return { message: "Service credits exhausted. Please contact support.", status: 402 };
+  }
+
+  return { message: `Failed to ${operation}. Please try again or contact support.`, status: 500 };
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,7 +48,18 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const { recordingUrl, leadName, businessName }: RecapRequest = await req.json();
+    // Parse and validate input
+    const rawInput = await req.json();
+    const validation = recapSchema.safeParse(rawInput);
+
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: validation.error.errors.map(e => e.message) }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const { recordingUrl, leadName, businessName } = validation.data;
 
     let transcriptionText = "";
 
@@ -110,13 +144,13 @@ Please create:
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+          JSON.stringify({ error: "Too many requests, please try again later" }),
           { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
       if (aiResponse.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds." }),
+          JSON.stringify({ error: "Service credits exhausted. Please contact support." }),
           { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
@@ -159,10 +193,10 @@ Please create:
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
-    console.error("Error in generate-call-recap:", error);
+    const { message, status } = sanitizeError(error, "generate recap");
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      JSON.stringify({ error: message }),
+      { status, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });
