@@ -13,6 +13,8 @@ import {
   Menu,
   X,
   Upload,
+  Mail,
+  Bot,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -23,6 +25,8 @@ interface DashboardLayoutProps {
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/dashboard/leads", icon: Users },
+  { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
+  { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];

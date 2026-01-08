@@ -106,6 +106,122 @@ export type Database = {
           },
         ]
       }
+      email_campaign_steps: {
+        Row: {
+          body_template: string
+          campaign_id: string
+          created_at: string
+          delay_days: number
+          id: string
+          step_order: number
+          subject_template: string
+        }
+        Insert: {
+          body_template: string
+          campaign_id: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_order: number
+          subject_template: string
+        }
+        Update: {
+          body_template?: string
+          campaign_id?: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_order?: number
+          subject_template?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaign_steps_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_campaigns: {
+        Row: {
+          client_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lead_campaign_enrollments: {
+        Row: {
+          campaign_id: string
+          current_step: number
+          enrolled_at: string
+          id: string
+          last_step_sent_at: string | null
+          lead_id: string
+          next_send_at: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          current_step?: number
+          enrolled_at?: string
+          id?: string
+          last_step_sent_at?: string | null
+          lead_id: string
+          next_send_at?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          current_step?: number
+          enrolled_at?: string
+          id?: string
+          last_step_sent_at?: string | null
+          lead_id?: string
+          next_send_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_campaign_enrollments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_campaign_enrollments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           business_name: string
@@ -231,6 +347,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      voice_agent_calls: {
+        Row: {
+          ai_transcript: string | null
+          call_outcome: string | null
+          call_summary: string | null
+          client_id: string
+          created_at: string
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          lead_id: string
+          script_template: string | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          ai_transcript?: string | null
+          call_outcome?: string | null
+          call_summary?: string | null
+          client_id: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          lead_id: string
+          script_template?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          ai_transcript?: string | null
+          call_outcome?: string | null
+          call_summary?: string | null
+          client_id?: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          lead_id?: string
+          script_template?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_agent_calls_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
