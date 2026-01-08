@@ -213,55 +213,64 @@ export function CSVImportDialog({ open, onOpenChange, onImportComplete }: CSVImp
     setStep("importing");
     setIsLoading(true);
 
-    let successCount = 0;
-    let failedCount = 0;
+    try {
+      // Transform CSV data to lead objects
+      const leads = csvData
+        .map(row => {
+          const lead: Record<string, string | null> = {};
+          
+          for (const [indexStr, field] of Object.entries(columnMapping)) {
+            const index = parseInt(indexStr);
+            if (field !== "skip" && row[index]) {
+              lead[field] = row[index];
+            }
+          }
+          
+          return lead;
+        })
+        .filter(lead => lead.business_name); // Only include leads with business_name
 
-    for (const row of csvData) {
-      const lead: Record<string, string> = {};
-      
-      for (const [indexStr, field] of Object.entries(columnMapping)) {
-        const index = parseInt(indexStr);
-        if (field !== "skip" && row[index]) {
-          lead[field] = row[index];
-        }
+      if (leads.length === 0) {
+        toast.error("No valid leads to import (all rows missing business name)");
+        setImportResult({ success: 0, failed: csvData.length });
+        setIsLoading(false);
+        return;
       }
 
-      // Skip rows without business name
-      if (!lead.business_name) {
-        failedCount++;
-        continue;
-      }
+      const skippedCount = csvData.length - leads.length;
 
-      const { error } = await supabase.from("leads").insert({
-        client_id: selectedClientId,
-        business_name: lead.business_name,
-        contact_name: lead.contact_name || null,
-        email: lead.email || null,
-        phone: lead.phone || null,
-        city: lead.city || null,
-        state: lead.state || null,
-        zip_code: lead.zip_code || null,
-        industry: lead.industry || null,
-        source_url: lead.source_url || null,
-        notes: lead.notes || null,
-        status: "new",
+      // Call server-side edge function for secure import
+      const { data, error } = await supabase.functions.invoke("import-leads", {
+        body: {
+          targetClientId: selectedClientId,
+          leads: leads,
+        },
       });
 
       if (error) {
-        console.error("Failed to import lead:", error);
-        failedCount++;
-      } else {
-        successCount++;
+        console.error("Import failed:", error);
+        toast.error(error.message || "Failed to import leads");
+        setImportResult({ success: 0, failed: csvData.length });
+        setIsLoading(false);
+        return;
       }
+
+      const successCount = data?.imported || 0;
+      const failedCount = (data?.failed || 0) + skippedCount;
+
+      setImportResult({ success: successCount, failed: failedCount });
+
+      if (successCount > 0) {
+        toast.success(`Successfully imported ${successCount} leads`);
+        onImportComplete();
+      }
+    } catch (err) {
+      console.error("Import error:", err);
+      toast.error("An unexpected error occurred during import");
+      setImportResult({ success: 0, failed: csvData.length });
     }
 
-    setImportResult({ success: successCount, failed: failedCount });
     setIsLoading(false);
-
-    if (successCount > 0) {
-      toast.success(`Successfully imported ${successCount} leads`);
-      onImportComplete();
-    }
   };
 
   const handleClose = () => {
