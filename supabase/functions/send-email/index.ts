@@ -84,6 +84,29 @@ serve(async (req) => {
       }
     }
 
+    // Verify lead ownership before sending email
+    if (leadId && clientId !== "system") {
+      const { data: lead, error: leadError } = await supabase
+        .from("leads")
+        .select("client_id")
+        .eq("id", leadId)
+        .single();
+
+      if (leadError || !lead) {
+        return new Response(
+          JSON.stringify({ error: "Lead not found" }),
+          { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      if (lead.client_id !== clientId) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized: Lead does not belong to user" }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    }
+
     console.log(`Sending email to ${to} with subject: ${subject}`);
 
     // Send email via Resend API
