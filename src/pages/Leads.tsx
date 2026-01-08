@@ -5,6 +5,8 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { CommunicationPanel } from "@/components/leads/CommunicationPanel";
 import { CSVImportDialog } from "@/components/leads/CSVImportDialog";
 import { LeadScoreBadge } from "@/components/leads/LeadScoreBadge";
+import { LeadKanbanBoard } from "@/components/leads/LeadKanbanBoard";
+import { LeadActivityTimeline } from "@/components/leads/LeadActivityTimeline";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +34,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Search, ExternalLink, Download, Filter, Upload, Sparkles } from "lucide-react";
+import { Search, ExternalLink, Download, Filter, Upload, Sparkles, LayoutGrid, List } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -56,6 +59,7 @@ const Leads = () => {
   const [notes, setNotes] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -207,14 +211,24 @@ const Leads = () => {
               {filteredLeads.length} of {leads.length} leads
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban")}>
+              <ToggleGroupItem value="table" aria-label="Table view" className="gap-1.5">
+                <List className="w-4 h-4" />
+                <span className="hidden sm:inline">Table</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5">
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Kanban</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
             <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="gap-2">
               <Upload className="w-4 h-4" />
-              Import CSV
+              <span className="hidden sm:inline">Import CSV</span>
             </Button>
             <Button onClick={exportLeads} variant="outline" className="gap-2">
               <Download className="w-4 h-4" />
-              Export CSV
+              <span className="hidden sm:inline">Export CSV</span>
             </Button>
           </div>
         </div>
@@ -246,100 +260,111 @@ const Leads = () => {
           </Select>
         </div>
 
-        {/* Table */}
-        <div className="rounded-lg border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-secondary/50">
-                <TableHead>Business</TableHead>
-                <TableHead className="hidden md:table-cell">Contact</TableHead>
-                <TableHead className="hidden lg:table-cell">Location</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden sm:table-cell">Score</TableHead>
-                <TableHead className="hidden sm:table-cell">Source</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLeads.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    No leads found
-                  </TableCell>
+        {/* View Content */}
+        {viewMode === "kanban" ? (
+          <LeadKanbanBoard
+            leads={filteredLeads}
+            onLeadClick={(lead) => {
+              setSelectedLead(lead);
+              setNotes(lead.notes || "");
+            }}
+            onLeadsUpdate={fetchLeads}
+          />
+        ) : (
+          <div className="rounded-lg border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-secondary/50">
+                  <TableHead>Business</TableHead>
+                  <TableHead className="hidden md:table-cell">Contact</TableHead>
+                  <TableHead className="hidden lg:table-cell">Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden sm:table-cell">Score</TableHead>
+                  <TableHead className="hidden sm:table-cell">Source</TableHead>
                 </TableRow>
-              ) : (
-                filteredLeads.map((lead) => (
-                  <TableRow
-                    key={lead.id}
-                    className="cursor-pointer hover:bg-secondary/30"
-                    onClick={() => {
-                      setSelectedLead(lead);
-                      setNotes(lead.notes || "");
-                    }}
-                  >
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{lead.business_name}</p>
-                        <p className="text-sm text-muted-foreground md:hidden">
-                          {lead.contact_name}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <div>
-                        <p className="text-foreground">{lead.contact_name}</p>
-                        <p className="text-sm text-muted-foreground">{lead.email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {lead.city}, {lead.state}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                          lead.status === "new"
-                            ? "bg-status-new/20 text-status-new"
-                            : lead.status === "contacted"
-                            ? "bg-status-contacted/20 text-status-contacted"
-                            : lead.status === "qualified"
-                            ? "bg-status-qualified/20 text-status-qualified"
-                            : lead.status === "converted"
-                            ? "bg-status-converted/20 text-status-converted"
-                            : "bg-status-lost/20 text-status-lost"
-                        }`}
-                      >
-                        {lead.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
-                      <LeadScoreBadge 
-                        leadId={lead.id} 
-                        score={lead.lead_score ?? null}
-                        onScoreUpdate={(newScore) => {
-                          setLeads(prev => prev.map(l => 
-                            l.id === lead.id ? { ...l, lead_score: newScore } : l
-                          ));
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {lead.source_url && (
-                        <a
-                          href={lead.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline inline-flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          View <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
+              </TableHeader>
+              <TableBody>
+                {filteredLeads.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                      No leads found
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  filteredLeads.map((lead) => (
+                    <TableRow
+                      key={lead.id}
+                      className="cursor-pointer hover:bg-secondary/30"
+                      onClick={() => {
+                        setSelectedLead(lead);
+                        setNotes(lead.notes || "");
+                      }}
+                    >
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-foreground">{lead.business_name}</p>
+                          <p className="text-sm text-muted-foreground md:hidden">
+                            {lead.contact_name}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <div>
+                          <p className="text-foreground">{lead.contact_name}</p>
+                          <p className="text-sm text-muted-foreground">{lead.email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+                        {lead.city}, {lead.state}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                            lead.status === "new"
+                              ? "bg-status-new/20 text-status-new"
+                              : lead.status === "contacted"
+                              ? "bg-status-contacted/20 text-status-contacted"
+                              : lead.status === "qualified"
+                              ? "bg-status-qualified/20 text-status-qualified"
+                              : lead.status === "converted"
+                              ? "bg-status-converted/20 text-status-converted"
+                              : "bg-status-lost/20 text-status-lost"
+                          }`}
+                        >
+                          {lead.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                        <LeadScoreBadge 
+                          leadId={lead.id} 
+                          score={lead.lead_score ?? null}
+                          onScoreUpdate={(newScore) => {
+                            setLeads(prev => prev.map(l => 
+                              l.id === lead.id ? { ...l, lead_score: newScore } : l
+                            ));
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {lead.source_url && (
+                          <a
+                            href={lead.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline inline-flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Lead Detail Dialog */}
         <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
