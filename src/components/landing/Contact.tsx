@@ -73,21 +73,17 @@ const Contact = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-foreground mb-1">Book a Demo</h3>
-                  <p className="text-muted-foreground text-sm mb-2">15-minute walkthrough of your custom lead plan</p>
+                  <a 
+                    href="https://calendly.com/brivano/15min" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                  >
+                    Schedule a 15-minute walkthrough
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
                 </div>
               </div>
-            </div>
-
-            {/* Calendly Embed */}
-            <div className="rounded-xl overflow-hidden border border-border bg-card">
-              <iframe
-                src="https://calendly.com/brivano/15min?hide_gdpr_banner=1&background_color=1a1a2e&text_color=ffffff&primary_color=10b981"
-                width="100%"
-                height="400"
-                frameBorder="0"
-                title="Schedule a demo"
-                className="w-full"
-              />
             </div>
           </div>
 
