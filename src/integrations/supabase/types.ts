@@ -290,6 +290,7 @@ export type Database = {
           avatar_url: string | null
           company_name: string | null
           created_at: string
+          elevenlabs_agent_id: string | null
           email: string
           first_name: string | null
           id: string
@@ -303,6 +304,7 @@ export type Database = {
           avatar_url?: string | null
           company_name?: string | null
           created_at?: string
+          elevenlabs_agent_id?: string | null
           email: string
           first_name?: string | null
           id?: string
@@ -316,6 +318,7 @@ export type Database = {
           avatar_url?: string | null
           company_name?: string | null
           created_at?: string
+          elevenlabs_agent_id?: string | null
           email?: string
           first_name?: string | null
           id?: string

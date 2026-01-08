@@ -100,8 +100,36 @@ const VoiceAgent = () => {
     if (user) {
       fetchCalls();
       fetchLeads();
+      fetchProfile();
     }
   }, [user]);
+
+  const fetchProfile = async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("elevenlabs_agent_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!error && data?.elevenlabs_agent_id) {
+      setElevenLabsAgentId(data.elevenlabs_agent_id);
+    }
+  };
+
+  const saveAgentId = async (agentId: string) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ elevenlabs_agent_id: agentId })
+      .eq("user_id", user.id);
+
+    if (error) {
+      toast.error("Failed to save Agent ID");
+    } else {
+      toast.success("Agent ID saved to profile");
+    }
+  };
 
   const fetchCalls = async () => {
     const { data, error } = await supabase
@@ -356,12 +384,21 @@ const VoiceAgent = () => {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">ElevenLabs Agent ID</label>
-              <Input
-                value={elevenLabsAgentId}
-                onChange={(e) => setElevenLabsAgentId(e.target.value)}
-                placeholder="Enter your ElevenLabs Agent ID"
-                className="mt-1"
-              />
+              <div className="flex gap-2 mt-1">
+                <Input
+                  value={elevenLabsAgentId}
+                  onChange={(e) => setElevenLabsAgentId(e.target.value)}
+                  placeholder="Enter your ElevenLabs Agent ID"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => saveAgentId(elevenLabsAgentId)}
+                  disabled={!elevenLabsAgentId}
+                >
+                  Save
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Create an agent at{" "}
                 <a 
