@@ -16,6 +16,46 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@brivanoio" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://brivano.lovable.app/#organization",
+          "name": "Brivano",
+          "url": "https://brivano.lovable.app",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://brivano.lovable.app/favicon.png"
+          },
+          "sameAs": ["https://twitter.com/brivanoio"]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://brivano.lovable.app/#website",
+          "url": "https://brivano.lovable.app",
+          "name": "Brivano",
+          "publisher": {"@id": "https://brivano.lovable.app/#organization"}
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Brivano",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "description": "AI-powered B2B lead generation platform delivering fresh, verified leads weekly for any niche and market.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+          },
+          "provider": {"@id": "https://brivano.lovable.app/#organization"}
+        }
+      ]
+    }
+    </script>
   </head>
 
   <body>
