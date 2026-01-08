@@ -1,5 +1,4 @@
 import { Phone, MessageSquare, Mail, Mic, Sparkles, LayoutDashboard } from "lucide-react";
-import dashboardMockup from "@/assets/dashboard-mockup.png";
 
 const features = [
   {
@@ -55,37 +54,24 @@ const CRMShowcase = () => {
           </p>
         </div>
 
-        {/* Features Grid + Screenshot */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          {/* Features */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {features.map((feature) => (
-              <div
-                key={feature.title}
-                className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <feature.icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="font-display text-lg font-semibold text-foreground mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {feature.description}
-                </p>
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-all duration-300"
+            >
+              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                <feature.icon className="w-6 h-6 text-primary" />
               </div>
-            ))}
-          </div>
-
-          {/* Screenshot */}
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 rounded-2xl blur-3xl" />
-            <img
-              src={dashboardMockup}
-              alt="Brivano CRM Dashboard"
-              className="relative rounded-2xl border border-border shadow-2xl shadow-primary/10"
-            />
-          </div>
+              <h3 className="font-display text-lg font-semibold text-foreground mb-2">
+                {feature.title}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {feature.description}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
