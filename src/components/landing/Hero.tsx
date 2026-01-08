@@ -1,10 +1,10 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, Shield, Target, Globe } from "lucide-react";
+import SampleLeadsModal from "./SampleLeadsModal";
 
 const Hero = () => {
-  const scrollToContact = () => {
-    document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
-  };
+  const [modalOpen, setModalOpen] = useState(false);
 
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
@@ -57,7 +57,7 @@ const Hero = () => {
             <Button
               size="lg"
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-lg px-8 py-6 glow-box group"
-              onClick={scrollToContact}
+              onClick={() => setModalOpen(true)}
             >
               Get 10 Sample Leads
               <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -96,6 +96,8 @@ const Hero = () => {
           </div>
         </div>
       </div>
+
+      <SampleLeadsModal open={modalOpen} onOpenChange={setModalOpen} />
     </section>
   );
 };

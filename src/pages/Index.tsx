@@ -10,6 +10,7 @@ import FAQ from "@/components/landing/FAQ";
 import About from "@/components/landing/About";
 import Contact from "@/components/landing/Contact";
 import Footer from "@/components/landing/Footer";
+import ChatWidget from "@/components/landing/ChatWidget";
 
 const Index = () => {
   return (
@@ -26,6 +27,7 @@ const Index = () => {
       <About />
       <Contact />
       <Footer />
+      <ChatWidget />
     </div>
   );
 };
