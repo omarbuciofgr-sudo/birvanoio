@@ -3,23 +3,31 @@ import { Quote } from "lucide-react";
 const testimonials = [
   {
     quote: "We closed 3 new accounts in 30 days. The CRM keeps my team organized and the leads are actually picking up.",
-    author: "Sales Director",
-    company: "Real Estate Brokerage",
+    author: "Marcus T.",
+    role: "Sales Director",
+    company: "Austin Real Estate Group",
+    metric: "3 deals in 30 days",
   },
   {
     quote: "Finally, a platform built for sales teams. My reps went from juggling 5 tools to just using Brivano.",
-    author: "VP of Sales",
-    company: "Insurance Agency",
+    author: "Jennifer L.",
+    role: "VP of Sales",
+    company: "SecureLife Insurance",
+    metric: "5 tools → 1 platform",
   },
   {
     quote: "The AI recaps save us hours every week. Our follow-up game has never been stronger.",
-    author: "SDR Manager",
-    company: "SaaS Startup",
+    author: "David K.",
+    role: "SDR Manager",
+    company: "CloudScale SaaS",
+    metric: "4+ hours saved weekly",
   },
   {
     quote: "We started with 2 seats and now have 15 reps on the platform. It scales perfectly with our growth.",
-    author: "CEO",
-    company: "Marketing Agency",
+    author: "Sarah M.",
+    role: "CEO",
+    company: "GrowthFirst Agency",
+    metric: "2 → 15 seats in 6 months",
   },
 ];
 
@@ -44,15 +52,21 @@ const Testimonials = () => {
           {testimonials.map((testimonial, index) => (
             <div
               key={index}
-              className="p-8 rounded-2xl bg-card border border-border hover:border-primary/30 transition-all duration-300"
+              className="p-8 rounded-2xl bg-card border border-border hover:border-primary/30 transition-all duration-300 flex flex-col"
             >
-              <Quote className="w-10 h-10 text-primary/30 mb-6" />
-              <p className="text-foreground text-lg leading-relaxed mb-6">
+              {/* Result Badge */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-4 w-fit">
+                {testimonial.metric}
+              </div>
+              
+              <Quote className="w-8 h-8 text-primary/30 mb-4" />
+              <p className="text-foreground leading-relaxed mb-6 flex-1">
                 "{testimonial.quote}"
               </p>
-              <div>
+              <div className="border-t border-border pt-4">
                 <p className="font-medium text-foreground">{testimonial.author}</p>
-                <p className="text-sm text-muted-foreground">{testimonial.company}</p>
+                <p className="text-sm text-muted-foreground">{testimonial.role}</p>
+                <p className="text-xs text-muted-foreground/70">{testimonial.company}</p>
               </div>
             </div>
           ))}
