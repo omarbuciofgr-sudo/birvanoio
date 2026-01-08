@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          sender_type: string
+          session_id: string
+          visitor_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          sender_type: string
+          session_id?: string
+          visitor_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          sender_type?: string
+          session_id?: string
+          visitor_email?: string | null
+        }
+        Relationships: []
+      }
       conversation_logs: {
         Row: {
           call_sid: string | null
