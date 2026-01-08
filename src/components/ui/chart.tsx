@@ -58,6 +58,50 @@ const ChartContainer = React.forwardRef<
 });
 ChartContainer.displayName = "Chart";
 
+/**
+ * SECURITY: Sanitizes CSS color values to prevent CSS injection attacks.
+ * Only allows valid CSS color formats: hex, rgb, rgba, hsl, hsla, and named colors.
+ * Any value that doesn't match these patterns is rejected.
+ */
+const sanitizeCssColor = (color: string): string | null => {
+  if (!color || typeof color !== 'string') return null;
+  
+  const trimmed = color.trim();
+  
+  // Valid CSS color patterns
+  const validPatterns = [
+    /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, // hex: #fff, #ffffff, #ffffffff
+    /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/, // rgb(255, 255, 255)
+    /^rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*[\d.]+\s*\)$/, // rgba(255, 255, 255, 0.5)
+    /^hsl\(\s*\d{1,3}\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*\)$/, // hsl(360, 100%, 50%)
+    /^hsla\(\s*\d{1,3}\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+\s*\)$/, // hsla(360, 100%, 50%, 0.5)
+    /^[a-zA-Z]+$/, // named colors: red, blue, etc.
+    /^var\(--[a-zA-Z0-9-]+\)$/, // CSS variables: var(--color-name)
+    /^[\d.]+\s+[\d.]+%?\s+[\d.]+%?$/, // HSL without function: 220 90% 56%
+  ];
+  
+  if (validPatterns.some(pattern => pattern.test(trimmed))) {
+    return trimmed;
+  }
+  
+  // Log invalid color for debugging (sanitized to prevent log injection)
+  console.warn('Invalid CSS color value rejected:', trimmed.substring(0, 50));
+  return null;
+};
+
+/**
+ * SECURITY: Sanitizes CSS property keys to prevent injection.
+ * Only allows alphanumeric characters and hyphens.
+ */
+const sanitizeCssKey = (key: string): string | null => {
+  if (!key || typeof key !== 'string') return null;
+  const trimmed = key.trim();
+  if (/^[a-zA-Z0-9-]+$/.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+};
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
 
@@ -68,15 +112,20 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   return (
     <style
       dangerouslySetInnerHTML={{
+        // SECURITY NOTE: All values are sanitized before injection to prevent CSS/XSS attacks.
+        // The id is generated internally and config values are validated through sanitizeCssColor/sanitizeCssKey.
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
-    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    const sanitizedKey = sanitizeCssKey(key);
+    const rawColor = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
+    const sanitizedColor = rawColor ? sanitizeCssColor(rawColor) : null;
+    return sanitizedKey && sanitizedColor ? `  --color-${sanitizedKey}: ${sanitizedColor};` : null;
   })
+  .filter(Boolean)
   .join("\n")}
 }
 `,
