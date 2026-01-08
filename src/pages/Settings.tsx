@@ -192,14 +192,14 @@ const Settings = () => {
               Communication Settings
             </CardTitle>
             <CardDescription>
-              Configure your outbound phone number and email address for contacting leads.
+              Set up your personal phone number and email so leads see your contact info when you reach out.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Twilio Phone Number */}
+            {/* Personal Phone Number */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-foreground">
-                Your Twilio Phone Number
+                Your Phone Number
               </label>
               <Input
                 value={profile.twilio_phone_number}
@@ -210,9 +210,8 @@ const Settings = () => {
               <div className="flex items-start gap-2 p-3 rounded-md bg-secondary/30 border border-border">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <p className="text-xs text-muted-foreground">
-                  Enter your Twilio phone number in E.164 format (e.g., +15551234567). 
-                  This number will be used as the caller ID for outbound calls and SMS. 
-                  If not configured, the default system number will be used.
+                  Enter your personal or business phone number in international format (e.g., +15551234567 for US, +447911123456 for UK). 
+                  This number will appear as the caller ID when you call or text leads — perfect for realtors and professionals who want leads to recognize them.
                 </p>
               </div>
             </div>
@@ -223,20 +222,19 @@ const Settings = () => {
             <div className="space-y-2">
               <label className="block text-sm font-medium text-foreground flex items-center gap-2">
                 <Mail className="w-4 h-4" />
-                Your Sender Email
+                Your Email Address
               </label>
               <Input
                 value={profile.sender_email}
                 onChange={(e) => setProfile({ ...profile, sender_email: e.target.value })}
-                placeholder="sales@yourcompany.com"
+                placeholder="you@yourdomain.com"
                 className="bg-secondary/50 border-border"
               />
               <div className="flex items-start gap-2 p-3 rounded-md bg-secondary/30 border border-border">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <p className="text-xs text-muted-foreground">
-                  Enter your verified sender email address. This email must be verified with Resend 
-                  (your email provider) before it can be used. If not configured, emails will be 
-                  sent from the default system address.
+                  Enter your personal or business email address. Leads will see this as the sender when you email them, 
+                  building trust and brand recognition. Domain verification may be required for deliverability.
                 </p>
               </div>
             </div>
