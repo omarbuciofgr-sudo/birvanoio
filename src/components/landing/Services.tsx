@@ -4,7 +4,7 @@ const services = [
   {
     icon: Database,
     title: "Fresh, Verified Leads",
-    description: "Our proprietary scrapers collect live data from verified public sources. Every lead includes contact info, source URL, and is manually verified for accuracy.",
+    description: "Our proprietary scrapers collect live data from verified public sources. Every lead includes source URL and best available contact info (email and/or phone when publicly available).",
   },
   {
     icon: Phone,

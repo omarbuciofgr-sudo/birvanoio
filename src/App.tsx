@@ -11,6 +11,8 @@ import Leads from "./pages/Leads";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import AdminImport from "./pages/AdminImport";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
+import CheckoutCancel from "./pages/CheckoutCancel";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,8 +32,9 @@ const App = () => (
             <Route path="/dashboard/analytics" element={<Analytics />} />
             <Route path="/dashboard/settings" element={<Settings />} />
             <Route path="/admin/import" element={<AdminImport />} />
+            <Route path="/checkout/success" element={<CheckoutSuccess />} />
+            <Route path="/checkout/cancel" element={<CheckoutCancel />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

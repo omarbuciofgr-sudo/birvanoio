@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Send, Mail, Calendar } from "lucide-react";
+import { Send, Mail, Calendar, Phone, ExternalLink } from "lucide-react";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -42,14 +42,28 @@ const Contact = () => {
               for a 15-minute walkthrough.
             </p>
 
-            <div className="space-y-6">
+            <div className="space-y-6 mb-8">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <Mail className="w-6 h-6 text-primary" />
                 </div>
                 <div>
                   <h3 className="font-medium text-foreground mb-1">Email Us</h3>
-                  <p className="text-muted-foreground">info@brivano.io</p>
+                  <a href="mailto:info@brivano.io" className="text-muted-foreground hover:text-primary transition-colors">
+                    info@brivano.io
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-foreground mb-1">Call or Text</h3>
+                  <a href="tel:+18005551234" className="text-muted-foreground hover:text-primary transition-colors">
+                    (800) 555-1234
+                  </a>
                 </div>
               </div>
 
@@ -59,7 +73,13 @@ const Contact = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-foreground mb-1">Book a Demo</h3>
-                  <p className="text-muted-foreground">15-minute walkthrough of your custom lead plan</p>
+                  <p className="text-muted-foreground text-sm mb-2">15-minute walkthrough of your custom lead plan</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href="https://calendly.com/brivano" target="_blank" rel="noopener noreferrer">
+                      Schedule Now
+                      <ExternalLink className="w-3 h-3 ml-2" />
+                    </a>
+                  </Button>
                 </div>
               </div>
             </div>

@@ -58,7 +58,7 @@ const Navbar = () => {
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => scrollToSection("#contact")}
             >
-              Get Started
+              Get Sample Leads
             </Button>
           </div>
 
@@ -100,7 +100,7 @@ const Navbar = () => {
                 className="w-full bg-primary text-primary-foreground"
                 onClick={() => scrollToSection("#contact")}
               >
-                Get Started
+                Get Sample Leads
               </Button>
             </div>
           </div>

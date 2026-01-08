@@ -59,7 +59,7 @@ const Hero = () => {
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-lg px-8 py-6 glow-box group"
               onClick={scrollToContact}
             >
-              Start Generating Leads
+              Get 10 Sample Leads
               <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
             <Button
