@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       chat_messages: {
         Row: {
+          ai_qualified: boolean | null
           created_at: string
           id: string
           is_read: boolean
@@ -23,8 +24,11 @@ export type Database = {
           sender_type: string
           session_id: string
           visitor_email: string | null
+          visitor_name: string | null
+          visitor_phone: string | null
         }
         Insert: {
+          ai_qualified?: boolean | null
           created_at?: string
           id?: string
           is_read?: boolean
@@ -32,8 +36,11 @@ export type Database = {
           sender_type: string
           session_id?: string
           visitor_email?: string | null
+          visitor_name?: string | null
+          visitor_phone?: string | null
         }
         Update: {
+          ai_qualified?: boolean | null
           created_at?: string
           id?: string
           is_read?: boolean
@@ -41,6 +48,8 @@ export type Database = {
           sender_type?: string
           session_id?: string
           visitor_email?: string | null
+          visitor_name?: string | null
+          visitor_phone?: string | null
         }
         Relationships: []
       }
@@ -55,6 +64,7 @@ export type Database = {
           id: string
           lead_id: string
           recording_url: string | null
+          sentiment: string | null
           subject: string | null
           type: string
         }
@@ -68,6 +78,7 @@ export type Database = {
           id?: string
           lead_id: string
           recording_url?: string | null
+          sentiment?: string | null
           subject?: string | null
           type: string
         }
@@ -81,6 +92,7 @@ export type Database = {
           id?: string
           lead_id?: string
           recording_url?: string | null
+          sentiment?: string | null
           subject?: string | null
           type?: string
         }
@@ -106,6 +118,7 @@ export type Database = {
           email: string | null
           id: string
           industry: string | null
+          lead_score: number | null
           notes: string | null
           phone: string | null
           source_url: string | null
@@ -125,6 +138,7 @@ export type Database = {
           email?: string | null
           id?: string
           industry?: string | null
+          lead_score?: number | null
           notes?: string | null
           phone?: string | null
           source_url?: string | null
@@ -144,6 +158,7 @@ export type Database = {
           email?: string | null
           id?: string
           industry?: string | null
+          lead_score?: number | null
           notes?: string | null
           phone?: string | null
           source_url?: string | null

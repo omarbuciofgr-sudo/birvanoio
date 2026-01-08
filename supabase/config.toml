@@ -23,3 +23,15 @@ verify_jwt = false
 
 [functions.chat-notification]
 verify_jwt = false
+
+[functions.score-lead]
+verify_jwt = false
+
+[functions.generate-message]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.analyze-sentiment]
+verify_jwt = false

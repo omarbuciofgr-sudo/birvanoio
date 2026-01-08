@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { CommunicationPanel } from "@/components/leads/CommunicationPanel";
 import { CSVImportDialog } from "@/components/leads/CSVImportDialog";
+import { LeadScoreBadge } from "@/components/leads/LeadScoreBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,13 +32,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Search, ExternalLink, Download, Filter, Upload } from "lucide-react";
+import { Search, ExternalLink, Download, Filter, Upload, Sparkles } from "lucide-react";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
 const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
 
-type Lead = Database["public"]["Tables"]["leads"]["Row"];
+type Lead = Database["public"]["Tables"]["leads"]["Row"] & {
+  lead_score?: number | null;
+};
 type LeadStatus = Database["public"]["Enums"]["lead_status"];
 
 const statusOptions: LeadStatus[] = ["new", "contacted", "qualified", "converted", "lost"];
@@ -252,13 +255,14 @@ const Leads = () => {
                 <TableHead className="hidden md:table-cell">Contact</TableHead>
                 <TableHead className="hidden lg:table-cell">Location</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden sm:table-cell">Score</TableHead>
                 <TableHead className="hidden sm:table-cell">Source</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     No leads found
                   </TableCell>
                 </TableRow>
@@ -306,6 +310,17 @@ const Leads = () => {
                         {lead.status}
                       </span>
                     </TableCell>
+                    <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                      <LeadScoreBadge 
+                        leadId={lead.id} 
+                        score={lead.lead_score ?? null}
+                        onScoreUpdate={(newScore) => {
+                          setLeads(prev => prev.map(l => 
+                            l.id === lead.id ? { ...l, lead_score: newScore } : l
+                          ));
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       {lead.source_url && (
                         <a
@@ -343,6 +358,24 @@ const Leads = () => {
                 </TabsList>
                 
                 <TabsContent value="details" className="space-y-6 mt-4">
+                  {/* AI Lead Score */}
+                  <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/30 border border-border">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">AI Lead Score:</span>
+                    </div>
+                    <LeadScoreBadge 
+                      leadId={selectedLead.id} 
+                      score={selectedLead.lead_score ?? null}
+                      onScoreUpdate={(newScore) => {
+                        setSelectedLead({ ...selectedLead, lead_score: newScore });
+                        setLeads(prev => prev.map(l => 
+                          l.id === selectedLead.id ? { ...l, lead_score: newScore } : l
+                        ));
+                      }}
+                    />
+                  </div>
+
                   {/* Contact Info */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>

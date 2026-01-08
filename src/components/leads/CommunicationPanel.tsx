@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles, Play } from "lucide-react";
+import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles, Play, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { CallDialog } from "./CallDialog";
 import { AudioRecordingPlayer } from "./AudioRecordingPlayer";
+import { SentimentBadge } from "./SentimentBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -35,6 +36,7 @@ interface ConversationLog {
   created_at: string;
   recording_url: string | null;
   call_sid: string | null;
+  sentiment: string | null;
 }
 
 interface CommunicationPanelProps {
@@ -85,6 +87,7 @@ export function CommunicationPanel({
   const [recapEmail, setRecapEmail] = useState("");
   const [recapSms, setRecapSms] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
   
   const [newLog, setNewLog] = useState<{
     type: LogType;
@@ -159,6 +162,55 @@ export function CommunicationPanel({
     setEmailSubject(`Following up - ${leadName || "Lead"}`);
     setEmailBody("");
     setEmailDialogOpen(true);
+  };
+
+  const generateEmailWithAI = async () => {
+    setIsGeneratingMessage(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-message", {
+        body: {
+          messageType: "email",
+          leadName: leadName || "Contact",
+          businessName: businessName || "the company",
+          notes: logs.length > 0 ? logs.slice(0, 3).map(l => l.content || l.subject).filter(Boolean).join(". ") : undefined,
+          context: "Follow-up after initial contact"
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.subject) setEmailSubject(data.subject);
+      if (data?.body) setEmailBody(data.body);
+      toast.success("AI generated email draft!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate email");
+    } finally {
+      setIsGeneratingMessage(false);
+    }
+  };
+
+  const generateSmsWithAI = async () => {
+    setIsGeneratingMessage(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-message", {
+        body: {
+          messageType: "sms",
+          leadName: leadName || "Contact",
+          businessName: businessName || "the company",
+          notes: logs.length > 0 ? logs.slice(0, 2).map(l => l.content || l.subject).filter(Boolean).join(". ") : undefined,
+          context: "Brief follow-up"
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.message) setSmsMessage(data.message);
+      toast.success("AI generated SMS draft!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate SMS");
+    } finally {
+      setIsGeneratingMessage(false);
+    }
   };
 
   const sendEmail = async () => {
@@ -417,6 +469,20 @@ export function CommunicationPanel({
               onChange={(e) => setSmsMessage(e.target.value)}
               rows={4}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateSmsWithAI}
+              disabled={isGeneratingMessage}
+              className="w-full"
+            >
+              {isGeneratingMessage ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4 mr-2" />
+              )}
+              Generate with AI
+            </Button>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSmsDialogOpen(false)} disabled={isSending}>
@@ -448,6 +514,20 @@ export function CommunicationPanel({
               onChange={(e) => setEmailBody(e.target.value)}
               rows={6}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateEmailWithAI}
+              disabled={isGeneratingMessage}
+              className="w-full"
+            >
+              {isGeneratingMessage ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4 mr-2" />
+              )}
+              Generate with AI
+            </Button>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEmailDialogOpen(false)} disabled={isSending}>
@@ -707,6 +787,11 @@ export function CommunicationPanel({
                       • {formatDuration(log.duration_seconds)}
                     </span>
                   )}
+                  <SentimentBadge 
+                    logId={log.id}
+                    content={log.content}
+                    sentiment={log.sentiment}
+                  />
                   <span className="text-xs text-muted-foreground ml-auto">
                     {new Date(log.created_at).toLocaleDateString()}{" "}
                     {new Date(log.created_at).toLocaleTimeString([], {
