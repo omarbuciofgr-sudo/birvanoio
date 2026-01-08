@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard,
   Users,
@@ -11,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  Upload,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -27,14 +29,37 @@ const navItems = [
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user?.id) return;
+      
+      const { data, error } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin'
+      });
+      
+      if (!error && data) {
+        setIsAdmin(true);
+      }
+    };
+    
+    checkAdminRole();
+  }, [user?.id]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
+
+  const allNavItems = [
+    ...navItems,
+    ...(isAdmin ? [{ name: "Import Leads", href: "/admin/import", icon: Upload }] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,7 +93,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1">
-            {navItems.map((item) => {
+            {allNavItems.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link
