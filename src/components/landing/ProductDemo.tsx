@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Autoplay from "embla-carousel-autoplay";
 import dashboardLeads from "@/assets/dashboard-mockup.png";
 import dashboardOverview from "@/assets/dashboard-overview.png";
 import dashboardAnalytics from "@/assets/dashboard-analytics.png";
@@ -50,7 +51,19 @@ const ProductDemo = () => {
           {/* Glow effect behind image */}
           <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-3xl scale-95" />
           
-          <Carousel setApi={setApi} className="relative">
+          <Carousel 
+            setApi={setApi} 
+            className="relative"
+            plugins={[
+              Autoplay({
+                delay: 4000,
+                stopOnInteraction: true,
+              }),
+            ]}
+            opts={{
+              loop: true,
+            }}
+          >
             <CarouselContent>
               {screenshots.map((screenshot, index) => (
                 <CarouselItem key={index}>
