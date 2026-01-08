@@ -1,6 +1,9 @@
 import { Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const plans = [
   {
@@ -16,6 +19,8 @@ const plans = [
       "Email support",
     ],
     popular: false,
+    monthlyPriceId: "price_1SnL6O2K2aKgw8lLpeaoYPSp",
+    yearlyPriceId: "price_1SnLG42K2aKgw8lLL6TIsWBx",
   },
   {
     name: "Growth",
@@ -30,6 +35,8 @@ const plans = [
       "Custom lead filters",
     ],
     popular: true,
+    monthlyPriceId: "price_1SnL7z2K2aKgw8lL9eBDzOyl",
+    yearlyPriceId: "price_1SnLHI2K2aKgw8lLED3IgbcT",
   },
   {
     name: "Scale",
@@ -44,14 +51,45 @@ const plans = [
       "API access & integrations",
     ],
     popular: false,
+    monthlyPriceId: "price_1SnLBL2K2aKgw8lLVLOgPcXu",
+    yearlyPriceId: "price_1SnLJK2K2aKgw8lLBGXjTAgd",
   },
 ];
 
 const Pricing = () => {
   const [isYearly, setIsYearly] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const navigate = useNavigate();
   
-  const scrollToContact = () => {
-    document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
+  const handleSubscribe = async (plan: typeof plans[0]) => {
+    setLoadingPlan(plan.name);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.info("Please sign in to subscribe");
+        navigate("/auth");
+        return;
+      }
+
+      const priceId = isYearly ? plan.yearlyPriceId : plan.monthlyPriceId;
+      
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId },
+      });
+
+      if (error) throw error;
+      
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      toast.error("Failed to start checkout. Please try again.");
+    } finally {
+      setLoadingPlan(null);
+    }
   };
 
   return (
@@ -154,9 +192,10 @@ const Pricing = () => {
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
                     : "bg-secondary text-foreground hover:bg-secondary/80"
                 }`}
-                onClick={scrollToContact}
+                onClick={() => handleSubscribe(plan)}
+                disabled={loadingPlan === plan.name}
               >
-                Get Started
+                {loadingPlan === plan.name ? "Loading..." : "Get Started"}
               </Button>
             </div>
           ))}
