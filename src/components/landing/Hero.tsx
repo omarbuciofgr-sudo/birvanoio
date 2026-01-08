@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Zap, Shield, Target } from "lucide-react";
+import { ArrowRight, Zap, Shield, Target, Globe } from "lucide-react";
 
 const Hero = () => {
   const scrollToContact = () => {
@@ -74,7 +74,7 @@ const Hero = () => {
 
           {/* Trust Indicators */}
           <div 
-            className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto animate-fade-in"
+            className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto animate-fade-in"
             style={{ animationDelay: "0.4s" }}
           >
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
@@ -88,6 +88,10 @@ const Hero = () => {
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Zap className="w-5 h-5 text-primary" />
               <span className="text-sm text-muted-foreground">AI-Powered Tools</span>
+            </div>
+            <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
+              <Globe className="w-5 h-5 text-primary" />
+              <span className="text-sm text-muted-foreground">Worldwide Service</span>
             </div>
           </div>
         </div>

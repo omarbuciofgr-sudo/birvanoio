@@ -1,4 +1,4 @@
-import { Lightbulb, Heart, TrendingUp } from "lucide-react";
+import { Lightbulb, Heart, TrendingUp, Globe } from "lucide-react";
 
 const About = () => {
   return (
@@ -22,7 +22,7 @@ const About = () => {
               </p>
               <p>
                 Whether you are a solo rep building your book of business or an enterprise agency 
-                managing hundreds of accounts, Brivano scales with you.
+                managing hundreds of accounts, Brivano scales with you — <span className="text-foreground font-medium">no matter where in the world you operate</span>.
               </p>
               <p className="text-foreground font-medium">
                 We are not just a lead provider — we are the platform your team uses to turn prospects into customers.
@@ -59,6 +59,16 @@ const About = () => {
               <h3 className="font-display text-xl font-semibold text-foreground mb-2">Scalability</h3>
               <p className="text-muted-foreground">
                 From 1 seat to 100+ — our per-seat pricing and enterprise features grow with your team.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/30 transition-colors">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+                <Globe className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="font-display text-xl font-semibold text-foreground mb-2">Global Reach</h3>
+              <p className="text-muted-foreground">
+                We serve clients worldwide — from North America to Europe, Asia, and beyond. Any niche, any market, anywhere.
               </p>
             </div>
           </div>
