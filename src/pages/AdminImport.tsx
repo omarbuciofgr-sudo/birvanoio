@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import * as XLSX from "xlsx";
 
 interface Profile {
   user_id: string;
@@ -100,82 +101,131 @@ const AdminImport = () => {
     setImportResult(null);
   };
 
+  const processFileData = useCallback((headerRow: string[], dataRows: string[][]) => {
+    if (headerRow.length === 0 || dataRows.length === 0) {
+      toast.error("File must have headers and at least one data row");
+      return;
+    }
+
+    setHeaders(headerRow);
+    setCsvData(dataRows);
+
+    // Auto-map columns based on header names
+    const autoMapping: Record<number, LeadField> = {};
+    headerRow.forEach((header, index) => {
+      const lowerHeader = header.toLowerCase().replace(/[_\s-]/g, "");
+      if (lowerHeader.includes("business") || lowerHeader.includes("company")) {
+        autoMapping[index] = "business_name";
+      } else if (lowerHeader.includes("contact") || lowerHeader === "name" || lowerHeader.includes("owner")) {
+        autoMapping[index] = "contact_name";
+      } else if (lowerHeader.includes("email")) {
+        autoMapping[index] = "email";
+      } else if (lowerHeader.includes("phone") || lowerHeader.includes("tel")) {
+        autoMapping[index] = "phone";
+      } else if (lowerHeader.includes("city")) {
+        autoMapping[index] = "city";
+      } else if (lowerHeader.includes("state") || lowerHeader === "st") {
+        autoMapping[index] = "state";
+      } else if (lowerHeader.includes("zip") || lowerHeader.includes("postal")) {
+        autoMapping[index] = "zip_code";
+      } else if (lowerHeader.includes("industry") || lowerHeader.includes("type")) {
+        autoMapping[index] = "industry";
+      } else if (lowerHeader.includes("url") || lowerHeader.includes("source") || lowerHeader.includes("link")) {
+        autoMapping[index] = "source_url";
+      } else if (lowerHeader.includes("note") || lowerHeader.includes("comment")) {
+        autoMapping[index] = "notes";
+      }
+    });
+
+    setColumnMapping(autoMapping);
+    setStep("map");
+  }, []);
+
+  const parseCSV = useCallback((text: string): { headers: string[]; data: string[][] } => {
+    const lines = text.split("\n").filter(line => line.trim());
+    const parsed = lines.map(line => {
+      const result: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      
+      for (const char of line) {
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === "," && !inQuotes) {
+          result.push(current.trim());
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    });
+
+    return {
+      headers: parsed[0] || [],
+      data: parsed.slice(1)
+    };
+  }, []);
+
+  const parseExcel = useCallback((buffer: ArrayBuffer): { headers: string[]; data: string[][] } => {
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    // Convert to array of arrays
+    const jsonData = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1 });
+    
+    // Filter out empty rows
+    const filteredData = jsonData.filter(row => row.some(cell => cell !== undefined && cell !== ""));
+    
+    // Convert all values to strings
+    const stringData = filteredData.map(row => 
+      row.map(cell => (cell !== undefined && cell !== null) ? String(cell) : "")
+    );
+
+    return {
+      headers: stringData[0] || [],
+      data: stringData.slice(1)
+    };
+  }, []);
+
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith(".csv")) {
-      toast.error("Please upload a CSV file");
+    const fileName = file.name.toLowerCase();
+    const isCSV = fileName.endsWith(".csv");
+    const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+
+    if (!isCSV && !isExcel) {
+      toast.error("Please upload a CSV or Excel file (.csv, .xlsx, .xls)");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split("\n").filter(line => line.trim());
-      const parsed = lines.map(line => {
-        const result: string[] = [];
-        let current = "";
-        let inQuotes = false;
-        
-        for (const char of line) {
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === "," && !inQuotes) {
-            result.push(current.trim());
-            current = "";
-          } else {
-            current += char;
-          }
+    if (isCSV) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const { headers, data } = parseCSV(text);
+        processFileData(headers, data);
+      };
+      reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target?.result as ArrayBuffer;
+        try {
+          const { headers, data } = parseExcel(buffer);
+          processFileData(headers, data);
+        } catch (error) {
+          console.error("Error parsing Excel file:", error);
+          toast.error("Failed to parse Excel file. Please check the file format.");
         }
-        result.push(current.trim());
-        return result;
-      });
-
-      if (parsed.length < 2) {
-        toast.error("CSV must have headers and at least one data row");
-        return;
-      }
-
-      const headerRow = parsed[0];
-      const dataRows = parsed.slice(1);
-
-      setHeaders(headerRow);
-      setCsvData(dataRows);
-
-      // Auto-map columns based on header names
-      const autoMapping: Record<number, LeadField> = {};
-      headerRow.forEach((header, index) => {
-        const lowerHeader = header.toLowerCase().replace(/[_\s-]/g, "");
-        if (lowerHeader.includes("business") || lowerHeader.includes("company")) {
-          autoMapping[index] = "business_name";
-        } else if (lowerHeader.includes("contact") || lowerHeader === "name" || lowerHeader.includes("owner")) {
-          autoMapping[index] = "contact_name";
-        } else if (lowerHeader.includes("email")) {
-          autoMapping[index] = "email";
-        } else if (lowerHeader.includes("phone") || lowerHeader.includes("tel")) {
-          autoMapping[index] = "phone";
-        } else if (lowerHeader.includes("city")) {
-          autoMapping[index] = "city";
-        } else if (lowerHeader.includes("state") || lowerHeader === "st") {
-          autoMapping[index] = "state";
-        } else if (lowerHeader.includes("zip") || lowerHeader.includes("postal")) {
-          autoMapping[index] = "zip_code";
-        } else if (lowerHeader.includes("industry") || lowerHeader.includes("type")) {
-          autoMapping[index] = "industry";
-        } else if (lowerHeader.includes("url") || lowerHeader.includes("source") || lowerHeader.includes("link")) {
-          autoMapping[index] = "source_url";
-        } else if (lowerHeader.includes("note") || lowerHeader.includes("comment")) {
-          autoMapping[index] = "notes";
-        }
-      });
-
-      setColumnMapping(autoMapping);
-      setStep("map");
-    };
-
-    reader.readAsText(file);
-  }, []);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  }, [parseCSV, parseExcel, processFileData]);
 
   const fetchClients = async () => {
     setIsLoading(true);
@@ -326,26 +376,26 @@ const AdminImport = () => {
                 <div className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors">
                   <input
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     onChange={handleFileUpload}
                     className="hidden"
-                    id="csv-upload"
+                    id="file-upload"
                   />
                   <label
-                    htmlFor="csv-upload"
+                    htmlFor="file-upload"
                     className="cursor-pointer flex flex-col items-center gap-4"
                   >
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
                       <Upload className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-foreground text-lg">Click to upload CSV</p>
-                      <p className="text-sm text-muted-foreground">or drag and drop your file here</p>
+                      <p className="font-medium text-foreground text-lg">Click to upload</p>
+                      <p className="text-sm text-muted-foreground">CSV or Excel files (.csv, .xlsx, .xls)</p>
                     </div>
                   </label>
                 </div>
                 <p className="text-sm text-muted-foreground text-center">
-                  Your CSV should have headers in the first row. We'll help you map the columns to lead fields.
+                  Your file should have headers in the first row. We'll help you map the columns to lead fields.
                 </p>
               </div>
             )}
