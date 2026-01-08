@@ -11,7 +11,6 @@ import Leads from "./pages/Leads";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import AdminImport from "./pages/AdminImport";
-import PricingPage from "./pages/PricingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,7 +25,6 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/pricing" element={<PricingPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/leads" element={<Leads />} />
             <Route path="/dashboard/analytics" element={<Analytics />} />
