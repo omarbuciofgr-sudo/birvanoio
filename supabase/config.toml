@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.import-leads]
 verify_jwt = false
+
+[functions.get-recording]
+verify_jwt = false
