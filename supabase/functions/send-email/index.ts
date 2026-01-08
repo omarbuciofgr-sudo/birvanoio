@@ -1,17 +1,45 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.22.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface EmailRequest {
-  to: string;
-  subject: string;
-  body: string;
-  leadId: string;
-}
+// Input validation schema
+const emailSchema = z.object({
+  to: z.string().email("Invalid email address").max(255, "Email too long"),
+  subject: z.string()
+    .min(1, "Subject is required")
+    .max(200, "Subject too long")
+    .regex(/^[^\n\r]*$/, "Subject cannot contain newlines"),
+  body: z.string()
+    .min(1, "Body is required")
+    .max(10000, "Body too long"),
+  leadId: z.string().uuid("Invalid lead ID").optional(),
+});
+
+// Sanitize error messages to avoid leaking internal details
+const sanitizeError = (error: any, operation: string): { message: string; status: number } => {
+  console.error(`Error in ${operation}:`, error);
+
+  const errorMessage = error?.message?.toLowerCase() || "";
+
+  if (errorMessage.includes("not configured") || errorMessage.includes("api key")) {
+    return { message: "Service temporarily unavailable", status: 503 };
+  }
+
+  if (errorMessage.includes("invalid") || errorMessage.includes("validation")) {
+    return { message: "Invalid request parameters", status: 400 };
+  }
+
+  if (errorMessage.includes("rate limit") || errorMessage.includes("too many")) {
+    return { message: "Too many requests, please try again later", status: 429 };
+  }
+
+  return { message: `Failed to ${operation}. Please try again or contact support.`, status: 500 };
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,11 +53,18 @@ serve(async (req) => {
       throw new Error("Resend API key not configured");
     }
 
-    const { to, subject, body, leadId }: EmailRequest = await req.json();
+    // Parse and validate input
+    const rawInput = await req.json();
+    const validation = emailSchema.safeParse(rawInput);
 
-    if (!to || !subject || !body) {
-      throw new Error("Missing required fields: to, subject, body");
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: validation.error.errors.map(e => e.message) }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
+
+    const { to, subject, body, leadId } = validation.data;
 
     // Get the user from the authorization header
     const authHeader = req.headers.get("authorization");
@@ -70,10 +105,14 @@ serve(async (req) => {
 
     if (!emailResponse.ok) {
       console.error("Resend error:", emailData);
-      throw new Error(emailData.message || "Failed to send email");
+      // Return generic error instead of exposing API details
+      return new Response(
+        JSON.stringify({ error: "Failed to send email. Please try again." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
-    console.log("Email sent successfully:", emailData);
+    console.log("Email sent successfully:", emailData.id);
 
     // Log the conversation
     if (leadId) {
@@ -96,10 +135,10 @@ serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
-    console.error("Error in send-email:", error);
+    const { message, status } = sanitizeError(error, "send email");
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      JSON.stringify({ error: message }),
+      { status, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });

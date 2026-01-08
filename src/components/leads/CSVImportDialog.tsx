@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Upload, FileSpreadsheet, Loader2, AlertCircle, Check } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Upload, FileSpreadsheet, Loader2, AlertCircle, Check, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,6 +57,40 @@ export function CSVImportDialog({ open, onOpenChange, onImportComplete }: CSVImp
   const [clients, setClients] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ success: number; failed: number } | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checkingRole, setCheckingRole] = useState(true);
+
+  // Check if user has admin role
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      setCheckingRole(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsAdmin(false);
+          setCheckingRole(false);
+          return;
+        }
+
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        setIsAdmin(!!roleData);
+      } catch (error) {
+        console.error('Error checking admin role:', error);
+        setIsAdmin(false);
+      }
+      setCheckingRole(false);
+    };
+
+    if (open) {
+      checkAdminRole();
+    }
+  }, [open]);
 
   const resetState = () => {
     setStep("upload");
@@ -245,7 +279,30 @@ export function CSVImportDialog({ open, onOpenChange, onImportComplete }: CSVImp
           </DialogTitle>
         </DialogHeader>
 
-        {step === "upload" && (
+        {/* Loading state while checking role */}
+        {checkingRole && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {/* Access denied for non-admins */}
+        {!checkingRole && !isAdmin && (
+          <div className="flex flex-col items-center gap-4 py-8">
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <ShieldAlert className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-medium text-foreground">Access Denied</p>
+              <p className="text-muted-foreground">
+                Only administrators can import leads via CSV.
+              </p>
+            </div>
+            <Button onClick={handleClose}>Close</Button>
+          </div>
+        )}
+
+        {step === "upload" && !checkingRole && isAdmin && (
           <div className="space-y-4">
             <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
               <input

@@ -1,18 +1,43 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.22.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface CallRequest {
-  to: string;
-  leadId: string;
-}
-
+// E.164 phone number validation
 const e164Regex = /^\+[1-9]\d{1,14}$/;
-const isE164 = (value: string) => e164Regex.test(value);
+
+// Input validation schema
+const callSchema = z.object({
+  to: z.string()
+    .min(1, "Phone number is required")
+    .regex(e164Regex, "Phone number must be in E.164 format (example: +15551234567)"),
+  leadId: z.string().uuid("Invalid lead ID").optional(),
+});
+
+// Sanitize error messages to avoid leaking internal details
+const sanitizeError = (error: any, operation: string): { message: string; status: number } => {
+  console.error(`Error in ${operation}:`, error);
+
+  const errorMessage = error?.message?.toLowerCase() || "";
+
+  if (errorMessage.includes("not configured") || errorMessage.includes("credentials")) {
+    return { message: "Service temporarily unavailable", status: 503 };
+  }
+
+  if (errorMessage.includes("invalid") || errorMessage.includes("e.164")) {
+    return { message: "Invalid request parameters", status: 400 };
+  }
+
+  if (errorMessage.includes("rate limit") || errorMessage.includes("too many")) {
+    return { message: "Too many requests, please try again later", status: 429 };
+  }
+
+  return { message: `Failed to ${operation}. Please try again or contact support.`, status: 500 };
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -28,25 +53,23 @@ serve(async (req) => {
       throw new Error("Twilio credentials not configured");
     }
 
-    const { to, leadId }: CallRequest = await req.json();
+    // Parse and validate input
+    const rawInput = await req.json();
+    const validation = callSchema.safeParse(rawInput);
 
-    if (!to) {
+    if (!validation.success) {
       return new Response(
-        JSON.stringify({ error: "Missing required field: to" }),
+        JSON.stringify({ error: "Invalid input", details: validation.error.errors.map(e => e.message) }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    if (!isE164(to)) {
-      return new Response(
-        JSON.stringify({ error: "Phone number must be in E.164 format (example: +15551234567)." }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
+    const { to, leadId } = validation.data;
 
-    if (!isE164(twilioPhone)) {
+    if (!e164Regex.test(twilioPhone)) {
+      console.error("Configured Twilio phone number is not in E.164 format");
       return new Response(
-        JSON.stringify({ error: "Configured Twilio phone number must be in E.164 format." }),
+        JSON.stringify({ error: "Service configuration error" }),
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -95,10 +118,10 @@ serve(async (req) => {
 
     if (!twilioResponse.ok) {
       console.error("Twilio error:", twilioData);
-      const status = typeof twilioData?.status === "number" ? twilioData.status : 500;
+      // Return generic error instead of exposing Twilio API details
       return new Response(
-        JSON.stringify({ error: twilioData.message || "Failed to initiate call", code: twilioData.code }),
-        { status, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ error: "Failed to initiate call. Please try again." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
@@ -125,10 +148,10 @@ serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
-    console.error("Error in make-call:", error);
+    const { message, status } = sanitizeError(error, "initiate call");
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      JSON.stringify({ error: message }),
+      { status, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });
