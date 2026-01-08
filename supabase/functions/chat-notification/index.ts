@@ -30,6 +30,19 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Require service role key for server-side calls (e.g., from database triggers via pg_net)
+    const authHeader = req.headers.get("authorization");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    // Only allow calls with service role key (from server-side triggers)
+    if (!authHeader || !serviceRoleKey || authHeader !== `Bearer ${serviceRoleKey}`) {
+      console.warn("Unauthorized attempt to call chat-notification function");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const { message, visitorEmail, sessionId }: ChatNotificationRequest = await req.json();
 
     // Validate and sanitize inputs
