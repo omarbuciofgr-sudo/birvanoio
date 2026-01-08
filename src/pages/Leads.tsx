@@ -377,10 +377,15 @@ const Leads = () => {
 
             {selectedLead && user && (
               <Tabs defaultValue="details" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="activity">Activity</TabsTrigger>
                   <TabsTrigger value="communication">Communication</TabsTrigger>
                 </TabsList>
+                
+                <TabsContent value="activity" className="mt-4">
+                  <LeadActivityTimeline leadId={selectedLead.id} maxHeight="350px" />
+                </TabsContent>
                 
                 <TabsContent value="details" className="space-y-6 mt-4">
                   {/* AI Lead Score */}
