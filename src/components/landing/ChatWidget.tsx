@@ -1,19 +1,74 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, X, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Message {
+  id: string;
+  sender_type: 'visitor' | 'support';
+  message: string;
+  created_at: string;
+}
 
 const ChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessionId] = useState(() => crypto.randomUUID());
+  const [isSending, setIsSending] = useState(false);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
+  useEffect(() => {
+    // Add initial welcome message
+    setMessages([{
+      id: 'welcome',
+      sender_type: 'support',
+      message: '👋 Hi there! How can we help you today?',
+      created_at: new Date().toISOString()
+    }]);
+  }, []);
+
+  const handleSend = async () => {
+    if (!message.trim() || isSending) return;
     
-    toast.success("Message sent! We'll get back to you shortly.");
+    setIsSending(true);
+    const messageText = message.trim();
     setMessage("");
-    setIsOpen(false);
+
+    // Optimistically add message to UI
+    const tempMessage: Message = {
+      id: crypto.randomUUID(),
+      sender_type: 'visitor',
+      message: messageText,
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempMessage]);
+
+    try {
+      // Save to database
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId,
+          sender_type: 'visitor',
+          message: messageText
+        });
+
+      if (error) throw error;
+
+      // Send notification email
+      await supabase.functions.invoke('chat-notification', {
+        body: { message: messageText, sessionId }
+      });
+
+      toast.success("Message sent! We'll get back to you shortly.");
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error("Failed to send message. Please try again.");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -43,13 +98,21 @@ const ChatWidget = () => {
           </div>
 
           {/* Messages Area */}
-          <div className="p-4 h-48 overflow-y-auto bg-secondary/30">
-            <div className="bg-card p-3 rounded-lg rounded-tl-none max-w-[80%] border border-border">
-              <p className="text-sm text-foreground">
-                👋 Hi there! How can we help you today?
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Just now</p>
-            </div>
+          <div className="p-4 h-48 overflow-y-auto bg-secondary/30 space-y-3">
+            {messages.map((msg) => (
+              <div 
+                key={msg.id}
+                className={`p-3 rounded-lg max-w-[80%] border border-border ${
+                  msg.sender_type === 'visitor' 
+                    ? 'ml-auto bg-primary text-primary-foreground rounded-br-none' 
+                    : 'bg-card rounded-tl-none'
+                }`}
+              >
+                <p className={`text-sm ${msg.sender_type === 'visitor' ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  {msg.message}
+                </p>
+              </div>
+            ))}
           </div>
 
           {/* Input */}
