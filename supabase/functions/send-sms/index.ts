@@ -50,9 +50,9 @@ serve(async (req) => {
   try {
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioPhone = Deno.env.get("TWILIO_PHONE_NUMBER");
+    const defaultTwilioPhone = Deno.env.get("TWILIO_PHONE_NUMBER");
 
-    if (!accountSid || !authToken || !twilioPhone) {
+    if (!accountSid || !authToken || !defaultTwilioPhone) {
       throw new Error("Twilio credentials not configured");
     }
 
@@ -69,14 +69,6 @@ serve(async (req) => {
 
     const { to, message, leadId } = validation.data;
 
-    if (!e164Regex.test(twilioPhone)) {
-      console.error("Configured Twilio phone number is not in E.164 format");
-      return new Response(
-        JSON.stringify({ error: "Service configuration error" }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
     // Get the user from the authorization header
     const authHeader = req.headers.get("authorization");
     const supabase = createClient(
@@ -85,12 +77,34 @@ serve(async (req) => {
     );
 
     let clientId = "system";
+    let twilioPhone = defaultTwilioPhone;
+    
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
       if (user) {
         clientId = user.id;
+        
+        // Fetch client's custom Twilio phone number if configured
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("twilio_phone_number")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (profile?.twilio_phone_number && e164Regex.test(profile.twilio_phone_number)) {
+          twilioPhone = profile.twilio_phone_number;
+          console.log(`Using client's custom Twilio number: ${twilioPhone}`);
+        }
       }
+    }
+
+    if (!e164Regex.test(twilioPhone)) {
+      console.error("Twilio phone number is not in E.164 format");
+      return new Response(
+        JSON.stringify({ error: "Service configuration error" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     // Verify lead ownership before sending SMS

@@ -48,6 +48,7 @@ serve(async (req) => {
 
   try {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const defaultSenderEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
 
     if (!resendApiKey) {
       throw new Error("Resend API key not configured");
@@ -74,13 +75,32 @@ serve(async (req) => {
     );
 
     let clientId = "system";
-    const senderEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
-
+    let senderEmail = defaultSenderEmail;
+    let senderName = "CRM";
+    
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
       if (user) {
         clientId = user.id;
+        
+        // Fetch client's custom sender email and name if configured
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("sender_email, first_name, last_name, company_name")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (profile?.sender_email) {
+          senderEmail = profile.sender_email;
+          // Use company name or full name as sender name
+          if (profile.company_name) {
+            senderName = profile.company_name;
+          } else if (profile.first_name || profile.last_name) {
+            senderName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
+          }
+          console.log(`Using client's custom sender email: ${senderEmail}`);
+        }
       }
     }
 
@@ -107,7 +127,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Sending email to ${to} with subject: ${subject}`);
+    console.log(`Sending email to ${to} from ${senderName} <${senderEmail}> with subject: ${subject}`);
 
     // Send email via Resend API
     const emailResponse = await fetch("https://api.resend.com/emails", {
@@ -117,7 +137,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `CRM <${senderEmail}>`,
+        from: `${senderName} <${senderEmail}>`,
         to: [to],
         subject: subject,
         html: body.replace(/\n/g, "<br>"),
