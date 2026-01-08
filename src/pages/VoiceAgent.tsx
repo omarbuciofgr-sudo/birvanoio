@@ -32,8 +32,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Phone, Mic, Play, Pause, Clock, CheckCircle, XCircle, AlertCircle, Bot, Wand2, Loader2 } from "lucide-react";
+import { Phone, Mic, Play, Pause, Clock, CheckCircle, XCircle, AlertCircle, Bot, Wand2, Loader2, Settings } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { ElevenLabsVoiceAgent } from "@/components/voice/ElevenLabsVoiceAgent";
 
 interface VoiceCall {
   id: string;
@@ -85,6 +86,9 @@ const VoiceAgent = () => {
   // Form state
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [scriptTemplate, setScriptTemplate] = useState("");
+  const [elevenLabsAgentId, setElevenLabsAgentId] = useState("");
+  const [isLiveCallActive, setIsLiveCallActive] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -346,10 +350,31 @@ const VoiceAgent = () => {
           <DialogHeader>
             <DialogTitle>Start AI Voice Call</DialogTitle>
             <DialogDescription>
-              Select a lead and customize the AI agent's script
+              Connect with ElevenLabs to have an AI agent call your leads
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">ElevenLabs Agent ID</label>
+              <Input
+                value={elevenLabsAgentId}
+                onChange={(e) => setElevenLabsAgentId(e.target.value)}
+                placeholder="Enter your ElevenLabs Agent ID"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Create an agent at{" "}
+                <a 
+                  href="https://elevenlabs.io/app/conversational-ai" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  ElevenLabs Conversational AI
+                </a>
+              </p>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Select Lead</label>
               <Select value={selectedLeadId} onValueChange={setSelectedLeadId}>
@@ -376,50 +401,49 @@ const VoiceAgent = () => {
               )}
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium">Call Script (optional)</label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={generateScript}
-                  disabled={isGenerating || !selectedLeadId}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Wand2 className="w-4 h-4 mr-2" />
-                  )}
-                  Generate with AI
-                </Button>
+            {elevenLabsAgentId && selectedLeadId && (
+              <div className="pt-2">
+                <label className="text-sm font-medium mb-2 block">Live AI Call</label>
+                <ElevenLabsVoiceAgent
+                  agentId={elevenLabsAgentId}
+                  leadName={selectedLead?.contact_name || selectedLead?.business_name}
+                  onTranscriptUpdate={(transcript) => setLiveTranscript(transcript)}
+                  onCallEnd={async (summary) => {
+                    // Save the call record when call ends
+                    if (user && selectedLeadId) {
+                      await supabase.from("voice_agent_calls").insert({
+                        lead_id: selectedLeadId,
+                        client_id: user.id,
+                        script_template: scriptTemplate || null,
+                        ai_transcript: summary,
+                        status: "completed",
+                      });
+                      fetchCalls();
+                      toast.success("Call saved to history");
+                    }
+                  }}
+                />
               </div>
-              <Textarea
-                value={scriptTemplate}
-                onChange={(e) => setScriptTemplate(e.target.value)}
-                placeholder="Enter a script or talking points for the AI agent..."
-                rows={8}
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                The AI will use this as guidance during the call
-              </p>
-            </div>
+            )}
+
+            {!elevenLabsAgentId && (
+              <div className="p-4 bg-secondary/50 rounded-lg">
+                <h4 className="font-medium flex items-center gap-2 mb-2">
+                  <Settings className="w-4 h-4" />
+                  Setup Required
+                </h4>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Go to <a href="https://elevenlabs.io/app/conversational-ai" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ElevenLabs</a></li>
+                  <li>Create a new Conversational AI agent</li>
+                  <li>Configure your agent's voice and personality</li>
+                  <li>Copy the Agent ID and paste it above</li>
+                </ol>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={initiateCall}
-              disabled={isInitiating || !selectedLeadId}
-              className="gap-2"
-            >
-              {isInitiating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Phone className="w-4 h-4" />
-              )}
-              Start Call
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
