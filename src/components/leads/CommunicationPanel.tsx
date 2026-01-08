@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles } from "lucide-react";
+import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles, Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -718,6 +718,28 @@ export function CommunicationPanel({
                 )}
                 {log.content && (
                   <p className="text-sm text-muted-foreground mt-1">{log.content}</p>
+                )}
+                {/* Call Recording Player */}
+                {log.type === "call" && log.recording_url && (
+                  <div className="mt-3 p-3 rounded-md bg-secondary/50 border border-border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Play className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">Call Recording</span>
+                      {log.duration_seconds && (
+                        <span className="text-xs text-muted-foreground">
+                          ({formatDuration(log.duration_seconds)})
+                        </span>
+                      )}
+                    </div>
+                    <audio
+                      controls
+                      className="w-full h-10"
+                      preload="metadata"
+                    >
+                      <source src={log.recording_url} type="audio/mpeg" />
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
                 )}
               </div>
             ))}
