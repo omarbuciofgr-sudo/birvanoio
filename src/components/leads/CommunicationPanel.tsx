@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles, Play, Pause } from "lucide-react";
+import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { CallDialog } from "./CallDialog";
+import { AudioRecordingPlayer } from "./AudioRecordingPlayer";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -364,6 +365,7 @@ export function CommunicationPanel({
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -725,20 +727,11 @@ export function CommunicationPanel({
                     <div className="flex items-center gap-2 mb-2">
                       <Play className="w-4 h-4 text-primary" />
                       <span className="text-sm font-medium">Call Recording</span>
-                      {log.duration_seconds && (
-                        <span className="text-xs text-muted-foreground">
-                          ({formatDuration(log.duration_seconds)})
-                        </span>
-                      )}
                     </div>
-                    <audio
-                      controls
-                      className="w-full h-10"
-                      preload="metadata"
-                    >
-                      <source src={log.recording_url} type="audio/mpeg" />
-                      Your browser does not support the audio element.
-                    </audio>
+                    <AudioRecordingPlayer 
+                      recordingUrl={log.recording_url} 
+                      duration={log.duration_seconds}
+                    />
                   </div>
                 )}
               </div>
