@@ -14,6 +14,16 @@ interface ChatNotificationRequest {
   sessionId: string;
 }
 
+// HTML escape function to prevent XSS injection in emails
+const escapeHtml = (unsafe: string): string => {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -22,19 +32,39 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { message, visitorEmail, sessionId }: ChatNotificationRequest = await req.json();
 
+    // Validate and sanitize inputs
+    if (!message || typeof message !== 'string' || message.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: "Invalid message" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return new Response(
+        JSON.stringify({ error: "Invalid session ID" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Sanitize all user inputs before inserting into HTML
+    const safeMessage = escapeHtml(message);
+    const safeSessionId = escapeHtml(sessionId);
+    const safeVisitorEmail = visitorEmail ? escapeHtml(visitorEmail) : 'Not provided';
+
     const notifyEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
 
     const emailResponse = await resend.emails.send({
       from: `Brivano Chat <${notifyEmail}>`,
       to: ["support@brivano.com"], // Update this to your actual support email
-      subject: `New Chat Message from ${visitorEmail || 'Anonymous Visitor'}`,
+      subject: `New Chat Message from ${safeVisitorEmail}`,
       html: `
         <h2>New Chat Widget Message</h2>
-        <p><strong>Session ID:</strong> ${sessionId}</p>
-        <p><strong>Visitor Email:</strong> ${visitorEmail || 'Not provided'}</p>
+        <p><strong>Session ID:</strong> ${safeSessionId}</p>
+        <p><strong>Visitor Email:</strong> ${safeVisitorEmail}</p>
         <hr>
         <p><strong>Message:</strong></p>
-        <p>${message}</p>
+        <p>${safeMessage}</p>
         <hr>
         <p style="color: #666; font-size: 12px;">Reply to this visitor through your Brivano dashboard.</p>
       `,
@@ -49,7 +79,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error sending chat notification:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Failed to send notification" }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
