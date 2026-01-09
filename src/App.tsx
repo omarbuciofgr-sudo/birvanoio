@@ -12,6 +12,7 @@ import Leads from "./pages/Leads";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Campaigns from "./pages/Campaigns";
+import Templates from "./pages/Templates";
 import VoiceAgent from "./pages/VoiceAgent";
 import AdminImport from "./pages/AdminImport";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/dashboard/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
             <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+            <Route path="/dashboard/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
             <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
             <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
             <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
