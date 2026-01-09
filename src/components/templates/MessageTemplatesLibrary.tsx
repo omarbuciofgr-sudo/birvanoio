@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -22,8 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Mail, MessageSquare, Copy, Pencil, Trash2, Search } from "lucide-react";
-
+import { Plus, Mail, MessageSquare, Copy, Pencil, Trash2, Search, Sparkles, Loader2 } from "lucide-react";
 interface MessageTemplate {
   id: string;
   name: string;
@@ -50,6 +50,26 @@ const categories = [
   { value: "re-engagement", label: "Re-engagement" },
 ];
 
+const industries = [
+  { value: "technology", label: "Technology" },
+  { value: "healthcare", label: "Healthcare" },
+  { value: "finance", label: "Finance" },
+  { value: "real-estate", label: "Real Estate" },
+  { value: "retail", label: "Retail" },
+  { value: "manufacturing", label: "Manufacturing" },
+  { value: "professional-services", label: "Professional Services" },
+  { value: "hospitality", label: "Hospitality" },
+  { value: "education", label: "Education" },
+  { value: "construction", label: "Construction" },
+];
+
+const tones = [
+  { value: "professional", label: "Professional" },
+  { value: "friendly", label: "Friendly" },
+  { value: "urgent", label: "Urgent" },
+  { value: "casual", label: "Casual" },
+];
+
 export function MessageTemplatesLibrary({ 
   userId, 
   onSelectTemplate,
@@ -58,6 +78,8 @@ export function MessageTemplatesLibrary({
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAIDialogOpen, setIsAIDialogOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "email" | "sms">("all");
@@ -70,6 +92,14 @@ export function MessageTemplatesLibrary({
     body: "",
     category: "",
     is_shared: false,
+  });
+
+  // AI generation state
+  const [aiForm, setAiForm] = useState({
+    industry: "",
+    purpose: "",
+    type: "email" as "email" | "sms",
+    tone: "professional",
   });
 
   useEffect(() => {
@@ -189,6 +219,52 @@ export function MessageTemplatesLibrary({
     setIsDialogOpen(true);
   };
 
+  const handleGenerateWithAI = async () => {
+    if (!aiForm.industry || !aiForm.purpose) {
+      toast.error("Please select an industry and purpose");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-template", {
+        body: {
+          industry: aiForm.industry,
+          purpose: aiForm.purpose,
+          type: aiForm.type,
+          tone: aiForm.tone,
+        },
+      });
+
+      if (error) throw error;
+
+      // Pre-fill the form with AI-generated content
+      setFormData({
+        name: data.name,
+        type: aiForm.type,
+        subject: data.subject || "",
+        body: data.body,
+        category: aiForm.purpose,
+        is_shared: false,
+      });
+
+      setIsAIDialogOpen(false);
+      setIsDialogOpen(true);
+      toast.success("Template generated! Review and save it.");
+    } catch (error: any) {
+      console.error("AI generation error:", error);
+      if (error.message?.includes("429")) {
+        toast.error("Rate limit exceeded. Please try again in a moment.");
+      } else if (error.message?.includes("402")) {
+        toast.error("AI credits exhausted. Please add credits to continue.");
+      } else {
+        toast.error("Failed to generate template");
+      }
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const filteredTemplates = templates.filter((t) => {
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.body.toLowerCase().includes(searchQuery.toLowerCase());
@@ -219,6 +295,14 @@ export function MessageTemplatesLibrary({
             <SelectItem value="sms">SMS</SelectItem>
           </SelectContent>
         </Select>
+        <Button 
+          variant="outline" 
+          onClick={() => setIsAIDialogOpen(true)} 
+          className="gap-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          AI Generate
+        </Button>
         <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="gap-2">
           <Plus className="w-4 h-4" />
           New Template
@@ -392,6 +476,114 @@ export function MessageTemplatesLibrary({
             </Button>
             <Button onClick={handleSave}>
               {editingTemplate ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Generation Dialog */}
+      <Dialog open={isAIDialogOpen} onOpenChange={setIsAIDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              AI Template Generator
+            </DialogTitle>
+            <DialogDescription>
+              Describe what you need and AI will create a template for you
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Industry</Label>
+              <Select 
+                value={aiForm.industry} 
+                onValueChange={(v) => setAiForm({ ...aiForm, industry: v })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select industry..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {industries.map((ind) => (
+                    <SelectItem key={ind.value} value={ind.value}>
+                      {ind.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Purpose</Label>
+              <Select 
+                value={aiForm.purpose} 
+                onValueChange={(v) => setAiForm({ ...aiForm, purpose: v })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select purpose..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Message Type</Label>
+                <Select 
+                  value={aiForm.type} 
+                  onValueChange={(v) => setAiForm({ ...aiForm, type: v as "email" | "sms" })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="sms">SMS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tone</Label>
+                <Select 
+                  value={aiForm.tone} 
+                  onValueChange={(v) => setAiForm({ ...aiForm, tone: v })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tones.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsAIDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateWithAI} disabled={isGenerating} className="gap-2">
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generate
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
