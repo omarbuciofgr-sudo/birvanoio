@@ -42,6 +42,7 @@ import {
   AlertCircle,
   Eye,
   Calendar,
+  Bell,
 } from "lucide-react";
 
 interface ContactSubmission {
@@ -126,6 +127,76 @@ const Contacts = () => {
       fetchSubmissions();
     }
   }, [isAdmin, highlightId]);
+
+  // Real-time subscription for new submissions
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const channel = supabase
+      .channel("contact_submissions_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "contact_submissions",
+        },
+        (payload) => {
+          const newSubmission = payload.new as ContactSubmission;
+          console.log("New contact submission received:", newSubmission.id);
+          
+          // Add to top of list
+          setSubmissions((prev) => [newSubmission, ...prev]);
+          
+          // Show notification
+          toast.success(
+            `New submission from ${newSubmission.first_name} ${newSubmission.last_name}`,
+            {
+              description: newSubmission.email,
+              action: {
+                label: "View",
+                onClick: () => handleViewDetails(newSubmission),
+              },
+              icon: <Bell className="w-4 h-4" />,
+              duration: 10000,
+            }
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "contact_submissions",
+        },
+        (payload) => {
+          const updatedSubmission = payload.new as ContactSubmission;
+          setSubmissions((prev) =>
+            prev.map((s) =>
+              s.id === updatedSubmission.id ? updatedSubmission : s
+            )
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "contact_submissions",
+        },
+        (payload) => {
+          const deletedId = payload.old.id;
+          setSubmissions((prev) => prev.filter((s) => s.id !== deletedId));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin]);
 
   const handleViewDetails = (submission: ContactSubmission) => {
     setSelectedSubmission(submission);
