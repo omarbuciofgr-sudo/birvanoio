@@ -45,22 +45,34 @@ serve(async (req) => {
 
     console.log(`Contact form submission from ${firstName} ${lastName} <${email}>`);
 
-    // Save to database
+    // Save to database and get the ID
+    let submissionId: string | null = null;
     if (supabaseUrl && supabaseServiceKey) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      const { error: dbError } = await supabase.from("contact_submissions").insert({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        message,
-      });
+      const { data: insertData, error: dbError } = await supabase
+        .from("contact_submissions")
+        .insert({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          message,
+        })
+        .select("id")
+        .single();
 
       if (dbError) {
         console.error("Failed to save contact submission:", dbError);
       } else {
-        console.log("Contact submission saved to database");
+        submissionId = insertData?.id;
+        console.log("Contact submission saved to database:", submissionId);
       }
     }
+
+    // Build admin dashboard link
+    const dashboardUrl = "https://brivano.io/dashboard/contacts";
+    const submissionLink = submissionId 
+      ? `${dashboardUrl}?id=${submissionId}` 
+      : dashboardUrl;
 
     // Send notification email to Brivano
     const notificationEmail = await fetch("https://api.resend.com/emails", {
@@ -72,15 +84,40 @@ serve(async (req) => {
       body: JSON.stringify({
         from: `Brivano Contact Form <${fromEmail}>`,
         to: ["info@brivano.io"],
-        subject: `New Lead Request from ${firstName} ${lastName}`,
+        subject: `🔔 New Lead Request from ${firstName} ${lastName}`,
         html: `
-          <h2>New Contact Form Submission</h2>
-          <p><strong>Name:</strong> ${firstName} ${lastName}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Niche & Target Location:</strong></p>
-          <p>${message.replace(/\n/g, "<br>")}</p>
-          <hr>
-          <p><em>Submitted via Brivano website contact form</em></p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 8px 8px 0 0;">
+              <h2 style="color: white; margin: 0;">New Contact Form Submission</h2>
+            </div>
+            <div style="background: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 0; color: #6b7280; width: 120px;"><strong>Name:</strong></td>
+                  <td style="padding: 8px 0; color: #111827;">${firstName} ${lastName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #6b7280;"><strong>Email:</strong></td>
+                  <td style="padding: 8px 0;"><a href="mailto:${email}" style="color: #6366f1;">${email}</a></td>
+                </tr>
+              </table>
+              
+              <div style="margin-top: 16px; padding: 16px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;"><strong>Niche & Target Location:</strong></p>
+                <p style="margin: 0; color: #111827;">${message.replace(/\n/g, "<br>")}</p>
+              </div>
+              
+              <div style="margin-top: 24px; text-align: center;">
+                <a href="${submissionLink}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+                  View in Dashboard →
+                </a>
+              </div>
+              
+              <p style="margin-top: 24px; color: #9ca3af; font-size: 12px; text-align: center;">
+                Submitted via Brivano website contact form
+              </p>
+            </div>
+          </div>
         `,
       }),
     });
