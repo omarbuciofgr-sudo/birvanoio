@@ -41,7 +41,8 @@ serve(async (req) => {
 
   try {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
+    const rawFromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
+    const fromEmail = rawFromEmail.trim();
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const recaptchaSecretKey = Deno.env.get("RECAPTCHA_SECRET_KEY");
@@ -108,6 +109,10 @@ serve(async (req) => {
       ? `${dashboardUrl}?id=${submissionId}` 
       : dashboardUrl;
 
+    // Build a strict, valid "from" value (Resend requires: email@domain.com or Name <email@domain.com>)
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail);
+    const fromHeader = isEmail ? `Brivano <${fromEmail}>` : "Brivano <onboarding@resend.dev>";
+
     // Send notification email to Brivano
     // IMPORTANT: Resend accounts in "testing" mode can only send to the account owner's email.
     // We should not fail the whole contact form submission if this notification fails.
@@ -118,7 +123,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `Brivano Contact Form <${fromEmail}>`,
+        from: fromHeader,
         to: ["info@brivano.io"],
         subject: `🔔 New Lead Request from ${firstName} ${lastName}`,
         html: `
@@ -180,7 +185,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `Brivano <${fromEmail}>`,
+        from: fromHeader,
         to: [email],
         subject: "We received your request - Sample leads coming soon!",
         html: `
