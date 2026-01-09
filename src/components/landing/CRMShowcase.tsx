@@ -1,4 +1,4 @@
-import { Phone, MessageSquare, Mail, Mic, Sparkles, LayoutDashboard, Bot, BarChart3, Kanban, FileText } from "lucide-react";
+import { Phone, MessageSquare, Mic, Sparkles, Bot, BarChart3 } from "lucide-react";
 
 const features = [
   {
@@ -13,13 +13,13 @@ const features = [
   },
   {
     icon: Mic,
-    title: "Call Recording & Transcription",
+    title: "Recording & Transcription",
     description: "Every call is recorded, transcribed, and analyzed for insights",
   },
   {
     icon: Sparkles,
-    title: "AI Call Recaps",
-    description: "Automatic follow-up emails and texts generated after each call",
+    title: "AI-Powered Follow-ups",
+    description: "Automatic recaps, follow-up emails, and weekly pipeline digests",
   },
   {
     icon: BarChart3,
@@ -30,26 +30,6 @@ const features = [
     icon: MessageSquare,
     title: "SMS & Email",
     description: "Send texts and emails without leaving the platform",
-  },
-  {
-    icon: FileText,
-    title: "Message Templates",
-    description: "AI-generated templates for consistent, high-converting outreach",
-  },
-  {
-    icon: Kanban,
-    title: "Kanban Boards",
-    description: "Visual pipeline management with drag-and-drop lead organization",
-  },
-  {
-    icon: LayoutDashboard,
-    title: "Full CRM",
-    description: "Track deals, log notes, and never lose context on a lead",
-  },
-  {
-    icon: Mail,
-    title: "AI Weekly Digest",
-    description: "Get AI-powered summaries of your pipeline activity every week",
   },
 ];
 
@@ -62,7 +42,7 @@ const CRMShowcase = () => {
         {/* Section Header */}
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
-            <LayoutDashboard className="w-4 h-4 text-primary" />
+            <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary font-medium">Built-in CRM + AI Tools</span>
           </div>
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
@@ -75,7 +55,7 @@ const CRMShowcase = () => {
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {features.map((feature) => (
             <div
               key={feature.title}
