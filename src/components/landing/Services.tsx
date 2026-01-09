@@ -1,50 +1,30 @@
-import { Database, Users, Lock, Phone, Sparkles, Building2, Mic, Bot, BarChart3, MessageSquare } from "lucide-react";
+import { Database, Users, Lock, Sparkles, Building2, Bot } from "lucide-react";
 
 const services = [
   {
     icon: Database,
     title: "Fresh, Verified Leads",
-    description: "Our proprietary scrapers collect live data from verified public sources. Every lead includes source URL and best available contact info (email and/or phone when publicly available).",
-  },
-  {
-    icon: Phone,
-    title: "Click-to-Call with Recording",
-    description: "Call leads directly from your dashboard with automatic call recording, logging, and AI-generated transcriptions for every conversation.",
-  },
-  {
-    icon: Bot,
-    title: "AI Voice Agent",
-    description: "Let our AI voice agent handle initial outreach and qualification calls. It speaks naturally, answers questions, and logs everything automatically.",
-  },
-  {
-    icon: Sparkles,
-    title: "AI-Powered Recaps",
-    description: "After every call, our AI generates follow-up emails and texts automatically. Get weekly AI digests summarizing your pipeline activity.",
-  },
-  {
-    icon: BarChart3,
-    title: "Lead Scoring & Sentiment",
-    description: "AI automatically scores leads based on engagement and analyzes sentiment from conversations to help you prioritize high-value prospects.",
-  },
-  {
-    icon: MessageSquare,
-    title: "SMS, Email & Templates",
-    description: "Send texts and emails without leaving the platform. Use AI-generated templates or create your own for consistent outreach.",
-  },
-  {
-    icon: Mic,
-    title: "Call Recording & Transcription",
-    description: "Every call is recorded, transcribed, and stored. Review conversations, train your team, and maintain compliance.",
-  },
-  {
-    icon: Users,
-    title: "Team Collaboration",
-    description: "Assign leads to team members, track activity across your org, and manage permissions. Kanban boards and activity timelines keep everyone aligned.",
+    description: "Our proprietary scrapers collect live data from verified public sources. Every lead includes source URL and best available contact info.",
   },
   {
     icon: Lock,
     title: "Exclusive Data",
     description: "No recycled lists. Choose your cities, industries, and filters. Your leads are exclusively yours — not shared with competitors.",
+  },
+  {
+    icon: Bot,
+    title: "AI Voice Agent & Calling",
+    description: "Click-to-call from your dashboard or let our AI voice agent handle outreach. Every call is recorded, transcribed, and logged automatically.",
+  },
+  {
+    icon: Sparkles,
+    title: "AI-Powered Automation",
+    description: "Auto-generated follow-ups, lead scoring, sentiment analysis, and weekly pipeline digests — all powered by AI.",
+  },
+  {
+    icon: Users,
+    title: "Team Collaboration",
+    description: "Assign leads to team members, track activity across your org, and manage permissions with full activity timelines.",
   },
   {
     icon: Building2,
