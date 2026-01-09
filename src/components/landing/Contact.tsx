@@ -74,12 +74,12 @@ const Contact = () => {
                 <div>
                   <h3 className="font-medium text-foreground mb-1">Book a Demo</h3>
                   <a 
-                    href="https://calendly.com/brivano/15min" 
+                    href="https://calendly.com/brivano-info-juke/30min" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
                   >
-                    Schedule a 15-minute walkthrough
+                    Schedule a 30-minute walkthrough
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 </div>
