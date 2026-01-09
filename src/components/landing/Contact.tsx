@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Send, Mail, Calendar, Phone, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -18,12 +19,21 @@ const Contact = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Simulate form submission
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    toast.success("Thanks for reaching out! We'll send you 10 sample leads shortly.");
-    setFormData({ firstName: "", lastName: "", email: "", message: "" });
-    setIsSubmitting(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("contact-form", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      toast.success("Thanks for reaching out! Check your email - we'll send you 10 sample leads shortly.");
+      setFormData({ firstName: "", lastName: "", email: "", message: "" });
+    } catch (error: any) {
+      console.error("Contact form error:", error);
+      toast.error("Something went wrong. Please try again or email us directly at info@brivano.io");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
