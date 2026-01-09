@@ -36,6 +36,7 @@ import { Phone, Mic, Play, Pause, Clock, CheckCircle, XCircle, AlertCircle, Bot,
 import { format, formatDistanceToNow } from "date-fns";
 import { ElevenLabsVoiceAgent } from "@/components/voice/ElevenLabsVoiceAgent";
 import { AudioRecordingPlayer } from "@/components/leads/AudioRecordingPlayer";
+import { GatedVoiceAgentPage } from "@/components/voice/GatedVoiceAgent";
 
 interface VoiceCall {
   id: string;
@@ -254,6 +255,7 @@ const VoiceAgent = () => {
 
   return (
     <DashboardLayout>
+      <GatedVoiceAgentPage>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -568,6 +570,7 @@ const VoiceAgent = () => {
           )}
         </DialogContent>
       </Dialog>
+      </GatedVoiceAgentPage>
     </DashboardLayout>
   );
 };
