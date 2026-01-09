@@ -7,7 +7,7 @@ import { Send, Mail, Calendar, Phone, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import ReCAPTCHA from "react-google-recaptcha";
 
-const RECAPTCHA_SITE_KEY = "6Le0h0UsAAAAAMHFyZVa-TbB3X47Ci-r9efjShyK";
+const RECAPTCHA_SITE_KEY = "6LeviUUsAAAAANOMWvBgY-qSK3y-yuNIYnrnDmUT";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
