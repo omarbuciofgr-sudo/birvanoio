@@ -53,6 +53,42 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_submissions: {
+        Row: {
+          created_at: string
+          email: string
+          first_name: string
+          followed_up_at: string | null
+          id: string
+          last_name: string
+          message: string
+          notes: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          first_name: string
+          followed_up_at?: string | null
+          id?: string
+          last_name: string
+          message: string
+          notes?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          first_name?: string
+          followed_up_at?: string | null
+          id?: string
+          last_name?: string
+          message?: string
+          notes?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       conversation_logs: {
         Row: {
           call_sid: string | null

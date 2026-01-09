@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.22.4";
 
 const corsHeaders = {
@@ -22,6 +23,8 @@ serve(async (req) => {
   try {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!resendApiKey) {
       throw new Error("RESEND_API_KEY not configured");
@@ -41,6 +44,23 @@ serve(async (req) => {
     const { firstName, lastName, email, message } = validation.data;
 
     console.log(`Contact form submission from ${firstName} ${lastName} <${email}>`);
+
+    // Save to database
+    if (supabaseUrl && supabaseServiceKey) {
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { error: dbError } = await supabase.from("contact_submissions").insert({
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        message,
+      });
+
+      if (dbError) {
+        console.error("Failed to save contact submission:", dbError);
+      } else {
+        console.log("Contact submission saved to database");
+      }
+    }
 
     // Send notification email to Brivano
     const notificationEmail = await fetch("https://api.resend.com/emails", {
