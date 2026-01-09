@@ -109,6 +109,8 @@ serve(async (req) => {
       : dashboardUrl;
 
     // Send notification email to Brivano
+    // IMPORTANT: Resend accounts in "testing" mode can only send to the account owner's email.
+    // We should not fail the whole contact form submission if this notification fails.
     const notificationEmail = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -156,14 +158,19 @@ serve(async (req) => {
       }),
     });
 
-    const notificationData = await notificationEmail.json();
-
-    if (!notificationEmail.ok) {
-      console.error("Failed to send notification email:", notificationData);
-      throw new Error("Failed to send notification");
+    // Don't assume a JSON body on errors
+    let notificationData: any = null;
+    try {
+      notificationData = await notificationEmail.json();
+    } catch {
+      notificationData = null;
     }
 
-    console.log("Notification email sent:", notificationData.id);
+    if (!notificationEmail.ok) {
+      console.error("Failed to send notification email (non-blocking):", notificationData);
+    } else {
+      console.log("Notification email sent:", notificationData?.id);
+    }
 
     // Send confirmation email to the user
     const confirmationEmail = await fetch("https://api.resend.com/emails", {
