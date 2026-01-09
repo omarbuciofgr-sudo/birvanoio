@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Send, Mail, Calendar, Phone, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import ReCAPTCHA from "react-google-recaptcha";
+
+const RECAPTCHA_SITE_KEY = "6Le0h0UsAAAAAMHFyZVa-TbB3X47Ci-r9efjShyK";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -14,23 +17,34 @@ const Contact = () => {
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Get reCAPTCHA token
+    const recaptchaToken = recaptchaRef.current?.getValue();
+    if (!recaptchaToken) {
+      toast.error("Please complete the reCAPTCHA verification");
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
       const { data, error } = await supabase.functions.invoke("contact-form", {
-        body: formData,
+        body: { ...formData, recaptchaToken },
       });
 
       if (error) throw error;
 
       toast.success("Thanks for reaching out! Check your email - we'll send you 10 sample leads shortly.");
       setFormData({ firstName: "", lastName: "", email: "", message: "" });
+      recaptchaRef.current?.reset();
     } catch (error: any) {
       console.error("Contact form error:", error);
       toast.error("Something went wrong. Please try again or email us directly at info@brivano.io");
+      recaptchaRef.current?.reset();
     } finally {
       setIsSubmitting(false);
     }
@@ -152,6 +166,14 @@ const Contact = () => {
                   rows={4}
                   required
                   className="bg-secondary/50 border-border resize-none"
+                />
+              </div>
+
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  theme="dark"
                 />
               </div>
 

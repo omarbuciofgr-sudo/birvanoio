@@ -13,7 +13,26 @@ const contactSchema = z.object({
   lastName: z.string().trim().min(1, "Last name is required").max(100),
   email: z.string().trim().email("Invalid email").max(255),
   message: z.string().trim().min(1, "Message is required").max(2000),
+  recaptchaToken: z.string().min(1, "reCAPTCHA verification required"),
 });
+
+// Verify reCAPTCHA token with Google
+async function verifyRecaptcha(token: string, secretKey: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `secret=${secretKey}&response=${token}`,
+    });
+
+    const data = await response.json();
+    console.log("reCAPTCHA verification response:", { success: data.success, score: data.score });
+    return data.success === true;
+  } catch (error) {
+    console.error("reCAPTCHA verification error:", error);
+    return false;
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,9 +44,14 @@ serve(async (req) => {
     const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const recaptchaSecretKey = Deno.env.get("RECAPTCHA_SECRET_KEY");
 
     if (!resendApiKey) {
       throw new Error("RESEND_API_KEY not configured");
+    }
+
+    if (!recaptchaSecretKey) {
+      throw new Error("RECAPTCHA_SECRET_KEY not configured");
     }
 
     // Parse and validate input
@@ -41,9 +65,19 @@ serve(async (req) => {
       );
     }
 
-    const { firstName, lastName, email, message } = validation.data;
+    const { firstName, lastName, email, message, recaptchaToken } = validation.data;
 
-    console.log(`Contact form submission from ${firstName} ${lastName} <${email}>`);
+    // Verify reCAPTCHA
+    const isValidRecaptcha = await verifyRecaptcha(recaptchaToken, recaptchaSecretKey);
+    if (!isValidRecaptcha) {
+      console.warn(`reCAPTCHA verification failed for ${email}`);
+      return new Response(
+        JSON.stringify({ error: "reCAPTCHA verification failed. Please try again." }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Contact form submission from ${firstName} ${lastName} <${email}> (reCAPTCHA verified)`);
 
     // Save to database and get the ID
     let submissionId: string | null = null;
