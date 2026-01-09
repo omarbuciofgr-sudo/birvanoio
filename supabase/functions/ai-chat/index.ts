@@ -22,14 +22,63 @@ serve(async (req) => {
 
     const { message, sessionId, conversationHistory } = await req.json();
 
-    if (!message || !sessionId) {
+    // Input validation - validate message type and length before AI processing
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return new Response(
-        JSON.stringify({ error: "Message and sessionId are required" }),
+        JSON.stringify({ error: "Message is required" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (message.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: "Message must be less than 5000 characters" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return new Response(
+        JSON.stringify({ error: "sessionId is required" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+
+    // Session-based rate limiting (existing)
+    const { data: rateLimitOk } = await supabase.rpc('check_chat_rate_limit', { 
+      session_uuid: sessionId 
+    });
+    
+    if (rateLimitOk === false) {
+      return new Response(
+        JSON.stringify({ error: "Too many messages. Please wait a moment before sending more." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // IP-based rate limiting to prevent session cycling attacks
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('cf-connecting-ip') || 
+                     req.headers.get('x-real-ip') || 
+                     'unknown';
+    
+    // Check IP-based rate limit (100 messages per hour per IP)
+    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+    const { count: ipMessageCount } = await supabase
+      .from('chat_messages')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', oneHourAgo);
+
+    // If more than 100 messages in the last hour from this session pattern, rate limit
+    if (ipMessageCount && ipMessageCount > 100) {
+      console.log(`Rate limit exceeded for IP pattern, count: ${ipMessageCount}`);
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     // Build conversation context
     const messages = [
