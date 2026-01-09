@@ -7,6 +7,7 @@ import { CSVImportDialog } from "@/components/leads/CSVImportDialog";
 import { LeadScoreBadge } from "@/components/leads/LeadScoreBadge";
 import { LeadKanbanBoard } from "@/components/leads/LeadKanbanBoard";
 import { LeadActivityTimeline } from "@/components/leads/LeadActivityTimeline";
+import { TeamAssignment } from "@/components/leads/TeamAssignment";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -377,9 +378,10 @@ const Leads = () => {
 
             {selectedLead && user && (
               <Tabs defaultValue="details" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="details">Details</TabsTrigger>
                   <TabsTrigger value="activity">Activity</TabsTrigger>
+                  <TabsTrigger value="team">Team</TabsTrigger>
                   <TabsTrigger value="communication">Communication</TabsTrigger>
                 </TabsList>
                 
@@ -505,6 +507,13 @@ const Leads = () => {
                   </div>
                 </TabsContent>
                 
+                <TabsContent value="team" className="mt-4">
+                  <TeamAssignment
+                    leadId={selectedLead.id}
+                    clientId={user.id}
+                  />
+                </TabsContent>
+
                 <TabsContent value="communication" className="mt-4">
                   <CommunicationPanel
                     leadId={selectedLead.id}
