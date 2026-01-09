@@ -27,7 +27,7 @@ const Hero = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8 animate-fade-in">
             <Zap className="w-4 h-4 text-primary" />
-            <span className="text-sm text-primary font-medium">Leads + CRM in One Platform</span>
+            <span className="text-sm text-primary font-medium">Leads + CRM + AI Voice Agent</span>
           </div>
 
           {/* Headline */}
@@ -45,8 +45,8 @@ const Hero = () => {
             className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-in"
             style={{ animationDelay: "0.2s" }}
           >
-            Brivano delivers verified B2B leads directly into a powerful CRM built for sales teams of any size. 
-            From solo reps to enterprise agencies — close more deals with less effort.
+            Brivano delivers verified B2B leads into a powerful CRM with AI voice agents, call recording, 
+            lead scoring, and automated follow-ups. From solo reps to enterprise agencies — close more deals with AI.
           </p>
 
           {/* CTA Buttons */}
@@ -83,15 +83,15 @@ const Hero = () => {
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Shield className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Built-in CRM</span>
+              <span className="text-sm text-muted-foreground">AI Voice Agent</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Zap className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">AI-Powered Tools</span>
+              <span className="text-sm text-muted-foreground">Call Recording</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Globe className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Worldwide Service</span>
+              <span className="text-sm text-muted-foreground">Lead Scoring</span>
             </div>
           </div>
         </div>

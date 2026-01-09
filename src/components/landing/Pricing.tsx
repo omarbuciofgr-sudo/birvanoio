@@ -14,8 +14,10 @@ const plans = [
     features: [
       "50 leads per seat/month",
       "Full CRM access",
-      "Call, SMS & email tools",
+      "Click-to-call with recording",
+      "SMS & email tools",
       "CSV import & export",
+      "Basic message templates",
       "Email support",
     ],
     popular: false,
@@ -26,13 +28,16 @@ const plans = [
     name: "Growth",
     monthlyPrice: 99,
     yearlyPrice: 79,
-    description: "For growing teams that need more leads and smarter tools.",
+    description: "For growing teams that need more leads and smarter AI tools.",
     features: [
       "150 leads per seat/month",
       "Everything in Starter",
       "AI-powered call recaps",
+      "Lead scoring & sentiment analysis",
+      "AI message templates",
+      "AI voice agent (limited minutes)",
+      "Kanban pipeline view",
       "Priority support",
-      "Custom lead filters",
     ],
     popular: true,
     monthlyPriceId: "price_1SnL7z2K2aKgw8lL9eBDzOyl",
@@ -42,13 +47,17 @@ const plans = [
     name: "Scale",
     monthlyPrice: 149,
     yearlyPrice: 119,
-    description: "For agencies and teams that need volume and exclusivity.",
+    description: "For agencies and teams that need volume, AI, and exclusivity.",
     features: [
       "300 leads per seat/month",
       "Everything in Growth",
+      "Unlimited AI voice agent",
+      "AI weekly digest reports",
+      "Call transcription & analysis",
       "Zip-level exclusivity",
+      "Webhook integrations",
       "Dedicated account manager",
-      "API access & integrations",
+      "API access",
     ],
     popular: false,
     monthlyPriceId: "price_1SnLBL2K2aKgw8lLVLOgPcXu",
@@ -103,7 +112,7 @@ const Pricing = () => {
             Choose Your <span className="gradient-text">Plan</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-8">
-            Scale your lead generation with plans designed for every stage of growth.
+            Scale your lead generation with plans designed for every stage of growth. All plans include our full CRM and AI-powered tools.
           </p>
           
           {/* Billing Toggle */}
@@ -175,7 +184,7 @@ const Pricing = () => {
                 )}
               </div>
 
-              <ul className="space-y-4 mb-8">
+              <ul className="space-y-3 mb-8">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3">
                     <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -199,6 +208,21 @@ const Pricing = () => {
               </Button>
             </div>
           ))}
+        </div>
+
+        {/* Enterprise CTA */}
+        <div className="mt-12 text-center">
+          <p className="text-muted-foreground mb-2">Need a custom solution for your enterprise?</p>
+          <a 
+            href="#contact" 
+            className="text-primary hover:underline font-medium"
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            Contact us for custom pricing →
+          </a>
         </div>
       </div>
     </section>
