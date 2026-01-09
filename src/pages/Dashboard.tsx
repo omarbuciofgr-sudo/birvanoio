@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { AIWeeklyDigest } from "@/components/dashboard/AIWeeklyDigest";
+import { GatedAIWeeklyDigest } from "@/components/dashboard/GatedAIWeeklyDigest";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Phone, CheckCircle, TrendingUp } from "lucide-react";
@@ -148,7 +148,7 @@ const Dashboard = () => {
         </Card>
 
         {/* AI Weekly Digest */}
-        <AIWeeklyDigest />
+        <GatedAIWeeklyDigest />
       </div>
     </DashboardLayout>
   );

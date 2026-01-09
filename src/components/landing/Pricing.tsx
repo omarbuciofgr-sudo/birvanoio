@@ -36,7 +36,6 @@ const plans = [
       "Lead scoring & sentiment analysis",
       "AI message templates",
       "AI voice agent (limited minutes)",
-      "Kanban pipeline view",
       "Priority support",
     ],
     popular: true,
