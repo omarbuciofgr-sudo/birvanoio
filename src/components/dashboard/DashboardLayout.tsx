@@ -15,6 +15,7 @@ import {
   Upload,
   Mail,
   Bot,
+  FileText,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -26,6 +27,7 @@ const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/dashboard/leads", icon: Users },
   { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
+  { name: "Templates", href: "/dashboard/templates", icon: FileText },
   { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
