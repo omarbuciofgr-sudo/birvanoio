@@ -15,6 +15,18 @@ const faqs = [
     answer: "No. Your leads are exclusively yours. We never resell or share leads between customers. With our Scale plan, you can even get zip-level exclusivity in your target areas.",
   },
   {
+    question: "What is the AI Voice Agent?",
+    answer: "Our AI Voice Agent can make outbound calls on your behalf, qualify leads, answer common questions, and log all conversations automatically. It speaks naturally and can handle complex conversations. Growth plans include limited minutes, while Scale plans include unlimited usage.",
+  },
+  {
+    question: "How does call recording and transcription work?",
+    answer: "Every call you make through Brivano is automatically recorded and stored securely. Our AI then transcribes the conversation and generates insights, including sentiment analysis and suggested follow-ups.",
+  },
+  {
+    question: "What AI features are included?",
+    answer: "Depending on your plan, you get access to: AI-powered call recaps, automatic follow-up email/SMS generation, lead scoring, sentiment analysis, message templates, weekly digest reports, and our AI voice agent for automated outreach.",
+  },
+  {
     question: "What if I get a bad lead?",
     answer: "We stand behind our data quality. If a lead has incorrect contact information, let us know and we'll replace it — no questions asked.",
   },
@@ -29,6 +41,10 @@ const faqs = [
   {
     question: "How does team pricing work?",
     answer: "Pricing is per seat. Each team member gets their own login, lead allocation, and full CRM access. Add or remove seats anytime as your team grows.",
+  },
+  {
+    question: "Can I integrate Brivano with other tools?",
+    answer: "Yes! Scale plan includes webhook integrations and API access, allowing you to connect Brivano with your existing tech stack — CRMs, marketing tools, and more.",
   },
 ];
 

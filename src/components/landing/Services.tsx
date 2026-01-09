@@ -1,4 +1,4 @@
-import { Database, Users, Lock, Phone, Sparkles, Building2 } from "lucide-react";
+import { Database, Users, Lock, Phone, Sparkles, Building2, Mic, Bot, BarChart3, MessageSquare } from "lucide-react";
 
 const services = [
   {
@@ -8,18 +8,38 @@ const services = [
   },
   {
     icon: Phone,
-    title: "All-in-One CRM",
-    description: "Call, text, and email leads directly from your dashboard. Track conversations, log notes, and never lose context on a deal again.",
+    title: "Click-to-Call with Recording",
+    description: "Call leads directly from your dashboard with automatic call recording, logging, and AI-generated transcriptions for every conversation.",
+  },
+  {
+    icon: Bot,
+    title: "AI Voice Agent",
+    description: "Let our AI voice agent handle initial outreach and qualification calls. It speaks naturally, answers questions, and logs everything automatically.",
   },
   {
     icon: Sparkles,
     title: "AI-Powered Recaps",
-    description: "After every call, our AI generates follow-up emails and texts automatically. Spend less time on admin, more time closing.",
+    description: "After every call, our AI generates follow-up emails and texts automatically. Get weekly AI digests summarizing your pipeline activity.",
+  },
+  {
+    icon: BarChart3,
+    title: "Lead Scoring & Sentiment",
+    description: "AI automatically scores leads based on engagement and analyzes sentiment from conversations to help you prioritize high-value prospects.",
+  },
+  {
+    icon: MessageSquare,
+    title: "SMS, Email & Templates",
+    description: "Send texts and emails without leaving the platform. Use AI-generated templates or create your own for consistent outreach.",
+  },
+  {
+    icon: Mic,
+    title: "Call Recording & Transcription",
+    description: "Every call is recorded, transcribed, and stored. Review conversations, train your team, and maintain compliance.",
   },
   {
     icon: Users,
-    title: "Built for Teams",
-    description: "Per-seat pricing that scales with your organization. Whether you have 2 reps or 200, everyone gets the tools they need.",
+    title: "Team Collaboration",
+    description: "Assign leads to team members, track activity across your org, and manage permissions. Kanban boards and activity timelines keep everyone aligned.",
   },
   {
     icon: Lock,
@@ -29,7 +49,7 @@ const services = [
   {
     icon: Building2,
     title: "Scales With You",
-    description: "From solo reps to large agencies — get dedicated support, API access, and custom integrations as you grow.",
+    description: "From solo reps to large agencies — get dedicated support, API access, webhook integrations, and custom solutions as you grow.",
   },
 ];
 
@@ -45,7 +65,7 @@ const Services = () => {
             Everything You Need to <span className="gradient-text">Close Deals</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Leads, CRM, and AI tools — all in one platform designed for sales teams that want results.
+            Leads, CRM, AI voice agents, and automation tools — all in one platform designed for sales teams that want results.
           </p>
         </div>
 

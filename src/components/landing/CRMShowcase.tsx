@@ -1,10 +1,30 @@
-import { Phone, MessageSquare, Mail, Mic, Sparkles, LayoutDashboard } from "lucide-react";
+import { Phone, MessageSquare, Mail, Mic, Sparkles, LayoutDashboard, Bot, BarChart3, Kanban, FileText } from "lucide-react";
 
 const features = [
   {
     icon: Phone,
     title: "Click-to-Call",
-    description: "Call leads directly from your dashboard with automatic logging",
+    description: "Call leads directly from your dashboard with automatic logging and recording",
+  },
+  {
+    icon: Bot,
+    title: "AI Voice Agent",
+    description: "Automated outreach calls with natural conversation and smart qualification",
+  },
+  {
+    icon: Mic,
+    title: "Call Recording & Transcription",
+    description: "Every call is recorded, transcribed, and analyzed for insights",
+  },
+  {
+    icon: Sparkles,
+    title: "AI Call Recaps",
+    description: "Automatic follow-up emails and texts generated after each call",
+  },
+  {
+    icon: BarChart3,
+    title: "Lead Scoring & Sentiment",
+    description: "AI scores leads and analyzes conversation sentiment automatically",
   },
   {
     icon: MessageSquare,
@@ -12,14 +32,14 @@ const features = [
     description: "Send texts and emails without leaving the platform",
   },
   {
-    icon: Mic,
-    title: "Call Recording",
-    description: "Every call is recorded and stored for training and compliance",
+    icon: FileText,
+    title: "Message Templates",
+    description: "AI-generated templates for consistent, high-converting outreach",
   },
   {
-    icon: Sparkles,
-    title: "AI Call Recaps",
-    description: "Automatic follow-up emails and texts generated after each call",
+    icon: Kanban,
+    title: "Kanban Boards",
+    description: "Visual pipeline management with drag-and-drop lead organization",
   },
   {
     icon: LayoutDashboard,
@@ -28,8 +48,8 @@ const features = [
   },
   {
     icon: Mail,
-    title: "Smart Follow-ups",
-    description: "AI suggests the best time and message for your next touchpoint",
+    title: "AI Weekly Digest",
+    description: "Get AI-powered summaries of your pipeline activity every week",
   },
 ];
 
@@ -50,24 +70,24 @@ const CRMShowcase = () => {
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             Call, text, and email your leads directly from your dashboard. 
-            Every interaction is logged, recorded, and enhanced with AI.
+            Every interaction is logged, recorded, transcribed, and enhanced with AI.
           </p>
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {features.map((feature) => (
             <div
               key={feature.title}
-              className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-all duration-300"
+              className="p-5 rounded-xl bg-card border border-border hover:border-primary/30 transition-all duration-300"
             >
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                <feature.icon className="w-6 h-6 text-primary" />
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                <feature.icon className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-display text-lg font-semibold text-foreground mb-2">
+              <h3 className="font-display text-base font-semibold text-foreground mb-1.5">
                 {feature.title}
               </h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {feature.description}
               </p>
             </div>
