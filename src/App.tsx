@@ -15,6 +15,7 @@ import Campaigns from "./pages/Campaigns";
 import Templates from "./pages/Templates";
 import VoiceAgent from "./pages/VoiceAgent";
 import AdminImport from "./pages/AdminImport";
+import Contacts from "./pages/Contacts";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import NotFound from "./pages/NotFound";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/dashboard/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
             <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
             <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
+            <Route path="/dashboard/contacts" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
             <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
             <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

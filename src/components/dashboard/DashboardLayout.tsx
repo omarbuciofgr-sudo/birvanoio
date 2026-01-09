@@ -16,6 +16,7 @@ import {
   Mail,
   Bot,
   FileText,
+  Inbox,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -64,7 +65,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const allNavItems = [
     ...navItems,
-    ...(isAdmin ? [{ name: "Import Leads", href: "/admin/import", icon: Upload }] : []),
+    ...(isAdmin ? [
+      { name: "Contacts", href: "/dashboard/contacts", icon: Inbox },
+      { name: "Import Leads", href: "/admin/import", icon: Upload },
+    ] : []),
   ];
 
   return (
