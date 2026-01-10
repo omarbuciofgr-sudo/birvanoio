@@ -19,6 +19,12 @@ const TIER_MAP: Record<string, string> = {
   "prod_Tkr1MJspbuRMt9": "scale",
 };
 
+// Demo accounts that get full "scale" tier access without Stripe subscription
+const DEMO_EMAILS = [
+  "info@brivano.io",
+  "omar.bucio@yahoo.com",
+];
+
 const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CHECK-SUBSCRIPTION] ${step}${detailsStr}`);
@@ -69,6 +75,19 @@ serve(async (req) => {
     if (!userId || !email) throw new Error("User not authenticated or email not available");
 
     logStep("User authenticated", { userId, email });
+
+    // Check if this is a demo account - grant full access without Stripe check
+    if (DEMO_EMAILS.includes(email.toLowerCase())) {
+      logStep("Demo account detected, granting full scale tier access", { email });
+      return new Response(JSON.stringify({
+        subscribed: true,
+        tier: "scale",
+        subscription_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email, limit: 1 });
