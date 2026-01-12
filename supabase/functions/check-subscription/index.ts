@@ -20,10 +20,9 @@ const TIER_MAP: Record<string, string> = {
 };
 
 // Demo accounts that get full "scale" tier access without Stripe subscription
-const DEMO_EMAILS = [
-  "info@brivano.io",
-  "omar.bucio@yahoo.com",
-];
+// Read from environment variable to prevent hardcoding privileged account emails in source code
+const DEMO_EMAILS_ENV = Deno.env.get("DEMO_ACCOUNT_EMAILS") || "";
+const DEMO_EMAILS = DEMO_EMAILS_ENV.split(",").map(email => email.trim().toLowerCase()).filter(Boolean);
 
 const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
