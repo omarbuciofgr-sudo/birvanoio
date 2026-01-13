@@ -7,12 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Globe, 
   Search, 
@@ -22,7 +23,9 @@ import {
   ExternalLink, 
   Copy, 
   Download,
-  FileText
+  FileText,
+  UserPlus,
+  Check
 } from 'lucide-react';
 
 type ScrapeResult = {
@@ -41,6 +44,7 @@ type SearchResult = {
   title: string;
   description?: string;
   markdown?: string;
+  imported?: boolean;
 };
 
 export default function WebScraper() {
@@ -58,6 +62,9 @@ export default function WebScraper() {
   const [searchLimit, setSearchLimit] = useState(10);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set());
+  const [importingIndex, setImportingIndex] = useState<number | null>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
 
   // Map state
   const [mapUrl, setMapUrl] = useState('');
@@ -123,6 +130,7 @@ export default function WebScraper() {
 
     setSearchLoading(true);
     setSearchResults([]);
+    setSelectedResults(new Set());
 
     try {
       const response = await firecrawlApi.search(searchQuery, {
@@ -131,7 +139,7 @@ export default function WebScraper() {
       });
 
       if (response.success) {
-        setSearchResults(response.data || []);
+        setSearchResults((response.data || []).map((r: SearchResult) => ({ ...r, imported: false })));
         toast.success(`Found ${response.data?.length || 0} results`);
       } else {
         toast.error(response.error || 'Search failed');
@@ -141,6 +149,132 @@ export default function WebScraper() {
       toast.error('Search failed');
     } finally {
       setSearchLoading(false);
+    }
+  };
+
+  // Extract domain name for business name
+  const extractBusinessName = (url: string, title: string): string => {
+    try {
+      const domain = new URL(url).hostname.replace('www.', '');
+      // Use title if it seems like a business name, otherwise use domain
+      if (title && title.length < 60 && !title.includes('|') && !title.includes('-')) {
+        return title;
+      }
+      // Clean up domain to make it readable
+      return domain.split('.')[0].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    } catch {
+      return title || 'Unknown Business';
+    }
+  };
+
+  const importAsLead = async (result: SearchResult, index: number) => {
+    if (!user?.id) {
+      toast.error('You must be logged in to import leads');
+      return;
+    }
+
+    setImportingIndex(index);
+
+    try {
+      const businessName = extractBusinessName(result.url, result.title);
+      
+      const { error } = await supabase.from('leads').insert({
+        client_id: user.id,
+        business_name: businessName,
+        website: result.url,
+        notes: result.description || '',
+        source_url: result.url,
+        status: 'new',
+      });
+
+      if (error) throw error;
+
+      // Mark as imported
+      setSearchResults(prev => prev.map((r, i) => 
+        i === index ? { ...r, imported: true } : r
+      ));
+      setSelectedResults(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+      
+      toast.success(`Imported "${businessName}" as a new lead`);
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Failed to import lead');
+    } finally {
+      setImportingIndex(null);
+    }
+  };
+
+  const importSelectedLeads = async () => {
+    if (selectedResults.size === 0) {
+      toast.error('Please select at least one result to import');
+      return;
+    }
+
+    setBulkImporting(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const index of selectedResults) {
+      const result = searchResults[index];
+      if (result.imported) continue;
+
+      try {
+        const businessName = extractBusinessName(result.url, result.title);
+        
+        const { error } = await supabase.from('leads').insert({
+          client_id: user!.id,
+          business_name: businessName,
+          website: result.url,
+          notes: result.description || '',
+          source_url: result.url,
+          status: 'new',
+        });
+
+        if (error) throw error;
+        successCount++;
+        
+        // Mark as imported
+        setSearchResults(prev => prev.map((r, i) => 
+          i === index ? { ...r, imported: true } : r
+        ));
+      } catch (error) {
+        console.error('Import error:', error);
+        errorCount++;
+      }
+    }
+
+    setSelectedResults(new Set());
+    setBulkImporting(false);
+
+    if (successCount > 0) {
+      toast.success(`Successfully imported ${successCount} lead${successCount > 1 ? 's' : ''}`);
+    }
+    if (errorCount > 0) {
+      toast.error(`Failed to import ${errorCount} lead${errorCount > 1 ? 's' : ''}`);
+    }
+  };
+
+  const toggleSelectResult = (index: number) => {
+    setSelectedResults(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedResults.size === searchResults.filter(r => !r.imported).length) {
+      setSelectedResults(new Set());
+    } else {
+      setSelectedResults(new Set(searchResults.map((r, i) => r.imported ? -1 : i).filter(i => i >= 0)));
     }
   };
 
@@ -397,24 +531,67 @@ export default function WebScraper() {
 
           {searchResults.length > 0 && (
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Search Results ({searchResults.length})</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleSelectAll}
+                  >
+                    {selectedResults.size === searchResults.filter(r => !r.imported).length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={importSelectedLeads}
+                    disabled={selectedResults.size === 0 || bulkImporting}
+                  >
+                    {bulkImporting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Import Selected ({selectedResults.size})
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[500px]">
                   <div className="space-y-4">
                     {searchResults.map((result, i) => (
-                      <Card key={i} className="p-4">
-                        <div className="flex items-start justify-between">
+                      <Card key={i} className={`p-4 ${result.imported ? 'opacity-60 bg-muted/50' : ''}`}>
+                        <div className="flex items-start gap-3">
+                          {!result.imported && (
+                            <Checkbox
+                              checked={selectedResults.has(i)}
+                              onCheckedChange={() => toggleSelectResult(i)}
+                              className="mt-1"
+                            />
+                          )}
+                          {result.imported && (
+                            <div className="mt-1">
+                              <Check className="h-4 w-4 text-green-500" />
+                            </div>
+                          )}
                           <div className="space-y-1 flex-1 min-w-0">
-                            <a 
-                              href={result.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="font-medium text-primary hover:underline block truncate"
-                            >
-                              {result.title}
-                            </a>
+                            <div className="flex items-center gap-2">
+                              <a 
+                                href={result.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="font-medium text-primary hover:underline block truncate"
+                              >
+                                {result.title}
+                              </a>
+                              {result.imported && (
+                                <Badge variant="secondary" className="text-xs">Imported</Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground truncate">
                               {result.url}
                             </p>
@@ -422,13 +599,29 @@ export default function WebScraper() {
                               <p className="text-sm mt-2">{result.description}</p>
                             )}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => copyToClipboard(result.markdown || result.url)}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(result.markdown || result.url)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            {!result.imported && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => importAsLead(result, i)}
+                                disabled={importingIndex === i}
+                              >
+                                {importingIndex === i ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <UserPlus className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </Card>
                     ))}
