@@ -1,0 +1,634 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { firecrawlApi } from '@/lib/api/firecrawl';
+import { 
+  Globe, 
+  Search, 
+  Map, 
+  Layers, 
+  Loader2, 
+  ExternalLink, 
+  Copy, 
+  Download,
+  FileText
+} from 'lucide-react';
+
+type ScrapeResult = {
+  markdown?: string;
+  html?: string;
+  links?: string[];
+  metadata?: {
+    title?: string;
+    description?: string;
+    sourceURL?: string;
+  };
+};
+
+type SearchResult = {
+  url: string;
+  title: string;
+  description?: string;
+  markdown?: string;
+};
+
+export default function WebScraper() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // Scrape state
+  const [scrapeUrl, setScrapeUrl] = useState('');
+  const [scrapeLoading, setScrapeLoading] = useState(false);
+  const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null);
+  const [onlyMainContent, setOnlyMainContent] = useState(true);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLimit, setSearchLimit] = useState(10);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+
+  // Map state
+  const [mapUrl, setMapUrl] = useState('');
+  const [mapLimit, setMapLimit] = useState(100);
+  const [includeSubdomains, setIncludeSubdomains] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapResults, setMapResults] = useState<string[]>([]);
+
+  // Crawl state
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlLimit, setCrawlLimit] = useState(50);
+  const [crawlDepth, setCrawlDepth] = useState(3);
+  const [crawlLoading, setCrawlLoading] = useState(false);
+  const [crawlResult, setCrawlResult] = useState<any>(null);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    navigate('/auth');
+    return null;
+  }
+
+  const handleScrape = async () => {
+    if (!scrapeUrl.trim()) {
+      toast.error('Please enter a URL');
+      return;
+    }
+
+    setScrapeLoading(true);
+    setScrapeResult(null);
+
+    try {
+      const response = await firecrawlApi.scrape(scrapeUrl, {
+        formats: ['markdown', 'links'],
+        onlyMainContent,
+      });
+
+      if (response.success) {
+        setScrapeResult(response.data?.data || response.data);
+        toast.success('Page scraped successfully');
+      } else {
+        toast.error(response.error || 'Failed to scrape page');
+      }
+    } catch (error) {
+      console.error('Scrape error:', error);
+      toast.error('Failed to scrape page');
+    } finally {
+      setScrapeLoading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.error('Please enter a search query');
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchResults([]);
+
+    try {
+      const response = await firecrawlApi.search(searchQuery, {
+        limit: searchLimit,
+        scrapeOptions: { formats: ['markdown'] },
+      });
+
+      if (response.success) {
+        setSearchResults(response.data || []);
+        toast.success(`Found ${response.data?.length || 0} results`);
+      } else {
+        toast.error(response.error || 'Search failed');
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('Search failed');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleMap = async () => {
+    if (!mapUrl.trim()) {
+      toast.error('Please enter a URL');
+      return;
+    }
+
+    setMapLoading(true);
+    setMapResults([]);
+
+    try {
+      const response = await firecrawlApi.map(mapUrl, {
+        limit: mapLimit,
+        includeSubdomains,
+      });
+
+      if (response.success) {
+        const links = response.data?.links || response.links || [];
+        setMapResults(links);
+        toast.success(`Found ${links.length} URLs`);
+      } else {
+        toast.error(response.error || 'Failed to map website');
+      }
+    } catch (error) {
+      console.error('Map error:', error);
+      toast.error('Failed to map website');
+    } finally {
+      setMapLoading(false);
+    }
+  };
+
+  const handleCrawl = async () => {
+    if (!crawlUrl.trim()) {
+      toast.error('Please enter a URL');
+      return;
+    }
+
+    setCrawlLoading(true);
+    setCrawlResult(null);
+
+    try {
+      const response = await firecrawlApi.crawl(crawlUrl, {
+        limit: crawlLimit,
+        maxDepth: crawlDepth,
+      });
+
+      if (response.success) {
+        setCrawlResult(response);
+        toast.success('Crawl started! Check back for results.');
+      } else {
+        toast.error(response.error || 'Failed to start crawl');
+      }
+    } catch (error) {
+      console.error('Crawl error:', error);
+      toast.error('Failed to start crawl');
+    } finally {
+      setCrawlLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
+
+  const downloadAsFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Web Scraper</h1>
+        <p className="text-muted-foreground">Scrape websites, search the web, and crawl entire domains</p>
+      </div>
+      <Tabs defaultValue="scrape" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="scrape" className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Scrape
+          </TabsTrigger>
+          <TabsTrigger value="search" className="flex items-center gap-2">
+            <Search className="h-4 w-4" />
+            Search
+          </TabsTrigger>
+          <TabsTrigger value="map" className="flex items-center gap-2">
+            <Map className="h-4 w-4" />
+            Map
+          </TabsTrigger>
+          <TabsTrigger value="crawl" className="flex items-center gap-2">
+            <Layers className="h-4 w-4" />
+            Crawl
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Scrape Tab */}
+        <TabsContent value="scrape" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Scrape a Single Page</CardTitle>
+              <CardDescription>
+                Extract content from any URL in markdown format
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="scrape-url">URL to Scrape</Label>
+                <Input
+                  id="scrape-url"
+                  placeholder="https://example.com"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="main-content"
+                  checked={onlyMainContent}
+                  onCheckedChange={setOnlyMainContent}
+                />
+                <Label htmlFor="main-content">Only main content (exclude headers/footers)</Label>
+              </div>
+              <Button onClick={handleScrape} disabled={scrapeLoading}>
+                {scrapeLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Scraping...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="mr-2 h-4 w-4" />
+                    Scrape Page
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {scrapeResult && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">
+                    {scrapeResult.metadata?.title || 'Scraped Content'}
+                  </CardTitle>
+                  {scrapeResult.metadata?.sourceURL && (
+                    <CardDescription className="flex items-center gap-1">
+                      <ExternalLink className="h-3 w-3" />
+                      {scrapeResult.metadata.sourceURL}
+                    </CardDescription>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => copyToClipboard(scrapeResult.markdown || '')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => downloadAsFile(scrapeResult.markdown || '', 'scraped-content.md')}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px] rounded-md border p-4">
+                  <pre className="whitespace-pre-wrap text-sm">
+                    {scrapeResult.markdown}
+                  </pre>
+                </ScrollArea>
+                {scrapeResult.links && scrapeResult.links.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium mb-2">Found Links ({scrapeResult.links.length})</h4>
+                    <ScrollArea className="h-[150px]">
+                      <div className="space-y-1">
+                        {scrapeResult.links.slice(0, 50).map((link, i) => (
+                          <a 
+                            key={i} 
+                            href={link} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="block text-sm text-primary hover:underline truncate"
+                          >
+                            {link}
+                          </a>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Search Tab */}
+        <TabsContent value="search" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Search & Discover Leads</CardTitle>
+              <CardDescription>
+                Search the web for potential leads and scrape their information
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="search-query">Search Query</Label>
+                <Input
+                  id="search-query"
+                  placeholder="e.g., roofing companies in Dallas Texas"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="search-limit">Number of Results</Label>
+                <Input
+                  id="search-limit"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={searchLimit}
+                  onChange={(e) => setSearchLimit(parseInt(e.target.value) || 10)}
+                />
+              </div>
+              <Button onClick={handleSearch} disabled={searchLoading}>
+                {searchLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Search Web
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {searchResults.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Search Results ({searchResults.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[500px]">
+                  <div className="space-y-4">
+                    {searchResults.map((result, i) => (
+                      <Card key={i} className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <a 
+                              href={result.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="font-medium text-primary hover:underline block truncate"
+                            >
+                              {result.title}
+                            </a>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {result.url}
+                            </p>
+                            {result.description && (
+                              <p className="text-sm mt-2">{result.description}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyToClipboard(result.markdown || result.url)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Map Tab */}
+        <TabsContent value="map" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Map Website URLs</CardTitle>
+              <CardDescription>
+                Quickly discover all URLs on a website (like a fast sitemap)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="map-url">Website URL</Label>
+                <Input
+                  id="map-url"
+                  placeholder="https://example.com"
+                  value={mapUrl}
+                  onChange={(e) => setMapUrl(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="map-limit">Max URLs to Return</Label>
+                <Input
+                  id="map-limit"
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={mapLimit}
+                  onChange={(e) => setMapLimit(parseInt(e.target.value) || 100)}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="subdomains"
+                  checked={includeSubdomains}
+                  onCheckedChange={setIncludeSubdomains}
+                />
+                <Label htmlFor="subdomains">Include subdomains</Label>
+              </div>
+              <Button onClick={handleMap} disabled={mapLoading}>
+                {mapLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Mapping...
+                  </>
+                ) : (
+                  <>
+                    <Map className="mr-2 h-4 w-4" />
+                    Map Website
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {mapResults.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Discovered URLs ({mapResults.length})</CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => downloadAsFile(mapResults.join('\n'), 'sitemap.txt')}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-1">
+                    {mapResults.map((url, i) => (
+                      <a 
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-sm text-primary hover:underline truncate py-1"
+                      >
+                        {url}
+                      </a>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Crawl Tab */}
+        <TabsContent value="crawl" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Crawl Entire Website</CardTitle>
+              <CardDescription>
+                Recursively scrape all pages on a website
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="crawl-url">Starting URL</Label>
+                <Input
+                  id="crawl-url"
+                  placeholder="https://example.com"
+                  value={crawlUrl}
+                  onChange={(e) => setCrawlUrl(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="crawl-limit">Max Pages to Crawl</Label>
+                  <Input
+                    id="crawl-limit"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={crawlLimit}
+                    onChange={(e) => setCrawlLimit(parseInt(e.target.value) || 50)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="crawl-depth">Max Depth</Label>
+                  <Input
+                    id="crawl-depth"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={crawlDepth}
+                    onChange={(e) => setCrawlDepth(parseInt(e.target.value) || 3)}
+                  />
+                </div>
+              </div>
+              <Button onClick={handleCrawl} disabled={crawlLoading}>
+                {crawlLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting Crawl...
+                  </>
+                ) : (
+                  <>
+                    <Layers className="mr-2 h-4 w-4" />
+                    Start Crawl
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {crawlResult && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Crawl Status
+                  <Badge variant={crawlResult.status === 'completed' ? 'default' : 'secondary'}>
+                    {crawlResult.status || 'Started'}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <p><strong>Pages Completed:</strong> {crawlResult.completed || 0}</p>
+                  <p><strong>Total Pages:</strong> {crawlResult.total || 'Calculating...'}</p>
+                  <p><strong>Credits Used:</strong> {crawlResult.creditsUsed || 0}</p>
+                  {crawlResult.expiresAt && (
+                    <p><strong>Expires:</strong> {new Date(crawlResult.expiresAt).toLocaleString()}</p>
+                  )}
+                </div>
+                {crawlResult.data && crawlResult.data.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium mb-2">Crawled Pages ({crawlResult.data.length})</h4>
+                    <ScrollArea className="h-[300px]">
+                      <div className="space-y-2">
+                        {crawlResult.data.map((page: any, i: number) => (
+                          <Card key={i} className="p-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium truncate">
+                                {page.metadata?.title || page.metadata?.sourceURL || `Page ${i + 1}`}
+                              </span>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+    </DashboardLayout>
+  );
+}

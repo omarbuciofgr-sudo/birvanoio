@@ -19,6 +19,7 @@ import AdminImport from "./pages/AdminImport";
 import Contacts from "./pages/Contacts";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
+import WebScraper from "./pages/WebScraper";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
               <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
               <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
               <Route path="/dashboard/contacts" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
+              <Route path="/dashboard/scraper" element={<ProtectedRoute><WebScraper /></ProtectedRoute>} />
               <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
               <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
