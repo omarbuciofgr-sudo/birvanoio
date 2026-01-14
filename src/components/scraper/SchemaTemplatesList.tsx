@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Copy, FileJson, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Edit, Trash2, Copy, FileJson, ChevronDown, ChevronUp, Sparkles, Home, Shield, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,17 +17,26 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { schemaTemplatesApi } from '@/lib/api/scraper';
-import type { SchemaTemplate, SchemaField } from '@/types/scraper';
+import { REAL_ESTATE_TEMPLATE, INSURANCE_TEMPLATE, B2B_TEMPLATE } from '@/lib/nicheTemplates';
+import type { SchemaTemplate, SchemaField, CreateSchemaTemplateInput } from '@/types/scraper';
 
 interface SchemaTemplatesListProps {
   onEdit: (template: SchemaTemplate) => void;
   onCreateNew: () => void;
+  onCreateFromPreset?: (preset: any) => void;
 }
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -50,9 +59,28 @@ const NICHE_COLORS: Record<string, string> = {
   custom: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
 };
 
-export function SchemaTemplatesList({ onEdit, onCreateNew }: SchemaTemplatesListProps) {
+export function SchemaTemplatesList({ onEdit, onCreateNew, onCreateFromPreset }: SchemaTemplatesListProps) {
   const [expandedTemplates, setExpandedTemplates] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+
+  const createPresetMutation = useMutation({
+    mutationFn: schemaTemplatesApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schema-templates'] });
+      toast.success('Template created from preset');
+    },
+    onError: (error) => {
+      toast.error('Failed to create template', { description: error.message });
+    },
+  });
+
+  const handleCreateFromPreset = (preset: CreateSchemaTemplateInput) => {
+    if (onCreateFromPreset) {
+      onCreateFromPreset(preset);
+    } else {
+      createPresetMutation.mutate(preset);
+    }
+  };
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['schema-templates'],
@@ -118,10 +146,34 @@ export function SchemaTemplatesList({ onEdit, onCreateNew }: SchemaTemplatesList
             Define custom data fields for different lead types
           </p>
         </div>
-        <Button onClick={onCreateNew}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Template
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={createPresetMutation.isPending}>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Quick Start
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleCreateFromPreset(REAL_ESTATE_TEMPLATE)}>
+                <Home className="h-4 w-4 mr-2" />
+                Real Estate Template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleCreateFromPreset(INSURANCE_TEMPLATE)}>
+                <Shield className="h-4 w-4 mr-2" />
+                Insurance Template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleCreateFromPreset(B2B_TEMPLATE)}>
+                <Building2 className="h-4 w-4 mr-2" />
+                B2B Business Template
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={onCreateNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Template
+          </Button>
+        </div>
       </div>
 
       {templates?.length === 0 ? (
@@ -131,10 +183,34 @@ export function SchemaTemplatesList({ onEdit, onCreateNew }: SchemaTemplatesList
           <p className="text-muted-foreground mb-4">
             Create your first schema template to define custom fields for lead extraction.
           </p>
-          <Button onClick={onCreateNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Template
-          </Button>
+          <div className="flex gap-2 justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Quick Start Presets
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleCreateFromPreset(REAL_ESTATE_TEMPLATE)}>
+                  <Home className="h-4 w-4 mr-2" />
+                  Real Estate
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleCreateFromPreset(INSURANCE_TEMPLATE)}>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Insurance
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleCreateFromPreset(B2B_TEMPLATE)}>
+                  <Building2 className="h-4 w-4 mr-2" />
+                  B2B Business
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={onCreateNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Custom
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className="grid gap-4">
