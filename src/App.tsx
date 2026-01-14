@@ -22,6 +22,8 @@ import CheckoutCancel from "./pages/CheckoutCancel";
 import WebScraper from "./pages/WebScraper";
 import SchemaTemplates from "./pages/admin/SchemaTemplates";
 import ClientOrganizations from "./pages/admin/ClientOrganizations";
+import ScrapeJobs from "./pages/admin/ScrapeJobs";
+import ScrapedLeads from "./pages/admin/ScrapedLeads";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +51,8 @@ const App = () => (
               <Route path="/dashboard/scraper" element={<ProtectedRoute><WebScraper /></ProtectedRoute>} />
               <Route path="/admin/schema-templates" element={<ProtectedRoute><SchemaTemplates /></ProtectedRoute>} />
               <Route path="/admin/clients" element={<ProtectedRoute><ClientOrganizations /></ProtectedRoute>} />
+              <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />
+              <Route path="/admin/scraped-leads" element={<ProtectedRoute><ScrapedLeads /></ProtectedRoute>} />
               <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
               <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
