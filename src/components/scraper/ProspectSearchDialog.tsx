@@ -40,12 +40,15 @@ import {
   ProspectSearchParams,
   ProspectResult,
   PlaceResult,
+  ScoredProspect,
+  ScoringSummary,
   INDUSTRIES,
   DECISION_MAKER_TITLES,
   SENIORITY_LEVELS,
   US_STATES,
 } from '@/lib/api/prospectSearch';
 import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Search,
   Users,
@@ -66,6 +69,12 @@ import {
   MapPinned,
   Globe,
   Zap,
+  Brain,
+  TrendingUp,
+  PhoneCall,
+  MessageSquare,
+  HelpCircle,
+  ArrowDown,
 } from 'lucide-react';
 
 const quickSearchSchema = z.object({
@@ -102,6 +111,8 @@ export function ProspectSearchDialog({
 }: ProspectSearchDialogProps) {
   const [searchMode, setSearchMode] = useState<'quick' | 'advanced' | 'places'>('quick');
   const [results, setResults] = useState<ProspectResult[]>([]);
+  const [scoredResults, setScoredResults] = useState<ScoredProspect[]>([]);
+  const [scoringSummary, setScoringSummary] = useState<ScoringSummary | null>(null);
   const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
   const [selectedProspects, setSelectedProspects] = useState<Set<number>>(new Set());
   const [selectedPlaces, setSelectedPlaces] = useState<Set<number>>(new Set());
@@ -137,6 +148,8 @@ export function ProspectSearchDialog({
     onSuccess: (response) => {
       if (response.success && response.data) {
         setResults(response.data);
+        setScoredResults([]);
+        setScoringSummary(null);
         setSelectedProspects(new Set());
         setHasSearched(true);
         toast.success(`Found ${response.data.length} prospects`);
@@ -146,6 +159,27 @@ export function ProspectSearchDialog({
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Search failed');
+    },
+  });
+
+  const scoringMutation = useMutation({
+    mutationFn: async (prospects: ProspectResult[]) => {
+      return prospectSearchApi.scoreProspects(prospects, {
+        target_industry: advancedForm.getValues('industry') || undefined,
+        target_titles: advancedForm.getValues('targetTitles') || undefined,
+      });
+    },
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        setScoredResults(response.data);
+        setScoringSummary(response.summary || null);
+        toast.success('AI scoring complete');
+      } else {
+        toast.error(response.error || 'Scoring failed');
+      }
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Scoring failed');
     },
   });
 
@@ -311,6 +345,35 @@ export function ProspectSearchDialog({
     if (score >= 40) return <Badge variant="secondary">Medium</Badge>;
     return <Badge variant="outline">Low</Badge>;
   };
+
+  const getPriorityBadge = (priority: 'high' | 'medium' | 'low') => {
+    switch (priority) {
+      case 'high':
+        return <Badge className="bg-red-500 text-white">🔥 High Priority</Badge>;
+      case 'medium':
+        return <Badge className="bg-amber-500 text-white">⚡ Medium</Badge>;
+      case 'low':
+        return <Badge variant="outline">📋 Low</Badge>;
+    }
+  };
+
+  const getActionIcon = (action: string) => {
+    if (action.toLowerCase().includes('call')) return <PhoneCall className="h-3 w-3" />;
+    if (action.toLowerCase().includes('email')) return <MessageSquare className="h-3 w-3" />;
+    if (action.toLowerCase().includes('research')) return <HelpCircle className="h-3 w-3" />;
+    return <ArrowDown className="h-3 w-3" />;
+  };
+
+  const handleScoreProspects = () => {
+    if (results.length === 0) {
+      toast.error('No prospects to score');
+      return;
+    }
+    scoringMutation.mutate(results);
+  };
+
+  // Use scored results if available, otherwise use regular results
+  const displayResults = scoredResults.length > 0 ? scoredResults : results;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -692,23 +755,65 @@ export function ProspectSearchDialog({
         </Tabs>
 
         {/* Results */}
-        {hasSearched && (
+        {hasSearched && results.length > 0 && (
           <>
             <Separator className="my-4" />
+            
+            {/* Scoring Summary */}
+            {scoringSummary && (
+              <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-primary" />
+                    <span className="font-medium">AI Scoring Summary</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-red-500" />
+                      {scoringSummary.high_priority} High
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      {scoringSummary.medium_priority} Medium
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-gray-400" />
+                      {scoringSummary.low_priority} Low
+                    </span>
+                    <span className="ml-2">Avg Score: {scoringSummary.average_score}</span>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
                 <span className="font-medium">
-                  {results.length} Prospects Found
+                  {displayResults.length} Prospects {scoredResults.length > 0 ? '(Scored)' : 'Found'}
                 </span>
                 {selectedProspects.size > 0 && (
                   <Badge variant="secondary">{selectedProspects.size} selected</Badge>
                 )}
               </div>
               <div className="flex gap-2">
+                {scoredResults.length === 0 && results.length > 0 && results.length <= 20 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleScoreProspects}
+                    disabled={scoringMutation.isPending}
+                  >
+                    {scoringMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Brain className="h-4 w-4 mr-1" />
+                    )}
+                    AI Score
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                  {selectedProspects.size === results.length ? 'Deselect All' : 'Select All'}
+                  {selectedProspects.size === displayResults.length ? 'Deselect All' : 'Select All'}
                 </Button>
                 <Button variant="outline" size="sm" onClick={exportToCsv}>
                   <Download className="h-4 w-4 mr-1" />
@@ -722,101 +827,158 @@ export function ProspectSearchDialog({
             </div>
 
             <ScrollArea className="flex-1 max-h-[300px]">
-              <div className="space-y-2">
-                {results.map((prospect, index) => (
-                  <Card 
-                    key={index} 
-                    className={`cursor-pointer transition-colors ${
-                      selectedProspects.has(index) ? 'border-primary bg-primary/5' : ''
-                    }`}
-                    onClick={() => {
-                      const newSelected = new Set(selectedProspects);
-                      if (newSelected.has(index)) {
-                        newSelected.delete(index);
-                      } else {
-                        newSelected.add(index);
-                      }
-                      setSelectedProspects(newSelected);
-                    }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <Checkbox 
-                            checked={selectedProspects.has(index)}
-                            onCheckedChange={() => {}}
-                          />
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">
-                                {prospect.full_name || 'Unknown Contact'}
-                              </span>
-                              {prospect.job_title && (
-                                <Badge variant="secondary">{prospect.job_title}</Badge>
-                              )}
-                              {getConfidenceBadge(prospect.confidence_score)}
+              <TooltipProvider>
+                <div className="space-y-2">
+                  {displayResults.map((prospect, index) => {
+                    const scored = 'score' in prospect ? prospect as ScoredProspect : null;
+                    return (
+                      <Card 
+                        key={index} 
+                        className={`cursor-pointer transition-colors ${
+                          selectedProspects.has(index) ? 'border-primary bg-primary/5' : ''
+                        } ${scored?.priority === 'high' ? 'border-l-4 border-l-red-500' : scored?.priority === 'medium' ? 'border-l-4 border-l-amber-500' : ''}`}
+                        onClick={() => {
+                          const newSelected = new Set(selectedProspects);
+                          if (newSelected.has(index)) {
+                            newSelected.delete(index);
+                          } else {
+                            newSelected.add(index);
+                          }
+                          setSelectedProspects(newSelected);
+                        }}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <Checkbox 
+                                checked={selectedProspects.has(index)}
+                                onCheckedChange={() => {}}
+                              />
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">
+                                    {prospect.full_name || 'Unknown Contact'}
+                                  </span>
+                                  {prospect.job_title && (
+                                    <Badge variant="secondary">{prospect.job_title}</Badge>
+                                  )}
+                                  {scored ? (
+                                    <>
+                                      {getPriorityBadge(scored.priority)}
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge 
+                                            variant="outline" 
+                                            className="cursor-help flex items-center gap-1"
+                                          >
+                                            <TrendingUp className="h-3 w-3" />
+                                            {scored.score}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          <div className="text-xs space-y-1">
+                                            <p className="font-medium">Score Breakdown:</p>
+                                            <p>Data: {scored.score_breakdown.data_completeness}/25</p>
+                                            <p>Contact: {scored.score_breakdown.contact_quality}/25</p>
+                                            <p>Decision Maker: {scored.score_breakdown.decision_maker_fit}/25</p>
+                                            <p>Company Fit: {scored.score_breakdown.company_fit}/25</p>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </>
+                                  ) : (
+                                    getConfidenceBadge(prospect.confidence_score)
+                                  )}
+                                </div>
+                                
+                                {/* AI Insights & Recommended Action */}
+                                {scored && (scored.ai_insights || scored.recommended_action) && (
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <Badge 
+                                      variant="outline" 
+                                      className="text-xs flex items-center gap-1 bg-primary/10"
+                                    >
+                                      {getActionIcon(scored.recommended_action)}
+                                      {scored.recommended_action}
+                                    </Badge>
+                                    {scored.ai_insights && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="text-xs text-muted-foreground max-w-[300px] truncate cursor-help">
+                                            💡 {scored.ai_insights}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-sm">
+                                          <p className="text-sm">{scored.ai_insights}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                  {prospect.company_name && (
+                                    <span className="flex items-center gap-1">
+                                      <Building2 className="h-3 w-3" />
+                                      {prospect.company_name}
+                                    </span>
+                                  )}
+                                  {(prospect.headquarters_city || prospect.headquarters_state) && (
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" />
+                                      {[prospect.headquarters_city, prospect.headquarters_state].filter(Boolean).join(', ')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              {prospect.company_name && (
-                                <span className="flex items-center gap-1">
-                                  <Building2 className="h-3 w-3" />
-                                  {prospect.company_name}
-                                </span>
+                            <div className="flex items-center gap-2 text-sm">
+                              {prospect.email && (
+                                <a 
+                                  href={`mailto:${prospect.email}`}
+                                  className="flex items-center gap-1 text-primary hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Mail className="h-3 w-3" />
+                                  {prospect.email}
+                                </a>
                               )}
-                              {(prospect.headquarters_city || prospect.headquarters_state) && (
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" />
-                                  {[prospect.headquarters_city, prospect.headquarters_state].filter(Boolean).join(', ')}
-                                </span>
+                              {prospect.phone && (
+                                <a 
+                                  href={`tel:${prospect.phone}`}
+                                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Phone className="h-3 w-3" />
+                                  {prospect.phone}
+                                </a>
+                              )}
+                              {prospect.linkedin_url && (
+                                <a 
+                                  href={prospect.linkedin_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-700"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Linkedin className="h-4 w-4" />
+                                </a>
                               )}
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          {prospect.email && (
-                            <a 
-                              href={`mailto:${prospect.email}`}
-                              className="flex items-center gap-1 text-primary hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Mail className="h-3 w-3" />
-                              {prospect.email}
-                            </a>
-                          )}
-                          {prospect.phone && (
-                            <a 
-                              href={`tel:${prospect.phone}`}
-                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Phone className="h-3 w-3" />
-                              {prospect.phone}
-                            </a>
-                          )}
-                          {prospect.linkedin_url && (
-                            <a 
-                              href={prospect.linkedin_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-700"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Linkedin className="h-4 w-4" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
 
-                {results.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                    <p>No prospects found. Try adjusting your search criteria.</p>
-                  </div>
-                )}
-              </div>
+                  {displayResults.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                      <p>No prospects found. Try adjusting your search criteria.</p>
+                    </div>
+                  )}
+                </div>
+              </TooltipProvider>
             </ScrollArea>
           </>
         )}
