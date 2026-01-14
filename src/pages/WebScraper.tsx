@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
 import { supabase } from '@/integrations/supabase/client';
+import { ProspectSearchDialog } from '@/components/scraper/ProspectSearchDialog';
 import { 
   Globe, 
   Search, 
@@ -28,6 +29,7 @@ import {
   Check,
   Home,
   Building,
+  Target,
 } from 'lucide-react';
 import {
   Select,
@@ -136,7 +138,8 @@ export default function WebScraper() {
   const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
   const [reSkipTraceStats, setReSkipTraceStats] = useState<{ attempted: number; successful: number; rate: number } | null>(null);
 
-  if (authLoading || isAdmin === null) {
+  // Prospect Search state
+  const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -500,10 +503,22 @@ export default function WebScraper() {
 
   return (
     <DashboardLayout>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Web Scraper</h1>
-        <p className="text-muted-foreground">Scrape websites, search the web, and crawl entire domains</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Web Scraper</h1>
+          <p className="text-muted-foreground">Scrape websites, search the web, and crawl entire domains</p>
+        </div>
+        <Button onClick={() => setProspectSearchOpen(true)} className="bg-gradient-to-r from-primary to-purple-600">
+          <Target className="h-4 w-4 mr-2" />
+          Prospect Search (ZoomInfo-style)
+        </Button>
       </div>
+
+      <ProspectSearchDialog 
+        open={prospectSearchOpen} 
+        onOpenChange={setProspectSearchOpen}
+      />
+
       <Tabs defaultValue="real-estate" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="real-estate" className="flex items-center gap-2">
