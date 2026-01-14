@@ -237,11 +237,11 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             url: formattedUrl,
-            formats: [
-              { type: 'json', prompt: FSBO_EXTRACTION_PROMPT },
-              'markdown',
-              'links',
-            ],
+            formats: ['markdown', 'links'],
+            jsonOptions: {
+              prompt: FSBO_EXTRACTION_PROMPT,
+              schema: FSBO_EXTRACTION_SCHEMA,
+            },
             onlyMainContent: true,
             waitFor: 3000, // Wait for dynamic content
           }),
