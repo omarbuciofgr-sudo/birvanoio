@@ -9,9 +9,29 @@ interface EnrichmentResult {
   full_name?: string;
   email?: string;
   phone?: string;
+  direct_phone?: string;
+  mobile_phone?: string;
   company_name?: string;
   job_title?: string;
+  seniority_level?: string;
+  department?: string;
   linkedin_url?: string;
+  // Company data
+  company_linkedin_url?: string;
+  company_website?: string;
+  employee_count?: number;
+  employee_range?: string;
+  annual_revenue?: number;
+  revenue_range?: string;
+  funding_total?: number;
+  funding_stage?: string;
+  founded_year?: number;
+  industry?: string;
+  company_description?: string;
+  technologies?: string[];
+  headquarters_city?: string;
+  headquarters_state?: string;
+  headquarters_country?: string;
   provider: string;
   fields_enriched: string[];
 }
@@ -27,7 +47,40 @@ function generateLinkedInSearchUrl(companyName?: string, name?: string, jobTitle
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
 }
 
-// Apollo.io API - Domain/Company enrichment
+// Map Apollo seniority levels
+function mapSeniorityLevel(title: string | null): string {
+  if (!title) return 'unknown';
+  const t = title.toLowerCase();
+  
+  if (t.includes('ceo') || t.includes('cto') || t.includes('cfo') || t.includes('coo') || t.includes('chief')) return 'c_suite';
+  if (t.includes('vp') || t.includes('vice president')) return 'vp';
+  if (t.includes('director')) return 'director';
+  if (t.includes('senior') || t.includes('sr.')) return 'senior';
+  if (t.includes('manager')) return 'manager';
+  if (t.includes('lead')) return 'lead';
+  if (t.includes('junior') || t.includes('jr.') || t.includes('associate')) return 'entry';
+  return 'individual_contributor';
+}
+
+// Map department from title
+function mapDepartment(title: string | null): string {
+  if (!title) return 'unknown';
+  const t = title.toLowerCase();
+  
+  if (t.includes('sales') || t.includes('account executive') || t.includes('business development')) return 'sales';
+  if (t.includes('marketing') || t.includes('growth') || t.includes('brand')) return 'marketing';
+  if (t.includes('engineer') || t.includes('developer') || t.includes('tech') || t.includes('software')) return 'engineering';
+  if (t.includes('product') || t.includes('pm')) return 'product';
+  if (t.includes('hr') || t.includes('human resources') || t.includes('people')) return 'hr';
+  if (t.includes('finance') || t.includes('accounting') || t.includes('cfo')) return 'finance';
+  if (t.includes('operations') || t.includes('ops')) return 'operations';
+  if (t.includes('legal') || t.includes('counsel')) return 'legal';
+  if (t.includes('customer success') || t.includes('support')) return 'customer_success';
+  if (t.includes('ceo') || t.includes('founder') || t.includes('owner')) return 'executive';
+  return 'other';
+}
+
+// Apollo.io API - Enhanced Domain/Company enrichment
 async function enrichWithApollo(
   domain: string,
   name?: string | null,
@@ -47,7 +100,7 @@ async function enrichWithApollo(
         api_key: apiKey,
         q_organization_domains: domain,
         page: 1,
-        per_page: 5,
+        per_page: 10, // Get more people for better selection
       }),
     });
 
@@ -67,20 +120,56 @@ async function enrichWithApollo(
       }
 
       const fieldsEnriched: string[] = [];
+      const org = bestMatch.organization || {};
+      
       if (bestMatch.name) fieldsEnriched.push('full_name');
       if (bestMatch.email) fieldsEnriched.push('email');
       if (bestMatch.phone_numbers?.[0]) fieldsEnriched.push('phone');
-      if (bestMatch.organization?.name) fieldsEnriched.push('company_name');
-      if (bestMatch.title) fieldsEnriched.push('job_title');
+      if (org.name) fieldsEnriched.push('company_name');
+      if (bestMatch.title) {
+        fieldsEnriched.push('job_title');
+        fieldsEnriched.push('seniority_level');
+        fieldsEnriched.push('department');
+      }
       if (bestMatch.linkedin_url) fieldsEnriched.push('linkedin_url');
+      if (org.estimated_num_employees) fieldsEnriched.push('employee_count');
+      if (org.annual_revenue) fieldsEnriched.push('annual_revenue');
+      if (org.founded_year) fieldsEnriched.push('founded_year');
+      if (org.industry) fieldsEnriched.push('industry');
+      if (org.linkedin_url) fieldsEnriched.push('company_linkedin_url');
+      if (org.short_description) fieldsEnriched.push('company_description');
+      if (org.technologies?.length) fieldsEnriched.push('technologies');
+
+      // Extract direct/mobile phones
+      const directPhone = bestMatch.phone_numbers?.find((p: any) => p.type === 'direct_dial')?.number;
+      const mobilePhone = bestMatch.phone_numbers?.find((p: any) => p.type === 'mobile')?.number;
 
       return {
         full_name: bestMatch.name,
         email: bestMatch.email,
         phone: bestMatch.phone_numbers?.[0]?.number,
-        company_name: bestMatch.organization?.name,
+        direct_phone: directPhone,
+        mobile_phone: mobilePhone,
+        company_name: org.name,
         job_title: bestMatch.title,
+        seniority_level: bestMatch.seniority || mapSeniorityLevel(bestMatch.title),
+        department: bestMatch.departments?.[0] || mapDepartment(bestMatch.title),
         linkedin_url: bestMatch.linkedin_url,
+        company_linkedin_url: org.linkedin_url,
+        company_website: org.website_url,
+        employee_count: org.estimated_num_employees,
+        employee_range: org.employee_count_range,
+        annual_revenue: org.annual_revenue,
+        revenue_range: org.revenue_range,
+        funding_total: org.total_funding,
+        funding_stage: org.latest_funding_stage,
+        founded_year: org.founded_year,
+        industry: org.industry,
+        company_description: org.short_description,
+        technologies: org.technologies?.slice(0, 20), // Limit to 20 techs
+        headquarters_city: org.city,
+        headquarters_state: org.state,
+        headquarters_country: org.country,
         provider: 'apollo',
         fields_enriched: fieldsEnriched,
       };
@@ -130,21 +219,41 @@ async function apolloPeopleSearch(
     
     if (data.people && data.people.length > 0) {
       const person = data.people[0];
+      const org = person.organization || {};
       const fieldsEnriched: string[] = [];
       
       if (person.email) fieldsEnriched.push('email');
       if (person.phone_numbers?.[0]) fieldsEnriched.push('phone');
-      if (person.organization?.name) fieldsEnriched.push('company_name');
-      if (person.title) fieldsEnriched.push('job_title');
+      if (org.name) fieldsEnriched.push('company_name');
+      if (person.title) {
+        fieldsEnriched.push('job_title');
+        fieldsEnriched.push('seniority_level');
+        fieldsEnriched.push('department');
+      }
       if (person.linkedin_url) fieldsEnriched.push('linkedin_url');
+      if (org.estimated_num_employees) fieldsEnriched.push('employee_count');
+      if (org.annual_revenue) fieldsEnriched.push('annual_revenue');
+
+      const directPhone = person.phone_numbers?.find((p: any) => p.type === 'direct_dial')?.number;
+      const mobilePhone = person.phone_numbers?.find((p: any) => p.type === 'mobile')?.number;
 
       return {
         full_name: person.name,
         email: person.email,
         phone: person.phone_numbers?.[0]?.number,
-        company_name: person.organization?.name,
+        direct_phone: directPhone,
+        mobile_phone: mobilePhone,
+        company_name: org.name,
         job_title: person.title,
+        seniority_level: person.seniority || mapSeniorityLevel(person.title),
+        department: person.departments?.[0] || mapDepartment(person.title),
         linkedin_url: person.linkedin_url,
+        company_linkedin_url: org.linkedin_url,
+        employee_count: org.estimated_num_employees,
+        annual_revenue: org.annual_revenue,
+        funding_total: org.total_funding,
+        funding_stage: org.latest_funding_stage,
+        industry: org.industry,
         provider: 'apollo_people_search',
         fields_enriched: fieldsEnriched,
       };
@@ -153,6 +262,69 @@ async function apolloPeopleSearch(
     return null;
   } catch (error) {
     console.error('Apollo people search error:', error);
+    return null;
+  }
+}
+
+// Apollo.io API - Organization enrichment (company-level data)
+async function apolloOrganizationEnrich(
+  domain: string,
+  apiKey?: string
+): Promise<EnrichmentResult | null> {
+  if (!apiKey) return null;
+
+  try {
+    const response = await fetch('https://api.apollo.io/v1/organizations/enrich', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+    });
+
+    // Apollo org enrich uses query params
+    const url = `https://api.apollo.io/v1/organizations/enrich?api_key=${apiKey}&domain=${domain}`;
+    const enrichResponse = await fetch(url);
+    const data = await enrichResponse.json();
+    
+    if (data.organization) {
+      const org = data.organization;
+      const fieldsEnriched: string[] = [];
+      
+      if (org.name) fieldsEnriched.push('company_name');
+      if (org.estimated_num_employees) fieldsEnriched.push('employee_count');
+      if (org.annual_revenue) fieldsEnriched.push('annual_revenue');
+      if (org.total_funding) fieldsEnriched.push('funding_total');
+      if (org.founded_year) fieldsEnriched.push('founded_year');
+      if (org.industry) fieldsEnriched.push('industry');
+      if (org.linkedin_url) fieldsEnriched.push('company_linkedin_url');
+      if (org.technologies?.length) fieldsEnriched.push('technologies');
+
+      return {
+        company_name: org.name,
+        company_linkedin_url: org.linkedin_url,
+        company_website: org.website_url,
+        employee_count: org.estimated_num_employees,
+        employee_range: org.employee_count_range,
+        annual_revenue: org.annual_revenue,
+        revenue_range: org.revenue_range,
+        funding_total: org.total_funding,
+        funding_stage: org.latest_funding_stage,
+        founded_year: org.founded_year,
+        industry: org.industry,
+        company_description: org.short_description,
+        technologies: org.technologies?.slice(0, 20),
+        headquarters_city: org.city,
+        headquarters_state: org.state,
+        headquarters_country: org.country,
+        provider: 'apollo_org',
+        fields_enriched: fieldsEnriched,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Apollo organization enrichment error:', error);
     return null;
   }
 }
@@ -205,7 +377,9 @@ async function findEmailWithHunter(
       }
       if (bestEmail.position) {
         result.job_title = bestEmail.position;
-        fieldsEnriched.push('job_title');
+        result.seniority_level = mapSeniorityLevel(bestEmail.position);
+        result.department = mapDepartment(bestEmail.position);
+        fieldsEnriched.push('job_title', 'seniority_level', 'department');
       }
       if (bestEmail.linkedin) {
         result.linkedin_url = bestEmail.linkedin;
@@ -218,6 +392,143 @@ async function findEmailWithHunter(
     return null;
   } catch (error) {
     console.error('Hunter enrichment error:', error);
+    return null;
+  }
+}
+
+// People Data Labs - Person enrichment
+async function enrichWithPDL(
+  email?: string,
+  name?: string,
+  domain?: string,
+  apiKey?: string
+): Promise<EnrichmentResult | null> {
+  if (!apiKey) return null;
+  if (!email && !name) return null;
+
+  try {
+    const params: Record<string, string> = {};
+    if (email) params.email = email;
+    if (name) params.name = name;
+    if (domain) params.company = domain;
+
+    const queryString = new URLSearchParams(params).toString();
+    const response = await fetch(
+      `https://api.peopledatalabs.com/v5/person/enrich?${queryString}`,
+      {
+        headers: {
+          'X-Api-Key': apiKey,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    
+    if (data.status === 200 && data.data) {
+      const person = data.data;
+      const fieldsEnriched: string[] = [];
+      
+      if (person.full_name) fieldsEnriched.push('full_name');
+      if (person.work_email || person.personal_emails?.[0]) fieldsEnriched.push('email');
+      if (person.mobile_phone) fieldsEnriched.push('mobile_phone');
+      if (person.phone_numbers?.[0]) fieldsEnriched.push('phone');
+      if (person.job_title) fieldsEnriched.push('job_title');
+      if (person.job_company_name) fieldsEnriched.push('company_name');
+      if (person.linkedin_url) fieldsEnriched.push('linkedin_url');
+      if (person.job_company_size) fieldsEnriched.push('employee_range');
+      if (person.job_company_industry) fieldsEnriched.push('industry');
+
+      return {
+        full_name: person.full_name,
+        email: person.work_email || person.personal_emails?.[0],
+        phone: person.phone_numbers?.[0],
+        mobile_phone: person.mobile_phone,
+        company_name: person.job_company_name,
+        job_title: person.job_title,
+        seniority_level: person.job_title_levels?.[0] || mapSeniorityLevel(person.job_title),
+        department: person.job_title_sub_role || mapDepartment(person.job_title),
+        linkedin_url: person.linkedin_url,
+        company_linkedin_url: person.job_company_linkedin_url,
+        company_website: person.job_company_website,
+        employee_range: person.job_company_size,
+        industry: person.job_company_industry,
+        headquarters_city: person.job_company_location_locality,
+        headquarters_state: person.job_company_location_region,
+        headquarters_country: person.job_company_location_country,
+        provider: 'pdl',
+        fields_enriched: fieldsEnriched,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('PDL enrichment error:', error);
+    return null;
+  }
+}
+
+// People Data Labs - Company enrichment
+async function enrichCompanyWithPDL(
+  domain: string,
+  apiKey?: string
+): Promise<EnrichmentResult | null> {
+  if (!apiKey) return null;
+
+  try {
+    const response = await fetch(
+      `https://api.peopledatalabs.com/v5/company/enrich?website=${domain}`,
+      {
+        headers: {
+          'X-Api-Key': apiKey,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    
+    if (data.status === 200 && data.data) {
+      const company = data.data;
+      const fieldsEnriched: string[] = [];
+      
+      if (company.name) fieldsEnriched.push('company_name');
+      if (company.employee_count) fieldsEnriched.push('employee_count');
+      if (company.inferred_revenue) fieldsEnriched.push('annual_revenue');
+      if (company.total_funding_raised) fieldsEnriched.push('funding_total');
+      if (company.founded) fieldsEnriched.push('founded_year');
+      if (company.industry) fieldsEnriched.push('industry');
+      if (company.linkedin_url) fieldsEnriched.push('company_linkedin_url');
+      if (company.tags?.length) fieldsEnriched.push('technologies');
+
+      return {
+        company_name: company.name,
+        company_linkedin_url: company.linkedin_url,
+        company_website: company.website,
+        employee_count: company.employee_count,
+        employee_range: company.size,
+        annual_revenue: company.inferred_revenue,
+        funding_total: company.total_funding_raised,
+        funding_stage: company.latest_funding_stage,
+        founded_year: company.founded,
+        industry: company.industry,
+        company_description: company.summary,
+        technologies: company.tags?.slice(0, 20),
+        headquarters_city: company.location?.locality,
+        headquarters_state: company.location?.region,
+        headquarters_country: company.location?.country,
+        provider: 'pdl_company',
+        fields_enriched: fieldsEnriched,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('PDL company enrichment error:', error);
     return null;
   }
 }
@@ -245,9 +556,29 @@ async function enrichWithClearbit(
     const fieldsEnriched: string[] = [];
 
     if (data.name) fieldsEnriched.push('company_name');
+    if (data.metrics?.employees) fieldsEnriched.push('employee_count');
+    if (data.metrics?.estimatedAnnualRevenue) fieldsEnriched.push('revenue_range');
+    if (data.metrics?.raised) fieldsEnriched.push('funding_total');
+    if (data.foundedYear) fieldsEnriched.push('founded_year');
+    if (data.category?.industry) fieldsEnriched.push('industry');
+    if (data.linkedin?.handle) fieldsEnriched.push('company_linkedin_url');
+    if (data.tech?.length) fieldsEnriched.push('technologies');
 
     return {
       company_name: data.name,
+      company_linkedin_url: data.linkedin?.handle ? `https://linkedin.com/company/${data.linkedin.handle}` : undefined,
+      company_website: data.domain,
+      employee_count: data.metrics?.employees,
+      employee_range: data.metrics?.employeesRange,
+      revenue_range: data.metrics?.estimatedAnnualRevenue,
+      funding_total: data.metrics?.raised,
+      founded_year: data.foundedYear,
+      industry: data.category?.industry,
+      company_description: data.description,
+      technologies: data.tech?.slice(0, 20),
+      headquarters_city: data.geo?.city,
+      headquarters_state: data.geo?.state,
+      headquarters_country: data.geo?.country,
       provider: 'clearbit',
       fields_enriched: fieldsEnriched,
     };
@@ -267,12 +598,13 @@ Deno.serve(async (req) => {
   const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
   const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
   const clearbitApiKey = Deno.env.get('CLEARBIT_API_KEY');
+  const pdlApiKey = Deno.env.get('PDL_API_KEY');
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { lead_id, lead_ids } = body;
+    const { lead_id, lead_ids, enrich_company = true } = body;
 
     const idsToProcess = lead_ids || (lead_id ? [lead_id] : []);
 
@@ -293,7 +625,7 @@ Deno.serve(async (req) => {
 
     console.log(`Enriching ${idsToProcess.length} lead(s) with providers: ${Array.from(enabledProviders).join(', ')}`);
 
-    const results: { lead_id: string; enrichments: EnrichmentResult[] }[] = [];
+    const results: { lead_id: string; enrichments: EnrichmentResult[]; company_data?: Record<string, unknown> }[] = [];
 
     for (const leadId of idsToProcess) {
       const { data: lead, error: fetchError } = await supabase
@@ -310,6 +642,7 @@ Deno.serve(async (req) => {
       const enrichments: EnrichmentResult[] = [];
       const updates: Record<string, unknown> = {};
       const providersUsed: string[] = lead.enrichment_providers_used || [];
+      const companyData: Record<string, unknown> = lead.company_data || {};
 
       // Determine what's missing
       const needsName = !lead.full_name;
@@ -317,9 +650,10 @@ Deno.serve(async (req) => {
       const needsPhone = !lead.best_phone;
       const needsCompany = !lead.schema_data?.company_name;
       const needsJobTitle = !lead.schema_data?.job_title;
+      const needsCompanyEnrichment = enrich_company && (!companyData.employee_count || !companyData.industry);
 
       // Skip if everything is filled
-      if (!needsName && !needsEmail && !needsPhone && !needsCompany && !needsJobTitle) {
+      if (!needsName && !needsEmail && !needsPhone && !needsCompany && !needsJobTitle && !needsCompanyEnrichment) {
         // Just ensure LinkedIn URL is generated
         if (!lead.linkedin_search_url) {
           updates.linkedin_search_url = generateLinkedInSearchUrl(
@@ -342,7 +676,7 @@ Deno.serve(async (req) => {
           // Apply enriched data
           if (apolloResult.full_name && needsName) {
             updates.full_name = apolloResult.full_name;
-            updates.name_source_url = null; // Will be marked as enrichment
+            updates.name_source_url = null;
           }
           if (apolloResult.email && needsEmail) {
             updates.best_email = apolloResult.email;
@@ -351,20 +685,44 @@ Deno.serve(async (req) => {
               updates.all_emails = [...allEmails, apolloResult.email];
             }
           }
-          if (apolloResult.phone && needsPhone) {
-            updates.best_phone = apolloResult.phone;
+          if ((apolloResult.phone || apolloResult.direct_phone || apolloResult.mobile_phone) && needsPhone) {
+            updates.best_phone = apolloResult.direct_phone || apolloResult.mobile_phone || apolloResult.phone;
             const allPhones = lead.all_phones || [];
-            if (!allPhones.includes(apolloResult.phone)) {
-              updates.all_phones = [...allPhones, apolloResult.phone];
-            }
+            const newPhones = [apolloResult.phone, apolloResult.direct_phone, apolloResult.mobile_phone].filter(Boolean) as string[];
+            updates.all_phones = [...new Set([...allPhones, ...newPhones])];
           }
-          if (apolloResult.company_name || apolloResult.job_title) {
+          
+          // Update schema_data with person info
+          if (apolloResult.company_name || apolloResult.job_title || apolloResult.seniority_level || apolloResult.department) {
             updates.schema_data = {
               ...(lead.schema_data || {}),
               ...(apolloResult.company_name ? { company_name: apolloResult.company_name } : {}),
               ...(apolloResult.job_title ? { job_title: apolloResult.job_title } : {}),
+              ...(apolloResult.seniority_level ? { seniority_level: apolloResult.seniority_level } : {}),
+              ...(apolloResult.department ? { department: apolloResult.department } : {}),
             };
           }
+          
+          // Update company_data with company info
+          if (apolloResult.employee_count || apolloResult.annual_revenue || apolloResult.funding_total) {
+            Object.assign(companyData, {
+              employee_count: apolloResult.employee_count || companyData.employee_count,
+              employee_range: apolloResult.employee_range || companyData.employee_range,
+              annual_revenue: apolloResult.annual_revenue || companyData.annual_revenue,
+              revenue_range: apolloResult.revenue_range || companyData.revenue_range,
+              funding_total: apolloResult.funding_total || companyData.funding_total,
+              funding_stage: apolloResult.funding_stage || companyData.funding_stage,
+              founded_year: apolloResult.founded_year || companyData.founded_year,
+              industry: apolloResult.industry || companyData.industry,
+              company_description: apolloResult.company_description || companyData.company_description,
+              technologies: apolloResult.technologies || companyData.technologies,
+              company_linkedin_url: apolloResult.company_linkedin_url || companyData.company_linkedin_url,
+              headquarters_city: apolloResult.headquarters_city || companyData.headquarters_city,
+              headquarters_state: apolloResult.headquarters_state || companyData.headquarters_state,
+              headquarters_country: apolloResult.headquarters_country || companyData.headquarters_country,
+            });
+          }
+          
           if (apolloResult.linkedin_url) {
             updates.linkedin_search_url = apolloResult.linkedin_url;
           }
@@ -375,6 +733,36 @@ Deno.serve(async (req) => {
             provider: 'apollo',
             action: 'person_lookup',
             fields_enriched: apolloResult.fields_enriched,
+            success: true,
+          });
+        }
+      }
+
+      // Try PDL for additional person data
+      if (enabledProviders.has('pdl') && pdlApiKey && (needsEmail || needsPhone)) {
+        const pdlResult = await enrichWithPDL(
+          updates.best_email as string || lead.best_email,
+          updates.full_name as string || lead.full_name,
+          lead.domain,
+          pdlApiKey
+        );
+        
+        if (pdlResult) {
+          enrichments.push(pdlResult);
+          providersUsed.push('pdl');
+
+          if (pdlResult.email && needsEmail && !updates.best_email) {
+            updates.best_email = pdlResult.email;
+          }
+          if ((pdlResult.mobile_phone || pdlResult.phone) && needsPhone && !updates.best_phone) {
+            updates.best_phone = pdlResult.mobile_phone || pdlResult.phone;
+          }
+
+          await supabase.from('enrichment_logs').insert({
+            lead_id: leadId,
+            provider: 'pdl',
+            action: 'person_enrichment',
+            fields_enriched: pdlResult.fields_enriched,
             success: true,
           });
         }
@@ -405,6 +793,8 @@ Deno.serve(async (req) => {
             updates.schema_data = {
               ...(updates.schema_data || lead.schema_data || {}),
               job_title: hunterResult.job_title,
+              seniority_level: hunterResult.seniority_level,
+              department: hunterResult.department,
             };
           }
 
@@ -418,27 +808,65 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Try Clearbit for company enrichment
-      if (enabledProviders.has('clearbit') && clearbitApiKey && needsCompany) {
-        const clearbitResult = await enrichWithClearbit(lead.domain, clearbitApiKey);
-        if (clearbitResult) {
-          enrichments.push(clearbitResult);
-          providersUsed.push('clearbit');
+      // Company-level enrichment
+      if (needsCompanyEnrichment) {
+        // Try PDL Company
+        if (enabledProviders.has('pdl') && pdlApiKey) {
+          const pdlCompanyResult = await enrichCompanyWithPDL(lead.domain, pdlApiKey);
+          if (pdlCompanyResult) {
+            enrichments.push(pdlCompanyResult);
+            providersUsed.push('pdl_company');
 
-          if (clearbitResult.company_name) {
-            updates.schema_data = {
-              ...(updates.schema_data || lead.schema_data || {}),
-              company_name: clearbitResult.company_name,
-            };
+            Object.assign(companyData, {
+              employee_count: pdlCompanyResult.employee_count || companyData.employee_count,
+              employee_range: pdlCompanyResult.employee_range || companyData.employee_range,
+              annual_revenue: pdlCompanyResult.annual_revenue || companyData.annual_revenue,
+              funding_total: pdlCompanyResult.funding_total || companyData.funding_total,
+              funding_stage: pdlCompanyResult.funding_stage || companyData.funding_stage,
+              founded_year: pdlCompanyResult.founded_year || companyData.founded_year,
+              industry: pdlCompanyResult.industry || companyData.industry,
+              company_description: pdlCompanyResult.company_description || companyData.company_description,
+              technologies: pdlCompanyResult.technologies || companyData.technologies,
+              company_linkedin_url: pdlCompanyResult.company_linkedin_url || companyData.company_linkedin_url,
+            });
+
+            await supabase.from('enrichment_logs').insert({
+              lead_id: leadId,
+              provider: 'pdl_company',
+              action: 'company_enrichment',
+              fields_enriched: pdlCompanyResult.fields_enriched,
+              success: true,
+            });
           }
+        }
 
-          await supabase.from('enrichment_logs').insert({
-            lead_id: leadId,
-            provider: 'clearbit',
-            action: 'company_lookup',
-            fields_enriched: clearbitResult.fields_enriched,
-            success: true,
-          });
+        // Try Clearbit for company enrichment
+        if (enabledProviders.has('clearbit') && clearbitApiKey && !companyData.employee_count) {
+          const clearbitResult = await enrichWithClearbit(lead.domain, clearbitApiKey);
+          if (clearbitResult) {
+            enrichments.push(clearbitResult);
+            providersUsed.push('clearbit');
+
+            Object.assign(companyData, {
+              employee_count: clearbitResult.employee_count || companyData.employee_count,
+              employee_range: clearbitResult.employee_range || companyData.employee_range,
+              revenue_range: clearbitResult.revenue_range || companyData.revenue_range,
+              funding_total: clearbitResult.funding_total || companyData.funding_total,
+              founded_year: clearbitResult.founded_year || companyData.founded_year,
+              industry: clearbitResult.industry || companyData.industry,
+              company_description: clearbitResult.company_description || companyData.company_description,
+              technologies: clearbitResult.technologies || companyData.technologies,
+              company_linkedin_url: clearbitResult.company_linkedin_url || companyData.company_linkedin_url,
+            });
+
+            await supabase.from('enrichment_logs').insert({
+              lead_id: leadId,
+              provider: 'clearbit',
+              action: 'company_lookup',
+              fields_enriched: clearbitResult.fields_enriched,
+              success: true,
+            });
+          }
         }
       }
 
@@ -451,6 +879,11 @@ Deno.serve(async (req) => {
           lead.schema_data?.job_title as string;
 
         updates.linkedin_search_url = generateLinkedInSearchUrl(companyName, fullName, jobTitle);
+      }
+
+      // Store company data
+      if (Object.keys(companyData).length > 0) {
+        updates.company_data = companyData;
       }
 
       // Store enrichment data
@@ -467,6 +900,9 @@ Deno.serve(async (req) => {
         if (updates.best_email) newScore += 15;
         if (updates.best_phone) newScore += 10;
         if (updates.full_name) newScore += 10;
+        if (companyData.employee_count) newScore += 5;
+        if (companyData.industry) newScore += 5;
+        if (companyData.annual_revenue) newScore += 5;
         updates.confidence_score = Math.min(100, newScore);
       }
 
@@ -478,7 +914,7 @@ Deno.serve(async (req) => {
           .eq('id', leadId);
       }
 
-      results.push({ lead_id: leadId, enrichments });
+      results.push({ lead_id: leadId, enrichments, company_data: companyData });
     }
 
     return new Response(
