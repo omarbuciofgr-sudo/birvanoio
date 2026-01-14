@@ -1840,7 +1840,56 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      client_api_keys_safe: {
+        Row: {
+          api_key_prefix: string | null
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: string | null
+          is_active: boolean | null
+          key_name: string | null
+          last_used_at: string | null
+          organization_id: string | null
+          permissions: Json | null
+          rate_limit_per_minute: number | null
+        }
+        Insert: {
+          api_key_prefix?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          key_name?: string | null
+          last_used_at?: string | null
+          organization_id?: string | null
+          permissions?: Json | null
+          rate_limit_per_minute?: number | null
+        }
+        Update: {
+          api_key_prefix?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          key_name?: string | null
+          last_used_at?: string | null
+          organization_id?: string | null
+          permissions?: Json | null
+          rate_limit_per_minute?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       check_chat_rate_limit: {
