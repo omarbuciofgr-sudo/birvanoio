@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      blocked_domains: {
+        Row: {
+          block_count: number | null
+          block_reason: string | null
+          blocked_at: string
+          domain: string
+          http_status: number | null
+          id: string
+          last_attempt_at: string
+          retry_after: string | null
+        }
+        Insert: {
+          block_count?: number | null
+          block_reason?: string | null
+          blocked_at?: string
+          domain: string
+          http_status?: number | null
+          id?: string
+          last_attempt_at?: string
+          retry_after?: string | null
+        }
+        Update: {
+          block_count?: number | null
+          block_reason?: string | null
+          blocked_at?: string
+          domain?: string
+          http_status?: number | null
+          id?: string
+          last_attempt_at?: string
+          retry_after?: string | null
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           ai_qualified: boolean | null
@@ -256,6 +289,44 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domain_cache: {
+        Row: {
+          cache_expires_at: string
+          created_at: string
+          domain: string
+          id: string
+          last_scraped_at: string
+          lead_id: string | null
+          scraped_pages_count: number | null
+        }
+        Insert: {
+          cache_expires_at: string
+          created_at?: string
+          domain: string
+          id?: string
+          last_scraped_at?: string
+          lead_id?: string | null
+          scraped_pages_count?: number | null
+        }
+        Update: {
+          cache_expires_at?: string
+          created_at?: string
+          domain?: string
+          id?: string
+          last_scraped_at?: string
+          lead_id?: string | null
+          scraped_pages_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_cache_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
             referencedColumns: ["id"]
           },
         ]
@@ -808,6 +879,8 @@ export type Database = {
       }
       scrape_jobs: {
         Row: {
+          batch_size: number | null
+          checkpoint_index: number | null
           completed_at: string | null
           completed_targets: number | null
           created_at: string
@@ -816,6 +889,7 @@ export type Database = {
           failed_targets: number | null
           id: string
           input_method: string | null
+          last_checkpoint_at: string | null
           max_pages_per_domain: number | null
           name: string
           request_delay_ms: number | null
@@ -829,6 +903,8 @@ export type Database = {
           use_playwright_fallback: boolean | null
         }
         Insert: {
+          batch_size?: number | null
+          checkpoint_index?: number | null
           completed_at?: string | null
           completed_targets?: number | null
           created_at?: string
@@ -837,6 +913,7 @@ export type Database = {
           failed_targets?: number | null
           id?: string
           input_method?: string | null
+          last_checkpoint_at?: string | null
           max_pages_per_domain?: number | null
           name: string
           request_delay_ms?: number | null
@@ -850,6 +927,8 @@ export type Database = {
           use_playwright_fallback?: boolean | null
         }
         Update: {
+          batch_size?: number | null
+          checkpoint_index?: number | null
           completed_at?: string | null
           completed_targets?: number | null
           created_at?: string
@@ -858,6 +937,7 @@ export type Database = {
           failed_targets?: number | null
           id?: string
           input_method?: string | null
+          last_checkpoint_at?: string | null
           max_pages_per_domain?: number | null
           name?: string
           request_delay_ms?: number | null
@@ -1089,6 +1169,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scraper_locks: {
+        Row: {
+          expires_at: string
+          id: string
+          lock_key: string
+          lock_type: string
+          locked_at: string
+          locked_by: string | null
+        }
+        Insert: {
+          expires_at: string
+          id?: string
+          lock_key: string
+          lock_type: string
+          locked_at?: string
+          locked_by?: string | null
+        }
+        Update: {
+          expires_at?: string
+          id?: string
+          lock_key?: string
+          lock_type?: string
+          locked_at?: string
+          locked_by?: string | null
+        }
+        Relationships: []
+      }
+      scraper_stats: {
+        Row: {
+          avg_processing_time_ms: number | null
+          id: string
+          jobs_completed: number | null
+          jobs_failed: number | null
+          period_end: string
+          period_start: string
+          recorded_at: string
+          targets_failed: number | null
+          targets_processed: number | null
+          targets_success: number | null
+        }
+        Insert: {
+          avg_processing_time_ms?: number | null
+          id?: string
+          jobs_completed?: number | null
+          jobs_failed?: number | null
+          period_end: string
+          period_start: string
+          recorded_at?: string
+          targets_failed?: number | null
+          targets_processed?: number | null
+          targets_success?: number | null
+        }
+        Update: {
+          avg_processing_time_ms?: number | null
+          id?: string
+          jobs_completed?: number | null
+          jobs_failed?: number | null
+          period_end?: string
+          period_start?: string
+          recorded_at?: string
+          targets_failed?: number | null
+          targets_processed?: number | null
+          targets_success?: number | null
+        }
+        Relationships: []
       }
       team_assignments: {
         Row: {

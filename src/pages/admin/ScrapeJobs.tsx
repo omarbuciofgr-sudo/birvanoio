@@ -4,13 +4,14 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Play, Pause, StopCircle, Eye, Trash2, RefreshCw, Download } from 'lucide-react';
+import { Plus, Play, Pause, StopCircle, Eye, Trash2, RefreshCw, Download, Activity } from 'lucide-react';
 import { scrapeJobsApi, schemaTemplatesApi } from '@/lib/api/scraper';
 import { ScrapeJob, ScrapeJobStatus } from '@/types/scraper';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { CreateJobDialog } from '@/components/scraper/CreateJobDialog';
 import { JobProgressCard } from '@/components/scraper/JobProgressCard';
+import { ScraperMonitoringPanel } from '@/components/scraper/ScraperMonitoringPanel';
 import {
   Table,
   TableBody,
@@ -29,6 +30,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
 const statusColors: Record<ScrapeJobStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -170,6 +177,17 @@ export default function ScrapeJobs() {
           </Button>
         </div>
 
+        <Tabs defaultValue="jobs" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="jobs">Jobs</TabsTrigger>
+            <TabsTrigger value="monitoring" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Monitoring
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="jobs" className="space-y-6">
+
         {/* Active Jobs Progress */}
         {activeJobs.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -239,6 +257,12 @@ export default function ScrapeJobs() {
             )}
           </CardContent>
         </Card>
+        </TabsContent>
+
+        <TabsContent value="monitoring">
+          <ScraperMonitoringPanel />
+        </TabsContent>
+        </Tabs>
 
         {/* Create Job Dialog */}
         <CreateJobDialog
