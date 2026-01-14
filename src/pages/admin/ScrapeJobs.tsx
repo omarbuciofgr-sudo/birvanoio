@@ -4,7 +4,7 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Play, Pause, StopCircle, Eye, Trash2, RefreshCw, Download, Activity } from 'lucide-react';
+import { Plus, Play, Pause, StopCircle, Eye, Trash2, RefreshCw, Activity, History } from 'lucide-react';
 import { scrapeJobsApi, schemaTemplatesApi } from '@/lib/api/scraper';
 import { ScrapeJob, ScrapeJobStatus } from '@/types/scraper';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { CreateJobDialog } from '@/components/scraper/CreateJobDialog';
 import { JobProgressCard } from '@/components/scraper/JobProgressCard';
 import { ScraperMonitoringPanel } from '@/components/scraper/ScraperMonitoringPanel';
+import { ScrapeJobHistory } from '@/components/scraper/ScrapeJobHistory';
 import {
   Table,
   TableBody,
@@ -180,6 +181,10 @@ export default function ScrapeJobs() {
         <Tabs defaultValue="jobs" className="space-y-4">
           <TabsList>
             <TabsTrigger value="jobs">Jobs</TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
             <TabsTrigger value="monitoring" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Monitoring
@@ -257,6 +262,10 @@ export default function ScrapeJobs() {
             )}
           </CardContent>
         </Card>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ScrapeJobHistory />
         </TabsContent>
 
         <TabsContent value="monitoring">
