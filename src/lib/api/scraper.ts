@@ -283,6 +283,11 @@ export const scrapeJobsApi = {
       priority: 0,
     });
     
+    // Trigger the job processor edge function
+    supabase.functions.invoke('process-scrape-job', {
+      body: { job_id: id },
+    }).catch(err => console.error('Failed to trigger job processor:', err));
+    
     return data as unknown as ScrapeJob;
   },
 
