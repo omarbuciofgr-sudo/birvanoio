@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -28,13 +29,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson } from 'lucide-react';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
-import { ScrapedLead, ScrapedLeadStatus, ScrapeJob, ClientOrganization } from '@/types/scraper';
+import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { LeadDetailSheet } from '@/components/scraper/LeadDetailSheet';
+import { LeadEditDialog } from '@/components/scraper/LeadEditDialog';
 import { AssignLeadsDialog } from '@/components/scraper/AssignLeadsDialog';
+import { SuppressionListManager } from '@/components/scraper/SuppressionListManager';
+import { AuditLogViewer } from '@/components/scraper/AuditLogViewer';
 import { supabase } from '@/integrations/supabase/client';
 
 const statusColors: Record<ScrapedLeadStatus, string> = {
@@ -57,12 +61,14 @@ const validationColors = {
 
 export default function ScrapedLeads() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('leads');
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [jobFilter, setJobFilter] = useState<string>('all');
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<ScrapedLead | null>(null);
+  const [editingLead, setEditingLead] = useState<ScrapedLead | null>(null);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ['scraped-leads', statusFilter, jobFilter],
@@ -234,57 +240,77 @@ export default function ScrapedLeads() {
             <h1 className="text-3xl font-bold">Scraped Leads</h1>
             <p className="text-muted-foreground">Review, validate, and assign scraped leads</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {selectedLeads.size > 0 && (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => enrichMutation.mutate(Array.from(selectedLeads))}
-                  disabled={isProcessing}
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  {enrichMutation.isPending ? 'Enriching...' : `Enrich (${selectedLeads.size})`}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => validateMutation.mutate(Array.from(selectedLeads))}
-                  disabled={isProcessing}
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2" />
-                  {validateMutation.isPending ? 'Validating...' : `Validate (${selectedLeads.size})`}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => dedupeMutation.mutate(Array.from(selectedLeads))}
-                  disabled={isProcessing}
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  {dedupeMutation.isPending ? 'Checking...' : `Dedupe (${selectedLeads.size})`}
-                </Button>
-                <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
-                  <Users className="h-4 w-4 mr-2" />
-                  Assign ({selectedLeads.size})
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-destructive"
-                  onClick={() => bulkDeleteMutation.mutate(Array.from(selectedLeads))}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-              </>
-            )}
-            <Button variant="outline" onClick={handleExportCsv}>
-              <Download className="h-4 w-4 mr-2" />
-              CSV
-            </Button>
-            <Button variant="outline" onClick={handleExportJson}>
-              <FileJson className="h-4 w-4 mr-2" />
-              JSON
-            </Button>
-          </div>
         </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="leads" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Leads ({leads.length})
+            </TabsTrigger>
+            <TabsTrigger value="suppression" className="flex items-center gap-2">
+              <Ban className="h-4 w-4" />
+              Suppression Lists
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              Audit History
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="leads" className="mt-6 space-y-6">
+            {/* Bulk Actions */}
+            <div className="flex flex-wrap gap-2">
+              {selectedLeads.size > 0 && (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => enrichMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {enrichMutation.isPending ? 'Enriching...' : `Enrich (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => validateMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    {validateMutation.isPending ? 'Validating...' : `Validate (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => dedupeMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    {dedupeMutation.isPending ? 'Checking...' : `Dedupe (${selectedLeads.size})`}
+                  </Button>
+                  <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
+                    <Users className="h-4 w-4 mr-2" />
+                    Assign ({selectedLeads.size})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-destructive"
+                    onClick={() => bulkDeleteMutation.mutate(Array.from(selectedLeads))}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </>
+              )}
+              <div className="flex-1" />
+              <Button variant="outline" onClick={handleExportCsv}>
+                <Download className="h-4 w-4 mr-2" />
+                CSV
+              </Button>
+              <Button variant="outline" onClick={handleExportJson}>
+                <FileJson className="h-4 w-4 mr-2" />
+                JSON
+              </Button>
+            </div>
 
         {/* Filters */}
         <Card>
@@ -450,6 +476,9 @@ export default function ScrapedLeads() {
                             <DropdownMenuItem onClick={() => setSelectedLead(lead)}>
                               <Eye className="h-4 w-4 mr-2" /> View Details
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingLead(lead)}>
+                              <Edit className="h-4 w-4 mr-2" /> Edit Lead
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => updateStatusMutation.mutate({ id: lead.id, status: 'approved' })}
@@ -478,11 +507,28 @@ export default function ScrapedLeads() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="suppression" className="mt-6">
+            <SuppressionListManager organizations={organizations} />
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-6">
+            <AuditLogViewer tableName="scraped_leads" limit={100} />
+          </TabsContent>
+        </Tabs>
 
         {/* Lead Detail Sheet */}
         <LeadDetailSheet
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
+        />
+
+        {/* Lead Edit Dialog */}
+        <LeadEditDialog
+          lead={editingLead}
+          open={!!editingLead}
+          onClose={() => setEditingLead(null)}
         />
 
         {/* Assign Dialog */}
