@@ -64,6 +64,10 @@ export default function WebScraper() {
   // Check admin role
   useEffect(() => {
     const checkAdminRole = async () => {
+      // Wait until auth finishes resolving; otherwise we may set isAdmin=false
+      // briefly and trigger an incorrect redirect.
+      if (authLoading) return;
+
       if (!user?.id) {
         setIsAdmin(false);
         return;
@@ -90,7 +94,7 @@ export default function WebScraper() {
     };
 
     checkAdminRole();
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   // Scrape state
   const [scrapeUrl, setScrapeUrl] = useState('');
