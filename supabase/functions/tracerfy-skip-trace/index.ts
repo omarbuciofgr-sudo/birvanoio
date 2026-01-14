@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -50,6 +52,59 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized - Missing or invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Verify the user's JWT
+    const token = authHeader.replace('Bearer ', '');
+    const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: claimsData, error: claimsError } = await authedClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error('tracerfy-skip-trace auth error:', claimsError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+
+    // Check if user has admin role
+    const adminClient = createClient(supabaseUrl, serviceKey);
+    const { data: hasAdminRole, error: roleError } = await adminClient.rpc('has_role', {
+      _user_id: userId,
+      _role: 'admin',
+    });
+
+    if (roleError) {
+      console.error('tracerfy-skip-trace role check error:', roleError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authorization check failed' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!hasAdminRole) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Forbidden - Admin access required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate Tracerfy API key
     const apiKey = Deno.env.get('TRACERFY_API_KEY');
     if (!apiKey) {
       console.error('TRACERFY_API_KEY not configured');
