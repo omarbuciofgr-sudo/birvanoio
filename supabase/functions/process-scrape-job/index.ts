@@ -160,7 +160,7 @@ async function processTarget(
   firecrawlApiKey: string,
   // deno-lint-ignore no-explicit-any
   supabaseClient: any
-): Promise<{ success: boolean; leadId?: string; error?: string }> {
+): Promise<{ success: boolean; leadId?: string; error?: string; needsEnrichment?: boolean }> {
   const domain = extractDomain(url);
   const formattedUrl = formatUrl(url);
 
@@ -257,7 +257,7 @@ async function processTarget(
     return { success: false, error: error.message };
   }
 
-  return { success: true, leadId: lead?.id as string };
+  return { success: true, leadId: lead?.id as string, needsEnrichment: emails.length === 0 || phones.length === 0 || !fullName };
 }
 
 Deno.serve(async (req) => {
@@ -283,6 +283,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const jobId = body.job_id;
     const batchSize = body.batch_size || 5; // Process N URLs per invocation
+    const autoEnrich = body.auto_enrich !== false; // Default to true
+    const autoValidate = body.auto_validate !== false; // Default to true
 
     // If specific job ID provided, process that job
     // Otherwise, pick up from queue
@@ -403,9 +405,10 @@ Deno.serve(async (req) => {
     console.log(`Processing ${urlsToProcess.length} URLs for job ${job.id}`);
 
     // Process each URL
-    const results: { url: string; success: boolean; error?: string }[] = [];
+    const results: { url: string; success: boolean; error?: string; leadId?: string }[] = [];
     let newCompleted = 0;
     let newFailed = 0;
+    const leadsToEnrich: string[] = [];
 
     for (const url of urlsToProcess) {
       try {
@@ -417,10 +420,14 @@ Deno.serve(async (req) => {
           supabase
         );
 
-        results.push({ url, success: result.success, error: result.error });
+        results.push({ url, success: result.success, error: result.error, leadId: result.leadId });
 
         if (result.success) {
           newCompleted++;
+          // Track leads that need enrichment (missing contact info)
+          if (result.needsEnrichment && result.leadId) {
+            leadsToEnrich.push(result.leadId);
+          }
         } else {
           newFailed++;
         }
@@ -443,6 +450,41 @@ Deno.serve(async (req) => {
           failed_targets: job.failed_targets + newFailed,
         })
         .eq('id', job.id);
+    }
+
+    // Auto-enrich leads that need it
+    if (autoEnrich && leadsToEnrich.length > 0) {
+      console.log(`Auto-enriching ${leadsToEnrich.length} leads...`);
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/enrich-lead`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ lead_ids: leadsToEnrich }),
+        });
+      } catch (err) {
+        console.error('Auto-enrichment failed:', err);
+      }
+    }
+
+    // Auto-validate all processed leads
+    const allLeadIds = results.filter(r => r.success && r.leadId).map(r => r.leadId!);
+    if (autoValidate && allLeadIds.length > 0) {
+      console.log(`Auto-validating ${allLeadIds.length} leads...`);
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/validate-lead`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ lead_ids: allLeadIds }),
+        });
+      } catch (err) {
+        console.error('Auto-validation failed:', err);
+      }
     }
 
     // Check if job is now complete

@@ -28,13 +28,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check } from 'lucide-react';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus, ScrapeJob, ClientOrganization } from '@/types/scraper';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { LeadDetailSheet } from '@/components/scraper/LeadDetailSheet';
 import { AssignLeadsDialog } from '@/components/scraper/AssignLeadsDialog';
+import { supabase } from '@/integrations/supabase/client';
 
 const statusColors: Record<ScrapedLeadStatus, string> = {
   new: 'bg-blue-500/20 text-blue-600',
@@ -110,6 +111,54 @@ export default function ScrapedLeads() {
     onError: (error) => toast.error(`Failed to delete leads: ${error.message}`),
   });
 
+  const enrichMutation = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke('enrich-lead', {
+        body: { lead_ids: leadIds },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Enriched ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Enrichment failed: ${error.message}`),
+  });
+
+  const validateMutation = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke('validate-lead', {
+        body: { lead_ids: leadIds },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Validated ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Validation failed: ${error.message}`),
+  });
+
+  const dedupeMutation = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke('dedupe-leads', {
+        body: { lead_ids: leadIds, auto_merge: true },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Found ${data.duplicates_found || 0} duplicates, merged ${data.merged_count || 0}`);
+    },
+    onError: (error) => toast.error(`Dedupe failed: ${error.message}`),
+  });
+
   const filteredLeads = leads.filter(lead => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -157,6 +206,26 @@ export default function ScrapedLeads() {
     }
   };
 
+  const handleExportJson = async () => {
+    try {
+      const json = await scrapedLeadsApi.exportToJson({
+        job_id: jobFilter !== 'all' ? jobFilter : undefined,
+      });
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads-${format(new Date(), 'yyyy-MM-dd')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export completed');
+    } catch (error) {
+      toast.error('Failed to export leads');
+    }
+  };
+
+  const isProcessing = enrichMutation.isPending || validateMutation.isPending || dedupeMutation.isPending;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -165,9 +234,33 @@ export default function ScrapedLeads() {
             <h1 className="text-3xl font-bold">Scraped Leads</h1>
             <p className="text-muted-foreground">Review, validate, and assign scraped leads</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {selectedLeads.size > 0 && (
               <>
+                <Button 
+                  variant="outline" 
+                  onClick={() => enrichMutation.mutate(Array.from(selectedLeads))}
+                  disabled={isProcessing}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {enrichMutation.isPending ? 'Enriching...' : `Enrich (${selectedLeads.size})`}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => validateMutation.mutate(Array.from(selectedLeads))}
+                  disabled={isProcessing}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  {validateMutation.isPending ? 'Validating...' : `Validate (${selectedLeads.size})`}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => dedupeMutation.mutate(Array.from(selectedLeads))}
+                  disabled={isProcessing}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  {dedupeMutation.isPending ? 'Checking...' : `Dedupe (${selectedLeads.size})`}
+                </Button>
                 <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
                   <Users className="h-4 w-4 mr-2" />
                   Assign ({selectedLeads.size})
@@ -184,7 +277,11 @@ export default function ScrapedLeads() {
             )}
             <Button variant="outline" onClick={handleExportCsv}>
               <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              CSV
+            </Button>
+            <Button variant="outline" onClick={handleExportJson}>
+              <FileJson className="h-4 w-4 mr-2" />
+              JSON
             </Button>
           </div>
         </div>
