@@ -68,15 +68,19 @@ export default function WebScraper() {
         setIsAdmin(false);
         return;
       }
-      
-      const { data: hasAdminRole } = await supabase.rpc('has_role', {
-        _user_id: user.id,
-        _role: 'admin'
-      });
-      
-      setIsAdmin(!!hasAdminRole);
+
+      // Use backend check to avoid client-side RPC permission/config issues
+      const { data, error } = await supabase.functions.invoke('check-admin');
+
+      if (error) {
+        console.error('Admin check failed:', error);
+        setIsAdmin(false);
+        return;
+      }
+
+      setIsAdmin(!!data?.isAdmin);
     };
-    
+
     checkAdminRole();
   }, [user?.id]);
 
