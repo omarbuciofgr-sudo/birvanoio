@@ -1,5 +1,28 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Scored lead with AI insights
+export interface ScoredProspect extends ProspectResult {
+  score: number;
+  score_breakdown: {
+    data_completeness: number;
+    contact_quality: number;
+    decision_maker_fit: number;
+    company_fit: number;
+    total: number;
+  };
+  ai_insights: string;
+  priority: 'high' | 'medium' | 'low';
+  recommended_action: string;
+}
+
+export interface ScoringSummary {
+  total_leads: number;
+  high_priority: number;
+  medium_priority: number;
+  low_priority: number;
+  average_score: number;
+}
+
 /**
  * Prospect Search API - ZoomInfo-style lead prospecting
  * 
@@ -432,6 +455,85 @@ export const prospectSearchApi = {
       return { 
         success: false, 
         savedCount: 0, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  },
+
+  /**
+   * Score prospects using AI for priority and recommended actions
+   */
+  async scoreProspects(
+    prospects: ProspectResult[],
+    criteria?: {
+      target_industry?: string;
+      target_titles?: string[];
+      min_company_size?: number;
+      max_company_size?: number;
+    }
+  ): Promise<{ 
+    success: boolean; 
+    data?: ScoredProspect[]; 
+    summary?: ScoringSummary;
+    error?: string 
+  }> {
+    try {
+      const leadsToScore = prospects.map(p => ({
+        full_name: p.full_name,
+        email: p.email,
+        phone: p.phone || p.mobile_phone || p.direct_phone,
+        job_title: p.job_title,
+        seniority_level: p.seniority_level,
+        company_name: p.company_name,
+        industry: p.industry,
+        employee_count: p.employee_count,
+        annual_revenue: p.annual_revenue,
+        website: p.company_website,
+        linkedin_url: p.linkedin_url,
+        email_validation_status: null,
+        phone_validation_status: null,
+        source: p.source,
+      }));
+
+      const { data, error } = await supabase.functions.invoke('ai-lead-scoring', {
+        body: { 
+          leads: leadsToScore, 
+          criteria: criteria || {},
+          use_ai: true,
+        },
+      });
+
+      if (error) {
+        console.error('Lead scoring error:', error);
+        return { success: false, error: error.message };
+      }
+
+      if (!data?.success) {
+        return { success: false, error: data?.error || 'Scoring failed' };
+      }
+
+      // Map scored leads back to ScoredProspect format
+      const scoredProspects: ScoredProspect[] = data.data.map((scored: any, index: number) => ({
+        ...prospects[index],
+        score: scored.score,
+        score_breakdown: scored.score_breakdown,
+        ai_insights: scored.ai_insights,
+        priority: scored.priority,
+        recommended_action: scored.recommended_action,
+      }));
+
+      // Sort by score descending
+      scoredProspects.sort((a, b) => b.score - a.score);
+
+      return { 
+        success: true, 
+        data: scoredProspects,
+        summary: data.summary,
+      };
+    } catch (error) {
+      console.error('Scoring error:', error);
+      return { 
+        success: false, 
         error: error instanceof Error ? error.message : 'Unknown error' 
       };
     }
