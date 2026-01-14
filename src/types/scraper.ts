@@ -107,6 +107,11 @@ export interface ScrapedLead {
   domain: string;
   source_url: string | null;
   
+  // Lead type
+  lead_type: 'person' | 'company';
+  best_contact_title: string | null;
+  best_contact_selection_reason: string | null;
+  
   // Universal fields
   full_name: string | null;
   best_email: string | null;
@@ -115,11 +120,25 @@ export interface ScrapedLead {
   all_phones: string[];
   contact_form_url: string | null;
   
+  // Address
+  address: string | null;
+  address_source_url: string | null;
+  address_evidence_snippet: string | null;
+  address_evidence_type: EvidenceType;
+  
   // Evidence URLs
   name_source_url: string | null;
   email_source_url: string | null;
   phone_source_url: string | null;
   contact_form_source_url: string | null;
+  
+  // Evidence snippets
+  name_evidence_snippet: string | null;
+  name_evidence_type: EvidenceType;
+  email_evidence_snippet: string | null;
+  email_evidence_type: EvidenceType;
+  phone_evidence_snippet: string | null;
+  phone_evidence_type: EvidenceType;
   
   // LinkedIn
   linkedin_search_url: string | null;
@@ -131,10 +150,27 @@ export interface ScrapedLead {
   phone_line_type: string | null;
   phone_validation_notes: string | null;
   
+  // Explicit verification
+  email_verification_method: string | null;
+  email_verification_result: Record<string, unknown> | null;
+  email_verified_at: string | null;
+  phone_verification_method: string | null;
+  phone_verification_result: Record<string, unknown> | null;
+  phone_verified_at: string | null;
+  
   // Confidence & QC
   confidence_score: number;
   qc_flag: string | null;
   qc_notes: string | null;
+  
+  // Review
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  
+  // Suppression
+  is_suppressed: boolean;
+  suppression_reason: string | null;
   
   // Schema data
   schema_template_id: string | null;
@@ -153,6 +189,77 @@ export interface ScrapedLead {
   // Joined fields
   schema_template?: SchemaTemplate;
   assigned_organization?: ClientOrganization;
+}
+
+// Evidence type
+export type EvidenceType = 'on_page_text' | 'structured_data' | 'pdf' | 'enrichment_provider';
+
+// Audit log
+export interface AuditLog {
+  id: string;
+  table_name: string;
+  record_id: string;
+  action: 'create' | 'update' | 'delete' | 'status_change' | 'assignment';
+  field_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string | null;
+  performed_by: string | null;
+  performed_at: string;
+}
+
+// Suppression list
+export interface SuppressionEntry {
+  id: string;
+  suppression_type: 'email' | 'phone' | 'domain';
+  value: string;
+  reason: string | null;
+  added_by: string | null;
+  created_at: string;
+  organization_id?: string; // Only for client suppression
+}
+
+// Client webhook
+export interface ClientWebhook {
+  id: string;
+  organization_id: string;
+  name: string;
+  webhook_url: string;
+  secret_hash: string | null;
+  events: string[];
+  is_active: boolean;
+  last_triggered_at: string | null;
+  failure_count: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+// Client API key
+export interface ClientApiKey {
+  id: string;
+  organization_id: string;
+  key_name: string;
+  api_key_prefix: string;
+  permissions: string[];
+  rate_limit_per_minute: number;
+  is_active: boolean;
+  last_used_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  expires_at: string | null;
+}
+
+// Webhook delivery log
+export interface WebhookDeliveryLog {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  response_status: number | null;
+  response_body: string | null;
+  success: boolean;
+  error_message: string | null;
+  delivered_at: string;
 }
 
 // Enrichment provider config
