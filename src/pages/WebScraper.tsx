@@ -74,6 +74,14 @@ export default function WebScraper() {
 
       if (error) {
         console.error('Admin check failed:', error);
+        toast.error(`Admin check failed: ${error.message}`);
+        setIsAdmin(false);
+        return;
+      }
+
+      if (data?.error) {
+        console.error('Admin check returned error:', data.error);
+        toast.error(`Admin check failed: ${data.error}`);
         setIsAdmin(false);
         return;
       }
