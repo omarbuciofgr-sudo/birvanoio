@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          field_name: string | null
+          id: string
+          new_value: string | null
+          old_value: string | null
+          performed_at: string
+          performed_by: string | null
+          reason: string | null
+          record_id: string
+          table_name: string
+        }
+        Insert: {
+          action: string
+          field_name?: string | null
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          performed_at?: string
+          performed_by?: string | null
+          reason?: string | null
+          record_id: string
+          table_name: string
+        }
+        Update: {
+          action?: string
+          field_name?: string | null
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          performed_at?: string
+          performed_by?: string | null
+          reason?: string | null
+          record_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
       blocked_domains: {
         Row: {
           block_count: number | null
@@ -86,6 +125,59 @@ export type Database = {
         }
         Relationships: []
       }
+      client_api_keys: {
+        Row: {
+          api_key_hash: string
+          api_key_prefix: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          key_name: string
+          last_used_at: string | null
+          organization_id: string
+          permissions: Json | null
+          rate_limit_per_minute: number | null
+        }
+        Insert: {
+          api_key_hash: string
+          api_key_prefix: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_name: string
+          last_used_at?: string | null
+          organization_id: string
+          permissions?: Json | null
+          rate_limit_per_minute?: number | null
+        }
+        Update: {
+          api_key_hash?: string
+          api_key_prefix?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_name?: string
+          last_used_at?: string | null
+          organization_id?: string
+          permissions?: Json | null
+          rate_limit_per_minute?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_organizations: {
         Row: {
           contact_email: string | null
@@ -144,6 +236,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_webhooks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          events: Json | null
+          failure_count: number | null
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          name: string
+          organization_id: string
+          secret_hash: string | null
+          webhook_url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          events?: Json | null
+          failure_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name: string
+          organization_id: string
+          secret_hash?: string | null
+          webhook_url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          events?: Json | null
+          failure_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name?: string
+          organization_id?: string
+          secret_hash?: string | null
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_webhooks_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "client_organizations"
@@ -396,6 +538,42 @@ export type Database = {
           is_active?: boolean
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      enrichment_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          id: string
+          input_data: Json
+          lookup_type: string
+          provider: string
+          result_data: Json | null
+          success: boolean
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input_data: Json
+          lookup_type: string
+          provider: string
+          result_data?: Json | null
+          success: boolean
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input_data?: Json
+          lookup_type?: string
+          provider?: string
+          result_data?: Json | null
+          success?: boolean
         }
         Relationships: []
       }
@@ -851,6 +1029,7 @@ export type Database = {
           is_default: boolean | null
           name: string
           niche: string
+          target_contact_role: string | null
           updated_at: string
         }
         Insert: {
@@ -862,6 +1041,7 @@ export type Database = {
           is_default?: boolean | null
           name: string
           niche: string
+          target_contact_role?: string | null
           updated_at?: string
         }
         Update: {
@@ -873,6 +1053,7 @@ export type Database = {
           is_default?: boolean | null
           name?: string
           niche?: string
+          target_contact_role?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -880,23 +1061,29 @@ export type Database = {
       scrape_jobs: {
         Row: {
           batch_size: number | null
+          budget_exceeded: boolean | null
           checkpoint_index: number | null
           completed_at: string | null
           completed_targets: number | null
           created_at: string
           created_by: string | null
+          current_cost_usd: number | null
           description: string | null
           failed_targets: number | null
           id: string
           input_method: string | null
+          job_budget_usd: number | null
           last_checkpoint_at: string | null
+          max_enrichment_calls_per_domain: number | null
           max_pages_per_domain: number | null
+          max_verification_calls_per_lead: number | null
           name: string
           request_delay_ms: number | null
           respect_robots_txt: boolean | null
           schema_template_id: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["scrape_job_status"]
+          target_contact_role: string | null
           target_urls: Json
           total_targets: number | null
           updated_at: string
@@ -904,23 +1091,29 @@ export type Database = {
         }
         Insert: {
           batch_size?: number | null
+          budget_exceeded?: boolean | null
           checkpoint_index?: number | null
           completed_at?: string | null
           completed_targets?: number | null
           created_at?: string
           created_by?: string | null
+          current_cost_usd?: number | null
           description?: string | null
           failed_targets?: number | null
           id?: string
           input_method?: string | null
+          job_budget_usd?: number | null
           last_checkpoint_at?: string | null
+          max_enrichment_calls_per_domain?: number | null
           max_pages_per_domain?: number | null
+          max_verification_calls_per_lead?: number | null
           name: string
           request_delay_ms?: number | null
           respect_robots_txt?: boolean | null
           schema_template_id?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["scrape_job_status"]
+          target_contact_role?: string | null
           target_urls?: Json
           total_targets?: number | null
           updated_at?: string
@@ -928,23 +1121,29 @@ export type Database = {
         }
         Update: {
           batch_size?: number | null
+          budget_exceeded?: boolean | null
           checkpoint_index?: number | null
           completed_at?: string | null
           completed_targets?: number | null
           created_at?: string
           created_by?: string | null
+          current_cost_usd?: number | null
           description?: string | null
           failed_targets?: number | null
           id?: string
           input_method?: string | null
+          job_budget_usd?: number | null
           last_checkpoint_at?: string | null
+          max_enrichment_calls_per_domain?: number | null
           max_pages_per_domain?: number | null
+          max_verification_calls_per_lead?: number | null
           name?: string
           request_delay_ms?: number | null
           respect_robots_txt?: boolean | null
           schema_template_id?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["scrape_job_status"]
+          target_contact_role?: string | null
           target_urls?: Json
           total_targets?: number | null
           updated_at?: string
@@ -962,11 +1161,17 @@ export type Database = {
       }
       scraped_leads: {
         Row: {
+          address: string | null
+          address_evidence_snippet: string | null
+          address_evidence_type: string | null
+          address_source_url: string | null
           all_emails: Json | null
           all_phones: Json | null
           assigned_at: string | null
           assigned_by: string | null
           assigned_to_org: string | null
+          best_contact_selection_reason: string | null
+          best_contact_title: string | null
           best_email: string | null
           best_phone: string | null
           confidence_score: number | null
@@ -974,40 +1179,64 @@ export type Database = {
           contact_form_url: string | null
           created_at: string
           domain: string
+          email_evidence_snippet: string | null
+          email_evidence_type: string | null
           email_source_url: string | null
           email_validation_notes: string | null
           email_validation_status:
             | Database["public"]["Enums"]["validation_status"]
             | null
+          email_verification_method: string | null
+          email_verification_result: Json | null
+          email_verified_at: string | null
           enrichment_data: Json | null
           enrichment_providers_used: Json | null
           full_name: string | null
           id: string
+          is_suppressed: boolean | null
           job_id: string | null
+          lead_type: string | null
           linkedin_search_url: string | null
+          name_evidence_snippet: string | null
+          name_evidence_type: string | null
           name_source_url: string | null
+          phone_evidence_snippet: string | null
+          phone_evidence_type: string | null
           phone_line_type: string | null
           phone_source_url: string | null
           phone_validation_notes: string | null
           phone_validation_status:
             | Database["public"]["Enums"]["validation_status"]
             | null
+          phone_verification_method: string | null
+          phone_verification_result: Json | null
+          phone_verified_at: string | null
           qc_flag: string | null
           qc_notes: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           schema_data: Json | null
           schema_evidence: Json | null
           schema_template_id: string | null
           scraped_at: string | null
           source_url: string | null
           status: Database["public"]["Enums"]["scraped_lead_status"]
+          suppression_reason: string | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
+          address_evidence_snippet?: string | null
+          address_evidence_type?: string | null
+          address_source_url?: string | null
           all_emails?: Json | null
           all_phones?: Json | null
           assigned_at?: string | null
           assigned_by?: string | null
           assigned_to_org?: string | null
+          best_contact_selection_reason?: string | null
+          best_contact_title?: string | null
           best_email?: string | null
           best_phone?: string | null
           confidence_score?: number | null
@@ -1015,40 +1244,64 @@ export type Database = {
           contact_form_url?: string | null
           created_at?: string
           domain: string
+          email_evidence_snippet?: string | null
+          email_evidence_type?: string | null
           email_source_url?: string | null
           email_validation_notes?: string | null
           email_validation_status?:
             | Database["public"]["Enums"]["validation_status"]
             | null
+          email_verification_method?: string | null
+          email_verification_result?: Json | null
+          email_verified_at?: string | null
           enrichment_data?: Json | null
           enrichment_providers_used?: Json | null
           full_name?: string | null
           id?: string
+          is_suppressed?: boolean | null
           job_id?: string | null
+          lead_type?: string | null
           linkedin_search_url?: string | null
+          name_evidence_snippet?: string | null
+          name_evidence_type?: string | null
           name_source_url?: string | null
+          phone_evidence_snippet?: string | null
+          phone_evidence_type?: string | null
           phone_line_type?: string | null
           phone_source_url?: string | null
           phone_validation_notes?: string | null
           phone_validation_status?:
             | Database["public"]["Enums"]["validation_status"]
             | null
+          phone_verification_method?: string | null
+          phone_verification_result?: Json | null
+          phone_verified_at?: string | null
           qc_flag?: string | null
           qc_notes?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           schema_data?: Json | null
           schema_evidence?: Json | null
           schema_template_id?: string | null
           scraped_at?: string | null
           source_url?: string | null
           status?: Database["public"]["Enums"]["scraped_lead_status"]
+          suppression_reason?: string | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
+          address_evidence_snippet?: string | null
+          address_evidence_type?: string | null
+          address_source_url?: string | null
           all_emails?: Json | null
           all_phones?: Json | null
           assigned_at?: string | null
           assigned_by?: string | null
           assigned_to_org?: string | null
+          best_contact_selection_reason?: string | null
+          best_contact_title?: string | null
           best_email?: string | null
           best_phone?: string | null
           confidence_score?: number | null
@@ -1056,32 +1309,50 @@ export type Database = {
           contact_form_url?: string | null
           created_at?: string
           domain?: string
+          email_evidence_snippet?: string | null
+          email_evidence_type?: string | null
           email_source_url?: string | null
           email_validation_notes?: string | null
           email_validation_status?:
             | Database["public"]["Enums"]["validation_status"]
             | null
+          email_verification_method?: string | null
+          email_verification_result?: Json | null
+          email_verified_at?: string | null
           enrichment_data?: Json | null
           enrichment_providers_used?: Json | null
           full_name?: string | null
           id?: string
+          is_suppressed?: boolean | null
           job_id?: string | null
+          lead_type?: string | null
           linkedin_search_url?: string | null
+          name_evidence_snippet?: string | null
+          name_evidence_type?: string | null
           name_source_url?: string | null
+          phone_evidence_snippet?: string | null
+          phone_evidence_type?: string | null
           phone_line_type?: string | null
           phone_source_url?: string | null
           phone_validation_notes?: string | null
           phone_validation_status?:
             | Database["public"]["Enums"]["validation_status"]
             | null
+          phone_verification_method?: string | null
+          phone_verification_result?: Json | null
+          phone_verified_at?: string | null
           qc_flag?: string | null
           qc_notes?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           schema_data?: Json | null
           schema_evidence?: Json | null
           schema_template_id?: string | null
           scraped_at?: string | null
           source_url?: string | null
           status?: Database["public"]["Enums"]["scraped_lead_status"]
+          suppression_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1236,6 +1507,71 @@ export type Database = {
         }
         Relationships: []
       }
+      suppression_list_client: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          id: string
+          organization_id: string
+          reason: string | null
+          suppression_type: string
+          value: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          reason?: string | null
+          suppression_type: string
+          value: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          reason?: string | null
+          suppression_type?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppression_list_client_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppression_list_global: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          id: string
+          reason: string | null
+          suppression_type: string
+          value: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          suppression_type: string
+          value: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          suppression_type?: string
+          value?: string
+        }
+        Relationships: []
+      }
       team_assignments: {
         Row: {
           assigned_at: string
@@ -1333,6 +1669,42 @@ export type Database = {
           },
         ]
       }
+      verification_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          id: string
+          input_value: string
+          provider: string | null
+          result_data: Json | null
+          result_status: string
+          verification_type: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input_value: string
+          provider?: string | null
+          result_data?: Json | null
+          result_status: string
+          verification_type: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          input_value?: string
+          provider?: string | null
+          result_data?: Json | null
+          result_status?: string
+          verification_type?: string
+        }
+        Relationships: []
+      }
       voice_agent_calls: {
         Row: {
           ai_transcript: string | null
@@ -1385,6 +1757,50 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhook_delivery_log: {
+        Row: {
+          delivered_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json
+          response_body: string | null
+          response_status: number | null
+          success: boolean
+          webhook_id: string
+        }
+        Insert: {
+          delivered_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          response_body?: string | null
+          response_status?: number | null
+          success: boolean
+          webhook_id: string
+        }
+        Update: {
+          delivered_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean
+          webhook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_delivery_log_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "client_webhooks"
             referencedColumns: ["id"]
           },
         ]
