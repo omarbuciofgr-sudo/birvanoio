@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
  * Prospect Search API - ZoomInfo-style lead prospecting
  * 
  * This combines Apollo.io's people database with Firecrawl web search
- * to find decision-makers in any niche and location.
+ * and Google Places to find decision-makers in any niche and location.
  */
 
 export interface ProspectSearchParams {
@@ -31,9 +31,27 @@ export interface ProspectSearchParams {
   revenueMax?: number;
   
   // Search settings
-  searchType?: 'apollo_search' | 'web_discovery' | 'hybrid';
+  searchType?: 'apollo_search' | 'web_discovery' | 'hybrid' | 'google_places';
   limit?: number;
   enrichWebResults?: boolean;
+  validate_contacts?: boolean;
+  use_waterfall?: boolean;
+}
+
+// Google Places result
+export interface PlaceResult {
+  place_id: string;
+  name: string;
+  address: string;
+  phone: string | null;
+  website: string | null;
+  rating: number | null;
+  review_count: number | null;
+  business_status: string | null;
+  types: string[];
+  location: { lat: number; lng: number } | null;
+  hours: string[] | null;
+  owner_mentions: string[];
 }
 
 export interface ProspectResult {
@@ -165,6 +183,153 @@ export const prospectSearchApi = {
     }
 
     return data as ProspectSearchResponse;
+  },
+
+  /**
+   * Search Google Places for local businesses
+   */
+  async searchPlaces(query: string, limit: number = 20): Promise<{
+    success: boolean;
+    data?: PlaceResult[];
+    error?: string;
+  }> {
+    const { data, error } = await supabase.functions.invoke('google-places-search', {
+      body: { action: 'search', query, limit },
+    });
+
+    if (error) {
+      console.error('Google Places search error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return data;
+  },
+
+  /**
+   * Enrich a Google Places result with contact info from Apollo/Hunter/PDL
+   */
+  async enrichPlaceResult(place: PlaceResult, targetTitles?: string[]): Promise<ProspectResult | null> {
+    // Extract domain from website
+    let domain: string | null = null;
+    if (place.website) {
+      try {
+        const url = new URL(place.website);
+        domain = url.hostname.replace(/^www\./, '');
+      } catch {
+        domain = null;
+      }
+    }
+
+    if (!domain) {
+      // Return basic result without enrichment
+      return {
+        full_name: place.owner_mentions[0] || null,
+        email: null,
+        phone: place.phone,
+        mobile_phone: null,
+        direct_phone: null,
+        job_title: place.owner_mentions[0] ? 'Owner (from reviews)' : null,
+        seniority_level: 'owner',
+        department: 'executive',
+        linkedin_url: null,
+        company_name: place.name,
+        company_domain: null,
+        company_website: place.website,
+        company_linkedin_url: null,
+        industry: place.types[0]?.replace(/_/g, ' ') || null,
+        employee_count: null,
+        annual_revenue: null,
+        founded_year: null,
+        headquarters_city: null,
+        headquarters_state: null,
+        source: 'google_places',
+        confidence_score: place.phone ? 40 : 20,
+        enrichment_providers: ['google_places'],
+      };
+    }
+
+    // Call waterfall enrichment
+    const { data, error } = await supabase.functions.invoke('data-waterfall-enrich', {
+      body: { 
+        domain, 
+        target_titles: targetTitles || ['owner', 'ceo', 'founder', 'president'],
+      },
+    });
+
+    if (error || !data?.success) {
+      // Return basic result
+      return {
+        full_name: place.owner_mentions[0] || null,
+        email: null,
+        phone: place.phone,
+        mobile_phone: null,
+        direct_phone: null,
+        job_title: place.owner_mentions[0] ? 'Owner (from reviews)' : null,
+        seniority_level: 'owner',
+        department: 'executive',
+        linkedin_url: null,
+        company_name: place.name,
+        company_domain: domain,
+        company_website: place.website,
+        company_linkedin_url: null,
+        industry: place.types[0]?.replace(/_/g, ' ') || null,
+        employee_count: null,
+        annual_revenue: null,
+        founded_year: null,
+        headquarters_city: null,
+        headquarters_state: null,
+        source: 'google_places',
+        confidence_score: place.phone ? 40 : 20,
+        enrichment_providers: ['google_places'],
+      };
+    }
+
+    const enriched = data.data;
+    return {
+      full_name: enriched.full_name || place.owner_mentions[0] || null,
+      email: enriched.email || null,
+      phone: enriched.phone || place.phone,
+      mobile_phone: enriched.mobile_phone || null,
+      direct_phone: enriched.direct_phone || null,
+      job_title: enriched.job_title || (place.owner_mentions[0] ? 'Owner' : null),
+      seniority_level: enriched.seniority_level || 'owner',
+      department: enriched.department || 'executive',
+      linkedin_url: enriched.linkedin_url || null,
+      company_name: enriched.company_name || place.name,
+      company_domain: domain,
+      company_website: place.website,
+      company_linkedin_url: enriched.company_linkedin_url || null,
+      industry: enriched.industry || place.types[0]?.replace(/_/g, ' ') || null,
+      employee_count: enriched.employee_count || null,
+      annual_revenue: enriched.annual_revenue || null,
+      founded_year: enriched.founded_year || null,
+      headquarters_city: enriched.headquarters_city || null,
+      headquarters_state: enriched.headquarters_state || null,
+      source: 'google_places_enriched',
+      confidence_score: enriched.email ? 85 : (enriched.phone || place.phone ? 60 : 30),
+      enrichment_providers: ['google_places', ...(data.providers_used || [])],
+    };
+  },
+
+  /**
+   * Batch enrich multiple places
+   */
+  async enrichPlaceResults(
+    places: PlaceResult[], 
+    targetTitles?: string[],
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<ProspectResult[]> {
+    const results: ProspectResult[] = [];
+    
+    for (let i = 0; i < places.length; i++) {
+      const enriched = await this.enrichPlaceResult(places[i], targetTitles);
+      if (enriched) {
+        results.push(enriched);
+      }
+      onProgress?.(i + 1, places.length);
+    }
+    
+    return results;
   },
 
   /**

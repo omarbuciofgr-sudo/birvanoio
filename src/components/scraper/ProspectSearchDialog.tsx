@@ -34,10 +34,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import {
   prospectSearchApi,
   ProspectSearchParams,
   ProspectResult,
+  PlaceResult,
   INDUSTRIES,
   DECISION_MAKER_TITLES,
   SENIORITY_LEVELS,
@@ -60,6 +62,10 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Star,
+  MapPinned,
+  Globe,
+  Zap,
 } from 'lucide-react';
 
 const quickSearchSchema = z.object({
@@ -75,8 +81,13 @@ const advancedSearchSchema = z.object({
   limit: z.number().min(1).max(100).default(25),
 });
 
+const placesSearchSchema = z.object({
+  query: z.string().min(3, 'Enter at least 3 characters'),
+});
+
 type QuickSearchForm = z.infer<typeof quickSearchSchema>;
 type AdvancedSearchForm = z.infer<typeof advancedSearchSchema>;
+type PlacesSearchForm = z.infer<typeof placesSearchSchema>;
 
 interface ProspectSearchDialogProps {
   open: boolean;
@@ -89,10 +100,13 @@ export function ProspectSearchDialog({
   onOpenChange,
   onSaveProspects,
 }: ProspectSearchDialogProps) {
-  const [searchMode, setSearchMode] = useState<'quick' | 'advanced'>('quick');
+  const [searchMode, setSearchMode] = useState<'quick' | 'advanced' | 'places'>('quick');
   const [results, setResults] = useState<ProspectResult[]>([]);
+  const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
   const [selectedProspects, setSelectedProspects] = useState<Set<number>>(new Set());
+  const [selectedPlaces, setSelectedPlaces] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
+  const [enrichmentProgress, setEnrichmentProgress] = useState<{ completed: number; total: number } | null>(null);
 
   const quickForm = useForm<QuickSearchForm>({
     resolver: zodResolver(quickSearchSchema),
@@ -111,6 +125,11 @@ export function ProspectSearchDialog({
     },
   });
 
+  const placesForm = useForm<PlacesSearchForm>({
+    resolver: zodResolver(placesSearchSchema),
+    defaultValues: { query: '' },
+  });
+
   const searchMutation = useMutation({
     mutationFn: async (params: ProspectSearchParams) => {
       return prospectSearchApi.search(params);
@@ -127,6 +146,48 @@ export function ProspectSearchDialog({
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Search failed');
+    },
+  });
+
+  const placesSearchMutation = useMutation({
+    mutationFn: async (query: string) => {
+      return prospectSearchApi.searchPlaces(query, 20);
+    },
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        setPlaceResults(response.data);
+        setSelectedPlaces(new Set());
+        setResults([]);
+        setHasSearched(true);
+        toast.success(`Found ${response.data.length} local businesses`);
+      } else {
+        toast.error(response.error || 'Search failed');
+      }
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Search failed');
+    },
+  });
+
+  const enrichPlacesMutation = useMutation({
+    mutationFn: async (places: PlaceResult[]) => {
+      setEnrichmentProgress({ completed: 0, total: places.length });
+      return prospectSearchApi.enrichPlaceResults(
+        places,
+        ['owner', 'ceo', 'founder', 'president'],
+        (completed, total) => setEnrichmentProgress({ completed, total })
+      );
+    },
+    onSuccess: (enrichedResults) => {
+      setResults(enrichedResults);
+      setPlaceResults([]);
+      setSelectedProspects(new Set());
+      setEnrichmentProgress(null);
+      toast.success(`Enriched ${enrichedResults.length} prospects with contact info`);
+    },
+    onError: (error) => {
+      setEnrichmentProgress(null);
+      toast.error(error instanceof Error ? error.message : 'Enrichment failed');
     },
   });
 
@@ -168,6 +229,27 @@ export function ProspectSearchDialog({
       limit: data.limit,
       enrichWebResults: true,
     });
+  };
+
+  const handlePlacesSearch = (data: PlacesSearchForm) => {
+    placesSearchMutation.mutate(data.query);
+  };
+
+  const handleEnrichSelected = () => {
+    const selectedPlaceResults = placeResults.filter((_, i) => selectedPlaces.has(i));
+    if (selectedPlaceResults.length === 0) {
+      toast.error('Select at least one business to enrich');
+      return;
+    }
+    enrichPlacesMutation.mutate(selectedPlaceResults);
+  };
+
+  const handleSelectAllPlaces = () => {
+    if (selectedPlaces.size === placeResults.length) {
+      setSelectedPlaces(new Set());
+    } else {
+      setSelectedPlaces(new Set(placeResults.map((_, i) => i)));
+    }
   };
 
   const handleSelectAll = () => {
@@ -243,15 +325,19 @@ export function ProspectSearchDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as 'quick' | 'advanced')} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as 'quick' | 'advanced' | 'places')} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="quick">
               <Sparkles className="h-4 w-4 mr-2" />
               Quick Search
             </TabsTrigger>
+            <TabsTrigger value="places">
+              <MapPinned className="h-4 w-4 mr-2" />
+              Google Places
+            </TabsTrigger>
             <TabsTrigger value="advanced">
               <Search className="h-4 w-4 mr-2" />
-              Advanced Search
+              Advanced
             </TabsTrigger>
           </TabsList>
 
@@ -312,6 +398,166 @@ export function ProspectSearchDialog({
                 </Button>
               ))}
             </div>
+          </TabsContent>
+
+          {/* Google Places Search */}
+          <TabsContent value="places" className="mt-4">
+            <Form {...placesForm}>
+              <form onSubmit={placesForm.handleSubmit(handlePlacesSearch)} className="space-y-4">
+                <FormField
+                  control={placesForm.control}
+                  name="query"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Search Local Businesses</FormLabel>
+                      <FormControl>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="e.g., roofing companies in Houston, TX"
+                            {...field}
+                            className="flex-1"
+                          />
+                          <Button type="submit" disabled={placesSearchMutation.isPending}>
+                            {placesSearchMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <MapPinned className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Search Google Places for verified business info, then enrich with contact data
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </form>
+            </Form>
+
+            {/* Place Results */}
+            {placeResults.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{placeResults.length} Businesses Found</span>
+                    {selectedPlaces.size > 0 && (
+                      <Badge variant="secondary">{selectedPlaces.size} selected</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleSelectAllPlaces}>
+                      {selectedPlaces.size === placeResults.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={handleEnrichSelected} 
+                      disabled={enrichPlacesMutation.isPending || selectedPlaces.size === 0}
+                    >
+                      {enrichPlacesMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Zap className="h-4 w-4 mr-1" />
+                      )}
+                      Enrich with Contacts
+                    </Button>
+                  </div>
+                </div>
+
+                {enrichmentProgress && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span>Enriching contacts...</span>
+                      <span>{enrichmentProgress.completed} / {enrichmentProgress.total}</span>
+                    </div>
+                    <Progress value={(enrichmentProgress.completed / enrichmentProgress.total) * 100} />
+                  </div>
+                )}
+
+                <ScrollArea className="h-[250px]">
+                  <div className="space-y-2">
+                    {placeResults.map((place, index) => (
+                      <Card 
+                        key={place.place_id} 
+                        className={`cursor-pointer transition-colors ${
+                          selectedPlaces.has(index) ? 'border-primary bg-primary/5' : ''
+                        }`}
+                        onClick={() => {
+                          const newSelected = new Set(selectedPlaces);
+                          if (newSelected.has(index)) {
+                            newSelected.delete(index);
+                          } else {
+                            newSelected.add(index);
+                          }
+                          setSelectedPlaces(newSelected);
+                        }}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <Checkbox 
+                                checked={selectedPlaces.has(index)}
+                                onCheckedChange={() => {}}
+                              />
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{place.name}</span>
+                                  {place.rating && (
+                                    <div className="flex items-center gap-1 text-amber-500">
+                                      <Star className="h-3 w-3 fill-current" />
+                                      <span className="text-xs">{place.rating} ({place.review_count})</span>
+                                    </div>
+                                  )}
+                                  {place.business_status === 'OPERATIONAL' && (
+                                    <Badge variant="outline" className="text-green-600 border-green-600">Open</Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {place.address}
+                                  </span>
+                                </div>
+                                {place.owner_mentions.length > 0 && (
+                                  <div className="text-xs text-muted-foreground">
+                                    <span className="text-primary">Owner mentions:</span> {place.owner_mentions.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              {place.phone && (
+                                <a 
+                                  href={`tel:${place.phone}`}
+                                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Phone className="h-3 w-3" />
+                                  {place.phone}
+                                </a>
+                              )}
+                              {place.website && (
+                                <a 
+                                  href={place.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Globe className="h-4 w-4" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
           </TabsContent>
 
           {/* Advanced Search */}
