@@ -1860,7 +1860,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "client"
-      enrichment_provider: "apollo" | "hunter" | "clearbit" | "manual"
+      enrichment_provider: "apollo" | "hunter" | "clearbit" | "manual" | "pdl"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
       scrape_job_status:
         | "draft"
@@ -2015,7 +2015,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client"],
-      enrichment_provider: ["apollo", "hunter", "clearbit", "manual"],
+      enrichment_provider: ["apollo", "hunter", "clearbit", "manual", "pdl"],
       lead_status: ["new", "contacted", "qualified", "converted", "lost"],
       scrape_job_status: [
         "draft",
