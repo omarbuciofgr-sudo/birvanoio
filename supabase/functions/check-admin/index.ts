@@ -32,21 +32,25 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await authedClient.auth.getUser(token);
 
     if (userError || !userData?.user) {
+      console.error('check-admin auth error:', userError);
       return new Response(JSON.stringify({ isAdmin: false, error: 'Invalid authentication' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    const userId = userData.user.id;
+
     const adminClient = createClient(supabaseUrl, serviceKey);
     const { data: hasAdminRole, error: roleError } = await adminClient.rpc('has_role', {
-      _user_id: userData.user.id,
+      _user_id: userId,
       _role: 'admin',
     });
 
     if (roleError) {
       console.error('check-admin role check error:', roleError);
-      return new Response(JSON.stringify({ isAdmin: false }), {
+      return new Response(JSON.stringify({ isAdmin: false, error: 'Role check failed' }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -56,7 +60,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('check-admin unexpected error:', error);
-    return new Response(JSON.stringify({ isAdmin: false }), {
+    return new Response(JSON.stringify({ isAdmin: false, error: 'Internal error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
