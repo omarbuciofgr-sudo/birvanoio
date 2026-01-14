@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import type {
   SchemaTemplate,
   ScrapeJob,
@@ -45,16 +46,18 @@ export const schemaTemplatesApi = {
   async create(input: CreateSchemaTemplateInput): Promise<SchemaTemplate> {
     const { data: userData } = await supabase.auth.getUser();
     
+    const insertData = {
+      name: input.name,
+      description: input.description,
+      niche: input.niche,
+      fields: input.fields as unknown as Json,
+      is_default: input.is_default,
+      created_by: userData.user?.id,
+    };
+    
     const { data, error } = await supabase
       .from('schema_templates')
-      .insert({
-        name: input.name,
-        description: input.description,
-        niche: input.niche,
-        fields: input.fields as unknown as Record<string, unknown>[],
-        is_default: input.is_default,
-        created_by: userData.user?.id,
-      })
+      .insert(insertData)
       .select()
       .single();
     
