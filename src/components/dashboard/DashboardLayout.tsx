@@ -18,6 +18,8 @@ import {
   FileText,
   Inbox,
   Globe,
+  Key,
+  Briefcase,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -39,25 +41,38 @@ const navItems = [
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkAdminRole = async () => {
+    const checkUserRoles = async () => {
       if (!user?.id) return;
       
-      const { data, error } = await supabase.rpc('has_role', {
+      // Check if admin
+      const { data: adminData } = await supabase.rpc('has_role', {
         _user_id: user.id,
         _role: 'admin'
       });
       
-      if (!error && data) {
+      if (adminData) {
         setIsAdmin(true);
+      }
+
+      // Check if client (has organization)
+      const { data: clientData } = await supabase
+        .from('client_users')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (clientData?.organization_id) {
+        setIsClient(true);
       }
     };
     
-    checkAdminRole();
+    checkUserRoles();
   }, [user?.id]);
 
   const handleSignOut = async () => {
@@ -75,11 +90,17 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { name: "Scraped Leads", href: "/admin/scraped-leads", icon: Users },
     { name: "Schema Templates", href: "/admin/schema-templates", icon: FileText },
     { name: "Client Orgs", href: "/admin/clients", icon: Inbox },
+    { name: "API Settings", href: "/admin/api-settings", icon: Key },
+  ];
+
+  const clientNavItems = [
+    { name: "My Leads", href: "/client/leads", icon: Briefcase },
   ];
 
   const allNavItems = [
     ...navItems,
     ...(isAdmin ? adminNavItems : []),
+    ...(isClient && !isAdmin ? clientNavItems : []),
   ];
 
   const allAdminScraperItems = isAdmin ? adminScraperItems : [];
