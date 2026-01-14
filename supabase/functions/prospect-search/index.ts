@@ -511,6 +511,103 @@ function deduplicateResults(results: ProspectResult[]): ProspectResult[] {
   return Array.from(seen.values()).sort((a, b) => b.confidence_score - a.confidence_score);
 }
 
+// Validate leads using ZeroBounce and Twilio
+async function validateProspects(
+  prospects: ProspectResult[],
+  zerobounceApiKey?: string,
+  twilioAccountSid?: string,
+  twilioAuthToken?: string
+): Promise<ProspectResult[]> {
+  const validated = [...prospects];
+  
+  for (const prospect of validated) {
+    // Email validation
+    if (prospect.email && zerobounceApiKey) {
+      try {
+        const response = await fetch(
+          `https://api.zerobounce.net/v2/validate?api_key=${zerobounceApiKey}&email=${encodeURIComponent(prospect.email)}`
+        );
+        const data = await response.json();
+        
+        if (data.status === 'valid') {
+          prospect.confidence_score = Math.min(prospect.confidence_score + 10, 100);
+          prospect.enrichment_providers.push('zerobounce_verified');
+        } else if (data.status === 'invalid') {
+          prospect.email = null;
+          prospect.confidence_score = Math.max(prospect.confidence_score - 15, 0);
+        }
+      } catch (error) {
+        console.error('ZeroBounce validation error:', error);
+      }
+    }
+    
+    // Phone validation
+    if (prospect.phone && twilioAccountSid && twilioAuthToken) {
+      try {
+        const authHeader = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
+        const normalized = prospect.phone.replace(/\D/g, '');
+        const e164 = normalized.length === 10 ? `+1${normalized}` : `+${normalized}`;
+        
+        const response = await fetch(
+          `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(e164)}?Fields=line_type_intelligence`,
+          { headers: { 'Authorization': `Basic ${authHeader}` } }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          prospect.phone = data.phone_number || prospect.phone;
+          prospect.confidence_score = Math.min(prospect.confidence_score + 10, 100);
+          prospect.enrichment_providers.push('twilio_verified');
+          
+          // Prefer mobile phones
+          if (data.line_type_intelligence?.type === 'mobile') {
+            prospect.mobile_phone = prospect.phone;
+          }
+        } else if (response.status === 404) {
+          prospect.phone = null;
+          prospect.confidence_score = Math.max(prospect.confidence_score - 10, 0);
+        }
+      } catch (error) {
+        console.error('Twilio validation error:', error);
+      }
+    }
+  }
+  
+  return validated;
+}
+
+// Call data waterfall for enhanced enrichment
+async function waterfallEnrich(
+  domain: string,
+  targetTitles: string[],
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<Partial<ProspectResult> | null> {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/data-waterfall-enrich`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({
+        domain,
+        target_titles: targetTitles,
+      }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.data) {
+        return data.data;
+      }
+    }
+  } catch (error) {
+    console.error('Waterfall enrich error:', error);
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -520,6 +617,11 @@ Deno.serve(async (req) => {
     // Get API keys
     const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    const zerobounceApiKey = Deno.env.get('ZEROBOUNCE_API_KEY');
+    const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
     
     if (!apolloApiKey && !firecrawlApiKey) {
       return new Response(
@@ -531,7 +633,10 @@ Deno.serve(async (req) => {
       );
     }
     
-    const params: ProspectSearchParams = await req.json();
+    const params: ProspectSearchParams & { 
+      validate_contacts?: boolean;
+      use_waterfall?: boolean;
+    } = await req.json();
     console.log('Prospect search params:', JSON.stringify(params, null, 2));
     
     // Validate required params
@@ -562,6 +667,42 @@ Deno.serve(async (req) => {
       }
     }
     
+    // Use waterfall enrichment for prospects missing data
+    if (params.use_waterfall !== false && supabaseUrl && supabaseKey) {
+      for (let i = 0; i < Math.min(allResults.length, 10); i++) {
+        const prospect = allResults[i];
+        if (!prospect.email && prospect.company_domain) {
+          console.log(`Waterfall enriching ${prospect.company_domain}...`);
+          const titles = params.targetTitles || getTitlesByNiche(params.industry || 'default');
+          const enriched = await waterfallEnrich(prospect.company_domain, titles, supabaseUrl, supabaseKey);
+          if (enriched) {
+            if (enriched.full_name) prospect.full_name = enriched.full_name as string;
+            if (enriched.email) prospect.email = enriched.email as string;
+            if (enriched.phone) prospect.phone = enriched.phone as string;
+            if (enriched.mobile_phone) prospect.mobile_phone = enriched.mobile_phone as string;
+            if (enriched.job_title) prospect.job_title = enriched.job_title as string;
+            if (enriched.linkedin_url) prospect.linkedin_url = enriched.linkedin_url as string;
+            prospect.source = 'waterfall_enriched';
+            prospect.confidence_score = Math.min(prospect.confidence_score + 20, 100);
+            if ((enriched as any).providers_used) {
+              prospect.enrichment_providers = [...prospect.enrichment_providers, ...((enriched as any).providers_used as string[])];
+            }
+          }
+        }
+      }
+    }
+    
+    // Validate contacts if requested
+    if (params.validate_contacts !== false && (zerobounceApiKey || (twilioAccountSid && twilioAuthToken))) {
+      console.log('Validating contacts...');
+      allResults = await validateProspects(
+        allResults,
+        zerobounceApiKey,
+        twilioAccountSid,
+        twilioAuthToken
+      );
+    }
+    
     // Deduplicate and sort by confidence
     const finalResults = deduplicateResults(allResults);
     
@@ -581,6 +722,11 @@ Deno.serve(async (req) => {
           location: params.location,
           target_titles: params.targetTitles || getTitlesByNiche(params.industry || 'default'),
           search_type: searchType,
+        },
+        enrichment_providers: [...new Set(limitedResults.flatMap(r => r.enrichment_providers))],
+        validation_enabled: {
+          email: !!zerobounceApiKey,
+          phone: !!(twilioAccountSid && twilioAuthToken),
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
