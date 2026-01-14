@@ -16,6 +16,16 @@ const contactSchema = z.object({
   recaptchaToken: z.string().min(1, "reCAPTCHA verification required"),
 });
 
+// HTML escape function to prevent XSS in emails
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 // Verify reCAPTCHA token with Google
 async function verifyRecaptcha(token: string, secretKey: string): Promise<boolean> {
   try {
@@ -125,7 +135,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: fromHeader,
         to: ["info@brivano.io"],
-        subject: `🔔 New Lead Request from ${firstName} ${lastName}`,
+        subject: `🔔 New Lead Request from ${escapeHtml(firstName)} ${escapeHtml(lastName)}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 8px 8px 0 0;">
@@ -135,17 +145,17 @@ serve(async (req) => {
               <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                   <td style="padding: 8px 0; color: #6b7280; width: 120px;"><strong>Name:</strong></td>
-                  <td style="padding: 8px 0; color: #111827;">${firstName} ${lastName}</td>
+                  <td style="padding: 8px 0; color: #111827;">${escapeHtml(firstName)} ${escapeHtml(lastName)}</td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; color: #6b7280;"><strong>Email:</strong></td>
-                  <td style="padding: 8px 0;"><a href="mailto:${email}" style="color: #6366f1;">${email}</a></td>
+                  <td style="padding: 8px 0;"><a href="mailto:${escapeHtml(email)}" style="color: #6366f1;">${escapeHtml(email)}</a></td>
                 </tr>
               </table>
               
               <div style="margin-top: 16px; padding: 16px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
-                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;"><strong>Niche & Target Location:</strong></p>
-                <p style="margin: 0; color: #111827;">${message.replace(/\n/g, "<br>")}</p>
+                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;"><strong>Niche &amp; Target Location:</strong></p>
+                <p style="margin: 0; color: #111827;">${escapeHtml(message).replace(/\n/g, "<br>")}</p>
               </div>
               
               <div style="margin-top: 24px; text-align: center;">
@@ -189,10 +199,10 @@ serve(async (req) => {
         to: [email],
         subject: "We received your request - Sample leads coming soon!",
         html: `
-          <h1>Thanks for reaching out, ${firstName}!</h1>
+          <h1>Thanks for reaching out, ${escapeHtml(firstName)}!</h1>
           <p>We've received your request for sample leads. Our team will review your niche and target location, and we'll send you 10 sample leads within 24 hours.</p>
           <h3>What you requested:</h3>
-          <p><em>${message.replace(/\n/g, "<br>")}</em></p>
+          <p><em>${escapeHtml(message).replace(/\n/g, "<br>")}</em></p>
           <p>If you'd like to schedule a walkthrough, you can book a call here:</p>
           <p><a href="https://calendly.com/brivano-info-juke/30min">Schedule a 30-minute demo</a></p>
           <br>
