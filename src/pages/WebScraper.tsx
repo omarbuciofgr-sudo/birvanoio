@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
@@ -25,8 +25,17 @@ import {
   Download,
   FileText,
   UserPlus,
-  Check
+  Check,
+  Home,
+  Building,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type ScrapeResult = {
   markdown?: string;
@@ -50,6 +59,26 @@ type SearchResult = {
 export default function WebScraper() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  // Check admin role
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user?.id) {
+        setIsAdmin(false);
+        return;
+      }
+      
+      const { data: hasAdminRole } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin'
+      });
+      
+      setIsAdmin(!!hasAdminRole);
+    };
+    
+    checkAdminRole();
+  }, [user?.id]);
 
   // Scrape state
   const [scrapeUrl, setScrapeUrl] = useState('');
@@ -80,7 +109,15 @@ export default function WebScraper() {
   const [crawlLoading, setCrawlLoading] = useState(false);
   const [crawlResult, setCrawlResult] = useState<any>(null);
 
-  if (authLoading) {
+  // Real Estate state
+  const [reLocation, setReLocation] = useState('');
+  const [rePlatform, setRePlatform] = useState<string>('all');
+  const [reListingType, setReListingType] = useState<'sale' | 'rent'>('sale');
+  const [reLoading, setReLoading] = useState(false);
+  const [reListings, setReListings] = useState<any[]>([]);
+  const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
+
+  if (authLoading || isAdmin === null) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -90,6 +127,12 @@ export default function WebScraper() {
 
   if (!user) {
     navigate('/auth');
+    return null;
+  }
+
+  if (!isAdmin) {
+    navigate('/dashboard');
+    toast.error('Access denied. Admin privileges required.');
     return null;
   }
 
@@ -352,14 +395,92 @@ export default function WebScraper() {
     URL.revokeObjectURL(url);
   };
 
+  const handleRealEstateScrape = async () => {
+    if (!reLocation.trim()) {
+      toast.error('Please enter a location');
+      return;
+    }
+
+    setReLoading(true);
+    setReListings([]);
+    setReErrors([]);
+
+    try {
+      const options: any = {
+        location: reLocation,
+        listingType: reListingType,
+      };
+      
+      if (rePlatform !== 'all') {
+        options.platform = rePlatform;
+      }
+
+      const response = await firecrawlApi.scrapeRealEstate(options);
+
+      if (response.success) {
+        setReListings(response.listings || []);
+        if (response.errors && response.errors.length > 0) {
+          setReErrors(response.errors);
+        }
+        toast.success(`Found ${response.total || 0} FSBO/FRBO listings`);
+      } else {
+        toast.error(response.error || 'Failed to scrape real estate listings');
+      }
+    } catch (error) {
+      console.error('Real estate scrape error:', error);
+      toast.error('Failed to scrape real estate listings');
+    } finally {
+      setReLoading(false);
+    }
+  };
+
+  const exportListingsToCSV = () => {
+    if (reListings.length === 0) return;
+    
+    const headers = [
+      'Address', 'Bedrooms', 'Bathrooms', 'Price', 'Days on Market', 
+      'Favorites', 'Views', 'Listing Type', 'Property Type', 'Sq Ft',
+      'Year Built', 'Owner Name', 'Owner Phone', 'Owner Email', 'Source URL'
+    ];
+    
+    const rows = reListings.map(l => [
+      l.address || '',
+      l.bedrooms || '',
+      l.bathrooms || '',
+      l.price || '',
+      l.days_on_market || '',
+      l.favorites_count || '',
+      l.views_count || '',
+      l.listing_type || '',
+      l.property_type || '',
+      l.square_feet || '',
+      l.year_built || '',
+      l.owner_name || '',
+      l.owner_phone || '',
+      l.owner_email || '',
+      l.source_url || '',
+    ]);
+    
+    const csv = [headers, ...rows].map(row => 
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    
+    downloadAsFile(csv, `fsbo-listings-${new Date().toISOString().split('T')[0]}.csv`);
+    toast.success('Exported listings to CSV');
+  };
+
   return (
     <DashboardLayout>
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Web Scraper</h1>
         <p className="text-muted-foreground">Scrape websites, search the web, and crawl entire domains</p>
       </div>
-      <Tabs defaultValue="scrape" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="real-estate" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="real-estate" className="flex items-center gap-2">
+            <Home className="h-4 w-4" />
+            Real Estate
+          </TabsTrigger>
           <TabsTrigger value="scrape" className="flex items-center gap-2">
             <Globe className="h-4 w-4" />
             Scrape
@@ -377,6 +498,212 @@ export default function WebScraper() {
             Crawl
           </TabsTrigger>
         </TabsList>
+
+        {/* Real Estate Tab */}
+        <TabsContent value="real-estate" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building className="h-5 w-5" />
+                FSBO & FRBO Listing Scraper
+              </CardTitle>
+              <CardDescription>
+                Scrape For Sale By Owner and For Rent By Owner listings from Zillow, Apartments.com, Hotpads, FSBO.com, Trulia, Redfin, and more
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="re-location">Location</Label>
+                  <Input
+                    id="re-location"
+                    placeholder="e.g., Austin, TX or 90210"
+                    value={reLocation}
+                    onChange={(e) => setReLocation(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Platform</Label>
+                  <Select value={rePlatform} onValueChange={setRePlatform}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select platform" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Platforms</SelectItem>
+                      <SelectItem value="zillow">Zillow</SelectItem>
+                      <SelectItem value="fsbo">FSBO.com</SelectItem>
+                      <SelectItem value="trulia">Trulia</SelectItem>
+                      <SelectItem value="redfin">Redfin</SelectItem>
+                      <SelectItem value="apartments">Apartments.com</SelectItem>
+                      <SelectItem value="hotpads">Hotpads</SelectItem>
+                      <SelectItem value="realtor">Realtor.com</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Listing Type</Label>
+                  <Select value={reListingType} onValueChange={(v) => setReListingType(v as 'sale' | 'rent')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sale">For Sale (FSBO)</SelectItem>
+                      <SelectItem value="rent">For Rent (FRBO)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={handleRealEstateScrape} disabled={reLoading} className="w-full">
+                    {reLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Scraping...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Find Listings
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <h4 className="font-medium text-sm mb-2">Extracted Fields:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {['Address', 'Beds', 'Baths', 'Price', 'Days on Market', 'Favorites', 'Views', 'Owner Name', 'Owner Phone', 'Owner Email', 'Source Link'].map(field => (
+                    <Badge key={field} variant="secondary" className="text-xs">{field}</Badge>
+                  ))}
+                </div>
+              </div>
+
+              {reErrors.length > 0 && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                  <h4 className="font-medium text-sm text-destructive mb-2">Some sites couldn't be scraped:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    {reErrors.map((err, i) => (
+                      <li key={i} className="truncate">• {err.url}: {err.error}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Note: Some sites have anti-scraping protections that may block requests.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {reListings.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>{reListings.length} Listings Found</CardTitle>
+                  <CardDescription>FSBO/FRBO listings with owner contact info</CardDescription>
+                </div>
+                <Button variant="outline" onClick={exportListingsToCSV}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[500px]">
+                  <div className="space-y-4">
+                    {reListings.map((listing, index) => (
+                      <div key={index} className="rounded-lg border p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-semibold">{listing.address || 'Address not available'}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {listing.property_type} • {listing.bedrooms} bed • {listing.bathrooms} bath
+                              {listing.square_feet && ` • ${listing.square_feet.toLocaleString()} sq ft`}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-primary">{listing.price || 'Price N/A'}</p>
+                            {listing.days_on_market && (
+                              <p className="text-xs text-muted-foreground">{listing.days_on_market} days on market</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                          {listing.favorites_count !== undefined && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-muted-foreground">Favorites:</span>
+                              <Badge variant="outline">{listing.favorites_count}</Badge>
+                            </div>
+                          )}
+                          {listing.views_count !== undefined && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-muted-foreground">Views:</span>
+                              <Badge variant="outline">{listing.views_count}</Badge>
+                            </div>
+                          )}
+                          {listing.listing_type && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-muted-foreground">Type:</span>
+                              <Badge variant="secondary">{listing.listing_type.toUpperCase()}</Badge>
+                            </div>
+                          )}
+                          {listing.source_platform && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-muted-foreground">Source:</span>
+                              <Badge>{listing.source_platform}</Badge>
+                            </div>
+                          )}
+                        </div>
+
+                        {(listing.owner_name || listing.owner_phone || listing.owner_email) && (
+                          <div className="rounded-md bg-primary/10 p-3">
+                            <h5 className="text-sm font-medium mb-1">Owner Contact</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                              {listing.owner_name && (
+                                <div>
+                                  <span className="text-muted-foreground">Name: </span>
+                                  <span className="font-medium">{listing.owner_name}</span>
+                                </div>
+                              )}
+                              {listing.owner_phone && (
+                                <div>
+                                  <span className="text-muted-foreground">Phone: </span>
+                                  <a href={`tel:${listing.owner_phone}`} className="font-medium text-primary hover:underline">
+                                    {listing.owner_phone}
+                                  </a>
+                                </div>
+                              )}
+                              {listing.owner_email && (
+                                <div>
+                                  <span className="text-muted-foreground">Email: </span>
+                                  <a href={`mailto:${listing.owner_email}`} className="font-medium text-primary hover:underline">
+                                    {listing.owner_email}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {listing.source_url && (
+                          <div className="flex justify-end">
+                            <a 
+                              href={listing.source_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              View Original <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
         {/* Scrape Tab */}
         <TabsContent value="scrape" className="space-y-6">

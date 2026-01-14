@@ -67,6 +67,47 @@ const EXTRACTION_SCHEMAS = {
       },
     },
   },
+  // FSBO/FRBO - For Sale By Owner / For Rent By Owner listings
+  fsbo_frbo: {
+    type: 'object',
+    properties: {
+      listing: {
+        type: 'object',
+        properties: {
+          address: { type: 'string', description: 'Full property address including street, city, state, zip' },
+          bedrooms: { type: 'number', description: 'Number of bedrooms' },
+          bathrooms: { type: 'number', description: 'Number of bathrooms (can be decimal like 2.5)' },
+          price: { type: 'string', description: 'Listing price or monthly rent (include $ symbol)' },
+          days_on_market: { type: 'number', description: 'Number of days the listing has been active' },
+          favorites_count: { type: 'number', description: 'Number of saves/favorites/hearts on the listing' },
+          views_count: { type: 'number', description: 'Number of views on the listing' },
+          listing_type: { type: 'string', description: 'Type: for_sale, for_rent, for_sale_by_owner, for_rent_by_owner' },
+          property_type: { type: 'string', description: 'Property type: house, condo, apartment, townhouse, multi-family' },
+          square_feet: { type: 'number', description: 'Square footage of the property' },
+          lot_size: { type: 'string', description: 'Lot size (acres or sq ft)' },
+          year_built: { type: 'number', description: 'Year the property was built' },
+          description: { type: 'string', description: 'Listing description text' },
+        },
+      },
+      owner: {
+        type: 'object',
+        properties: {
+          full_name: { type: 'string', description: 'Owner or landlord full name' },
+          phone: { type: 'string', description: 'Owner phone number' },
+          email: { type: 'string', description: 'Owner email address' },
+          is_verified: { type: 'boolean', description: 'Whether owner identity is verified' },
+        },
+      },
+      source: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Source listing URL' },
+          platform: { type: 'string', description: 'Source platform name (Zillow, FSBO.com, etc.)' },
+          listing_id: { type: 'string', description: 'Unique listing ID from the platform' },
+        },
+      },
+    },
+  },
   insurance: {
     type: 'object',
     properties: {
