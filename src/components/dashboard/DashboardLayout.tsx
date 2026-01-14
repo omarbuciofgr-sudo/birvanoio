@@ -65,13 +65,24 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     navigate("/");
   };
 
+  const adminNavItems = [
+    { name: "Contacts", href: "/dashboard/contacts", icon: Inbox },
+    { name: "Import Leads", href: "/admin/import", icon: Upload },
+  ];
+
+  const adminScraperItems = [
+    { name: "Scrape Jobs", href: "/admin/scrape-jobs", icon: Globe },
+    { name: "Scraped Leads", href: "/admin/scraped-leads", icon: Users },
+    { name: "Schema Templates", href: "/admin/schema-templates", icon: FileText },
+    { name: "Client Orgs", href: "/admin/clients", icon: Inbox },
+  ];
+
   const allNavItems = [
     ...navItems,
-    ...(isAdmin ? [
-      { name: "Contacts", href: "/dashboard/contacts", icon: Inbox },
-      { name: "Import Leads", href: "/admin/import", icon: Upload },
-    ] : []),
+    ...(isAdmin ? adminNavItems : []),
   ];
+
+  const allAdminScraperItems = isAdmin ? adminScraperItems : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,7 +115,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-1">
+          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
             {allNavItems.map((item) => {
               const isActive = location.pathname === item.href;
               return (
@@ -123,6 +134,35 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 </Link>
               );
             })}
+
+            {/* Admin Scraper Section */}
+            {allAdminScraperItems.length > 0 && (
+              <>
+                <div className="pt-4 pb-2">
+                  <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Admin Scraper
+                  </p>
+                </div>
+                {allAdminScraperItems.map((item) => {
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      }`}
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span className="font-medium">{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </nav>
 
           {/* User section */}
