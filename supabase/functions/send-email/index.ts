@@ -67,45 +67,55 @@ serve(async (req) => {
 
     const { to, subject, body, leadId } = validation.data;
 
-    // Get the user from the authorization header
+    // Require authentication - no anonymous email sending allowed
     const authHeader = req.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    let clientId = "system";
+    // Verify the user's token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication token" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const clientId = user.id;
     let senderEmail = defaultSenderEmail;
     let senderName = "CRM";
     
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        clientId = user.id;
-        
-        // Fetch client's custom sender email and name if configured
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("sender_email, first_name, last_name, company_name")
-          .eq("user_id", user.id)
-          .single();
-        
-        if (profile?.sender_email) {
-          senderEmail = profile.sender_email;
-          // Use company name or full name as sender name
-          if (profile.company_name) {
-            senderName = profile.company_name;
-          } else if (profile.first_name || profile.last_name) {
-            senderName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
-          }
-          console.log(`Using client's custom sender email: ${senderEmail}`);
-        }
+    // Fetch client's custom sender email and name if configured
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("sender_email, first_name, last_name, company_name")
+      .eq("user_id", user.id)
+      .single();
+    
+    if (profile?.sender_email) {
+      senderEmail = profile.sender_email;
+      // Use company name or full name as sender name
+      if (profile.company_name) {
+        senderName = profile.company_name;
+      } else if (profile.first_name || profile.last_name) {
+        senderName = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
       }
+      console.log(`Using client's custom sender email: ${senderEmail}`);
     }
 
     // Verify lead ownership before sending email
-    if (leadId && clientId !== "system") {
+    if (leadId) {
       const { data: lead, error: leadError } = await supabase
         .from("leads")
         .select("client_id")
