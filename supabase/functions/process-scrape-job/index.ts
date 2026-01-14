@@ -73,7 +73,222 @@ function extractPhones(text: string): string[] {
   return [...new Set(matches.map(p => p.replace(/\D/g, '')))].filter(p => p.length >= 10 && p.length <= 11);
 }
 
-// Extract names from text (simple heuristic)
+// Priority titles for contact selection (higher index = higher priority)
+const TITLE_PRIORITY: string[] = [
+  'assistant',
+  'coordinator',
+  'specialist',
+  'associate',
+  'representative',
+  'agent',
+  'consultant',
+  'advisor',
+  'analyst',
+  'office manager',
+  'operations manager',
+  'leasing manager',
+  'property manager',
+  'regional manager',
+  'general manager',
+  'managing director',
+  'director',
+  'vice president',
+  'vp',
+  'president',
+  'ceo',
+  'chief executive officer',
+  'founder',
+  'co-founder',
+  'owner',
+  'principal',
+  'partner',
+];
+
+// B2B decision-maker titles (for niche-specific prioritization)
+const B2B_DECISION_MAKER_TITLES: string[] = [
+  'cto', 'chief technology officer',
+  'cio', 'chief information officer',
+  'cfo', 'chief financial officer',
+  'cmo', 'chief marketing officer',
+  'coo', 'chief operating officer',
+  'vp of engineering', 'vp engineering',
+  'vp of sales', 'vp sales',
+  'vp of marketing', 'vp marketing',
+  'head of',
+  'director of',
+];
+
+interface ContactInfo {
+  name: string | null;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  sourceUrl: string | null;
+  priority: number;
+}
+
+// Get priority score for a title
+function getTitlePriority(title: string | null, niche?: string): number {
+  if (!title) return 0;
+  const lowerTitle = title.toLowerCase();
+  
+  // Check for B2B decision-maker titles if niche is B2B
+  if (niche?.toLowerCase().includes('b2b')) {
+    for (const dmTitle of B2B_DECISION_MAKER_TITLES) {
+      if (lowerTitle.includes(dmTitle)) {
+        return 100 + B2B_DECISION_MAKER_TITLES.indexOf(dmTitle);
+      }
+    }
+  }
+  
+  // Check standard priority titles
+  for (let i = TITLE_PRIORITY.length - 1; i >= 0; i--) {
+    if (lowerTitle.includes(TITLE_PRIORITY[i])) {
+      return i + 1;
+    }
+  }
+  
+  return 0;
+}
+
+// Parse team/staff cards and extract associated contact info
+function parseTeamCards(markdown: string, sourceUrl: string, niche?: string): ContactInfo[] {
+  const contacts: ContactInfo[] = [];
+  
+  // Pattern 1: Markdown-style cards with headers and content
+  // e.g., "### John Smith\n**Owner**\njohn@example.com\n(555) 123-4567"
+  const cardPattern1 = /#{2,4}\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\n+(?:\*{1,2}([^*\n]+)\*{1,2})?\s*\n*([\s\S]*?)(?=\n#{2,4}|\n\n\n|$)/gi;
+  
+  // Pattern 2: List-style team members
+  // e.g., "- **Name**: John Smith | **Title**: Owner | **Email**: john@example.com"
+  const cardPattern2 = /[-*]\s*(?:\*{1,2})?(?:name)?:?\s*\*{0,2}\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)[|\n].*?(?:title|role|position)?:?\s*([^|\n]+)?[|\n]?.*?([\s\S]*?)(?=\n[-*]|\n\n|$)/gi;
+  
+  // Pattern 3: Card/section blocks (div-like structures in markdown)
+  // e.g., content between horizontal rules or section breaks
+  const cardPattern3 = /(?:^|\n)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\n+([^#\n][^\n]+)?\s*\n*((?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|(?:\+?1[-.\s]?)?(?:\(\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4})[\s\S]*?)(?=\n[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\s*\n|\n\n\n|$)/gi;
+  
+  // Pattern 4: Explicit label patterns
+  // e.g., "Contact: John Smith, CEO"
+  const labelPattern = /(?:contact|agent|manager|broker|representative|team member|staff):\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)(?:,?\s*([^,\n]+))?/gi;
+  
+  let match;
+  
+  // Extract from Pattern 1
+  while ((match = cardPattern1.exec(markdown)) !== null) {
+    const name = match[1]?.trim();
+    const title = match[2]?.trim() || null;
+    const content = match[3] || '';
+    
+    if (name && name.split(' ').length >= 2) {
+      const emails = extractEmails(content);
+      const phones = extractPhones(content);
+      
+      contacts.push({
+        name,
+        title,
+        email: emails[0] || null,
+        phone: phones[0] || null,
+        sourceUrl,
+        priority: getTitlePriority(title, niche),
+      });
+    }
+  }
+  
+  // Extract from Pattern 4 (label patterns)
+  while ((match = labelPattern.exec(markdown)) !== null) {
+    const name = match[1]?.trim();
+    const title = match[2]?.trim() || null;
+    
+    if (name && name.split(' ').length >= 2) {
+      // Look for email/phone near this match
+      const contextStart = Math.max(0, match.index - 100);
+      const contextEnd = Math.min(markdown.length, match.index + match[0].length + 200);
+      const context = markdown.substring(contextStart, contextEnd);
+      
+      const emails = extractEmails(context);
+      const phones = extractPhones(context);
+      
+      // Check if this contact already exists
+      const exists = contacts.some(c => 
+        c.name?.toLowerCase() === name.toLowerCase()
+      );
+      
+      if (!exists) {
+        contacts.push({
+          name,
+          title,
+          email: emails[0] || null,
+          phone: phones[0] || null,
+          sourceUrl,
+          priority: getTitlePriority(title, niche),
+        });
+      }
+    }
+  }
+  
+  // Extract from structured sections (About/Team/Staff/Leadership)
+  const teamSectionPattern = /(?:#+\s*(?:our\s*)?(?:team|staff|leadership|management|agents?|brokers?|about\s*us)[\s\S]*?)(?=\n#+[^#]|\n\n\n|$)/gi;
+  
+  while ((match = teamSectionPattern.exec(markdown)) !== null) {
+    const sectionContent = match[0];
+    
+    // Look for name + title patterns within the section
+    const nameWithTitlePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)[\s,\-–|]+(?:is\s+(?:our|the)\s+)?([A-Za-z\s,]+?(?:owner|founder|ceo|president|director|manager|agent|broker|coordinator|specialist)[A-Za-z\s,]*?)(?=\.|,|\n|$)/gi;
+    
+    let innerMatch;
+    while ((innerMatch = nameWithTitlePattern.exec(sectionContent)) !== null) {
+      const name = innerMatch[1]?.trim();
+      const title = innerMatch[2]?.trim();
+      
+      if (name && name.split(' ').length >= 2) {
+        // Look for email/phone near this name
+        const contextStart = Math.max(0, innerMatch.index);
+        const contextEnd = Math.min(sectionContent.length, innerMatch.index + 300);
+        const context = sectionContent.substring(contextStart, contextEnd);
+        
+        const emails = extractEmails(context);
+        const phones = extractPhones(context);
+        
+        const exists = contacts.some(c => 
+          c.name?.toLowerCase() === name.toLowerCase()
+        );
+        
+        if (!exists) {
+          contacts.push({
+            name,
+            title,
+            email: emails[0] || null,
+            phone: phones[0] || null,
+            sourceUrl,
+            priority: getTitlePriority(title, niche),
+          });
+        }
+      }
+    }
+  }
+  
+  return contacts;
+}
+
+// Select the best contact based on priority and data completeness
+function selectBestContact(contacts: ContactInfo[], niche?: string): ContactInfo | null {
+  if (contacts.length === 0) return null;
+  
+  // Sort by priority (descending), then by data completeness
+  return contacts.sort((a, b) => {
+    // First, compare priority
+    if (b.priority !== a.priority) {
+      return b.priority - a.priority;
+    }
+    
+    // Then, prefer contacts with more data
+    const aScore = (a.email ? 2 : 0) + (a.phone ? 1 : 0);
+    const bScore = (b.email ? 2 : 0) + (b.phone ? 1 : 0);
+    return bScore - aScore;
+  })[0];
+}
+
+// Extract names from text (enhanced version)
 function extractName(text: string): string | null {
   // Look for common patterns like "Contact: John Smith" or "Owner: Jane Doe"
   const namePatterns = [
@@ -195,19 +410,56 @@ async function processTarget(
     scraped_at: new Date().toISOString(),
   });
 
-  // Extract contact information
-  const emails = extractEmails(markdown);
-  const phones = extractPhones(markdown);
-  const fullName = extractName(markdown);
+  // Extract all contact information from page
+  const allEmails = extractEmails(markdown);
+  const allPhones = extractPhones(markdown);
   const contactFormUrl = extractContactFormUrl(links, formattedUrl);
+  
+  // Get niche from schema template for prioritization
+  const niche = schemaTemplate?.niche || undefined;
+  
+  // Parse team/staff cards to find associated contacts
+  const teamContacts = parseTeamCards(markdown, formattedUrl, niche);
+  console.log(`Found ${teamContacts.length} team contacts for ${domain}`);
+  
+  // Select the best contact based on title priority and data completeness
+  const bestContact = selectBestContact(teamContacts, niche);
+  
+  // Fallback to simple extraction if no team cards found
+  const fallbackName = extractName(markdown);
+  
+  // Determine final contact info
+  const fullName = bestContact?.name || fallbackName;
+  const contactTitle = bestContact?.title || null;
+  const bestEmail = bestContact?.email || allEmails[0] || null;
+  const bestPhone = bestContact?.phone || allPhones[0] || null;
+  
+  // Collect all emails and phones (from team cards + page-wide extraction)
+  const contactEmails = teamContacts.map(c => c.email).filter(Boolean) as string[];
+  const contactPhones = teamContacts.map(c => c.phone).filter(Boolean) as string[];
+  const mergedEmails = [...new Set([...contactEmails, ...allEmails])];
+  const mergedPhones = [...new Set([...contactPhones, ...allPhones])];
+  
+  // Generate LinkedIn search URL with best contact info
   const linkedinSearchUrl = generateLinkedInSearchUrl(domain, fullName);
 
   // Calculate confidence score based on data quality
   let confidenceScore = 30; // Base score
-  if (emails.length > 0) confidenceScore += 25;
-  if (phones.length > 0) confidenceScore += 20;
+  if (mergedEmails.length > 0) confidenceScore += 20;
+  if (mergedPhones.length > 0) confidenceScore += 15;
   if (fullName) confidenceScore += 15;
-  if (contactFormUrl) confidenceScore += 10;
+  if (contactTitle) confidenceScore += 10; // Bonus for having a title
+  if (bestContact && bestContact.email && bestContact.phone) confidenceScore += 10; // Bonus for associated contact
+  if (contactFormUrl) confidenceScore += 5;
+
+  // Prepare lead data with all contacts for reference
+  const allContacts = teamContacts.map(c => ({
+    name: c.name,
+    title: c.title,
+    email: c.email,
+    phone: c.phone,
+    priority: c.priority,
+  }));
 
   // Prepare lead data
   const leadData: Record<string, unknown> = {
@@ -215,16 +467,16 @@ async function processTarget(
     domain,
     source_url: formattedUrl,
     full_name: fullName,
-    best_email: emails[0] || null,
-    best_phone: phones[0] || null,
-    all_emails: emails,
-    all_phones: phones,
+    best_email: bestEmail,
+    best_phone: bestPhone,
+    all_emails: mergedEmails,
+    all_phones: mergedPhones,
     contact_form_url: contactFormUrl,
     linkedin_search_url: linkedinSearchUrl,
     confidence_score: Math.min(100, confidenceScore),
-    email_source_url: emails.length > 0 ? formattedUrl : null,
-    phone_source_url: phones.length > 0 ? formattedUrl : null,
-    name_source_url: fullName ? formattedUrl : null,
+    email_source_url: bestEmail ? (bestContact?.sourceUrl || formattedUrl) : null,
+    phone_source_url: bestPhone ? (bestContact?.sourceUrl || formattedUrl) : null,
+    name_source_url: fullName ? (bestContact?.sourceUrl || formattedUrl) : null,
     scraped_at: new Date().toISOString(),
     status: 'new',
   };
@@ -233,16 +485,32 @@ async function processTarget(
   if (schemaTemplate) {
     leadData.schema_template_id = schemaTemplate.id;
     
-    // Extract schema-specific fields using AI (placeholder - would need LLM integration)
-    // For now, we'll leave schema_data empty
-    leadData.schema_data = {};
-    leadData.schema_evidence = {};
+    // Store extracted contacts and title info in schema_data
+    leadData.schema_data = {
+      contact_title: contactTitle,
+      all_contacts: allContacts,
+      contacts_found: teamContacts.length,
+    };
+    leadData.schema_evidence = {
+      contact_source: formattedUrl,
+      extraction_method: teamContacts.length > 0 ? 'team_card_parsing' : 'regex_extraction',
+    };
+  } else {
+    // Even without schema, store contact details in schema_data
+    leadData.schema_data = {
+      contact_title: contactTitle,
+      all_contacts: allContacts,
+      contacts_found: teamContacts.length,
+    };
   }
 
   // Set QC flags for data quality issues
-  if (emails.length === 0 && phones.length === 0 && !contactFormUrl) {
+  if (mergedEmails.length === 0 && mergedPhones.length === 0 && !contactFormUrl) {
     leadData.qc_flag = 'no_contact_info';
     leadData.qc_notes = 'No email, phone, or contact form found';
+  } else if (!fullName && (mergedEmails.length > 0 || mergedPhones.length > 0)) {
+    leadData.qc_flag = 'missing_name';
+    leadData.qc_notes = 'Contact info found but no associated name';
   }
 
   // Insert the lead
@@ -257,7 +525,11 @@ async function processTarget(
     return { success: false, error: error.message };
   }
 
-  return { success: true, leadId: lead?.id as string, needsEnrichment: emails.length === 0 || phones.length === 0 || !fullName };
+  return { 
+    success: true, 
+    leadId: lead?.id as string, 
+    needsEnrichment: mergedEmails.length === 0 || mergedPhones.length === 0 || !fullName 
+  };
 }
 
 Deno.serve(async (req) => {
