@@ -142,7 +142,7 @@ export function CreateJobDialog({ open, onOpenChange, templates }: CreateJobDial
       await createMutation.mutateAsync({
         name: data.name,
         description: data.description,
-        schema_template_id: data.schema_template_id || undefined,
+        schema_template_id: data.schema_template_id && data.schema_template_id !== 'none' ? data.schema_template_id : undefined,
         target_urls: urls,
         input_method: inputMethod,
         max_pages_per_domain: data.max_pages_per_domain,
@@ -196,7 +196,7 @@ export function CreateJobDialog({ open, onOpenChange, templates }: CreateJobDial
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">No template (universal fields only)</SelectItem>
+                        <SelectItem value="none">No template (universal fields only)</SelectItem>
                         {templates.map((template) => (
                           <SelectItem key={template.id} value={template.id}>
                             {template.name} ({template.niche})
