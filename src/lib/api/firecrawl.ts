@@ -42,7 +42,7 @@ type RealEstateScrapeOptions = {
   url?: string;
   urls?: string[];
   location?: string;
-  platform?: 'zillow' | 'apartments' | 'hotpads' | 'fsbo' | 'trulia' | 'redfin' | 'craigslist' | 'realtor';
+  platform?: 'zillow' | 'apartments' | 'hotpads' | 'fsbo' | 'trulia' | 'redfin' | 'craigslist' | 'realtor' | 'all';
   listingType?: 'sale' | 'rent';
   saveToJob?: boolean;
   jobId?: string;
@@ -77,6 +77,41 @@ type RealEstateResponse = {
   listings?: RealEstateListing[];
   total?: number;
   urls_scraped?: number;
+  errors?: { url: string; error: string }[];
+};
+
+// FSBO Scrape + Skip Trace workflow types
+type FSBOScrapeAndTraceOptions = {
+  url?: string;
+  urls?: string[];
+  location?: string;
+  platform?: 'zillow' | 'apartments' | 'hotpads' | 'fsbo' | 'trulia' | 'redfin' | 'craigslist' | 'realtor' | 'all';
+  listingType?: 'sale' | 'rent';
+  enableSkipTrace?: boolean;
+  saveToDatabase?: boolean;
+  jobId?: string;
+};
+
+type EnrichedListing = RealEstateListing & {
+  all_phones?: Array<{ number: string; type: string }>;
+  all_emails?: Array<{ address: string; type?: string }>;
+  skip_trace_confidence?: number;
+  skip_trace_status?: 'pending' | 'success' | 'not_found' | 'error';
+  skip_trace_error?: string;
+};
+
+type FSBOScrapeAndTraceResponse = {
+  success: boolean;
+  error?: string;
+  listings?: EnrichedListing[];
+  total?: number;
+  urls_scraped?: number;
+  skip_trace_stats?: {
+    attempted: number;
+    successful: number;
+    rate: number;
+  } | null;
+  saved_to_database?: number | null;
   errors?: { url: string; error: string }[];
 };
 
@@ -132,6 +167,22 @@ export const firecrawlApi = {
   // Scrape real estate FSBO/FRBO listings
   async scrapeRealEstate(options: RealEstateScrapeOptions): Promise<RealEstateResponse> {
     const { data, error } = await supabase.functions.invoke('scrape-real-estate', {
+      body: options,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return data;
+  },
+
+  /**
+   * Full FSBO/FRBO workflow: Scrape listings + Skip Trace owner info
+   * This combines Firecrawl scraping with Tracerfy skip tracing in one call.
+   * Cost: Firecrawl credits + ~$0.009 per address for skip tracing
+   */
+  async scrapeAndTraceFSBO(options: FSBOScrapeAndTraceOptions): Promise<FSBOScrapeAndTraceResponse> {
+    const { data, error } = await supabase.functions.invoke('fsbo-scrape-and-trace', {
       body: options,
     });
 

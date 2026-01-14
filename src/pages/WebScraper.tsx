@@ -113,9 +113,12 @@ export default function WebScraper() {
   const [reLocation, setReLocation] = useState('');
   const [rePlatform, setRePlatform] = useState<string>('all');
   const [reListingType, setReListingType] = useState<'sale' | 'rent'>('sale');
+  const [reEnableSkipTrace, setReEnableSkipTrace] = useState(true);
+  const [reSaveToDb, setReSaveToDb] = useState(false);
   const [reLoading, setReLoading] = useState(false);
   const [reListings, setReListings] = useState<any[]>([]);
   const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
+  const [reSkipTraceStats, setReSkipTraceStats] = useState<{ attempted: number; successful: number; rate: number } | null>(null);
 
   if (authLoading || isAdmin === null) {
     return (
@@ -404,25 +407,35 @@ export default function WebScraper() {
     setReLoading(true);
     setReListings([]);
     setReErrors([]);
+    setReSkipTraceStats(null);
 
     try {
-      const options: any = {
+      // Use the combined scrape + skip trace workflow
+      const response = await firecrawlApi.scrapeAndTraceFSBO({
         location: reLocation,
+        platform: rePlatform as any,
         listingType: reListingType,
-      };
-      
-      if (rePlatform !== 'all') {
-        options.platform = rePlatform;
-      }
-
-      const response = await firecrawlApi.scrapeRealEstate(options);
+        enableSkipTrace: reEnableSkipTrace,
+        saveToDatabase: reSaveToDb,
+      });
 
       if (response.success) {
         setReListings(response.listings || []);
         if (response.errors && response.errors.length > 0) {
           setReErrors(response.errors);
         }
-        toast.success(`Found ${response.total || 0} FSBO/FRBO listings`);
+        if (response.skip_trace_stats) {
+          setReSkipTraceStats(response.skip_trace_stats);
+        }
+        
+        const skipInfo = reEnableSkipTrace && response.skip_trace_stats 
+          ? ` (${response.skip_trace_stats.successful}/${response.skip_trace_stats.attempted} skip traced)` 
+          : '';
+        toast.success(`Found ${response.total || 0} FSBO/FRBO listings${skipInfo}`);
+        
+        if (reSaveToDb && response.saved_to_database) {
+          toast.success(`Saved ${response.saved_to_database} leads to database`);
+        }
       } else {
         toast.error(response.error || 'Failed to scrape real estate listings');
       }
@@ -557,7 +570,7 @@ export default function WebScraper() {
                     {reLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Scraping...
+                        {reEnableSkipTrace ? 'Scraping & Skip Tracing...' : 'Scraping...'}
                       </>
                     ) : (
                       <>
@@ -568,6 +581,32 @@ export default function WebScraper() {
                   </Button>
                 </div>
               </div>
+
+              {/* Skip Trace & Save Options */}
+              <div className="flex flex-wrap gap-6 p-4 rounded-lg border border-border bg-muted/30">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="enable-skip-trace"
+                    checked={reEnableSkipTrace}
+                    onCheckedChange={setReEnableSkipTrace}
+                  />
+                  <Label htmlFor="enable-skip-trace" className="cursor-pointer">
+                    <span className="font-medium">Auto Skip Trace</span>
+                    <span className="text-xs text-muted-foreground ml-2">~$0.009/address via Tracerfy</span>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="save-to-db"
+                    checked={reSaveToDb}
+                    onCheckedChange={setReSaveToDb}
+                  />
+                  <Label htmlFor="save-to-db" className="cursor-pointer">
+                    <span className="font-medium">Save to Database</span>
+                    <span className="text-xs text-muted-foreground ml-2">Store leads in Scraped Leads</span>
+                  </Label>
+                </div>
+              </div>
               
               <div className="rounded-lg border border-border bg-muted/50 p-4">
                 <h4 className="font-medium text-sm mb-2">Extracted Fields:</h4>
@@ -575,8 +614,32 @@ export default function WebScraper() {
                   {['Address', 'Beds', 'Baths', 'Price', 'Days on Market', 'Favorites', 'Views', 'Owner Name', 'Owner Phone', 'Owner Email', 'Source Link'].map(field => (
                     <Badge key={field} variant="secondary" className="text-xs">{field}</Badge>
                   ))}
+                  {reEnableSkipTrace && (
+                    <Badge variant="default" className="text-xs bg-green-600">+ Skip Trace Data</Badge>
+                  )}
                 </div>
               </div>
+
+              {/* Skip Trace Stats */}
+              {reSkipTraceStats && (
+                <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+                  <h4 className="font-medium text-sm text-green-700 dark:text-green-400 mb-2">Skip Trace Results</h4>
+                  <div className="flex gap-6 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Attempted: </span>
+                      <span className="font-medium">{reSkipTraceStats.attempted}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Successful: </span>
+                      <span className="font-medium text-green-600">{reSkipTraceStats.successful}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Success Rate: </span>
+                      <span className="font-medium">{reSkipTraceStats.rate}%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {reErrors.length > 0 && (
                 <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
