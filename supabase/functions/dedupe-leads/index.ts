@@ -54,7 +54,45 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+  // Authentication check
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(
+      JSON.stringify({ error: 'Authentication required' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const authSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const { data: { user }, error: userError } = await authSupabase.auth.getUser();
+  if (userError || !user) {
+    return new Response(
+      JSON.stringify({ error: 'Invalid authentication' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const userId = user.id;
+
+  // Check if user has admin role
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  
+  const { data: hasAdminRole } = await supabase.rpc('has_role', { 
+    _user_id: userId, 
+    _role: 'admin' 
+  });
+
+  if (!hasAdminRole) {
+    return new Response(
+      JSON.stringify({ error: 'Admin access required' }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
