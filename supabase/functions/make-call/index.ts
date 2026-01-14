@@ -66,34 +66,44 @@ serve(async (req) => {
 
     const { to, leadId } = validation.data;
 
-    // Get the user from the authorization header
+    // Require authentication - no anonymous calls allowed
     const authHeader = req.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    let clientId = "system";
+    // Verify the user's token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication token" }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const clientId = user.id;
     let twilioPhone = defaultTwilioPhone;
     
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        clientId = user.id;
-        
-        // Fetch client's custom Twilio phone number if configured
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("twilio_phone_number")
-          .eq("user_id", user.id)
-          .single();
-        
-        if (profile?.twilio_phone_number && e164Regex.test(profile.twilio_phone_number)) {
-          twilioPhone = profile.twilio_phone_number;
-          console.log(`Using client's custom Twilio number: ${twilioPhone}`);
-        }
-      }
+    // Fetch client's custom Twilio phone number if configured
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("twilio_phone_number")
+      .eq("user_id", user.id)
+      .single();
+    
+    if (profile?.twilio_phone_number && e164Regex.test(profile.twilio_phone_number)) {
+      twilioPhone = profile.twilio_phone_number;
+      console.log(`Using client's custom Twilio number: ${twilioPhone}`);
     }
 
     if (!e164Regex.test(twilioPhone)) {
@@ -105,7 +115,7 @@ serve(async (req) => {
     }
 
     // Verify lead ownership before initiating call
-    if (leadId && clientId !== "system") {
+    if (leadId) {
       const { data: lead, error: leadError } = await supabase
         .from("leads")
         .select("client_id")
