@@ -53,6 +53,71 @@ export type Database = {
         }
         Relationships: []
       }
+      client_organizations: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      client_users: {
+        Row: {
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_submissions: {
         Row: {
           created_at: string
@@ -142,6 +207,59 @@ export type Database = {
           },
         ]
       }
+      crawl_logs: {
+        Row: {
+          blocked_detected: boolean | null
+          blocked_reason: string | null
+          completed_at: string | null
+          created_at: string
+          domain: string
+          errors: Json | null
+          id: string
+          job_id: string
+          pages_blocked_count: number | null
+          pages_crawled_count: number | null
+          pages_error_count: number | null
+          started_at: string | null
+        }
+        Insert: {
+          blocked_detected?: boolean | null
+          blocked_reason?: string | null
+          completed_at?: string | null
+          created_at?: string
+          domain: string
+          errors?: Json | null
+          id?: string
+          job_id: string
+          pages_blocked_count?: number | null
+          pages_crawled_count?: number | null
+          pages_error_count?: number | null
+          started_at?: string | null
+        }
+        Update: {
+          blocked_detected?: boolean | null
+          blocked_reason?: string | null
+          completed_at?: string | null
+          created_at?: string
+          domain?: string
+          errors?: Json | null
+          id?: string
+          job_id?: string
+          pages_blocked_count?: number | null
+          pages_crawled_count?: number | null
+          pages_error_count?: number | null
+          started_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crawl_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaign_steps: {
         Row: {
           body_template: string
@@ -210,6 +328,143 @@ export type Database = {
         }
         Relationships: []
       }
+      enrichment_logs: {
+        Row: {
+          action: string
+          created_at: string
+          credits_used: number | null
+          error_message: string | null
+          fields_enriched: Json | null
+          id: string
+          lead_id: string
+          provider: Database["public"]["Enums"]["enrichment_provider"]
+          request_data: Json | null
+          response_data: Json | null
+          success: boolean
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          credits_used?: number | null
+          error_message?: string | null
+          fields_enriched?: Json | null
+          id?: string
+          lead_id: string
+          provider: Database["public"]["Enums"]["enrichment_provider"]
+          request_data?: Json | null
+          response_data?: Json | null
+          success: boolean
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          credits_used?: number | null
+          error_message?: string | null
+          fields_enriched?: Json | null
+          id?: string
+          lead_id?: string
+          provider?: Database["public"]["Enums"]["enrichment_provider"]
+          request_data?: Json | null
+          response_data?: Json | null
+          success?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrichment_providers_config: {
+        Row: {
+          api_key_secret_name: string | null
+          config: Json | null
+          created_at: string
+          display_name: string
+          id: string
+          is_enabled: boolean | null
+          provider: Database["public"]["Enums"]["enrichment_provider"]
+          updated_at: string
+        }
+        Insert: {
+          api_key_secret_name?: string | null
+          config?: Json | null
+          created_at?: string
+          display_name: string
+          id?: string
+          is_enabled?: boolean | null
+          provider: Database["public"]["Enums"]["enrichment_provider"]
+          updated_at?: string
+        }
+        Update: {
+          api_key_secret_name?: string | null
+          config?: Json | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_enabled?: boolean | null
+          provider?: Database["public"]["Enums"]["enrichment_provider"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      job_queue: {
+        Row: {
+          attempts: number | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          job_type: string
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number | null
+          next_attempt_at: string | null
+          payload: Json | null
+          priority: number | null
+          reference_id: string
+          result: Json | null
+          status: string
+        }
+        Insert: {
+          attempts?: number | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_type: string
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number | null
+          next_attempt_at?: string | null
+          payload?: Json | null
+          priority?: number | null
+          reference_id: string
+          result?: Json | null
+          status?: string
+        }
+        Update: {
+          attempts?: number | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number | null
+          next_attempt_at?: string | null
+          payload?: Json | null
+          priority?: number | null
+          reference_id?: string
+          result?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
       lead_campaign_enrollments: {
         Row: {
           campaign_id: string
@@ -254,6 +509,48 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_duplicates: {
+        Row: {
+          created_at: string
+          duplicate_lead_id: string
+          id: string
+          match_reason: string
+          merged_at: string | null
+          primary_lead_id: string
+        }
+        Insert: {
+          created_at?: string
+          duplicate_lead_id: string
+          id?: string
+          match_reason: string
+          merged_at?: string | null
+          primary_lead_id: string
+        }
+        Update: {
+          created_at?: string
+          duplicate_lead_id?: string
+          id?: string
+          match_reason?: string
+          merged_at?: string | null
+          primary_lead_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_duplicates_duplicate_lead_id_fkey"
+            columns: ["duplicate_lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_duplicates_primary_lead_id_fkey"
+            columns: ["primary_lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
             referencedColumns: ["id"]
           },
         ]
@@ -473,6 +770,326 @@ export type Database = {
           },
         ]
       }
+      schema_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fields: Json
+          id: string
+          is_default: boolean | null
+          name: string
+          niche: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fields?: Json
+          id?: string
+          is_default?: boolean | null
+          name: string
+          niche: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fields?: Json
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          niche?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scrape_jobs: {
+        Row: {
+          completed_at: string | null
+          completed_targets: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          failed_targets: number | null
+          id: string
+          input_method: string | null
+          max_pages_per_domain: number | null
+          name: string
+          request_delay_ms: number | null
+          respect_robots_txt: boolean | null
+          schema_template_id: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["scrape_job_status"]
+          target_urls: Json
+          total_targets: number | null
+          updated_at: string
+          use_playwright_fallback: boolean | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_targets?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          failed_targets?: number | null
+          id?: string
+          input_method?: string | null
+          max_pages_per_domain?: number | null
+          name: string
+          request_delay_ms?: number | null
+          respect_robots_txt?: boolean | null
+          schema_template_id?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["scrape_job_status"]
+          target_urls?: Json
+          total_targets?: number | null
+          updated_at?: string
+          use_playwright_fallback?: boolean | null
+        }
+        Update: {
+          completed_at?: string | null
+          completed_targets?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          failed_targets?: number | null
+          id?: string
+          input_method?: string | null
+          max_pages_per_domain?: number | null
+          name?: string
+          request_delay_ms?: number | null
+          respect_robots_txt?: boolean | null
+          schema_template_id?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["scrape_job_status"]
+          target_urls?: Json
+          total_targets?: number | null
+          updated_at?: string
+          use_playwright_fallback?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrape_jobs_schema_template_id_fkey"
+            columns: ["schema_template_id"]
+            isOneToOne: false
+            referencedRelation: "schema_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scraped_leads: {
+        Row: {
+          all_emails: Json | null
+          all_phones: Json | null
+          assigned_at: string | null
+          assigned_by: string | null
+          assigned_to_org: string | null
+          best_email: string | null
+          best_phone: string | null
+          confidence_score: number | null
+          contact_form_source_url: string | null
+          contact_form_url: string | null
+          created_at: string
+          domain: string
+          email_source_url: string | null
+          email_validation_notes: string | null
+          email_validation_status:
+            | Database["public"]["Enums"]["validation_status"]
+            | null
+          enrichment_data: Json | null
+          enrichment_providers_used: Json | null
+          full_name: string | null
+          id: string
+          job_id: string | null
+          linkedin_search_url: string | null
+          name_source_url: string | null
+          phone_line_type: string | null
+          phone_source_url: string | null
+          phone_validation_notes: string | null
+          phone_validation_status:
+            | Database["public"]["Enums"]["validation_status"]
+            | null
+          qc_flag: string | null
+          qc_notes: string | null
+          schema_data: Json | null
+          schema_evidence: Json | null
+          schema_template_id: string | null
+          scraped_at: string | null
+          source_url: string | null
+          status: Database["public"]["Enums"]["scraped_lead_status"]
+          updated_at: string
+        }
+        Insert: {
+          all_emails?: Json | null
+          all_phones?: Json | null
+          assigned_at?: string | null
+          assigned_by?: string | null
+          assigned_to_org?: string | null
+          best_email?: string | null
+          best_phone?: string | null
+          confidence_score?: number | null
+          contact_form_source_url?: string | null
+          contact_form_url?: string | null
+          created_at?: string
+          domain: string
+          email_source_url?: string | null
+          email_validation_notes?: string | null
+          email_validation_status?:
+            | Database["public"]["Enums"]["validation_status"]
+            | null
+          enrichment_data?: Json | null
+          enrichment_providers_used?: Json | null
+          full_name?: string | null
+          id?: string
+          job_id?: string | null
+          linkedin_search_url?: string | null
+          name_source_url?: string | null
+          phone_line_type?: string | null
+          phone_source_url?: string | null
+          phone_validation_notes?: string | null
+          phone_validation_status?:
+            | Database["public"]["Enums"]["validation_status"]
+            | null
+          qc_flag?: string | null
+          qc_notes?: string | null
+          schema_data?: Json | null
+          schema_evidence?: Json | null
+          schema_template_id?: string | null
+          scraped_at?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["scraped_lead_status"]
+          updated_at?: string
+        }
+        Update: {
+          all_emails?: Json | null
+          all_phones?: Json | null
+          assigned_at?: string | null
+          assigned_by?: string | null
+          assigned_to_org?: string | null
+          best_email?: string | null
+          best_phone?: string | null
+          confidence_score?: number | null
+          contact_form_source_url?: string | null
+          contact_form_url?: string | null
+          created_at?: string
+          domain?: string
+          email_source_url?: string | null
+          email_validation_notes?: string | null
+          email_validation_status?:
+            | Database["public"]["Enums"]["validation_status"]
+            | null
+          enrichment_data?: Json | null
+          enrichment_providers_used?: Json | null
+          full_name?: string | null
+          id?: string
+          job_id?: string | null
+          linkedin_search_url?: string | null
+          name_source_url?: string | null
+          phone_line_type?: string | null
+          phone_source_url?: string | null
+          phone_validation_notes?: string | null
+          phone_validation_status?:
+            | Database["public"]["Enums"]["validation_status"]
+            | null
+          qc_flag?: string | null
+          qc_notes?: string | null
+          schema_data?: Json | null
+          schema_evidence?: Json | null
+          schema_template_id?: string | null
+          scraped_at?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["scraped_lead_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scraped_leads_assigned_to_org_fkey"
+            columns: ["assigned_to_org"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scraped_leads_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scraped_leads_schema_template_id_fkey"
+            columns: ["schema_template_id"]
+            isOneToOne: false
+            referencedRelation: "schema_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scraped_pages: {
+        Row: {
+          blocked_reason: string | null
+          created_at: string
+          domain: string
+          error_message: string | null
+          extracted_signals: Json | null
+          html_content: string | null
+          http_status: number | null
+          id: string
+          job_id: string
+          markdown_content: string | null
+          page_type: string | null
+          processing_time_ms: number | null
+          scraped_at: string | null
+          status: Database["public"]["Enums"]["scraped_page_status"]
+          url: string
+        }
+        Insert: {
+          blocked_reason?: string | null
+          created_at?: string
+          domain: string
+          error_message?: string | null
+          extracted_signals?: Json | null
+          html_content?: string | null
+          http_status?: number | null
+          id?: string
+          job_id: string
+          markdown_content?: string | null
+          page_type?: string | null
+          processing_time_ms?: number | null
+          scraped_at?: string | null
+          status?: Database["public"]["Enums"]["scraped_page_status"]
+          url: string
+        }
+        Update: {
+          blocked_reason?: string | null
+          created_at?: string
+          domain?: string
+          error_message?: string | null
+          extracted_signals?: Json | null
+          html_content?: string | null
+          http_status?: number | null
+          id?: string
+          job_id?: string
+          markdown_content?: string | null
+          page_type?: string | null
+          processing_time_ms?: number | null
+          scraped_at?: string | null
+          status?: Database["public"]["Enums"]["scraped_page_status"]
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scraped_pages_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_assignments: {
         Row: {
           assigned_at: string
@@ -528,6 +1145,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      validation_logs: {
+        Row: {
+          created_at: string
+          id: string
+          input_value: string
+          lead_id: string
+          provider: string | null
+          result_details: Json | null
+          result_status: Database["public"]["Enums"]["validation_status"]
+          validation_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          input_value: string
+          lead_id: string
+          provider?: string | null
+          result_details?: Json | null
+          result_status: Database["public"]["Enums"]["validation_status"]
+          validation_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          input_value?: string
+          lead_id?: string
+          provider?: string | null
+          result_details?: Json | null
+          result_status?: Database["public"]["Enums"]["validation_status"]
+          validation_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       voice_agent_calls: {
         Row: {
@@ -627,6 +1285,7 @@ export type Database = {
         Args: { session_uuid: string }
         Returns: boolean
       }
+      get_user_organization: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -634,10 +1293,38 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_email: { Args: { p_email: string }; Returns: string }
+      normalize_phone: { Args: { p_phone: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "client"
+      enrichment_provider: "apollo" | "hunter" | "clearbit" | "manual"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
+      scrape_job_status:
+        | "draft"
+        | "queued"
+        | "running"
+        | "paused"
+        | "completed"
+        | "failed"
+        | "cancelled"
+      scraped_lead_status:
+        | "new"
+        | "review"
+        | "approved"
+        | "assigned"
+        | "in_progress"
+        | "won"
+        | "lost"
+        | "rejected"
+      scraped_page_status:
+        | "pending"
+        | "scraping"
+        | "scraped"
+        | "failed"
+        | "blocked"
+        | "skipped"
+      validation_status: "unverified" | "likely_valid" | "verified" | "invalid"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -766,7 +1453,36 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client"],
+      enrichment_provider: ["apollo", "hunter", "clearbit", "manual"],
       lead_status: ["new", "contacted", "qualified", "converted", "lost"],
+      scrape_job_status: [
+        "draft",
+        "queued",
+        "running",
+        "paused",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
+      scraped_lead_status: [
+        "new",
+        "review",
+        "approved",
+        "assigned",
+        "in_progress",
+        "won",
+        "lost",
+        "rejected",
+      ],
+      scraped_page_status: [
+        "pending",
+        "scraping",
+        "scraped",
+        "failed",
+        "blocked",
+        "skipped",
+      ],
+      validation_status: ["unverified", "likely_valid", "verified", "invalid"],
     },
   },
 } as const
