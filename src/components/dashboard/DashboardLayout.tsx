@@ -4,7 +4,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
-import { isAdminEmail } from "@/lib/adminEmails";
 import {
   LayoutDashboard,
   Users,
@@ -51,13 +50,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     const checkUserRoles = async () => {
       if (!user?.id) return;
       
-      // Check if admin by email whitelist first
-      if (isAdminEmail(user.email)) {
-        setIsAdmin(true);
-        return; // Skip DB check for whitelisted emails
-      }
-      
-      // Fallback: Check if admin via database role
+      // Always verify admin role via database - no client-side whitelist
       const { data: adminData } = await supabase.rpc('has_role', {
         _user_id: user.id,
         _role: 'admin'
@@ -80,7 +73,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     };
     
     checkUserRoles();
-  }, [user?.id, user?.email]);
+  }, [user?.id]);
 
   const handleSignOut = async () => {
     await signOut();
