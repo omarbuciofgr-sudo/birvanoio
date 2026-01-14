@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History } from 'lucide-react';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3 } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
@@ -39,6 +39,7 @@ import { LeadEditDialog } from '@/components/scraper/LeadEditDialog';
 import { AssignLeadsDialog } from '@/components/scraper/AssignLeadsDialog';
 import { SuppressionListManager } from '@/components/scraper/SuppressionListManager';
 import { AuditLogViewer } from '@/components/scraper/AuditLogViewer';
+import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
 import { supabase } from '@/integrations/supabase/client';
 
 const statusColors: Record<ScrapedLeadStatus, string> = {
@@ -244,6 +245,10 @@ export default function ScrapedLeads() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
+            <TabsTrigger value="pipeline" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Pipeline
+            </TabsTrigger>
             <TabsTrigger value="leads" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Leads ({leads.length})
@@ -257,6 +262,10 @@ export default function ScrapedLeads() {
               Audit History
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="pipeline" className="mt-6">
+            <LeadPipelineView leads={leads} />
+          </TabsContent>
 
           <TabsContent value="leads" className="mt-6 space-y-6">
             {/* Bulk Actions */}

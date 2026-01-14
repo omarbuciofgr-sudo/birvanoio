@@ -27,7 +27,7 @@ function generateLinkedInSearchUrl(companyName?: string, name?: string, jobTitle
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
 }
 
-// Apollo.io API enrichment
+// Apollo.io API - Domain/Company enrichment
 async function enrichWithApollo(
   domain: string,
   name?: string | null,
@@ -89,6 +89,70 @@ async function enrichWithApollo(
     return null;
   } catch (error) {
     console.error('Apollo enrichment error:', error);
+    return null;
+  }
+}
+
+// Apollo.io API - People Search (find specific person by name)
+async function apolloPeopleSearch(
+  name: string,
+  domain?: string,
+  jobTitle?: string,
+  apiKey?: string
+): Promise<EnrichmentResult | null> {
+  if (!apiKey || !name) return null;
+
+  try {
+    const searchParams: Record<string, unknown> = {
+      api_key: apiKey,
+      q_keywords: name,
+      page: 1,
+      per_page: 5,
+    };
+
+    if (domain) {
+      searchParams.q_organization_domains = domain;
+    }
+    if (jobTitle) {
+      searchParams.q_person_titles = [jobTitle];
+    }
+
+    const response = await fetch('https://api.apollo.io/v1/mixed_people/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+      body: JSON.stringify(searchParams),
+    });
+
+    const data = await response.json();
+    
+    if (data.people && data.people.length > 0) {
+      const person = data.people[0];
+      const fieldsEnriched: string[] = [];
+      
+      if (person.email) fieldsEnriched.push('email');
+      if (person.phone_numbers?.[0]) fieldsEnriched.push('phone');
+      if (person.organization?.name) fieldsEnriched.push('company_name');
+      if (person.title) fieldsEnriched.push('job_title');
+      if (person.linkedin_url) fieldsEnriched.push('linkedin_url');
+
+      return {
+        full_name: person.name,
+        email: person.email,
+        phone: person.phone_numbers?.[0]?.number,
+        company_name: person.organization?.name,
+        job_title: person.title,
+        linkedin_url: person.linkedin_url,
+        provider: 'apollo_people_search',
+        fields_enriched: fieldsEnriched,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Apollo people search error:', error);
     return null;
   }
 }

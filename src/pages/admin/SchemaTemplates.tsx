@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { SchemaTemplatesList } from '@/components/scraper/SchemaTemplatesList';
 import { SchemaTemplateBuilder } from '@/components/scraper/SchemaTemplateBuilder';
 import { schemaTemplatesApi } from '@/lib/api/scraper';
+import { ALL_NICHE_TEMPLATES, REAL_ESTATE_TEMPLATE, INSURANCE_TEMPLATE, B2B_TEMPLATE } from '@/lib/nicheTemplates';
 import type { SchemaTemplate, CreateSchemaTemplateInput } from '@/types/scraper';
 
 type ViewMode = 'list' | 'create' | 'edit';
@@ -58,6 +65,14 @@ export default function SchemaTemplates() {
   const handleCancel = () => {
     setViewMode('list');
     setEditingTemplate(null);
+  };
+
+  const handleCreateFromPreset = async (preset: CreateSchemaTemplateInput) => {
+    try {
+      await createMutation.mutateAsync(preset);
+    } catch {
+      // Error already handled by mutation
+    }
   };
 
   return (
