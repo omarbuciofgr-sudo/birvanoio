@@ -101,11 +101,15 @@ leads = response.json()`,
   };
 
   const generateApiKey = () => {
-    const key = `brv_${Array.from({ length: 32 }, () => 
-      Math.random().toString(36)[2]
-    ).join('')}`;
+    // Use cryptographically secure random values instead of Math.random()
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    const key = `brv_${Array.from(array)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 32)}`;
     setApiKey(key);
-    toast.success("API key generated! Make sure to save it securely.");
+    toast.success("API key generated! This is for demonstration only. Production keys should be generated server-side.");
   };
 
   return (
