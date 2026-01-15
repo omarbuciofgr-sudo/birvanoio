@@ -211,6 +211,27 @@ function hotpadsLocationSlug(location: string): string {
   return toHyphenSlug(normalizeLocation(location));
 }
 
+function normalizeForMatch(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function listingMatchesLocation(listingAddress: unknown, expectedCity: string, expectedStateAbbrev?: string): boolean {
+  if (typeof listingAddress !== 'string') return false;
+
+  const addr = normalizeForMatch(listingAddress);
+  const city = normalizeForMatch(expectedCity);
+
+  if (city && !addr.includes(city)) return false;
+
+  if (expectedStateAbbrev) {
+    const st = expectedStateAbbrev.toUpperCase();
+    const stateRe = new RegExp(`(^|[^A-Z])${st}([^A-Z]|$)`);
+    if (!stateRe.test(listingAddress.toUpperCase())) return false;
+  }
+
+  return true;
+}
+
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
   const normalizedLocation = normalizeLocation(location);
   const encodedLocation = encodeURIComponent(normalizedLocation);
@@ -389,6 +410,10 @@ Deno.serve(async (req) => {
       jobId,
     } = await req.json();
 
+    const expectedLocation = location ? parseCityState(location) : null;
+    const expectedCity = expectedLocation?.city || '';
+    const expectedStateAbbrev = expectedLocation?.state ? getStateAbbreviation(expectedLocation.state) : '';
+
     // Check API keys
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!firecrawlApiKey) {
@@ -487,6 +512,11 @@ Deno.serve(async (req) => {
         const listings = extractedData.listings || [];
         
         for (const listing of listings) {
+          // When searching by location, drop out-of-market results.
+          if (location && !listingMatchesLocation((listing as any)?.address, expectedCity, expectedStateAbbrev)) {
+            continue;
+          }
+
           allListings.push({
             ...listing,
             source_url: formattedUrl,

@@ -149,6 +149,29 @@ function buildCityStateSlug(location: string): string {
   return stateAbbrev ? `${citySlug}-${stateAbbrev}` : citySlug;
 }
 
+function normalizeForMatch(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function listingMatchesLocation(listingAddress: unknown, expectedCity: string, expectedStateAbbrev?: string): boolean {
+  if (typeof listingAddress !== 'string') return false;
+
+  const addr = normalizeForMatch(listingAddress);
+  const city = normalizeForMatch(expectedCity);
+
+  // If the city isn't even present, it's almost certainly the wrong market.
+  if (city && !addr.includes(city)) return false;
+
+  if (expectedStateAbbrev) {
+    // Match " TX " or ", TX" or " TX," or end-of-string. Keep it loose but safe.
+    const st = expectedStateAbbrev.toUpperCase();
+    const stateRe = new RegExp(`(^|[^A-Z])${st}([^A-Z]|$)`);
+    if (!stateRe.test(listingAddress.toUpperCase())) return false;
+  }
+
+  return true;
+}
+
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
   const decodedLocation = safeDecodeURIComponent(location);
 
@@ -442,6 +465,10 @@ Deno.serve(async (req) => {
       jobId,
     } = await req.json();
 
+    const expectedLocation = location ? parseCityState(location) : null;
+    const expectedCity = expectedLocation?.city || '';
+    const expectedStateAbbrev = expectedLocation?.state ? getStateAbbreviation(expectedLocation.state) : '';
+
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     const zyteApiKey = Deno.env.get('ZYTE_API_KEY');
     
@@ -535,7 +562,8 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({
               url: formattedUrl,
-              formats: ['markdown', 'links'],
+              // IMPORTANT: Firecrawl only returns structured extraction when `json` is included in formats.
+              formats: ['markdown', 'links', 'json'],
               jsonOptions: {
                 prompt: FSBO_EXTRACTION_PROMPT,
                 schema: FSBO_EXTRACTION_SCHEMA,
@@ -582,6 +610,12 @@ Deno.serve(async (req) => {
         
         // Enrich each listing with source info
         for (const listing of listings) {
+          // When searching by location, drop obviously out-of-market results.
+          // This prevents "fallback"/cross-market cards (e.g. IL/NE) from being returned.
+          if (location && !listingMatchesLocation((listing as any)?.address, expectedCity, expectedStateAbbrev)) {
+            continue;
+          }
+
           allListings.push({
             ...listing,
             source_url: formattedUrl,
