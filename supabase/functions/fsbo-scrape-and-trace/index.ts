@@ -123,9 +123,64 @@ function detectPlatform(url: string): { name: string; ownerFilter: string | null
   return null;
 }
 
+function normalizeLocation(location: string): string {
+  let loc = location.trim();
+  try {
+    // Handle inputs like "houston%2c%20texas"
+    loc = decodeURIComponent(loc);
+  } catch {
+    // ignore
+  }
+  return loc;
+}
+
+function getStateAbbreviation(state: string): string {
+  const s = state.trim().toLowerCase();
+  const map: Record<string, string> = {
+    alabama: 'al', alaska: 'ak', arizona: 'az', arkansas: 'ar', california: 'ca', colorado: 'co',
+    connecticut: 'ct', delaware: 'de', florida: 'fl', georgia: 'ga', hawaii: 'hi', idaho: 'id',
+    illinois: 'il', indiana: 'in', iowa: 'ia', kansas: 'ks', kentucky: 'ky', louisiana: 'la',
+    maine: 'me', maryland: 'md', massachusetts: 'ma', michigan: 'mi', minnesota: 'mn',
+    mississippi: 'ms', missouri: 'mo', montana: 'mt', nebraska: 'ne', nevada: 'nv',
+    'new hampshire': 'nh', 'new jersey': 'nj', 'new mexico': 'nm', 'new york': 'ny',
+    'north carolina': 'nc', 'north dakota': 'nd', ohio: 'oh', oklahoma: 'ok', oregon: 'or',
+    pennsylvania: 'pa', 'rhode island': 'ri', 'south carolina': 'sc', 'south dakota': 'sd',
+    tennessee: 'tn', texas: 'tx', utah: 'ut', vermont: 'vt', virginia: 'va', washington: 'wa',
+    'west virginia': 'wv', wisconsin: 'wi', wyoming: 'wy',
+  };
+
+  if (s.length === 2) return s;
+  return map[s] || s.slice(0, 2);
+}
+
+function toHyphenSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/_+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/^-|-$/g, '');
+}
+
+function hotpadsLocationSlug(location: string): string {
+  const loc = normalizeLocation(location);
+
+  // HotPads commonly uses city-state format like: "houston-tx"
+  const parts = loc.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const city = parts[0];
+    const state = parts[1];
+    return `${toHyphenSlug(city)}-${getStateAbbreviation(state)}`;
+  }
+
+  return toHyphenSlug(loc);
+}
+
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
-  const encodedLocation = encodeURIComponent(location);
-  
+  const normalizedLocation = normalizeLocation(location);
+  const encodedLocation = encodeURIComponent(normalizedLocation);
+
   switch (platform) {
     case 'zillow':
       return listingType === 'sale'
@@ -139,8 +194,11 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
         : `https://www.trulia.com/for_rent/${encodedLocation.toLowerCase().replace(/\s+/g, '_')}/`;
     case 'redfin':
       return `https://www.redfin.com/city/search?q=${encodedLocation}`;
-    case 'hotpads':
-      return `https://hotpads.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/apartments-for-rent`;
+    case 'hotpads': {
+      // IMPORTANT: HotPads expects a path slug (not URL-encoded commas/spaces), e.g. "houston-tx"
+      const slug = hotpadsLocationSlug(normalizedLocation);
+      return `https://hotpads.com/${slug}/apartments-for-rent`;
+    }
     case 'apartments':
       return `https://www.apartments.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/`;
     default:
@@ -371,11 +429,13 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             url: formattedUrl,
-            formats: [
-              { type: 'json', prompt: FSBO_EXTRACTION_PROMPT },
-              'markdown',
-              'links',
-            ],
+            // Firecrawl expects formats to be a list of allowed strings.
+            // JSON extraction is configured via jsonOptions.
+            formats: ['markdown', 'links'],
+            jsonOptions: {
+              prompt: FSBO_EXTRACTION_PROMPT,
+              schema: FSBO_EXTRACTION_SCHEMA,
+            },
             onlyMainContent: true,
             waitFor: 3000,
           }),
