@@ -5,7 +5,7 @@ import ProductDemo from "@/components/landing/ProductDemo";
 import CRMShowcase from "@/components/landing/CRMShowcase";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
-import CaseStudies from "@/components/landing/CaseStudies";
+
 import ComparisonTable from "@/components/landing/ComparisonTable";
 import ROICalculator from "@/components/landing/ROICalculator";
 import Pricing from "@/components/landing/Pricing";
@@ -28,7 +28,7 @@ const Index = () => {
       <CRMShowcase />
       <HowItWorks />
       <Services />
-      <CaseStudies />
+      
       <ComparisonTable />
       <ROICalculator />
       <Pricing />
