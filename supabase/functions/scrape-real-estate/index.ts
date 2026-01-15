@@ -84,33 +84,57 @@ function detectPlatform(url: string): { name: string; ownerFilter: string | null
   return null;
 }
 
+function safeDecodeURIComponent(value: string): string {
+  try {
+    // Only decode if it looks encoded; otherwise leave as-is
+    return /%[0-9A-Fa-f]{2}/.test(value) ? decodeURIComponent(value) : value;
+  } catch {
+    return value;
+  }
+}
+
+function parseCityState(location: string): { city: string; state: string } {
+  const decoded = safeDecodeURIComponent(location).trim();
+  const parts = decoded.split(',').map((p) => p.trim()).filter(Boolean);
+  return { city: parts[0] || decoded, state: parts[1] || '' };
+}
+
+function buildCityStateSlug(location: string): string {
+  const { city, state } = parseCityState(location);
+  const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const stateAbbrev = state ? getStateAbbreviation(state).toLowerCase() : '';
+  return stateAbbrev ? `${citySlug}-${stateAbbrev}` : citySlug;
+}
+
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
-  // Format location for URL paths: lowercase, remove commas, replace spaces with hyphens
-  const formattedLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '-');
-  // Format for Trulia: uses underscores
-  const truliaLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_');
-  
+  const decodedLocation = safeDecodeURIComponent(location);
+
+  // Default: lowercase, remove commas, replace spaces with hyphens (kept for platforms that accept full state names)
+  const formattedLocation = decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '-');
+  // Trulia: uses underscores
+  const truliaLocation = decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_');
+  // City-state abbreviation slug (e.g. houston-tx)
+  const cityStateSlug = buildCityStateSlug(decodedLocation);
+
   switch (platform) {
     case 'zillow':
       // Zillow uses searchQueryState with JSON params for FSBO/FRBO filtering
       if (listingType === 'sale') {
-        // FSBO filter: fsba=false excludes agent listings
         const searchState = {
           isMapVisible: true,
           filterState: {
-            sort: { value: "globalrelevanceex" },
-            nc: { value: false },      // new construction
-            fore: { value: false },    // foreclosures
-            auc: { value: false },     // auctions
-            fsba: { value: false },    // for sale by agent (exclude)
-            fsbo: { value: true }      // for sale by owner (include)
+            sort: { value: 'globalrelevanceex' },
+            nc: { value: false },
+            fore: { value: false },
+            auc: { value: false },
+            fsba: { value: false },
+            fsbo: { value: true },
           },
           isListVisible: true,
-          usersSearchTerm: location
+          usersSearchTerm: decodedLocation,
         };
         return `https://www.zillow.com/${formattedLocation}/fsbo/?searchQueryState=${encodeURIComponent(JSON.stringify(searchState))}`;
       } else {
-        // FRBO filter: att="by owner"
         const searchState = {
           isMapVisible: true,
           filterState: {
@@ -118,46 +142,45 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
             fore: { value: false },
             auc: { value: false },
             fsba: { value: false },
-            fr: { value: true },         // for rent
+            fr: { value: true },
             fsbo: { value: false },
             cmsn: { value: false },
-            att: { value: "by owner" }   // by owner filter
+            att: { value: 'by owner' },
           },
           isListVisible: true,
-          usersSearchTerm: location
+          usersSearchTerm: decodedLocation,
         };
         return `https://www.zillow.com/${formattedLocation}/rentals/?searchQueryState=${encodeURIComponent(JSON.stringify(searchState))}`;
       }
-    
-    case 'fsbo':
+
+    case 'fsbo': {
       // ForSaleByOwner.com: /search/list/{city}
-      const fsboCity = location.split(',')[0].trim().toLowerCase().replace(/\s+/g, '-');
+      const { city } = parseCityState(decodedLocation);
+      const fsboCity = city.trim().toLowerCase().replace(/\s+/g, '-');
       return `https://www.forsalebyowner.com/search/list/${fsboCity}`;
-    
+    }
+
     case 'trulia':
-      // Trulia: /for_sale/{location}/fsbo_lt/ or /for_rent/{location}/
       return listingType === 'sale'
         ? `https://www.trulia.com/for_sale/${truliaLocation}/fsbo_lt/`
         : `https://www.trulia.com/for_rent/${truliaLocation}/`;
-    
-    case 'redfin':
-      // Redfin: /stateCode/city/filter/include=fsbo
-      // Format: /IL/Chicago or /TX/Houston
-      const parts = location.split(',').map(p => p.trim());
-      const city = parts[0].replace(/\s+/g, '-');
-      const state = parts[1] || '';
-      // Try to get state abbreviation from common states
-      const stateAbbrev = getStateAbbreviation(state);
-      return `https://www.redfin.com/${stateAbbrev}/${city}/filter/include=fsbo`;
-    
+
+    case 'redfin': {
+      // Redfin: /{STATE}/{City}/filter/include=fsbo
+      const { city, state } = parseCityState(decodedLocation);
+      const cityPath = city.replace(/\s+/g, '-');
+      const stateAbbrev = getStateAbbreviation(state || '');
+      return `https://www.redfin.com/${stateAbbrev}/${cityPath}/filter/include=fsbo`;
+    }
+
     case 'hotpads':
-      // HotPads: /{city-state}/for-rent-by-owner?isListedByOwner=true
-      return `https://hotpads.com/${formattedLocation}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
-    
+      // HotPads is strict about city/state format; prefer city-stateAbbrev (houston-tx) to avoid 400s
+      return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
+
     case 'apartments':
-      // Apartments.com: /{location}/for-rent-by-owner/
-      return `https://www.apartments.com/${formattedLocation}/for-rent-by-owner/`;
-    
+      // Apartments.com also commonly uses city-stateAbbrev slugs
+      return `https://www.apartments.com/${cityStateSlug}/for-rent-by-owner/`;
+
     default:
       return null;
   }
