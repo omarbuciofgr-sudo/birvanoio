@@ -7,15 +7,15 @@ const corsHeaders = {
 
 // Supported real estate platforms
 const SUPPORTED_PLATFORMS = [
-  { name: 'zillow', pattern: /zillow\.com/i, ownerFilter: 'fsbo' },
-  { name: 'apartments', pattern: /apartments\.com/i, ownerFilter: 'owner' },
-  { name: 'hotpads', pattern: /hotpads\.com/i, ownerFilter: 'owner' },
-  { name: 'fsbo', pattern: /fsbo\.com/i, ownerFilter: null },
-  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo' },
-  { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo' },
-  { name: 'craigslist', pattern: /craigslist\.(org|com)/i, ownerFilter: null },
-  { name: 'facebook', pattern: /facebook\.com\/marketplace/i, ownerFilter: null },
-  { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo' },
+  { name: 'zillow', pattern: /zillow\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
+  { name: 'apartments', pattern: /apartments\.com/i, ownerFilter: 'owner', requiresZyte: false },
+  { name: 'hotpads', pattern: /hotpads\.com/i, ownerFilter: 'owner', requiresZyte: false },
+  { name: 'fsbo', pattern: /fsbo\.com/i, ownerFilter: null, requiresZyte: false },
+  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
+  { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
+  { name: 'craigslist', pattern: /craigslist\.(org|com)/i, ownerFilter: null, requiresZyte: false },
+  { name: 'facebook', pattern: /facebook\.com\/marketplace/i, ownerFilter: null, requiresZyte: true },
+  { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
 ];
 
 // FSBO/FRBO extraction schema
@@ -75,10 +75,10 @@ IMPORTANT: Only extract listings where the seller/landlord is the OWNER, not a r
 
 Return empty values for fields not found on the page.`;
 
-function detectPlatform(url: string): { name: string; ownerFilter: string | null } | null {
+function detectPlatform(url: string): { name: string; ownerFilter: string | null; requiresZyte: boolean } | null {
   for (const platform of SUPPORTED_PLATFORMS) {
     if (platform.pattern.test(url)) {
-      return { name: platform.name, ownerFilter: platform.ownerFilter };
+      return { name: platform.name, ownerFilter: platform.ownerFilter, requiresZyte: platform.requiresZyte };
     }
   }
   return null;
@@ -107,6 +107,134 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
     default:
       return null;
   }
+}
+
+// Zyte API scraping function with browser rendering
+async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: string; success: boolean; error?: string }> {
+  console.log(`[Zyte] Attempting to scrape: ${url}`);
+  
+  try {
+    const response = await fetch('https://api.zyte.com/v1/extract', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(zyteApiKey + ':')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: url,
+        browserHtml: true,
+        javascript: true,
+        actions: [
+          { action: 'waitForTimeout', timeout: 5000 }
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Zyte] API error: ${response.status}`, errorText);
+      return { html: '', success: false, error: `Zyte API error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    console.log(`[Zyte] Successfully scraped ${url}`);
+    return { html: data.browserHtml || '', success: true };
+  } catch (error) {
+    console.error(`[Zyte] Error:`, error);
+    return { html: '', success: false, error: error instanceof Error ? error.message : 'Unknown Zyte error' };
+  }
+}
+
+// Check if error indicates blocking
+function isBlockedError(status: number, errorMessage: string): boolean {
+  const blockedStatuses = [403, 429, 451, 503];
+  const blockedMessages = ['blocked', 'captcha', 'rate limit', 'forbidden', 'access denied', 'bad request'];
+  
+  if (blockedStatuses.includes(status)) return true;
+  
+  const lowerError = errorMessage.toLowerCase();
+  return blockedMessages.some(msg => lowerError.includes(msg));
+}
+
+// Extract listings from HTML content (basic parser for Zyte HTML responses)
+function extractListingsFromHtml(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Common patterns for real estate listing cards
+    // This is a best-effort extraction that works across multiple platforms
+    
+    // Pattern 1: Look for price patterns like $XXX,XXX
+    const priceRegex = /\$[\d,]+(?:\.\d{2})?/g;
+    const prices = html.match(priceRegex) || [];
+    
+    // Pattern 2: Look for address patterns
+    const addressRegex = /\d+\s+[\w\s]+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Ln|Lane|Way|Ct|Court)[\s,]+[\w\s]+,?\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s*\d{5}/gi;
+    const addresses = html.match(addressRegex) || [];
+    
+    // Pattern 3: Look for bed/bath patterns
+    const bedroomRegex = /(\d+)\s*(?:bed|br|bedroom)/gi;
+    const bathroomRegex = /(\d+(?:\.\d)?)\s*(?:bath|ba|bathroom)/gi;
+    
+    // Pattern 4: Look for sqft patterns
+    const sqftRegex = /([\d,]+)\s*(?:sq\s*ft|sqft|square\s*feet)/gi;
+    
+    // If we found addresses, create listings
+    for (let i = 0; i < Math.min(addresses.length, 50); i++) {
+      const listing: any = {
+        address: addresses[i]?.trim(),
+        price: prices[i] || null,
+        source_url: sourceUrl,
+      };
+      
+      // Try to extract bed/bath for this listing section
+      const bedroomMatch = html.match(bedroomRegex);
+      if (bedroomMatch && bedroomMatch[i]) {
+        const bedNum = bedroomMatch[i].match(/(\d+)/);
+        if (bedNum) listing.bedrooms = parseInt(bedNum[1]);
+      }
+      
+      const bathroomMatch = html.match(bathroomRegex);
+      if (bathroomMatch && bathroomMatch[i]) {
+        const bathNum = bathroomMatch[i].match(/(\d+(?:\.\d)?)/);
+        if (bathNum) listing.bathrooms = parseFloat(bathNum[1]);
+      }
+      
+      const sqftMatch = html.match(sqftRegex);
+      if (sqftMatch && sqftMatch[i]) {
+        const sqft = sqftMatch[i].match(/([\d,]+)/);
+        if (sqft) listing.square_feet = parseInt(sqft[1].replace(/,/g, ''));
+      }
+      
+      // Determine listing type based on URL and content
+      if (sourceUrl.includes('fsbo') || html.toLowerCase().includes('for sale by owner')) {
+        listing.listing_type = 'fsbo';
+      } else if (sourceUrl.includes('rent') || html.toLowerCase().includes('for rent')) {
+        listing.listing_type = 'for_rent';
+      } else {
+        listing.listing_type = 'for_sale';
+      }
+      
+      listings.push(listing);
+    }
+    
+    // If no structured data found, try to extract at least some content
+    if (listings.length === 0 && prices.length > 0) {
+      for (let i = 0; i < Math.min(prices.length, 20); i++) {
+        listings.push({
+          price: prices[i],
+          source_url: sourceUrl,
+          listing_type: sourceUrl.includes('rent') ? 'for_rent' : 'for_sale',
+        });
+      }
+    }
+    
+    console.log(`[extractListingsFromHtml] Found ${addresses.length} addresses, ${prices.length} prices, extracted ${listings.length} listings`);
+  } catch (error) {
+    console.error('[extractListingsFromHtml] Error parsing HTML:', error);
+  }
+  
+  return listings;
 }
 
 Deno.serve(async (req) => {
@@ -170,8 +298,10 @@ Deno.serve(async (req) => {
       jobId,
     } = await req.json();
 
-    const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
-    if (!apiKey) {
+    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    const zyteApiKey = Deno.env.get('ZYTE_API_KEY');
+    
+    if (!firecrawlApiKey) {
       console.error('FIRECRAWL_API_KEY not configured');
       return new Response(
         JSON.stringify({ success: false, error: 'Firecrawl connector not configured' }),
@@ -216,6 +346,7 @@ Deno.serve(async (req) => {
 
     const allListings: any[] = [];
     const errors: { url: string; error: string }[] = [];
+    let zyteUsed = 0;
 
     for (const targetUrl of urlsToScrape) {
       try {
@@ -226,38 +357,84 @@ Deno.serve(async (req) => {
         }
 
         const platform = detectPlatform(formattedUrl);
-        console.log(`Scraping ${formattedUrl} (platform: ${platform?.name || 'unknown'})`);
+        console.log(`Scraping ${formattedUrl} (platform: ${platform?.name || 'unknown'}, requiresZyte: ${platform?.requiresZyte})`);
 
-        // Make Firecrawl request with AI extraction
-        const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            url: formattedUrl,
-            formats: ['markdown', 'links'],
-            jsonOptions: {
-              prompt: FSBO_EXTRACTION_PROMPT,
-              schema: FSBO_EXTRACTION_SCHEMA,
+        let listings: any[] = [];
+        let usedZyte = false;
+
+        // Check if this platform is known to require Zyte
+        const shouldTryZyteFirst = platform?.requiresZyte && zyteApiKey;
+
+        if (shouldTryZyteFirst) {
+          // For platforms known to block (Zillow, Redfin, etc.), try Zyte first
+          console.log(`[${platform?.name}] Using Zyte API directly (known blocking site)`);
+          const zyteResult = await scrapeWithZyte(formattedUrl, zyteApiKey!);
+          
+          if (zyteResult.success && zyteResult.html) {
+            usedZyte = true;
+            zyteUsed++;
+            // Parse HTML to extract listings (basic extraction from HTML)
+            listings = extractListingsFromHtml(zyteResult.html, formattedUrl);
+            console.log(`[Zyte] Extracted ${listings.length} listings from ${formattedUrl}`);
+          } else {
+            console.error(`[Zyte] Failed for ${formattedUrl}: ${zyteResult.error}`);
+            errors.push({ url: formattedUrl, error: `Zyte: ${zyteResult.error}` });
+            continue;
+          }
+        } else {
+          // Try Firecrawl first
+          const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${firecrawlApiKey}`,
+              'Content-Type': 'application/json',
             },
-            onlyMainContent: true,
-            waitFor: 3000, // Wait for dynamic content
-          }),
-        });
+            body: JSON.stringify({
+              url: formattedUrl,
+              formats: ['markdown', 'links'],
+              jsonOptions: {
+                prompt: FSBO_EXTRACTION_PROMPT,
+                schema: FSBO_EXTRACTION_SCHEMA,
+              },
+              onlyMainContent: true,
+              waitFor: 3000,
+            }),
+          });
 
-        const data = await response.json();
+          const data = await response.json();
 
-        if (!response.ok) {
-          console.error(`Firecrawl error for ${formattedUrl}:`, data);
-          errors.push({ url: formattedUrl, error: data.error || `HTTP ${response.status}` });
-          continue;
+          if (!response.ok) {
+            const errorMessage = data.error || `HTTP ${response.status}`;
+            console.error(`Firecrawl error for ${formattedUrl}:`, errorMessage);
+            
+            // Check if we should fallback to Zyte
+            if (isBlockedError(response.status, errorMessage) && zyteApiKey) {
+              console.log(`[Fallback] Firecrawl blocked, trying Zyte for ${formattedUrl}`);
+              
+              const zyteResult = await scrapeWithZyte(formattedUrl, zyteApiKey);
+              
+              if (zyteResult.success && zyteResult.html) {
+                usedZyte = true;
+                zyteUsed++;
+                listings = extractListingsFromHtml(zyteResult.html, formattedUrl);
+                console.log(`[Zyte Fallback] Extracted ${listings.length} listings from ${formattedUrl}`);
+              } else {
+                errors.push({ url: formattedUrl, error: `Both Firecrawl and Zyte failed: ${zyteResult.error}` });
+                continue;
+              }
+            } else if (isBlockedError(response.status, errorMessage) && !zyteApiKey) {
+              errors.push({ url: formattedUrl, error: `${errorMessage} (Zyte API not configured for fallback)` });
+              continue;
+            } else {
+              errors.push({ url: formattedUrl, error: errorMessage });
+              continue;
+            }
+          } else {
+            // Firecrawl succeeded
+            const extractedData = data.data?.json || data.json || {};
+            listings = extractedData.listings || [];
+          }
         }
-
-        // Extract listings from response
-        const extractedData = data.data?.json || data.json || {};
-        const listings = extractedData.listings || [];
         
         // Enrich each listing with source info
         for (const listing of listings) {
@@ -266,10 +443,11 @@ Deno.serve(async (req) => {
             source_url: formattedUrl,
             source_platform: platform?.name || 'unknown',
             scraped_at: new Date().toISOString(),
+            scraped_via: usedZyte ? 'zyte' : 'firecrawl',
           });
         }
 
-        console.log(`Found ${listings.length} listings from ${formattedUrl}`);
+        console.log(`Found ${listings.length} listings from ${formattedUrl} (via ${usedZyte ? 'Zyte' : 'Firecrawl'})`);
 
         // Rate limiting between requests
         if (urlsToScrape.length > 1) {
@@ -324,6 +502,8 @@ Deno.serve(async (req) => {
         listings: allListings,
         total: allListings.length,
         urls_scraped: urlsToScrape.length,
+        zyte_fallback_used: zyteUsed,
+        zyte_available: !!zyteApiKey,
         errors: errors.length > 0 ? errors : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
