@@ -429,9 +429,8 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             url: formattedUrl,
-            // Firecrawl expects formats to be a list of allowed strings.
-            // JSON extraction is configured via jsonOptions.
-            formats: ['markdown', 'links'],
+            // Include 'json' format when using jsonOptions for extraction
+            formats: ['markdown', 'links', 'json'],
             jsonOptions: {
               prompt: FSBO_EXTRACTION_PROMPT,
               schema: FSBO_EXTRACTION_SCHEMA,
