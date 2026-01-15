@@ -2191,6 +2191,13 @@ export type Database = {
             referencedRelation: "client_webhooks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "webhook_delivery_log_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "client_webhooks_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       webhook_integrations: {
@@ -2271,6 +2278,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_webhooks_safe: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          events: Json | null
+          failure_count: number | null
+          id: string | null
+          is_active: boolean | null
+          last_triggered_at: string | null
+          name: string | null
+          organization_id: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          events?: Json | null
+          failure_count?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name?: string | null
+          organization_id?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          events?: Json | null
+          failure_count?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name?: string | null
+          organization_id?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_webhooks_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "client_organizations"

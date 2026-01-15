@@ -35,14 +35,14 @@ export function ClientWebhooksManager({ organizations }: ClientWebhooksManagerPr
     events: ['lead_assigned'] as string[],
   });
 
-  // Fetch webhooks for selected org
+  // Fetch webhooks for selected org using safe view (excludes secret_hash)
   const { data: webhooks = [], isLoading } = useQuery({
     queryKey: ['client-webhooks', selectedOrg],
     queryFn: async () => {
       if (!selectedOrg) return [];
       const { data, error } = await supabase
-        .from('client_webhooks')
-        .select('*')
+        .from('client_webhooks_safe')
+        .select('id, organization_id, name, webhook_url, events, is_active, failure_count, last_triggered_at, created_at, created_by')
         .eq('organization_id', selectedOrg)
         .order('created_at', { ascending: false });
       if (error) throw error;
