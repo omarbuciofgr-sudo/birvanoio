@@ -1,6 +1,6 @@
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
-import ClientLogos from "@/components/landing/ClientLogos";
+
 import ProductDemo from "@/components/landing/ProductDemo";
 import CRMShowcase from "@/components/landing/CRMShowcase";
 import HowItWorks from "@/components/landing/HowItWorks";
@@ -23,7 +23,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <Hero />
-      <ClientLogos />
+      
       <ProductDemo />
       <CRMShowcase />
       <HowItWorks />
