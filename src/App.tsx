@@ -25,6 +25,7 @@ import ClientOrganizations from "./pages/admin/ClientOrganizations";
 import ScrapeJobs from "./pages/admin/ScrapeJobs";
 import ScrapedLeads from "./pages/admin/ScrapedLeads";
 import APISettings from "./pages/admin/APISettings";
+import ScraperSettings from "./pages/admin/ScraperSettings";
 import ClientLeads from "./pages/client/ClientLeads";
 import NotFound from "./pages/NotFound";
 
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />
               <Route path="/admin/scraped-leads" element={<ProtectedRoute><ScrapedLeads /></ProtectedRoute>} />
               <Route path="/admin/api-settings" element={<ProtectedRoute><APISettings /></ProtectedRoute>} />
+              <Route path="/admin/scraper-settings" element={<ProtectedRoute><ScraperSettings /></ProtectedRoute>} />
               <Route path="/client/leads" element={<ProtectedRoute><ClientLeads /></ProtectedRoute>} />
               <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
               <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
