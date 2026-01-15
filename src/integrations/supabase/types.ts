@@ -382,6 +382,54 @@ export type Database = {
           },
         ]
       }
+      conversion_events: {
+        Row: {
+          client_lead_id: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          lead_id: string | null
+          recorded_at: string
+          recorded_by: string | null
+          value_usd: number | null
+        }
+        Insert: {
+          client_lead_id?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          lead_id?: string | null
+          recorded_at?: string
+          recorded_by?: string | null
+          value_usd?: number | null
+        }
+        Update: {
+          client_lead_id?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          lead_id?: string | null
+          recorded_at?: string
+          recorded_by?: string | null
+          value_usd?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversion_events_client_lead_id_fkey"
+            columns: ["client_lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversion_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crawl_logs: {
         Row: {
           blocked_detected: boolean | null
@@ -580,6 +628,7 @@ export type Database = {
       enrichment_logs: {
         Row: {
           action: string
+          cost_usd: number | null
           created_at: string
           credits_used: number | null
           error_message: string | null
@@ -593,6 +642,7 @@ export type Database = {
         }
         Insert: {
           action: string
+          cost_usd?: number | null
           created_at?: string
           credits_used?: number | null
           error_message?: string | null
@@ -606,6 +656,7 @@ export type Database = {
         }
         Update: {
           action?: string
+          cost_usd?: number | null
           created_at?: string
           credits_used?: number | null
           error_message?: string | null
@@ -659,6 +710,104 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      enrichment_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          enrich_company: boolean | null
+          enrich_email: boolean | null
+          enrich_linkedin: boolean | null
+          enrich_phone: boolean | null
+          id: string
+          is_active: boolean | null
+          max_credits_per_lead: number | null
+          min_score: number | null
+          name: string
+          trigger_on: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enrich_company?: boolean | null
+          enrich_email?: boolean | null
+          enrich_linkedin?: boolean | null
+          enrich_phone?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          max_credits_per_lead?: number | null
+          min_score?: number | null
+          name: string
+          trigger_on?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enrich_company?: boolean | null
+          enrich_email?: boolean | null
+          enrich_linkedin?: boolean | null
+          enrich_phone?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          max_credits_per_lead?: number | null
+          min_score?: number | null
+          name?: string
+          trigger_on?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      intent_signals: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          detected_at: string
+          expires_at: string | null
+          id: string
+          is_processed: boolean | null
+          lead_id: string | null
+          signal_data: Json | null
+          signal_source: string | null
+          signal_type: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          detected_at?: string
+          expires_at?: string | null
+          id?: string
+          is_processed?: boolean | null
+          lead_id?: string | null
+          signal_data?: Json | null
+          signal_source?: string | null
+          signal_type: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          detected_at?: string
+          expires_at?: string | null
+          id?: string
+          is_processed?: boolean | null
+          lead_id?: string | null
+          signal_data?: Json | null
+          signal_source?: string | null
+          signal_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intent_signals_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       job_queue: {
         Row: {
@@ -800,6 +949,77 @@ export type Database = {
             columns: ["primary_lead_id"]
             isOneToOne: false
             referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_routing_rules: {
+        Row: {
+          assign_to_org: string | null
+          assign_to_user: string | null
+          auto_enrich: boolean | null
+          created_at: string
+          created_by: string | null
+          criteria_industry: string[] | null
+          criteria_lead_type: string[] | null
+          criteria_max_score: number | null
+          criteria_min_score: number | null
+          criteria_state: string[] | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          priority: number | null
+          send_webhook: boolean | null
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          assign_to_org?: string | null
+          assign_to_user?: string | null
+          auto_enrich?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          criteria_industry?: string[] | null
+          criteria_lead_type?: string[] | null
+          criteria_max_score?: number | null
+          criteria_min_score?: number | null
+          criteria_state?: string[] | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          priority?: number | null
+          send_webhook?: boolean | null
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          assign_to_org?: string | null
+          assign_to_user?: string | null
+          auto_enrich?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          criteria_industry?: string[] | null
+          criteria_lead_type?: string[] | null
+          criteria_max_score?: number | null
+          criteria_min_score?: number | null
+          criteria_state?: string[] | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          priority?: number | null
+          send_webhook?: boolean | null
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_routing_rules_assign_to_org_fkey"
+            columns: ["assign_to_org"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1019,6 +1239,93 @@ export type Database = {
           },
         ]
       }
+      scheduled_scrape_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          input_method: string | null
+          is_active: boolean | null
+          last_run_at: string | null
+          last_run_job_id: string | null
+          max_results: number | null
+          name: string
+          next_run_at: string | null
+          run_count: number | null
+          schedule_day_of_month: number | null
+          schedule_day_of_week: number | null
+          schedule_hour: number | null
+          schedule_type: string
+          schema_template_id: string | null
+          search_location: string | null
+          search_query: string | null
+          target_urls: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          input_method?: string | null
+          is_active?: boolean | null
+          last_run_at?: string | null
+          last_run_job_id?: string | null
+          max_results?: number | null
+          name: string
+          next_run_at?: string | null
+          run_count?: number | null
+          schedule_day_of_month?: number | null
+          schedule_day_of_week?: number | null
+          schedule_hour?: number | null
+          schedule_type?: string
+          schema_template_id?: string | null
+          search_location?: string | null
+          search_query?: string | null
+          target_urls?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          input_method?: string | null
+          is_active?: boolean | null
+          last_run_at?: string | null
+          last_run_job_id?: string | null
+          max_results?: number | null
+          name?: string
+          next_run_at?: string | null
+          run_count?: number | null
+          schedule_day_of_month?: number | null
+          schedule_day_of_week?: number | null
+          schedule_hour?: number | null
+          schedule_type?: string
+          schema_template_id?: string | null
+          search_location?: string | null
+          search_query?: string | null
+          target_urls?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_scrape_jobs_last_run_job_id_fkey"
+            columns: ["last_run_job_id"]
+            isOneToOne: false
+            referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_scrape_jobs_schema_template_id_fkey"
+            columns: ["schema_template_id"]
+            isOneToOne: false
+            referencedRelation: "schema_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schema_templates: {
         Row: {
           created_at: string
@@ -1165,6 +1472,7 @@ export type Database = {
           address_evidence_snippet: string | null
           address_evidence_type: string | null
           address_source_url: string | null
+          ai_insights: string | null
           all_emails: Json | null
           all_phones: Json | null
           assigned_at: string | null
@@ -1193,8 +1501,11 @@ export type Database = {
           enrichment_providers_used: Json | null
           full_name: string | null
           id: string
+          intent_signals_count: number | null
           is_suppressed: boolean | null
           job_id: string | null
+          latest_intent_signal: string | null
+          lead_score: number | null
           lead_type: string | null
           linkedin_search_url: string | null
           name_evidence_snippet: string | null
@@ -1211,15 +1522,19 @@ export type Database = {
           phone_verification_method: string | null
           phone_verification_result: Json | null
           phone_verified_at: string | null
+          priority: string | null
           qc_flag: string | null
           qc_notes: string | null
+          recommended_action: string | null
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           schema_data: Json | null
           schema_evidence: Json | null
           schema_template_id: string | null
+          score_breakdown: Json | null
           scraped_at: string | null
+          source_type: string | null
           source_url: string | null
           status: Database["public"]["Enums"]["scraped_lead_status"]
           suppression_reason: string | null
@@ -1230,6 +1545,7 @@ export type Database = {
           address_evidence_snippet?: string | null
           address_evidence_type?: string | null
           address_source_url?: string | null
+          ai_insights?: string | null
           all_emails?: Json | null
           all_phones?: Json | null
           assigned_at?: string | null
@@ -1258,8 +1574,11 @@ export type Database = {
           enrichment_providers_used?: Json | null
           full_name?: string | null
           id?: string
+          intent_signals_count?: number | null
           is_suppressed?: boolean | null
           job_id?: string | null
+          latest_intent_signal?: string | null
+          lead_score?: number | null
           lead_type?: string | null
           linkedin_search_url?: string | null
           name_evidence_snippet?: string | null
@@ -1276,15 +1595,19 @@ export type Database = {
           phone_verification_method?: string | null
           phone_verification_result?: Json | null
           phone_verified_at?: string | null
+          priority?: string | null
           qc_flag?: string | null
           qc_notes?: string | null
+          recommended_action?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           schema_data?: Json | null
           schema_evidence?: Json | null
           schema_template_id?: string | null
+          score_breakdown?: Json | null
           scraped_at?: string | null
+          source_type?: string | null
           source_url?: string | null
           status?: Database["public"]["Enums"]["scraped_lead_status"]
           suppression_reason?: string | null
@@ -1295,6 +1618,7 @@ export type Database = {
           address_evidence_snippet?: string | null
           address_evidence_type?: string | null
           address_source_url?: string | null
+          ai_insights?: string | null
           all_emails?: Json | null
           all_phones?: Json | null
           assigned_at?: string | null
@@ -1323,8 +1647,11 @@ export type Database = {
           enrichment_providers_used?: Json | null
           full_name?: string | null
           id?: string
+          intent_signals_count?: number | null
           is_suppressed?: boolean | null
           job_id?: string | null
+          latest_intent_signal?: string | null
+          lead_score?: number | null
           lead_type?: string | null
           linkedin_search_url?: string | null
           name_evidence_snippet?: string | null
@@ -1341,15 +1668,19 @@ export type Database = {
           phone_verification_method?: string | null
           phone_verification_result?: Json | null
           phone_verified_at?: string | null
+          priority?: string | null
           qc_flag?: string | null
           qc_notes?: string | null
+          recommended_action?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           schema_data?: Json | null
           schema_evidence?: Json | null
           schema_template_id?: string | null
+          score_breakdown?: Json | null
           scraped_at?: string | null
+          source_type?: string | null
           source_url?: string | null
           status?: Database["public"]["Enums"]["scraped_lead_status"]
           suppression_reason?: string | null
@@ -1504,6 +1835,63 @@ export type Database = {
           targets_failed?: number | null
           targets_processed?: number | null
           targets_success?: number | null
+        }
+        Relationships: []
+      }
+      source_analytics: {
+        Row: {
+          avg_confidence_score: number | null
+          avg_lead_score: number | null
+          cost_per_conversion: number | null
+          cost_per_lead: number | null
+          created_at: string
+          id: string
+          leads_assigned: number | null
+          leads_converted: number | null
+          leads_enriched: number | null
+          leads_generated: number | null
+          leads_verified: number | null
+          period_end: string
+          period_start: string
+          source_identifier: string | null
+          source_type: string
+          total_cost_usd: number | null
+        }
+        Insert: {
+          avg_confidence_score?: number | null
+          avg_lead_score?: number | null
+          cost_per_conversion?: number | null
+          cost_per_lead?: number | null
+          created_at?: string
+          id?: string
+          leads_assigned?: number | null
+          leads_converted?: number | null
+          leads_enriched?: number | null
+          leads_generated?: number | null
+          leads_verified?: number | null
+          period_end: string
+          period_start: string
+          source_identifier?: string | null
+          source_type: string
+          total_cost_usd?: number | null
+        }
+        Update: {
+          avg_confidence_score?: number | null
+          avg_lead_score?: number | null
+          cost_per_conversion?: number | null
+          cost_per_lead?: number | null
+          created_at?: string
+          id?: string
+          leads_assigned?: number | null
+          leads_converted?: number | null
+          leads_enriched?: number | null
+          leads_generated?: number | null
+          leads_verified?: number | null
+          period_end?: string
+          period_start?: string
+          source_identifier?: string | null
+          source_type?: string
+          total_cost_usd?: number | null
         }
         Relationships: []
       }
