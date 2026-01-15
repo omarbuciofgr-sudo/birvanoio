@@ -204,7 +204,7 @@ When you successfully capture their name, email, or phone, include it in your re
   } catch (error: any) {
     console.error("AI chat error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to process message" }),
+      JSON.stringify({ error: "Failed to process message. Please try again." }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }

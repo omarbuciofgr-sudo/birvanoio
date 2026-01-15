@@ -795,7 +795,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Prospect search error:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Search failed' }),
+      JSON.stringify({ success: false, error: 'Search failed. Please check your parameters and try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
