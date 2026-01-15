@@ -85,30 +85,106 @@ function detectPlatform(url: string): { name: string; ownerFilter: string | null
 }
 
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
-  // Format location: lowercase, replace spaces with hyphens, remove commas
+  // Format location for URL paths: lowercase, remove commas, replace spaces with hyphens
   const formattedLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '-');
+  // Format for Trulia: uses underscores
+  const truliaLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_');
   
   switch (platform) {
     case 'zillow':
-      return listingType === 'sale'
-        ? `https://www.zillow.com/${formattedLocation}/fsbo/`
-        : `https://www.zillow.com/${formattedLocation}/rentals/`;
+      // Zillow uses searchQueryState with JSON params for FSBO/FRBO filtering
+      if (listingType === 'sale') {
+        // FSBO filter: fsba=false excludes agent listings
+        const searchState = {
+          isMapVisible: true,
+          filterState: {
+            sort: { value: "globalrelevanceex" },
+            nc: { value: false },      // new construction
+            fore: { value: false },    // foreclosures
+            auc: { value: false },     // auctions
+            fsba: { value: false },    // for sale by agent (exclude)
+            fsbo: { value: true }      // for sale by owner (include)
+          },
+          isListVisible: true,
+          usersSearchTerm: location
+        };
+        return `https://www.zillow.com/${formattedLocation}/fsbo/?searchQueryState=${encodeURIComponent(JSON.stringify(searchState))}`;
+      } else {
+        // FRBO filter: att="by owner"
+        const searchState = {
+          isMapVisible: true,
+          filterState: {
+            nc: { value: false },
+            fore: { value: false },
+            auc: { value: false },
+            fsba: { value: false },
+            fr: { value: true },         // for rent
+            fsbo: { value: false },
+            cmsn: { value: false },
+            att: { value: "by owner" }   // by owner filter
+          },
+          isListVisible: true,
+          usersSearchTerm: location
+        };
+        return `https://www.zillow.com/${formattedLocation}/rentals/?searchQueryState=${encodeURIComponent(JSON.stringify(searchState))}`;
+      }
+    
     case 'fsbo':
-      return `https://www.fsbo.com/search/?location=${encodeURIComponent(location)}`;
+      // ForSaleByOwner.com: /search/list/{city}
+      const fsboCity = location.split(',')[0].trim().toLowerCase().replace(/\s+/g, '-');
+      return `https://www.forsalebyowner.com/search/list/${fsboCity}`;
+    
     case 'trulia':
-      const truliaLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_');
+      // Trulia: /for_sale/{location}/fsbo_lt/ or /for_rent/{location}/
       return listingType === 'sale'
-        ? `https://www.trulia.com/${truliaLocation}/fsbo/`
+        ? `https://www.trulia.com/for_sale/${truliaLocation}/fsbo_lt/`
         : `https://www.trulia.com/for_rent/${truliaLocation}/`;
+    
     case 'redfin':
-      return `https://www.redfin.com/city/search?q=${encodeURIComponent(location)}`;
+      // Redfin: /stateCode/city/filter/include=fsbo
+      // Format: /IL/Chicago or /TX/Houston
+      const parts = location.split(',').map(p => p.trim());
+      const city = parts[0].replace(/\s+/g, '-');
+      const state = parts[1] || '';
+      // Try to get state abbreviation from common states
+      const stateAbbrev = getStateAbbreviation(state);
+      return `https://www.redfin.com/${stateAbbrev}/${city}/filter/include=fsbo`;
+    
     case 'hotpads':
-      return `https://hotpads.com/${formattedLocation}/apartments-for-rent`;
+      // HotPads: /{city-state}/for-rent-by-owner?isListedByOwner=true
+      return `https://hotpads.com/${formattedLocation}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
+    
     case 'apartments':
-      return `https://www.apartments.com/${formattedLocation}/`;
+      // Apartments.com: /{location}/for-rent-by-owner/
+      return `https://www.apartments.com/${formattedLocation}/for-rent-by-owner/`;
+    
     default:
       return null;
   }
+}
+
+// Helper to get state abbreviation
+function getStateAbbreviation(state: string): string {
+  const stateMap: Record<string, string> = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+    'district of columbia': 'DC'
+  };
+  
+  const normalized = state.toLowerCase().trim();
+  // If already an abbreviation (2 chars), return uppercase
+  if (normalized.length === 2) {
+    return normalized.toUpperCase();
+  }
+  return stateMap[normalized] || normalized.toUpperCase().slice(0, 2);
 }
 
 // Zyte API scraping function with browser rendering
