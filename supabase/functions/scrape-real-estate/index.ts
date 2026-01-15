@@ -85,25 +85,27 @@ function detectPlatform(url: string): { name: string; ownerFilter: string | null
 }
 
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
-  const encodedLocation = encodeURIComponent(location);
+  // Format location: lowercase, replace spaces with hyphens, remove commas
+  const formattedLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '-');
   
   switch (platform) {
     case 'zillow':
       return listingType === 'sale'
-        ? `https://www.zillow.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/fsbo/`
-        : `https://www.zillow.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/rentals/`;
+        ? `https://www.zillow.com/${formattedLocation}/fsbo/`
+        : `https://www.zillow.com/${formattedLocation}/rentals/`;
     case 'fsbo':
-      return `https://www.fsbo.com/search/?location=${encodedLocation}`;
+      return `https://www.fsbo.com/search/?location=${encodeURIComponent(location)}`;
     case 'trulia':
+      const truliaLocation = location.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_');
       return listingType === 'sale'
-        ? `https://www.trulia.com/${encodedLocation.toLowerCase().replace(/\s+/g, '_')}/fsbo/`
-        : `https://www.trulia.com/for_rent/${encodedLocation.toLowerCase().replace(/\s+/g, '_')}/`;
+        ? `https://www.trulia.com/${truliaLocation}/fsbo/`
+        : `https://www.trulia.com/for_rent/${truliaLocation}/`;
     case 'redfin':
-      return `https://www.redfin.com/city/search?q=${encodedLocation}`;
+      return `https://www.redfin.com/city/search?q=${encodeURIComponent(location)}`;
     case 'hotpads':
-      return `https://hotpads.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/apartments-for-rent`;
+      return `https://hotpads.com/${formattedLocation}/apartments-for-rent`;
     case 'apartments':
-      return `https://www.apartments.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/`;
+      return `https://www.apartments.com/${formattedLocation}/`;
     default:
       return null;
   }
