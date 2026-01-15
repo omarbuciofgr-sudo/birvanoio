@@ -1,9 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { z } from 'https://esm.sh/zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const enrichRequestSchema = z.object({
+  lead_id: z.string().uuid().optional(),
+  lead_ids: z.array(z.string().uuid()).max(50).optional(),
+  enrich_company: z.boolean().optional().default(true),
+}).refine(
+  data => data.lead_id || (data.lead_ids && data.lead_ids.length > 0),
+  { message: 'Either lead_id or lead_ids must be provided' }
+);
 
 interface EnrichmentResult {
   full_name?: string;
@@ -640,17 +651,23 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Parse and validate input
     const body = await req.json().catch(() => ({}));
-    const { lead_id, lead_ids, enrich_company = true } = body;
-
-    const idsToProcess = lead_ids || (lead_id ? [lead_id] : []);
-
-    if (idsToProcess.length === 0) {
+    const parseResult = enrichRequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No lead IDs provided' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Invalid request format',
+          validation_errors: parseResult.error.errors.map(e => e.message)
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    const { lead_id, lead_ids, enrich_company } = parseResult.data;
+    const idsToProcess = lead_ids || (lead_id ? [lead_id] : []);
 
     // Check which providers are enabled
     const { data: providersConfig } = await supabase
@@ -961,7 +978,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in enrich-lead:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ success: false, error: 'Failed to enrich lead data. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -1,9 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { z } from 'https://esm.sh/zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const routingRequestSchema = z.object({
+  lead_id: z.string().uuid().optional(),
+  lead_ids: z.array(z.string().uuid()).max(100).optional(),
+  dry_run: z.boolean().optional().default(false),
+}).refine(
+  data => data.lead_id || (data.lead_ids && data.lead_ids.length > 0),
+  { message: 'Either lead_id or lead_ids must be provided' }
+);
 
 interface RoutingRule {
   id: string;
@@ -131,17 +142,23 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    // Parse and validate input
     const body = await req.json().catch(() => ({}));
-    const { lead_id, lead_ids, dry_run = false } = body;
-
-    const idsToProcess = lead_ids || (lead_id ? [lead_id] : []);
-
-    if (idsToProcess.length === 0) {
+    const parseResult = routingRequestSchema.safeParse(body);
+    
+    if (!parseResult.success) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No lead IDs provided' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Invalid request format',
+          validation_errors: parseResult.error.errors.map(e => e.message)
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    const { lead_id, lead_ids, dry_run } = parseResult.data;
+    const idsToProcess = lead_ids || (lead_id ? [lead_id] : []);
 
     // Fetch active routing rules ordered by priority
     const { data: rules, error: rulesError } = await supabase
@@ -248,7 +265,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in apply-routing-rules:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ success: false, error: 'Failed to process routing rules. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
