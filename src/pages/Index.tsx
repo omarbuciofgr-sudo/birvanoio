@@ -9,7 +9,6 @@ import Services from "@/components/landing/Services";
 import ComparisonTable from "@/components/landing/ComparisonTable";
 import ROICalculator from "@/components/landing/ROICalculator";
 import Pricing from "@/components/landing/Pricing";
-import TrustBadges from "@/components/landing/TrustBadges";
 import Testimonials from "@/components/landing/Testimonials";
 import FAQ from "@/components/landing/FAQ";
 import About from "@/components/landing/About";
@@ -32,7 +31,6 @@ const Index = () => {
       <ComparisonTable />
       <ROICalculator />
       <Pricing />
-      <TrustBadges />
       <Testimonials />
       <FAQ />
       <About />
