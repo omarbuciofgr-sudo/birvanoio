@@ -95,8 +95,51 @@ function safeDecodeURIComponent(value: string): string {
 
 function parseCityState(location: string): { city: string; state: string } {
   const decoded = safeDecodeURIComponent(location).trim();
-  const parts = decoded.split(',').map((p) => p.trim()).filter(Boolean);
-  return { city: parts[0] || decoded, state: parts[1] || '' };
+
+  // Prefer explicit "City, State" inputs
+  const commaParts = decoded.split(',').map((p) => p.trim()).filter(Boolean);
+  if (commaParts.length >= 2) {
+    return { city: commaParts[0], state: commaParts[1] };
+  }
+
+  // Also support "City State" / "City ST" (no comma)
+  const tokens = decoded.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return { city: decoded, state: '' };
+
+  const stateMap: Record<string, string> = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+    'district of columbia': 'DC',
+  };
+
+  const last = tokens[tokens.length - 1];
+  const lastTwo = tokens.length >= 2 ? `${tokens[tokens.length - 2]} ${tokens[tokens.length - 1]}` : '';
+
+  const lastNorm = last.toLowerCase();
+  const lastTwoNorm = lastTwo.toLowerCase();
+
+  // 1) Two-letter abbreviations like "TX"
+  if (/^[A-Za-z]{2}$/.test(last)) {
+    return { city: tokens.slice(0, -1).join(' '), state: last.toUpperCase() };
+  }
+
+  // 2) Full state name (including two-word names)
+  if (stateMap[lastTwoNorm]) {
+    return { city: tokens.slice(0, -2).join(' '), state: lastTwoNorm };
+  }
+  if (stateMap[lastNorm]) {
+    return { city: tokens.slice(0, -1).join(' '), state: lastNorm };
+  }
+
+  return { city: decoded, state: '' };
 }
 
 function buildCityStateSlug(location: string): string {

@@ -147,10 +147,45 @@ function getStateAbbreviation(state: string): string {
     pennsylvania: 'pa', 'rhode island': 'ri', 'south carolina': 'sc', 'south dakota': 'sd',
     tennessee: 'tn', texas: 'tx', utah: 'ut', vermont: 'vt', virginia: 'va', washington: 'wa',
     'west virginia': 'wv', wisconsin: 'wi', wyoming: 'wy',
+    'district of columbia': 'dc',
   };
 
-  if (s.length === 2) return s;
+  if (/^[a-z]{2}$/.test(s)) return s;
   return map[s] || s.slice(0, 2);
+}
+
+function parseCityState(location: string): { city: string; state: string } {
+  const loc = normalizeLocation(location);
+
+  // Prefer explicit "City, State" inputs
+  const commaParts = loc.split(',').map((p) => p.trim()).filter(Boolean);
+  if (commaParts.length >= 2) {
+    return { city: commaParts[0], state: commaParts[1] };
+  }
+
+  // Also support "City State" / "City ST" (no comma)
+  const tokens = loc.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return { city: loc, state: '' };
+
+  const last = tokens[tokens.length - 1];
+  const lastTwo = tokens.length >= 2 ? `${tokens[tokens.length - 2]} ${tokens[tokens.length - 1]}` : '';
+
+  if (/^[A-Za-z]{2}$/.test(last)) {
+    return { city: tokens.slice(0, -1).join(' '), state: last.toUpperCase() };
+  }
+
+  const lastTwoNorm = lastTwo.toLowerCase();
+  const lastNorm = last.toLowerCase();
+
+  // If it's a known full state name (including two-word names)
+  if (getStateAbbreviation(lastTwoNorm) !== lastTwoNorm.slice(0, 2)) {
+    return { city: tokens.slice(0, -2).join(' '), state: lastTwoNorm };
+  }
+  if (getStateAbbreviation(lastNorm) !== lastNorm.slice(0, 2)) {
+    return { city: tokens.slice(0, -1).join(' '), state: lastNorm };
+  }
+
+  return { city: loc, state: '' };
 }
 
 function toHyphenSlug(input: string): string {
@@ -164,17 +199,16 @@ function toHyphenSlug(input: string): string {
 }
 
 function hotpadsLocationSlug(location: string): string {
-  const loc = normalizeLocation(location);
+  const { city, state } = parseCityState(location);
+  const citySlug = toHyphenSlug(city);
 
-  // HotPads commonly uses city-state format like: "houston-tx"
-  const parts = loc.split(',').map(p => p.trim()).filter(Boolean);
-  if (parts.length >= 2) {
-    const city = parts[0];
-    const state = parts[1];
-    return `${toHyphenSlug(city)}-${getStateAbbreviation(state)}`;
+  // HotPads strongly prefers city-state like "houston-tx".
+  if (state) {
+    const abbrev = getStateAbbreviation(state);
+    return `${citySlug}-${abbrev}`;
   }
 
-  return toHyphenSlug(loc);
+  return toHyphenSlug(normalizeLocation(location));
 }
 
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
@@ -195,9 +229,10 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
     case 'redfin':
       return `https://www.redfin.com/city/search?q=${encodedLocation}`;
     case 'hotpads': {
-      // IMPORTANT: HotPads expects a path slug (not URL-encoded commas/spaces), e.g. "houston-tx"
+      // IMPORTANT: HotPads expects a path slug (not URL-encoded commas/spaces), e.g. "houston-tx".
+      // Also: for an owner-focused view, use /for-rent-by-owner.
       const slug = hotpadsLocationSlug(normalizedLocation);
-      return `https://hotpads.com/${slug}/apartments-for-rent`;
+      return `https://hotpads.com/${slug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
     }
     case 'apartments':
       return `https://www.apartments.com/${encodedLocation.toLowerCase().replace(/\s+/g, '-')}/`;
