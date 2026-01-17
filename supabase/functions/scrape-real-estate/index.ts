@@ -5,88 +5,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Supported real estate platforms
+// Supported real estate platforms with scraping strategies
 const SUPPORTED_PLATFORMS = [
-  { name: 'zillow', pattern: /zillow\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
-  { name: 'apartments', pattern: /apartments\.com/i, ownerFilter: 'owner', requiresZyte: false },
-  { name: 'hotpads', pattern: /hotpads\.com/i, ownerFilter: 'owner', requiresZyte: false },
-  { name: 'fsbo', pattern: /fsbo\.com/i, ownerFilter: null, requiresZyte: false },
-  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
-  { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
-  { name: 'craigslist', pattern: /craigslist\.(org|com)/i, ownerFilter: null, requiresZyte: false },
-  { name: 'facebook', pattern: /facebook\.com\/marketplace/i, ownerFilter: null, requiresZyte: true },
-  { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo', requiresZyte: true },
+  { name: 'zillow', pattern: /zillow\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'zillow' },
+  { name: 'apartments', pattern: /apartments\.com/i, ownerFilter: 'owner', requiresZyte: false, strategy: 'apartments' },
+  { name: 'hotpads', pattern: /hotpads\.com/i, ownerFilter: 'owner', requiresZyte: true, strategy: 'hotpads' },
+  { name: 'fsbo', pattern: /fsbo\.com/i, ownerFilter: null, requiresZyte: false, strategy: 'generic' },
+  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'generic' },
+  { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'generic' },
+  { name: 'craigslist', pattern: /craigslist\.(org|com)/i, ownerFilter: null, requiresZyte: false, strategy: 'generic' },
+  { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'generic' },
 ];
 
-// FSBO/FRBO extraction schema
-const FSBO_EXTRACTION_SCHEMA = {
-  type: 'object',
-  properties: {
-    listings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          address: { type: 'string', description: 'Full property address' },
-          bedrooms: { type: 'number', description: 'Number of bedrooms' },
-          bathrooms: { type: 'number', description: 'Number of bathrooms' },
-          price: { type: 'string', description: 'Listing price or rent amount with $ symbol' },
-          days_on_market: { type: 'number', description: 'Days listed or time on market' },
-          favorites_count: { type: 'number', description: 'Number of saves/favorites/likes' },
-          views_count: { type: 'number', description: 'Number of views' },
-          listing_type: { type: 'string', description: 'for_sale, for_rent, fsbo, frbo' },
-          property_type: { type: 'string', description: 'house, condo, apartment, townhouse' },
-          square_feet: { type: 'number', description: 'Square footage' },
-          year_built: { type: 'number', description: 'Year built' },
-          owner_name: { type: 'string', description: 'Property owner or landlord name' },
-          owner_phone: { type: 'string', description: 'Owner phone number' },
-          owner_email: { type: 'string', description: 'Owner email address' },
-          listing_url: { type: 'string', description: 'Direct URL to this listing' },
-          listing_id: { type: 'string', description: 'Unique listing identifier' },
-          description: { type: 'string', description: 'Listing description (first 500 chars)' },
-        },
-      },
-    },
-  },
+// State abbreviation mapping
+const STATE_MAP: Record<string, string> = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+  'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+  'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+  'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+  'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+  'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+  'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+  'district of columbia': 'DC',
 };
 
-// AI prompt for extracting FSBO/FRBO listings
-const FSBO_EXTRACTION_PROMPT = `Extract all For Sale By Owner (FSBO) and For Rent By Owner (FRBO) property listings from this page.
-
-For EACH listing found, extract:
-- Full property address (street, city, state, zip)
-- Number of bedrooms (bed count)
-- Number of bathrooms (bath count)  
-- Price or monthly rent (include $ symbol)
-- Days on market (how long listed)
-- Number of favorites/saves/hearts
-- Number of views
-- Listing type (for_sale, for_rent, fsbo, frbo)
-- Property type (house, condo, apartment, townhouse, multi-family)
-- Square footage
-- Year built if shown
-- Owner/landlord name (if shown, not agent name)
-- Owner phone number (if shown)
-- Owner email (if shown)
-- Direct link to the listing
-- Listing ID or reference number
-
-IMPORTANT: Only extract listings where the seller/landlord is the OWNER, not a real estate agent or property manager. Look for keywords like "FSBO", "For Sale By Owner", "Owner", "Landlord", "No Agent", "Private Sale", "For Rent By Owner".
-
-Return empty values for fields not found on the page.`;
-
-function detectPlatform(url: string): { name: string; ownerFilter: string | null; requiresZyte: boolean } | null {
-  for (const platform of SUPPORTED_PLATFORMS) {
-    if (platform.pattern.test(url)) {
-      return { name: platform.name, ownerFilter: platform.ownerFilter, requiresZyte: platform.requiresZyte };
-    }
-  }
-  return null;
+function getStateAbbreviation(state: string): string {
+  const normalized = state.toLowerCase().trim();
+  if (normalized.length === 2) return normalized.toUpperCase();
+  return STATE_MAP[normalized] || normalized.toUpperCase().slice(0, 2);
 }
 
 function safeDecodeURIComponent(value: string): string {
   try {
-    // Only decode if it looks encoded; otherwise leave as-is
     return /%[0-9A-Fa-f]{2}/.test(value) ? decodeURIComponent(value) : value;
   } catch {
     return value;
@@ -95,47 +48,29 @@ function safeDecodeURIComponent(value: string): string {
 
 function parseCityState(location: string): { city: string; state: string } {
   const decoded = safeDecodeURIComponent(location).trim();
-
-  // Prefer explicit "City, State" inputs
   const commaParts = decoded.split(',').map((p) => p.trim()).filter(Boolean);
+  
   if (commaParts.length >= 2) {
     return { city: commaParts[0], state: commaParts[1] };
   }
 
-  // Also support "City State" / "City ST" (no comma)
   const tokens = decoded.split(/\s+/).filter(Boolean);
   if (tokens.length < 2) return { city: decoded, state: '' };
-
-  const stateMap: Record<string, string> = {
-    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
-    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
-    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
-    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
-    'district of columbia': 'DC',
-  };
 
   const last = tokens[tokens.length - 1];
   const lastTwo = tokens.length >= 2 ? `${tokens[tokens.length - 2]} ${tokens[tokens.length - 1]}` : '';
 
-  const lastNorm = last.toLowerCase();
-  const lastTwoNorm = lastTwo.toLowerCase();
-
-  // 1) Two-letter abbreviations like "TX"
   if (/^[A-Za-z]{2}$/.test(last)) {
     return { city: tokens.slice(0, -1).join(' '), state: last.toUpperCase() };
   }
 
-  // 2) Full state name (including two-word names)
-  if (stateMap[lastTwoNorm]) {
+  const lastTwoNorm = lastTwo.toLowerCase();
+  const lastNorm = last.toLowerCase();
+
+  if (STATE_MAP[lastTwoNorm]) {
     return { city: tokens.slice(0, -2).join(' '), state: lastTwoNorm };
   }
-  if (stateMap[lastNorm]) {
+  if (STATE_MAP[lastNorm]) {
     return { city: tokens.slice(0, -1).join(' '), state: lastNorm };
   }
 
@@ -155,131 +90,70 @@ function normalizeForMatch(value: string): string {
 
 function listingMatchesLocation(listingAddress: unknown, expectedCity: string, expectedStateAbbrev?: string): boolean {
   if (typeof listingAddress !== 'string') return false;
-
   const addr = normalizeForMatch(listingAddress);
   const city = normalizeForMatch(expectedCity);
-
-  // If the city isn't even present, it's almost certainly the wrong market.
   if (city && !addr.includes(city)) return false;
-
   if (expectedStateAbbrev) {
-    // Match " TX " or ", TX" or " TX," or end-of-string. Keep it loose but safe.
     const st = expectedStateAbbrev.toUpperCase();
     const stateRe = new RegExp(`(^|[^A-Z])${st}([^A-Z]|$)`);
     if (!stateRe.test(listingAddress.toUpperCase())) return false;
   }
-
   return true;
+}
+
+function cleanPhone(phone: string | null | undefined): string {
+  if (!phone) return '';
+  return phone.replace(/[^0-9+]/g, '').replace(/^[-=]+/, '');
 }
 
 function buildSearchUrl(platform: string, location: string, listingType: 'sale' | 'rent'): string | null {
   const decodedLocation = safeDecodeURIComponent(location);
-
-  // Default: lowercase, remove commas, replace spaces with hyphens (kept for platforms that accept full state names)
   const formattedLocation = decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '-');
-  // Trulia: uses underscores
-  const truliaLocation = decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_');
-  // City-state abbreviation slug (e.g. houston-tx)
   const cityStateSlug = buildCityStateSlug(decodedLocation);
 
   switch (platform) {
     case 'zillow':
-      // Zillow uses searchQueryState with JSON params for FSBO/FRBO filtering
       if (listingType === 'sale') {
-        const searchState = {
-          isMapVisible: true,
-          filterState: {
-            sort: { value: 'globalrelevanceex' },
-            nc: { value: false },
-            fore: { value: false },
-            auc: { value: false },
-            fsba: { value: false },
-            fsbo: { value: true },
-          },
-          isListVisible: true,
-          usersSearchTerm: decodedLocation,
-        };
-        return `https://www.zillow.com/${formattedLocation}/fsbo/?searchQueryState=${encodeURIComponent(JSON.stringify(searchState))}`;
+        return `https://www.zillow.com/${formattedLocation}/fsbo/`;
       } else {
-        const searchState = {
-          isMapVisible: true,
-          filterState: {
-            nc: { value: false },
-            fore: { value: false },
-            auc: { value: false },
-            fsba: { value: false },
-            fr: { value: true },
-            fsbo: { value: false },
-            cmsn: { value: false },
-            att: { value: 'by owner' },
-          },
-          isListVisible: true,
-          usersSearchTerm: decodedLocation,
-        };
-        return `https://www.zillow.com/${formattedLocation}/rentals/?searchQueryState=${encodeURIComponent(JSON.stringify(searchState))}`;
+        return `https://www.zillow.com/homes/for_rent/${formattedLocation}/`;
       }
-
     case 'fsbo': {
-      // ForSaleByOwner.com: /search/list/{city}
       const { city } = parseCityState(decodedLocation);
       const fsboCity = city.trim().toLowerCase().replace(/\s+/g, '-');
       return `https://www.forsalebyowner.com/search/list/${fsboCity}`;
     }
-
     case 'trulia':
       return listingType === 'sale'
-        ? `https://www.trulia.com/for_sale/${truliaLocation}/fsbo_lt/`
-        : `https://www.trulia.com/for_rent/${truliaLocation}/`;
-
+        ? `https://www.trulia.com/for_sale/${decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_')}/fsbo_lt/`
+        : `https://www.trulia.com/for_rent/${decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_')}/`;
     case 'redfin': {
-      // Redfin: /{STATE}/{City}/filter/include=fsbo
       const { city, state } = parseCityState(decodedLocation);
       const cityPath = city.replace(/\s+/g, '-');
       const stateAbbrev = getStateAbbreviation(state || '');
       return `https://www.redfin.com/${stateAbbrev}/${cityPath}/filter/include=fsbo`;
     }
-
     case 'hotpads':
-      // HotPads is strict about city/state format; prefer city-stateAbbrev (houston-tx) to avoid 400s
       return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
-
     case 'apartments':
-      // Apartments.com also commonly uses city-stateAbbrev slugs
       return `https://www.apartments.com/${cityStateSlug}/for-rent-by-owner/`;
-
     default:
       return null;
   }
 }
 
-// Helper to get state abbreviation
-function getStateAbbreviation(state: string): string {
-  const stateMap: Record<string, string> = {
-    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
-    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
-    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
-    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
-    'district of columbia': 'DC'
-  };
-  
-  const normalized = state.toLowerCase().trim();
-  // If already an abbreviation (2 chars), return uppercase
-  if (normalized.length === 2) {
-    return normalized.toUpperCase();
+function detectPlatform(url: string): { name: string; ownerFilter: string | null; requiresZyte: boolean; strategy: string } | null {
+  for (const platform of SUPPORTED_PLATFORMS) {
+    if (platform.pattern.test(url)) {
+      return { name: platform.name, ownerFilter: platform.ownerFilter, requiresZyte: platform.requiresZyte, strategy: platform.strategy };
+    }
   }
-  return stateMap[normalized] || normalized.toUpperCase().slice(0, 2);
+  return null;
 }
 
-// Zyte API scraping function with browser rendering
+// Scrape using Zyte API with browser rendering
 async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: string; success: boolean; error?: string }> {
-  console.log(`[Zyte] Attempting to scrape: ${url}`);
-  
+  console.log(`[Zyte] Scraping: ${url}`);
   try {
     const response = await fetch('https://api.zyte.com/v1/extract', {
       method: 'POST',
@@ -291,9 +165,7 @@ async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: 
         url: url,
         browserHtml: true,
         javascript: true,
-        actions: [
-          { action: 'waitForTimeout', timeout: 5000 }
-        ],
+        actions: [{ action: 'waitForTimeout', timeout: 5000 }],
       }),
     });
 
@@ -312,98 +184,275 @@ async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: 
   }
 }
 
-// Check if error indicates blocking
-function isBlockedError(status: number, errorMessage: string): boolean {
-  const blockedStatuses = [403, 429, 451, 503];
-  const blockedMessages = ['blocked', 'captcha', 'rate limit', 'forbidden', 'access denied', 'bad request'];
-  
-  if (blockedStatuses.includes(status)) return true;
-  
-  const lowerError = errorMessage.toLowerCase();
-  return blockedMessages.some(msg => lowerError.includes(msg));
-}
+// ==================== PLATFORM-SPECIFIC EXTRACTORS ====================
 
-// Extract listings from HTML content (basic parser for Zyte HTML responses)
-function extractListingsFromHtml(html: string, sourceUrl: string): any[] {
+// Extract Zillow listings from #__NEXT_DATA__ JSON (proven pattern from scrapy)
+function extractZillowListings(html: string, sourceUrl: string, listingType: 'sale' | 'rent'): any[] {
   const listings: any[] = [];
   
   try {
-    // Common patterns for real estate listing cards
-    // This is a best-effort extraction that works across multiple platforms
+    // Extract __NEXT_DATA__ JSON
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!nextDataMatch) {
+      console.log('[Zillow] No __NEXT_DATA__ found');
+      return listings;
+    }
+
+    const jsonData = JSON.parse(nextDataMatch[1]);
+    const searchResults = 
+      jsonData?.props?.pageProps?.searchPageState?.cat1?.searchResults?.listResults ||
+      jsonData?.props?.pageProps?.searchPageState?.cat2?.searchResults?.listResults ||
+      [];
+
+    console.log(`[Zillow] Found ${searchResults.length} listings in __NEXT_DATA__`);
+
+    for (const home of searchResults) {
+      const detailUrl = home.detailUrl || '';
+      const fullUrl = detailUrl.startsWith('https') ? detailUrl : `https://www.zillow.com${detailUrl}`;
+      
+      const listing: any = {
+        address: home.address || '',
+        bedrooms: home.beds || home.bedrooms || null,
+        bathrooms: home.baths || home.bathrooms || null,
+        price: home.price || home.unformattedPrice ? `$${home.unformattedPrice || home.price}` : null,
+        square_feet: home.area || home.sqft || null,
+        listing_url: fullUrl,
+        listing_id: home.zpid?.toString() || home.id || null,
+        property_type: home.homeType?.replace('_', ' ').replace('HOME_TYPE', '').trim() || null,
+        listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
+        source_url: sourceUrl,
+        source_platform: 'zillow',
+        scraped_at: new Date().toISOString(),
+      };
+
+      // Try to get zpid for later agent lookup
+      listing._zpid = home.zpid || null;
+      
+      listings.push(listing);
+    }
+  } catch (error) {
+    console.error('[Zillow] Error parsing __NEXT_DATA__:', error);
+  }
+
+  return listings;
+}
+
+// Extract Apartments.com listings from JSON-LD (proven pattern from scrapy)
+function extractApartmentsListings(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Extract JSON-LD script
+    const jsonLdMatch = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!jsonLdMatch) {
+      console.log('[Apartments] No JSON-LD found');
+      return listings;
+    }
+
+    const jsonData = JSON.parse(jsonLdMatch[1]);
+    const records = jsonData.about || [];
+
+    console.log(`[Apartments] Found ${records.length} listings in JSON-LD`);
+
+    // Also extract beds/baths/prices from HTML using regex patterns
+    const bedRangeMatches = html.match(/<div[^>]*class="[^"]*bed-range[^"]*"[^>]*>([^<]*)<\/div>/gi) || [];
+    const priceRangeMatches = html.match(/<div[^>]*class="[^"]*price-range[^"]*"[^>]*>([^<]*)<\/div>/gi) || [];
+    const phoneMatches = html.match(/<button[^>]*class="[^"]*phone-link[^"]*"[^>]*>.*?<span>([^<]*)<\/span>/gi) || [];
+
+    for (let idx = 0; idx < records.length; idx++) {
+      const record = records[idx];
+      const address = record.Address || {};
+      
+      const streetAddress = address.streetAddress?.trim() || '';
+      const addressLocality = address.addressLocality?.trim() || '';
+      const addressRegion = address.addressRegion?.trim() || '';
+      const postalCode = address.postalCode?.trim() || '';
+      const fullAddress = [streetAddress, addressLocality, `${addressRegion} ${postalCode}`]
+        .filter(Boolean).join(', ').trim();
+
+      // Extract bed/bath from HTML matches
+      let bedsBaths = '';
+      if (bedRangeMatches[idx]) {
+        const match = bedRangeMatches[idx].match(/>([^<]*)</);
+        if (match) bedsBaths = match[1].trim();
+      }
+
+      // Extract price from HTML matches
+      let price = '';
+      if (priceRangeMatches[idx]) {
+        const match = priceRangeMatches[idx].match(/>([^<]*)</);
+        if (match) price = match[1].trim();
+      }
+
+      const listing: any = {
+        address: fullAddress,
+        owner_name: record.name || null,
+        owner_phone: cleanPhone(record.telephone),
+        listing_url: record.url || null,
+        price: price || null,
+        beds_baths: bedsBaths || null,
+        listing_type: 'frbo',
+        source_url: sourceUrl,
+        source_platform: 'apartments',
+        scraped_at: new Date().toISOString(),
+      };
+
+      // Parse beds/baths if available
+      if (bedsBaths) {
+        const bedMatch = bedsBaths.match(/(\d+)\s*(?:bed|br)/i);
+        const bathMatch = bedsBaths.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+        if (bedMatch) listing.bedrooms = parseInt(bedMatch[1]);
+        if (bathMatch) listing.bathrooms = parseFloat(bathMatch[1]);
+      }
+
+      listings.push(listing);
+    }
+  } catch (error) {
+    console.error('[Apartments] Error parsing JSON-LD:', error);
+  }
+
+  return listings;
+}
+
+// Extract HotPads listings from JSON-LD @graph (proven pattern from scrapy)
+function extractHotpadsListings(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Extract JSON-LD script
+    const jsonLdMatch = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!jsonLdMatch) {
+      console.log('[HotPads] No JSON-LD found');
+      return listings;
+    }
+
+    const jsonData = JSON.parse(jsonLdMatch[1]);
+    const graph = jsonData['@graph'] || [];
+
+    console.log(`[HotPads] Found ${graph.length} items in @graph`);
+
+    for (const detail of graph) {
+      const mainEntity = detail.mainEntity;
+      if (!mainEntity) continue;
+
+      const address = mainEntity.address || {};
+      const streetAddress = address.streetAddress?.trim() || '';
+      const addressLocality = address.addressLocality?.trim() || '';
+      const addressRegion = address.addressRegion?.trim() || '';
+      const postalCode = address.postalCode?.trim() || '';
+      const fullAddress = [streetAddress, addressLocality, `${addressRegion} ${postalCode}`]
+        .filter(Boolean).join(', ').trim();
+
+      const listing: any = {
+        address: fullAddress,
+        owner_name: mainEntity.name?.trim() || null,
+        owner_phone: cleanPhone(mainEntity.telephone),
+        description: mainEntity.description?.trim()?.slice(0, 500) || null,
+        listing_type: 'frbo',
+        source_url: sourceUrl,
+        source_platform: 'hotpads',
+        scraped_at: new Date().toISOString(),
+      };
+
+      listings.push(listing);
+    }
+
+    // Also try to extract beds/baths from HTML if JSON-LD doesn't have them
+    // Pattern: HdpSummaryDetails divs
+    const bedMatch = html.match(/class="[^"]*HdpSummaryDetails[^"]*"[\s\S]*?(\d+)\s*(?:bed|br)/i);
+    const bathMatch = html.match(/class="[^"]*HdpSummaryDetails[^"]*"[\s\S]*?(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
     
-    // Pattern 1: Look for price patterns like $XXX,XXX
+    if (listings.length > 0) {
+      if (bedMatch) listings[0].bedrooms = parseInt(bedMatch[1]);
+      if (bathMatch) listings[0].bathrooms = parseFloat(bathMatch[1]);
+    }
+  } catch (error) {
+    console.error('[HotPads] Error parsing JSON-LD:', error);
+  }
+
+  return listings;
+}
+
+// Generic extraction using regex patterns (fallback)
+function extractGenericListings(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Price patterns
     const priceRegex = /\$[\d,]+(?:\.\d{2})?/g;
     const prices = html.match(priceRegex) || [];
     
-    // Pattern 2: Look for address patterns
+    // Address patterns
     const addressRegex = /\d+\s+[\w\s]+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Ln|Lane|Way|Ct|Court)[\s,]+[\w\s]+,?\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s*\d{5}/gi;
     const addresses = html.match(addressRegex) || [];
     
-    // Pattern 3: Look for bed/bath patterns
-    const bedroomRegex = /(\d+)\s*(?:bed|br|bedroom)/gi;
-    const bathroomRegex = /(\d+(?:\.\d)?)\s*(?:bath|ba|bathroom)/gi;
-    
-    // Pattern 4: Look for sqft patterns
-    const sqftRegex = /([\d,]+)\s*(?:sq\s*ft|sqft|square\s*feet)/gi;
-    
-    // If we found addresses, create listings
     for (let i = 0; i < Math.min(addresses.length, 50); i++) {
       const listing: any = {
         address: addresses[i]?.trim(),
         price: prices[i] || null,
         source_url: sourceUrl,
+        source_platform: 'unknown',
+        scraped_at: new Date().toISOString(),
       };
       
-      // Try to extract bed/bath for this listing section
-      const bedroomMatch = html.match(bedroomRegex);
-      if (bedroomMatch && bedroomMatch[i]) {
-        const bedNum = bedroomMatch[i].match(/(\d+)/);
-        if (bedNum) listing.bedrooms = parseInt(bedNum[1]);
-      }
-      
-      const bathroomMatch = html.match(bathroomRegex);
-      if (bathroomMatch && bathroomMatch[i]) {
-        const bathNum = bathroomMatch[i].match(/(\d+(?:\.\d)?)/);
-        if (bathNum) listing.bathrooms = parseFloat(bathNum[1]);
-      }
-      
-      const sqftMatch = html.match(sqftRegex);
-      if (sqftMatch && sqftMatch[i]) {
-        const sqft = sqftMatch[i].match(/([\d,]+)/);
-        if (sqft) listing.square_feet = parseInt(sqft[1].replace(/,/g, ''));
-      }
-      
-      // Determine listing type based on URL and content
       if (sourceUrl.includes('fsbo') || html.toLowerCase().includes('for sale by owner')) {
         listing.listing_type = 'fsbo';
       } else if (sourceUrl.includes('rent') || html.toLowerCase().includes('for rent')) {
-        listing.listing_type = 'for_rent';
+        listing.listing_type = 'frbo';
       } else {
         listing.listing_type = 'for_sale';
       }
       
       listings.push(listing);
     }
-    
-    // If no structured data found, try to extract at least some content
-    if (listings.length === 0 && prices.length > 0) {
-      for (let i = 0; i < Math.min(prices.length, 20); i++) {
-        listings.push({
-          price: prices[i],
-          source_url: sourceUrl,
-          listing_type: sourceUrl.includes('rent') ? 'for_rent' : 'for_sale',
-        });
-      }
-    }
-    
-    console.log(`[extractListingsFromHtml] Found ${addresses.length} addresses, ${prices.length} prices, extracted ${listings.length} listings`);
+
+    console.log(`[Generic] Found ${addresses.length} addresses, extracted ${listings.length} listings`);
   } catch (error) {
-    console.error('[extractListingsFromHtml] Error parsing HTML:', error);
+    console.error('[Generic] Error parsing HTML:', error);
   }
   
   return listings;
 }
 
+// Try to get Zillow agent info via RCF API
+async function getZillowAgentInfo(zpid: string): Promise<{ name?: string; phone?: string; agentName?: string }> {
+  try {
+    const payload = {
+      zpid: zpid,
+      pageType: 'HDP',
+      isInstantTourEnabled: false,
+      isCachedInstantTourAvailability: true,
+      tourTypes: [],
+    };
+
+    const response = await fetch('https://www.zillow.com/rentals/api/rcf/v1/rcf', {
+      method: 'POST',
+      headers: {
+        'accept': '*/*',
+        'content-type': 'application/json',
+        'origin': 'https://www.zillow.com',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) return {};
+
+    const data = await response.json();
+    const agentInfo = data?.propertyInfo?.agentInfo || {};
+
+    return {
+      name: agentInfo.businessName || null,
+      phone: agentInfo.phoneNumber || null,
+      agentName: agentInfo.displayName || null,
+    };
+  } catch (error) {
+    console.error('[Zillow RCF] Error:', error);
+    return {};
+  }
+}
+
+// Main handler
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -460,7 +509,7 @@ Deno.serve(async (req) => {
       urls,
       location, 
       platform: requestedPlatform,
-      listingType = 'sale',
+      listingType = 'rent',
       saveToJob,
       jobId,
     } = await req.json();
@@ -472,39 +521,36 @@ Deno.serve(async (req) => {
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     const zyteApiKey = Deno.env.get('ZYTE_API_KEY');
     
-    if (!firecrawlApiKey) {
-      console.error('FIRECRAWL_API_KEY not configured');
+    if (!firecrawlApiKey && !zyteApiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Firecrawl connector not configured' }),
+        JSON.stringify({ success: false, error: 'No scraping API configured (need Firecrawl or Zyte)' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Collect all URLs to scrape
+    // Collect URLs to scrape
     let urlsToScrape: string[] = [];
 
     if (url) {
       urlsToScrape.push(url);
     } else if (urls && Array.isArray(urls)) {
       urlsToScrape = urls;
-    } else if (location && requestedPlatform) {
-      // Build search URL for the platform
+    } else if (location && requestedPlatform && requestedPlatform !== 'all') {
       const searchUrl = buildSearchUrl(requestedPlatform, location, listingType);
       if (searchUrl) {
         urlsToScrape.push(searchUrl);
       } else {
         return new Response(
-          JSON.stringify({ success: false, error: `Platform ${requestedPlatform} not supported for search` }),
+          JSON.stringify({ success: false, error: `Platform ${requestedPlatform} not supported` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     } else if (location) {
-      // Search all supported platforms
-      for (const platform of SUPPORTED_PLATFORMS) {
-        const searchUrl = buildSearchUrl(platform.name, location, listingType);
-        if (searchUrl) {
-          urlsToScrape.push(searchUrl);
-        }
+      // Search specific owner-focused platforms
+      const platformsToSearch = ['apartments', 'hotpads', 'zillow'];
+      for (const pName of platformsToSearch) {
+        const searchUrl = buildSearchUrl(pName, location, listingType);
+        if (searchUrl) urlsToScrape.push(searchUrl);
       }
     } else {
       return new Response(
@@ -514,6 +560,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Scraping ${urlsToScrape.length} real estate URLs`);
+    console.log('URLs:', urlsToScrape);
 
     const allListings: any[] = [];
     const errors: { url: string; error: string }[] = [];
@@ -521,39 +568,33 @@ Deno.serve(async (req) => {
 
     for (const targetUrl of urlsToScrape) {
       try {
-        // Format URL
         let formattedUrl = targetUrl.trim();
         if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
           formattedUrl = `https://${formattedUrl}`;
         }
 
         const platform = detectPlatform(formattedUrl);
-        console.log(`Scraping ${formattedUrl} (platform: ${platform?.name || 'unknown'}, requiresZyte: ${platform?.requiresZyte})`);
+        console.log(`\n[Scraping] ${formattedUrl}`);
+        console.log(`[Platform] ${platform?.name || 'unknown'} (strategy: ${platform?.strategy}, requiresZyte: ${platform?.requiresZyte})`);
 
-        let listings: any[] = [];
+        let html = '';
         let usedZyte = false;
 
-        // Check if this platform is known to require Zyte
-        const shouldTryZyteFirst = platform?.requiresZyte && zyteApiKey;
-
-        if (shouldTryZyteFirst) {
-          // For platforms known to block (Zillow, Redfin, etc.), try Zyte first
-          console.log(`[${platform?.name}] Using Zyte API directly (known blocking site)`);
-          const zyteResult = await scrapeWithZyte(formattedUrl, zyteApiKey!);
-          
-          if (zyteResult.success && zyteResult.html) {
+        // Get HTML content
+        if (platform?.requiresZyte && zyteApiKey) {
+          // Use Zyte for platforms that require it
+          const zyteResult = await scrapeWithZyte(formattedUrl, zyteApiKey);
+          if (zyteResult.success) {
+            html = zyteResult.html;
             usedZyte = true;
             zyteUsed++;
-            // Parse HTML to extract listings (basic extraction from HTML)
-            listings = extractListingsFromHtml(zyteResult.html, formattedUrl);
-            console.log(`[Zyte] Extracted ${listings.length} listings from ${formattedUrl}`);
           } else {
-            console.error(`[Zyte] Failed for ${formattedUrl}: ${zyteResult.error}`);
-            errors.push({ url: formattedUrl, error: `Zyte: ${zyteResult.error}` });
+            console.error(`[Zyte] Failed: ${zyteResult.error}`);
+            errors.push({ url: formattedUrl, error: zyteResult.error || 'Zyte failed' });
             continue;
           }
-        } else {
-          // Try Firecrawl first
+        } else if (firecrawlApiKey) {
+          // Use Firecrawl
           const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
             method: 'POST',
             headers: {
@@ -562,74 +603,85 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({
               url: formattedUrl,
-              // IMPORTANT: Firecrawl only returns structured extraction when `json` is included in formats.
-              formats: ['markdown', 'links', 'json'],
-              jsonOptions: {
-                prompt: FSBO_EXTRACTION_PROMPT,
-                schema: FSBO_EXTRACTION_SCHEMA,
-              },
-              onlyMainContent: true,
+              formats: ['rawHtml', 'markdown'],
+              onlyMainContent: false,
               waitFor: 3000,
             }),
           });
 
           const data = await response.json();
-
           if (!response.ok) {
-            const errorMessage = data.error || `HTTP ${response.status}`;
-            console.error(`Firecrawl error for ${formattedUrl}:`, errorMessage);
-            
-            // Check if we should fallback to Zyte
-            if (isBlockedError(response.status, errorMessage) && zyteApiKey) {
-              console.log(`[Fallback] Firecrawl blocked, trying Zyte for ${formattedUrl}`);
-              
+            // Try Zyte as fallback
+            if (zyteApiKey) {
+              console.log('[Firecrawl] Failed, trying Zyte fallback...');
               const zyteResult = await scrapeWithZyte(formattedUrl, zyteApiKey);
-              
-              if (zyteResult.success && zyteResult.html) {
+              if (zyteResult.success) {
+                html = zyteResult.html;
                 usedZyte = true;
                 zyteUsed++;
-                listings = extractListingsFromHtml(zyteResult.html, formattedUrl);
-                console.log(`[Zyte Fallback] Extracted ${listings.length} listings from ${formattedUrl}`);
               } else {
-                errors.push({ url: formattedUrl, error: `Both Firecrawl and Zyte failed: ${zyteResult.error}` });
+                errors.push({ url: formattedUrl, error: `Both Firecrawl and Zyte failed` });
                 continue;
               }
-            } else if (isBlockedError(response.status, errorMessage) && !zyteApiKey) {
-              errors.push({ url: formattedUrl, error: `${errorMessage} (Zyte API not configured for fallback)` });
-              continue;
             } else {
-              errors.push({ url: formattedUrl, error: errorMessage });
+              errors.push({ url: formattedUrl, error: data.error || `HTTP ${response.status}` });
               continue;
             }
           } else {
-            // Firecrawl succeeded
-            const extractedData = data.data?.json || data.json || {};
-            listings = extractedData.listings || [];
+            html = data.data?.rawHtml || data.rawHtml || '';
+          }
+        } else if (zyteApiKey) {
+          const zyteResult = await scrapeWithZyte(formattedUrl, zyteApiKey);
+          if (zyteResult.success) {
+            html = zyteResult.html;
+            usedZyte = true;
+            zyteUsed++;
+          } else {
+            errors.push({ url: formattedUrl, error: zyteResult.error || 'Zyte failed' });
+            continue;
           }
         }
-        
-        // Enrich each listing with source info
+
+        if (!html) {
+          errors.push({ url: formattedUrl, error: 'No HTML content retrieved' });
+          continue;
+        }
+
+        console.log(`[HTML] Got ${html.length} characters (via ${usedZyte ? 'Zyte' : 'Firecrawl'})`);
+
+        // Extract listings based on platform strategy
+        let listings: any[] = [];
+
+        switch (platform?.strategy) {
+          case 'zillow':
+            listings = extractZillowListings(html, formattedUrl, listingType);
+            break;
+          case 'apartments':
+            listings = extractApartmentsListings(html, formattedUrl);
+            break;
+          case 'hotpads':
+            listings = extractHotpadsListings(html, formattedUrl);
+            break;
+          default:
+            listings = extractGenericListings(html, formattedUrl);
+        }
+
+        console.log(`[Extracted] ${listings.length} listings from ${platform?.name || 'unknown'}`);
+
+        // Filter by location if specified
         for (const listing of listings) {
-          // When searching by location, drop obviously out-of-market results.
-          // This prevents "fallback"/cross-market cards (e.g. IL/NE) from being returned.
-          if (location && !listingMatchesLocation((listing as any)?.address, expectedCity, expectedStateAbbrev)) {
+          if (location && listing.address && !listingMatchesLocation(listing.address, expectedCity, expectedStateAbbrev)) {
+            console.log(`[Filtered] Address "${listing.address}" doesn't match ${expectedCity}, ${expectedStateAbbrev}`);
             continue;
           }
 
-          allListings.push({
-            ...listing,
-            source_url: formattedUrl,
-            source_platform: platform?.name || 'unknown',
-            scraped_at: new Date().toISOString(),
-            scraped_via: usedZyte ? 'zyte' : 'firecrawl',
-          });
+          listing.scraped_via = usedZyte ? 'zyte' : 'firecrawl';
+          allListings.push(listing);
         }
 
-        console.log(`Found ${listings.length} listings from ${formattedUrl} (via ${usedZyte ? 'Zyte' : 'Firecrawl'})`);
-
-        // Rate limiting between requests
+        // Rate limiting
         if (urlsToScrape.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       } catch (error) {
         console.error(`Error scraping ${targetUrl}:`, error);
@@ -637,7 +689,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Optionally save to scrape job
+    console.log(`\n[Total] Scraped ${allListings.length} listings from ${urlsToScrape.length} URLs`);
+
+    // Save to database if requested
+    let savedCount = 0;
     if (saveToJob && jobId && allListings.length > 0) {
       console.log(`Saving ${allListings.length} listings to job ${jobId}`);
       
@@ -645,33 +700,34 @@ Deno.serve(async (req) => {
         try {
           await adminSupabase.from('scraped_leads').insert({
             job_id: jobId,
-            domain: new URL(listing.source_url).hostname,
-            source_url: listing.source_url,
+            domain: listing.source_platform || new URL(listing.source_url).hostname,
+            source_url: listing.listing_url || listing.source_url,
             full_name: listing.owner_name || null,
             best_email: listing.owner_email || null,
             best_phone: listing.owner_phone || null,
             address: listing.address || null,
             lead_type: listing.listing_type || 'fsbo',
-            status: 'pending',
+            status: 'new',
             schema_data: {
               bedrooms: listing.bedrooms,
               bathrooms: listing.bathrooms,
               price: listing.price,
               days_on_market: listing.days_on_market,
-              favorites_count: listing.favorites_count,
-              views_count: listing.views_count,
               property_type: listing.property_type,
               square_feet: listing.square_feet,
               year_built: listing.year_built,
               listing_id: listing.listing_id,
               description: listing.description,
               source_platform: listing.source_platform,
+              scraped_via: listing.scraped_via,
             },
           });
+          savedCount++;
         } catch (insertError) {
           console.error('Error inserting listing:', insertError);
         }
       }
+      console.log(`Saved ${savedCount} listings`);
     }
 
     return new Response(
@@ -680,17 +736,16 @@ Deno.serve(async (req) => {
         listings: allListings,
         total: allListings.length,
         urls_scraped: urlsToScrape.length,
-        zyte_fallback_used: zyteUsed,
-        zyte_available: !!zyteApiKey,
+        zyte_used: zyteUsed,
+        saved: saveToJob ? savedCount : undefined,
         errors: errors.length > 0 ? errors : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in real estate scraper:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to scrape';
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Failed to scrape' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
