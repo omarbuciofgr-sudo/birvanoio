@@ -503,11 +503,200 @@ function extractApartmentsFromHTML(html: string, sourceUrl: string): EnrichedLis
   return listings;
 }
 
-// Extract HotPads listings from JSON-LD @graph
+// Extract HotPads listing URLs from the search results page (matching Python logic)
+function extractHotpadsListingUrls(html: string): string[] {
+  const urls: string[] = [];
+  
+  try {
+    // Match listing card anchors: <a data-name="ListingCardAnchor" href="...">
+    // Python: record.xpath(".//a[@data-name='ListingCardAnchor']/@href")
+    const anchorPattern = /<a[^>]*data-name=["']ListingCardAnchor["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
+    let match;
+    while ((match = anchorPattern.exec(html)) !== null) {
+      const href = match[1];
+      if (href && href.startsWith('/')) {
+        urls.push(`https://hotpads.com${href}`);
+      } else if (href && href.startsWith('http')) {
+        urls.push(href);
+      }
+    }
+    
+    // Also try alternative pattern (href before data-name)
+    if (urls.length === 0) {
+      const altPattern = /<a[^>]*href=["']([^"']+)["'][^>]*data-name=["']ListingCardAnchor["'][^>]*>/gi;
+      while ((match = altPattern.exec(html)) !== null) {
+        const href = match[1];
+        if (href && href.startsWith('/')) {
+          urls.push(`https://hotpads.com${href}`);
+        } else if (href && href.startsWith('http')) {
+          urls.push(href);
+        }
+      }
+    }
+    
+    // Fallback: Look for listing links in AreaListingsContainer
+    // Python: response.xpath("//ul[@class='AreaListingsContainer-listings']/li")
+    if (urls.length === 0) {
+      const containerMatch = html.match(/<ul[^>]*class=["'][^"']*AreaListingsContainer-listings[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i);
+      if (containerMatch) {
+        const listItems = containerMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        for (const li of listItems) {
+          const linkMatch = li[1].match(/<a[^>]*href=["']([^"']+)["'][^>]*>/i);
+          if (linkMatch?.[1]) {
+            const href = linkMatch[1];
+            if (href.includes('hotpads.com') || href.startsWith('/')) {
+              urls.push(href.startsWith('/') ? `https://hotpads.com${href}` : href);
+            }
+          }
+        }
+      }
+    }
+    
+    console.log(`[HotPads] Found ${urls.length} listing URLs on search page`);
+  } catch (error) {
+    console.error('[HotPads] Error extracting URLs:', error);
+  }
+  
+  return [...new Set(urls)]; // Remove duplicates
+}
+
+// Extract HotPads detail page data (matching Python parse_detail logic)
+function extractHotpadsDetailPage(html: string, sourceUrl: string): EnrichedListing | null {
+  try {
+    // Extract beds using Python's XPath logic:
+    // response.xpath("//div[@class='HdpSummaryDetails']//div[@class='d_flex flex-d_column jc_center ai_flex-start c_hpxBlue600 mr_32px md:mr_60px'][1]/div/span/text()")
+    let beds = '';
+    let baths = '';
+    
+    // Try to find HdpSummaryDetails section
+    const summaryMatch = html.match(/<div[^>]*class=["'][^"']*HdpSummaryDetails[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/i);
+    if (summaryMatch) {
+      const summaryContent = summaryMatch[1];
+      
+      // Find all value columns (beds, baths, sqft order)
+      const valueBlocks = summaryContent.matchAll(/<div[^>]*class=["'][^"']*d_flex[^"']*flex-d_column[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi);
+      const values: string[] = [];
+      for (const block of valueBlocks) {
+        // Extract text from span elements
+        const spanMatch = block[1].match(/<span[^>]*>([^<]+)<\/span>/gi);
+        if (spanMatch) {
+          const text = spanMatch.map(s => s.replace(/<[^>]+>/g, '').trim()).join('');
+          if (text) values.push(text);
+        }
+      }
+      
+      if (values.length >= 1) beds = values[0];
+      if (values.length >= 2) baths = values[1];
+    }
+    
+    // Fallback: Look for bed/bath patterns in the HTML
+    if (!beds) {
+      const bedsMatch = html.match(/(\d+)\s*(?:bed|bedroom|br)/i);
+      if (bedsMatch) beds = bedsMatch[1];
+    }
+    if (!baths) {
+      const bathsMatch = html.match(/(\d+(?:\.\d)?)\s*(?:bath|bathroom|ba)/i);
+      if (bathsMatch) baths = bathsMatch[1];
+    }
+    
+    // Extract contact name (Python: //div[@class='ContactListedBy-name']/h2/text()[2])
+    let contactName = '';
+    const contactMatch = html.match(/<div[^>]*class=["'][^"']*ContactListedBy-name[^"']*["'][^>]*>[\s\S]*?<h2[^>]*>[\s\S]*?<[^>]+>[^<]*<\/[^>]+>([^<]*)<\/h2>/i);
+    if (contactMatch) {
+      contactName = contactMatch[1].trim();
+    }
+    // Fallback for contact name
+    if (!contactName) {
+      const altContactMatch = html.match(/ContactListedBy-name[^>]*>[\s\S]*?<h2[^>]*>([^<]+)/i);
+      if (altContactMatch) contactName = altContactMatch[1].trim();
+    }
+    
+    // Extract listing time (Python: //li[...]/span[contains(text(),'Listed')]/text())
+    let listingTime = '';
+    const listingTimeMatch = html.match(/<span[^>]*>([^<]*Listed[^<]*)<\/span>/i);
+    if (listingTimeMatch) {
+      listingTime = listingTimeMatch[1].trim();
+    }
+    
+    // Extract from JSON-LD (Python's main extraction method)
+    const jsonLdMatch = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (jsonLdMatch) {
+      try {
+        const jsonData = JSON.parse(jsonLdMatch[1]);
+        const graph = jsonData['@graph'] || [jsonData];
+        
+        for (const detail of graph) {
+          const mainEntity = detail.mainEntity || detail;
+          
+          // Skip if no mainEntity and not a property type
+          if (!detail.mainEntity && 
+              !mainEntity['@type']?.includes?.('Residence') && 
+              !mainEntity['@type']?.includes?.('Apartment') &&
+              !mainEntity['@type']?.includes?.('House')) {
+            continue;
+          }
+          
+          const name = (mainEntity.name || '').trim();
+          const phone = (mainEntity.telephone || '').trim();
+          const address = mainEntity.address || {};
+          
+          const streetAddress = (address.streetAddress || '').trim();
+          const addressLocality = (address.addressLocality || '').trim();
+          const addressRegion = (address.addressRegion || '').trim();
+          const postalCode = (address.postalCode || '').trim();
+          const fullAddress = `${streetAddress}, ${addressLocality}, ${addressRegion} ${postalCode}`.replace(/^,\s*/, '').replace(/,\s*$/, '').trim();
+          
+          if (!fullAddress || fullAddress === ', ') continue;
+          
+          const description = (mainEntity.description || '').trim();
+          
+          const listing: EnrichedListing = {
+            address: fullAddress,
+            owner_name: name || contactName || undefined,
+            owner_phone: cleanPhone(phone) || undefined,
+            description: description?.slice(0, 500) || undefined,
+            bedrooms: beds ? parseInt(beds) : undefined,
+            bathrooms: baths ? parseFloat(baths) : undefined,
+            listing_url: sourceUrl,
+            listing_type: 'frbo',
+            source_url: sourceUrl,
+            source_platform: 'hotpads',
+            scraped_at: new Date().toISOString(),
+            skip_trace_status: 'pending',
+          };
+          
+          // Calculate days on market from listing time
+          if (listingTime) {
+            const daysMatch = listingTime.match(/(\d+)\s*day/i);
+            if (daysMatch) {
+              listing.days_on_market = parseInt(daysMatch[1]);
+            }
+          }
+          
+          return listing;
+        }
+      } catch (e) {
+        console.error('[HotPads] JSON-LD parse error:', e);
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[HotPads] Error parsing detail page:', error);
+    return null;
+  }
+}
+
+// Extract HotPads listings from JSON-LD @graph (for search results without visiting detail pages)
 function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListing[] {
   const listings: EnrichedListing[] = [];
   
   try {
+    // First, try to extract listing URLs for detail page scraping
+    const listingUrls = extractHotpadsListingUrls(html);
+    console.log(`[HotPads] Found ${listingUrls.length} listing URLs to process`);
+    
+    // For now, we'll extract what we can from the search page JSON-LD
     // Find all JSON-LD blocks
     const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
     
@@ -515,7 +704,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
       try {
         const jsonData = JSON.parse(match[1]);
         
-        // Handle @graph array
+        // Handle @graph array (detail pages)
         const graph = jsonData['@graph'] || (Array.isArray(jsonData) ? jsonData : [jsonData]);
         
         console.log(`[HotPads] Processing ${graph.length} items from JSON-LD`);
@@ -526,13 +715,15 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
           
           // Skip non-property types
           const itemType = entity['@type'] || '';
-          if (!itemType.includes('Residence') && 
-              !itemType.includes('Apartment') && 
-              !itemType.includes('House') &&
-              !itemType.includes('Product') &&
-              !itemType.includes('Place') &&
-              itemType !== 'SingleFamilyResidence' &&
-              itemType !== 'ApartmentComplex') {
+          const isProperty = itemType.includes('Residence') || 
+                            itemType.includes('Apartment') || 
+                            itemType.includes('House') ||
+                            itemType.includes('Product') ||
+                            itemType.includes('Place') ||
+                            itemType === 'SingleFamilyResidence' ||
+                            itemType === 'ApartmentComplex';
+          
+          if (!isProperty && !item.mainEntity) {
             continue;
           }
           
@@ -564,7 +755,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
             owner_phone: cleanPhone(entity.telephone) || undefined,
             description: entity.description?.trim()?.slice(0, 500) || undefined,
             price: price?.toString() || undefined,
-            listing_url: entity.url || undefined,
+            listing_url: entity.url || sourceUrl,
             listing_type: 'frbo',
             source_url: sourceUrl,
             source_platform: 'hotpads',
@@ -593,49 +784,117 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
     
     // If no listings from JSON-LD, try HTML extraction
     if (listings.length === 0) {
-      console.log('[HotPads] No JSON-LD listings, trying HTML extraction');
+      console.log('[HotPads] No JSON-LD listings, trying HTML card extraction');
       
-      // HotPads listing cards pattern
-      const cardPatterns = [
-        /<div[^>]*class="[^"]*ListingCard[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-        /<article[^>]*data-testid="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
-      ];
-      
-      for (const pattern of cardPatterns) {
-        const cards = html.match(pattern) || [];
-        if (cards.length > 0) {
-          console.log(`[HotPads] Found ${cards.length} listing cards in HTML`);
+      // Extract from listing cards (search results page)
+      // Python: response.xpath("//ul[@class='AreaListingsContainer-listings']/li")
+      const containerMatch = html.match(/<ul[^>]*class=["'][^"']*AreaListingsContainer-listings[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i);
+      if (containerMatch) {
+        const listItems = [...containerMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)];
+        console.log(`[HotPads] Found ${listItems.length} listing cards in HTML`);
+        
+        for (const li of listItems.slice(0, 100)) {
+          const card = li[1];
           
-          for (const card of cards.slice(0, 50)) {
-            const addressMatch = card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i) ||
-                                card.match(/class="[^"]*location[^"]*"[^>]*>([^<]+)</i);
-            const priceMatch = card.match(/\$[\d,]+/);
-            const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
-            const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
-            
-            if (addressMatch) {
-              const listing: EnrichedListing = {
-                address: addressMatch[1].trim(),
-                price: priceMatch?.[0] || undefined,
-                listing_type: 'frbo',
-                source_url: sourceUrl,
-                source_platform: 'hotpads',
-                scraped_at: new Date().toISOString(),
-                skip_trace_status: 'pending',
-              };
-              
-              if (bedsMatch) listing.bedrooms = parseInt(bedsMatch[1]);
-              if (bathsMatch) listing.bathrooms = parseFloat(bathsMatch[1]);
-              
-              listings.push(listing);
-            }
+          // Get listing URL
+          const urlMatch = card.match(/href=["']([^"']+)["']/i);
+          let listingUrl = '';
+          if (urlMatch?.[1]) {
+            listingUrl = urlMatch[1].startsWith('/') ? `https://hotpads.com${urlMatch[1]}` : urlMatch[1];
           }
-          break;
+          
+          // Extract address from card
+          const addressMatch = card.match(/class=["'][^"']*(?:address|location)[^"']*["'][^>]*>([^<]+)</i) ||
+                              card.match(/<span[^>]*>(\d+[^<]+(?:St|Ave|Rd|Dr|Blvd|Ln|Way|Ct)[^<]*)</i);
+          
+          // Extract price
+          const priceMatch = card.match(/\$[\d,]+/);
+          
+          // Extract beds/baths
+          const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
+          const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+          
+          if (addressMatch || listingUrl) {
+            const listing: EnrichedListing = {
+              address: addressMatch?.[1]?.trim() || 'See listing',
+              price: priceMatch?.[0] || undefined,
+              listing_url: listingUrl || undefined,
+              listing_type: 'frbo',
+              source_url: sourceUrl,
+              source_platform: 'hotpads',
+              scraped_at: new Date().toISOString(),
+              skip_trace_status: 'pending',
+            };
+            
+            if (bedsMatch) listing.bedrooms = parseInt(bedsMatch[1]);
+            if (bathsMatch) listing.bathrooms = parseFloat(bathsMatch[1]);
+            
+            listings.push(listing);
+          }
+        }
+      }
+      
+      // Additional fallback: Look for any property card patterns
+      if (listings.length === 0) {
+        const cardPatterns = [
+          /<div[^>]*class="[^"]*ListingCard[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi,
+          /<article[^>]*data-testid="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
+        ];
+        
+        for (const pattern of cardPatterns) {
+          const cards = html.match(pattern) || [];
+          if (cards.length > 0) {
+            console.log(`[HotPads] Found ${cards.length} listing cards via fallback pattern`);
+            
+            for (const card of cards.slice(0, 50)) {
+              const addressMatch = card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i) ||
+                                  card.match(/class="[^"]*location[^"]*"[^>]*>([^<]+)</i);
+              const priceMatch = card.match(/\$[\d,]+/);
+              const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
+              const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+              const urlMatch = card.match(/href=["']([^"']+)["']/i);
+              
+              if (addressMatch) {
+                const listing: EnrichedListing = {
+                  address: addressMatch[1].trim(),
+                  price: priceMatch?.[0] || undefined,
+                  listing_url: urlMatch?.[1]?.startsWith('/') ? `https://hotpads.com${urlMatch[1]}` : urlMatch?.[1] || undefined,
+                  listing_type: 'frbo',
+                  source_url: sourceUrl,
+                  source_platform: 'hotpads',
+                  scraped_at: new Date().toISOString(),
+                  skip_trace_status: 'pending',
+                };
+                
+                if (bedsMatch) listing.bedrooms = parseInt(bedsMatch[1]);
+                if (bathsMatch) listing.bathrooms = parseFloat(bathsMatch[1]);
+                
+                listings.push(listing);
+              }
+            }
+            break;
+          }
         }
       }
     }
     
-    console.log(`[HotPads] Extracted ${listings.length} listings`);
+    // Store listing URLs for potential detail page scraping
+    if (listings.length === 0 && listingUrls.length > 0) {
+      console.log(`[HotPads] Creating placeholder listings from ${listingUrls.length} URLs`);
+      for (const url of listingUrls.slice(0, 100)) {
+        listings.push({
+          address: 'See listing',
+          listing_url: url,
+          listing_type: 'frbo',
+          source_url: sourceUrl,
+          source_platform: 'hotpads',
+          scraped_at: new Date().toISOString(),
+          skip_trace_status: 'pending',
+        });
+      }
+    }
+    
+    console.log(`[HotPads] Extracted ${listings.length} listings total`);
   } catch (error) {
     console.error('[HotPads] Error parsing:', error);
   }
@@ -1030,7 +1289,65 @@ Deno.serve(async (req) => {
             listings = extractApartmentsListings(html, formattedUrl);
             break;
           case 'hotpads':
+            // First extract what we can from the search page
             listings = extractHotpadsListings(html, formattedUrl);
+            
+            // If we got placeholder listings (only URLs), scrape detail pages
+            const detailUrls = extractHotpadsListingUrls(html);
+            if (detailUrls.length > 0 && listings.every(l => l.address === 'See listing' || !l.owner_phone)) {
+              console.log(`[HotPads] Scraping ${Math.min(detailUrls.length, 50)} detail pages...`);
+              const detailListings: EnrichedListing[] = [];
+              
+              for (const detailUrl of detailUrls.slice(0, 50)) {
+                try {
+                  console.log(`[HotPads Detail] ${detailUrl}`);
+                  let detailHtml = '';
+                  
+                  if (zyteApiKey) {
+                    const zyteResult = await scrapeWithZyte(detailUrl, zyteApiKey);
+                    if (zyteResult.success) {
+                      detailHtml = zyteResult.html;
+                    }
+                  } else if (firecrawlApiKey) {
+                    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${firecrawlApiKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        url: detailUrl,
+                        formats: ['rawHtml'],
+                        onlyMainContent: false,
+                        waitFor: 2000,
+                      }),
+                    });
+                    const respData = await resp.json();
+                    if (resp.ok) {
+                      detailHtml = respData.data?.rawHtml || respData.rawHtml || '';
+                    }
+                  }
+                  
+                  if (detailHtml) {
+                    const detailListing = extractHotpadsDetailPage(detailHtml, detailUrl);
+                    if (detailListing && detailListing.address && detailListing.address !== 'See listing') {
+                      detailListings.push(detailListing);
+                    }
+                  }
+                  
+                  // Delay between requests (matching Python's DOWNLOAD_DELAY: 0.5)
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (detailError) {
+                  console.error(`[HotPads Detail] Error scraping ${detailUrl}:`, detailError);
+                }
+              }
+              
+              // Use detail listings if we got more data
+              if (detailListings.length > 0) {
+                console.log(`[HotPads] Got ${detailListings.length} listings from detail pages`);
+                listings = detailListings;
+              }
+            }
             break;
           default:
             listings = extractGenericListings(html, formattedUrl);
