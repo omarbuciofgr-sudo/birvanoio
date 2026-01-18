@@ -225,7 +225,218 @@ async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: 
 
 // ==================== PLATFORM-SPECIFIC EXTRACTORS ====================
 
-// Extract Zillow listings from #__NEXT_DATA__ JSON
+// Extract Zillow listing URLs from search results page (matching Python parse method)
+function extractZillowListingUrls(html: string): string[] {
+  const urls: string[] = [];
+  
+  try {
+    // Python: json.loads(response.css("#__NEXT_DATA__::text").get(''))
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!nextDataMatch) {
+      console.log('[Zillow] No __NEXT_DATA__ found');
+      return urls;
+    }
+
+    const jsonData = JSON.parse(nextDataMatch[1]);
+    
+    // Python: json_data.get('props', {}).get('pageProps', {}).get('searchPageState', {}).get('cat1', {}).get('searchResults', {}).get('listResults', [])
+    // or cat2 if cat1 is empty
+    const homesListing = 
+      jsonData?.props?.pageProps?.searchPageState?.cat1?.searchResults?.listResults ||
+      jsonData?.props?.pageProps?.searchPageState?.cat2?.searchResults?.listResults ||
+      [];
+
+    console.log(`[Zillow] Found ${homesListing.length} listings in __NEXT_DATA__`);
+    
+    for (const home of homesListing) {
+      // Python: url = home.get('detailUrl', '')
+      const url = home.detailUrl || '';
+      if (url) {
+        // Python: if not url.startswith("https"): new_detailUrl = f'https://www.zillow.com{url}'
+        const fullUrl = url.startsWith('https') ? url : `https://www.zillow.com${url}`;
+        urls.push(fullUrl);
+      }
+    }
+    
+    console.log(`[Zillow] Extracted ${urls.length} listing URLs`);
+  } catch (error) {
+    console.error('[Zillow] Error extracting URLs:', error);
+  }
+  
+  return [...new Set(urls)];
+}
+
+// Extract next page URL from Zillow search results (matching Python pagination)
+function extractZillowNextPage(html: string, baseUrl: string): string | null {
+  try {
+    // Python: response.xpath("//a[@title='Next page']/@href").get('')
+    const nextPageMatch = html.match(/<a[^>]*title=["']Next page["'][^>]*href=["']([^"']+)["'][^>]*>/i) ||
+                         html.match(/<a[^>]*href=["']([^"']+)["'][^>]*title=["']Next page["'][^>]*>/i);
+    
+    if (nextPageMatch?.[1]) {
+      const href = nextPageMatch[1];
+      // Python: response.urljoin(next_page)
+      if (href.startsWith('http')) {
+        return href;
+      } else if (href.startsWith('/')) {
+        return `https://www.zillow.com${href}`;
+      } else {
+        // Relative URL - join with base
+        const urlObj = new URL(baseUrl);
+        return `${urlObj.origin}/${href}`;
+      }
+    }
+  } catch (error) {
+    console.error('[Zillow] Error extracting next page:', error);
+  }
+  
+  return null;
+}
+
+// Extract Zillow detail page data (matching Python detail_page method)
+function extractZillowDetailPage(html: string, sourceUrl: string, listingType: 'sale' | 'rent'): EnrichedListing | null {
+  try {
+    // Python: json_data = json.loads(response.css("#__NEXT_DATA__::text").get(''))
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!nextDataMatch) {
+      console.log('[Zillow Detail] No __NEXT_DATA__ found');
+      return null;
+    }
+
+    const jsonData = JSON.parse(nextDataMatch[1]);
+    
+    // Python: detail = json_data.get('props', {}).get('pageProps', {}).get('componentProps')
+    const detail = jsonData?.props?.pageProps?.componentProps || {};
+    
+    // Python: home_detail = detail.get('gdpClientCache', '')
+    const homeDetail = detail.gdpClientCache || '';
+    
+    let home: Record<string, any> = {};
+    
+    if (homeDetail) {
+      // Python: home_data = json.loads(home_detail)
+      // Python: detail_key = list(home_data.keys())[0]
+      // Python: home = home_data.get(detail_key, {}).get('property', '')
+      try {
+        const homeData = JSON.parse(homeDetail);
+        const detailKey = Object.keys(homeData)[0];
+        if (detailKey) {
+          home = homeData[detailKey]?.property || {};
+        }
+      } catch (e) {
+        console.log('[Zillow Detail] Error parsing gdpClientCache:', e);
+      }
+    } else {
+      // Python: home = detail.get('initialReduxState', {}).get('gdp', {}).get('building', {})
+      home = detail.initialReduxState?.gdp?.building || {};
+    }
+    
+    // Python: detail1 = json_data.get('props', {}).get('pageProps', {}).get('componentProps', {})
+    const detail1 = jsonData?.props?.pageProps?.componentProps || {};
+    
+    // Python: zpid = detail1.get('initialReduxState', {}).get('gdp', {}).get('building', {}).get('zpid', '')
+    // if not zpid: zpid = detail1.get('zpid', '')
+    let zpid = detail1.initialReduxState?.gdp?.building?.zpid || '';
+    if (!zpid) {
+      zpid = detail1.zpid || '';
+    }
+    
+    // Python: address extraction with XPath
+    // //div[@data-test-id="bdp-building-address"]//text() | //div[contains(@class,"styles__AddressWrapper")]/h1//text()
+    let address = '';
+    
+    // Try data-test-id="bdp-building-address"
+    const bdpAddressMatch = html.match(/<[^>]*data-test-id=["']bdp-building-address["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
+    if (bdpAddressMatch) {
+      address = bdpAddressMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    
+    // Fallback: styles__AddressWrapper h1
+    if (!address) {
+      const addressWrapperMatch = html.match(/<div[^>]*class=["'][^"']*styles__AddressWrapper[^"']*["'][^>]*>[\s\S]*?<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      if (addressWrapperMatch) {
+        address = addressWrapperMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+    }
+    
+    // Python: item["Address"] = address.replace(',',', ')
+    if (address) {
+      address = address.replace(/,/g, ', ').replace(/,\s+,/g, ',').replace(/\s+/g, ' ').trim();
+    }
+    
+    // Python: item['Bedrooms'] = home.get('bedrooms', '')
+    const bedrooms = home.bedrooms;
+    
+    // Python: item['Bathrooms'] = home.get('bathrooms', '')
+    const bathrooms = home.bathrooms;
+    
+    // Python: item['Price'] = response.xpath('//span[@data-testid="price"]//span//text()').get('').strip()
+    let price = '';
+    const priceMatch = html.match(/<span[^>]*data-testid=["']price["'][^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i) ||
+                      html.match(/<span[^>]*data-testid=["']price["'][^>]*>([^<]+)</i);
+    if (priceMatch) {
+      price = priceMatch[1].trim();
+    }
+    
+    // Python: item['Home_Type'] = home.get('homeType', '').replace('_',' ').replace('HOME_TYPE','').strip()
+    const homeType = (home.homeType || '').replace(/_/g, ' ').replace(/HOME_TYPE/gi, '').trim();
+    
+    // Python: item['Year_Build'] = response.xpath("//span[contains(text(),'Built in')]//text()").get('').strip()
+    let yearBuilt = '';
+    const yearMatch = html.match(/<span[^>]*>[^<]*Built in[^<]*<\/span>/i);
+    if (yearMatch) {
+      yearBuilt = yearMatch[0].replace(/<[^>]+>/g, '').trim();
+    }
+    
+    // Python: item['HOA'] = response.xpath("//span[contains(text(),'HOA')]//text()").get('').strip()
+    let hoa = '';
+    const hoaMatch = html.match(/<span[^>]*>[^<]*HOA[^<]*<\/span>/i);
+    if (hoaMatch) {
+      hoa = hoaMatch[0].replace(/<[^>]+>/g, '').trim();
+    }
+    
+    // Python: item['Days_On_Zillow'] = home.get('daysOnZillow', '')
+    const daysOnZillow = home.daysOnZillow;
+    
+    // Python: item['Page_View_Count'] = home.get('pageViewCount', '')
+    const pageViewCount = home.pageViewCount;
+    
+    // Python: item['Favorite_Count'] = home.get('favoriteCount', '')
+    const favoriteCount = home.favoriteCount;
+    
+    if (!address) {
+      console.log('[Zillow Detail] No address found');
+      return null;
+    }
+    
+    const listing: EnrichedListing = {
+      address,
+      bedrooms: bedrooms !== undefined && bedrooms !== '' ? Number(bedrooms) : undefined,
+      bathrooms: bathrooms !== undefined && bathrooms !== '' ? Number(bathrooms) : undefined,
+      price: price || undefined,
+      property_type: homeType || undefined,
+      year_built: yearBuilt ? parseInt(yearBuilt.replace(/\D/g, '')) || undefined : undefined,
+      days_on_market: daysOnZillow !== undefined && daysOnZillow !== '' ? Number(daysOnZillow) : undefined,
+      views_count: pageViewCount !== undefined && pageViewCount !== '' ? Number(pageViewCount) : undefined,
+      favorites_count: favoriteCount !== undefined && favoriteCount !== '' ? Number(favoriteCount) : undefined,
+      listing_url: sourceUrl,
+      listing_id: zpid?.toString() || undefined,
+      listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
+      source_url: sourceUrl,
+      source_platform: 'zillow',
+      scraped_at: new Date().toISOString(),
+      skip_trace_status: 'pending',
+      description: hoa ? `HOA: ${hoa}` : undefined,
+    };
+    
+    return listing;
+  } catch (error) {
+    console.error('[Zillow Detail] Error parsing:', error);
+    return null;
+  }
+}
+
+// Legacy function for backward compatibility - extracts from search results only
 function extractZillowListings(html: string, sourceUrl: string, listingType: 'sale' | 'rent'): EnrichedListing[] {
   const listings: EnrichedListing[] = [];
   
@@ -1423,7 +1634,74 @@ Deno.serve(async (req) => {
 
         switch (platform?.strategy) {
           case 'zillow':
+            // First try to extract from search page (for basic info)
             listings = extractZillowListings(html, formattedUrl, listingType);
+            
+            // Get listing URLs for detail page scraping (matching Python's two-phase approach)
+            const zillowDetailUrls = extractZillowListingUrls(html);
+            
+            // If we have detail URLs, scrape them for richer data (Python's detail_page method)
+            if (zillowDetailUrls.length > 0) {
+              console.log(`[Zillow] Scraping ${Math.min(zillowDetailUrls.length, 50)} detail pages...`);
+              const uniqueUrls = new Set<string>();
+              const zillowDetailListings: EnrichedListing[] = [];
+              
+              for (const detailUrl of zillowDetailUrls.slice(0, 50)) {
+                // Skip duplicates (matching Python's unique_list check)
+                if (uniqueUrls.has(detailUrl)) continue;
+                uniqueUrls.add(detailUrl);
+                
+                try {
+                  console.log(`[Zillow Detail] ${detailUrl}`);
+                  let detailHtml = '';
+                  
+                  // Zillow requires Zyte for detail pages
+                  if (zyteApiKey) {
+                    const zyteResult = await scrapeWithZyte(detailUrl, zyteApiKey);
+                    if (zyteResult.success) {
+                      detailHtml = zyteResult.html;
+                      zyteUsed++;
+                    }
+                  } else if (firecrawlApiKey) {
+                    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${firecrawlApiKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        url: detailUrl,
+                        formats: ['rawHtml'],
+                        onlyMainContent: false,
+                        waitFor: 3000,
+                      }),
+                    });
+                    const respData = await resp.json();
+                    if (resp.ok) {
+                      detailHtml = respData.data?.rawHtml || respData.rawHtml || '';
+                    }
+                  }
+                  
+                  if (detailHtml) {
+                    const detailListing = extractZillowDetailPage(detailHtml, detailUrl, listingType);
+                    if (detailListing && detailListing.address) {
+                      zillowDetailListings.push(detailListing);
+                    }
+                  }
+                  
+                  // Delay between requests (matching Python's DOWNLOAD_DELAY: 0.8)
+                  await new Promise(resolve => setTimeout(resolve, 800));
+                } catch (detailError) {
+                  console.error(`[Zillow Detail] Error scraping ${detailUrl}:`, detailError);
+                }
+              }
+              
+              // Use detail listings if we got data
+              if (zillowDetailListings.length > 0) {
+                console.log(`[Zillow] Got ${zillowDetailListings.length} listings from detail pages`);
+                listings = zillowDetailListings;
+              }
+            }
             break;
           case 'apartments':
             listings = extractApartmentsListings(html, formattedUrl);
