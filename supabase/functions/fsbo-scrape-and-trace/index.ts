@@ -158,9 +158,12 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
   switch (platform) {
     case 'zillow':
       if (listingType === 'sale') {
+        // FSBO for sale listings
         return `https://www.zillow.com/${formattedLocation}/fsbo/`;
       } else {
-        return `https://www.zillow.com/homes/for_rent/${formattedLocation}/`;
+        // For rent by owner - use the proper filter parameters
+        // Zillow uses lotId filter: 43094 = For Rent By Owner
+        return `https://www.zillow.com/${formattedLocation}/rentals/?searchQueryState=%7B%22filterState%22%3A%7B%22fsbo%22%3A%7B%22value%22%3Atrue%7D%2C%22fsba%22%3A%7B%22value%22%3Afalse%7D%2C%22fore%22%3A%7B%22value%22%3Afalse%7D%2C%22auc%22%3A%7B%22value%22%3Afalse%7D%2C%22nc%22%3A%7B%22value%22%3Afalse%7D%2C%22cmsn%22%3A%7B%22value%22%3Afalse%7D%2C%22fr%22%3A%7B%22value%22%3Atrue%7D%7D%7D`;
       }
     case 'fsbo': {
       const { city } = parseCityState(decodedLocation);
@@ -234,18 +237,42 @@ function extractZillowListings(html: string, sourceUrl: string, listingType: 'sa
     }
 
     const jsonData = JSON.parse(nextDataMatch[1]);
+    
+    // Try multiple paths where search results might be stored
     const searchResults = 
       jsonData?.props?.pageProps?.searchPageState?.cat1?.searchResults?.listResults ||
       jsonData?.props?.pageProps?.searchPageState?.cat2?.searchResults?.listResults ||
+      jsonData?.props?.pageProps?.searchResults?.listResults ||
+      jsonData?.props?.pageProps?.componentProps?.searchResults?.listResults ||
       [];
 
     console.log(`[Zillow] Found ${searchResults.length} listings in __NEXT_DATA__`);
+    
+    // Log first result structure for debugging
+    if (searchResults.length > 0) {
+      const sample = searchResults[0];
+      console.log('[Zillow] Sample listing fields:', Object.keys(sample));
+      console.log('[Zillow] Sample data:', JSON.stringify({
+        address: sample.address,
+        price: sample.price,
+        unformattedPrice: sample.unformattedPrice,
+        beds: sample.beds,
+        baths: sample.baths,
+        area: sample.area,
+        detailUrl: sample.detailUrl,
+        zpid: sample.zpid,
+        hdpData: sample.hdpData ? 'present' : 'missing',
+      }));
+    }
 
     for (const home of searchResults) {
-      const detailUrl = home.detailUrl || '';
-      const fullUrl = detailUrl.startsWith('https') ? detailUrl : `https://www.zillow.com${detailUrl}`;
+      // Zillow nests some data in hdpData
+      const hdpData = home.hdpData?.homeInfo || {};
       
-      // For FSBO, check listedBy for PROPERTY_OWNER
+      const detailUrl = home.detailUrl || hdpData.homeDetailUrl || '';
+      const fullUrl = detailUrl.startsWith('https') ? detailUrl : detailUrl ? `https://www.zillow.com${detailUrl}` : undefined;
+      
+      // For FSBO/FRBO, check listedBy for PROPERTY_OWNER
       let ownerPhone = '';
       const listedBy = home.listedBy || [];
       for (const b of listedBy) {
@@ -259,19 +286,33 @@ function extractZillowListings(html: string, sourceUrl: string, listingType: 'sa
         }
       }
 
+      // Get price - check multiple possible fields
+      let price = home.price || hdpData.price;
+      if (!price && home.unformattedPrice) {
+        price = `$${Number(home.unformattedPrice).toLocaleString()}`;
+      }
+      if (!price && hdpData.priceForHDP) {
+        price = hdpData.priceForHDP;
+      }
+
+      // Get beds/baths - check multiple fields
+      const beds = home.beds ?? home.bedrooms ?? hdpData.bedrooms ?? hdpData.beds;
+      const baths = home.baths ?? home.bathrooms ?? hdpData.bathrooms ?? hdpData.baths;
+      const sqft = home.area ?? home.sqft ?? home.livingArea ?? hdpData.livingArea ?? hdpData.sqft;
+
       const listing: EnrichedListing = {
-        address: home.address || '',
-        bedrooms: home.beds || home.bedrooms || undefined,
-        bathrooms: home.baths || home.bathrooms || undefined,
-        price: home.price || (home.unformattedPrice ? `$${home.unformattedPrice}` : undefined),
-        square_feet: home.area || home.sqft || undefined,
+        address: home.address || hdpData.streetAddress || '',
+        bedrooms: beds !== undefined ? Number(beds) : undefined,
+        bathrooms: baths !== undefined ? Number(baths) : undefined,
+        price: price?.toString(),
+        square_feet: sqft !== undefined ? Number(sqft) : undefined,
         listing_url: fullUrl,
-        listing_id: home.zpid?.toString() || home.id || undefined,
-        property_type: home.homeType?.replace('_', ' ').replace('HOME_TYPE', '').trim() || undefined,
+        listing_id: (home.zpid || hdpData.zpid)?.toString(),
+        property_type: (home.homeType || hdpData.homeType)?.replace('_', ' ').replace('HOME_TYPE', '').trim() || undefined,
         listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
-        days_on_market: home.daysOnZillow || undefined,
-        favorites_count: home.favoriteCount || undefined,
-        views_count: home.pageViewCount || undefined,
+        days_on_market: home.daysOnZillow ?? hdpData.daysOnZillow,
+        favorites_count: home.favoriteCount,
+        views_count: home.pageViewCount,
         owner_phone: cleanPhone(ownerPhone) || undefined,
         source_url: sourceUrl,
         source_platform: 'zillow',
@@ -553,7 +594,7 @@ function extractGenericListings(html: string, sourceUrl: string): EnrichedListin
   return listings;
 }
 
-// Skip trace a single address using Tracerfy
+// Skip trace a single address using Tracerfy or BatchData
 async function skipTraceAddress(address: string, tracerfyApiKey: string): Promise<SkipTraceResult> {
   if (!address || address.trim().length < 5) {
     return { success: false, error: 'Invalid address' };
@@ -582,15 +623,72 @@ async function skipTraceAddress(address: string, tracerfyApiKey: string): Promis
     addressData.street = address;
   }
 
+  // Try BatchData API first (more reliable)
+  const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
+  if (batchDataKey) {
+    try {
+      const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${batchDataKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [{
+            streetAddress: addressData.street,
+            city: addressData.city || '',
+            state: addressData.state || '',
+            zipCode: addressData.zip || '',
+          }],
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const result = data.results?.[0];
+        if (result?.persons?.[0]) {
+          const person = result.persons[0];
+          return {
+            success: true,
+            data: {
+              fullName: person.names?.[0]?.fullName || null,
+              firstName: person.names?.[0]?.firstName || null,
+              lastName: person.names?.[0]?.lastName || null,
+              phones: (person.phones || []).map((p: any) => ({
+                number: p.phoneNumber || p.number,
+                type: p.phoneType || 'unknown',
+                lineType: p.carrierType,
+              })),
+              emails: (person.emails || []).map((e: any) => ({
+                address: e.emailAddress || e.email,
+                type: e.emailType,
+              })),
+              confidence: result.confidenceScore || 0,
+            },
+          };
+        }
+        return {
+          success: true,
+          data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+          message: 'No owner information found',
+        };
+      }
+    } catch (error) {
+      console.error('[BatchData] Error:', error);
+    }
+  }
+
+  // Fallback to Tracerfy - using correct endpoint
   try {
-    const response = await fetch('https://api.tracerfy.com/v1/skip-trace', {
+    // Tracerfy API v2 endpoint
+    const response = await fetch('https://www.tracerfy.com/api/v2/trace', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${tracerfyApiKey}`,
+        'x-api-key': tracerfyApiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        address: addressData.street,
+        street: addressData.street,
         city: addressData.city || '',
         state: addressData.state || '',
         zip: addressData.zip || '',
@@ -598,13 +696,15 @@ async function skipTraceAddress(address: string, tracerfyApiKey: string): Promis
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
+      if (response.status === 404 || response.status === 422) {
         return {
           success: true,
           data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
           message: 'No owner information found',
         };
       }
+      const errorText = await response.text();
+      console.error('[Tracerfy] API error:', response.status, errorText);
       return { success: false, error: `API error: ${response.status}` };
     }
 
