@@ -1670,11 +1670,13 @@ Deno.serve(async (req) => {
             
             // If we have detail URLs, scrape them for richer data (Python's detail_page method)
             if (zillowDetailUrls.length > 0) {
-              console.log(`[Zillow] Scraping ${Math.min(zillowDetailUrls.length, 50)} detail pages...`);
+              // Limit to 10 detail pages to avoid edge function timeout (each Zyte request ~13s)
+              const maxZillowDetailPages = 10;
+              console.log(`[Zillow] Scraping ${Math.min(zillowDetailUrls.length, maxZillowDetailPages)} detail pages (max ${maxZillowDetailPages} to avoid timeout)...`);
               const uniqueUrls = new Set<string>();
               const zillowDetailListings: EnrichedListing[] = [];
               
-              for (const detailUrl of zillowDetailUrls.slice(0, 50)) {
+              for (const detailUrl of zillowDetailUrls.slice(0, maxZillowDetailPages)) {
                 // Skip duplicates (matching Python's unique_list check)
                 if (uniqueUrls.has(detailUrl)) continue;
                 uniqueUrls.add(detailUrl);
@@ -1741,10 +1743,12 @@ Deno.serve(async (req) => {
             // If we got placeholder listings (only URLs), scrape detail pages
             const detailUrls = extractHotpadsListingUrls(html);
             if (detailUrls.length > 0 && listings.every(l => l.address === 'See listing' || !l.owner_phone)) {
-              console.log(`[HotPads] Scraping ${Math.min(detailUrls.length, 50)} detail pages...`);
+              // Limit to 10 detail pages to avoid edge function timeout (each Zyte request ~13s)
+              const maxDetailPages = 10;
+              console.log(`[HotPads] Scraping ${Math.min(detailUrls.length, maxDetailPages)} detail pages (max ${maxDetailPages} to avoid timeout)...`);
               const detailListings: EnrichedListing[] = [];
               
-              for (const detailUrl of detailUrls.slice(0, 50)) {
+              for (const detailUrl of detailUrls.slice(0, maxDetailPages)) {
                 try {
                   console.log(`[HotPads Detail] ${detailUrl}`);
                   let detailHtml = '';
