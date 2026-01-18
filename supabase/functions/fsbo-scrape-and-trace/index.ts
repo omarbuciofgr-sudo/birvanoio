@@ -329,160 +329,275 @@ function extractZillowListings(html: string, sourceUrl: string, listingType: 'sa
   return listings;
 }
 
-// Extract Apartments.com listings from JSON-LD and HTML
+// Extract Apartments.com listing URLs from search results (for detail page scraping)
+function extractApartmentsListingUrls(html: string): string[] {
+  const urls: string[] = [];
+  
+  try {
+    // Python: JSON-LD data.get('about', []) -> record.get('url', '')
+    const jsonLdMatch = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (jsonLdMatch) {
+      try {
+        const jsonData = JSON.parse(jsonLdMatch[1]);
+        const records = jsonData.about || [];
+        for (const record of records) {
+          if (record.url) {
+            urls.push(record.url);
+          }
+        }
+      } catch (e) {
+        // Continue to HTML extraction
+      }
+    }
+    
+    // Also try HTML extraction for listing URLs
+    const placardMatches = html.matchAll(/<section[^>]*class=["'][^"']*placard-content[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi);
+    for (const match of placardMatches) {
+      const urlMatch = match[1].match(/href=["'](https:\/\/www\.apartments\.com\/[^"']+)["']/i);
+      if (urlMatch?.[1]) {
+        urls.push(urlMatch[1]);
+      }
+    }
+    
+    console.log(`[Apartments] Found ${urls.length} listing URLs`);
+  } catch (error) {
+    console.error('[Apartments] Error extracting URLs:', error);
+  }
+  
+  return [...new Set(urls)];
+}
+
+// Extract beds/baths and price from HTML cards (matching Python XPath selectors)
+function extractApartmentsHTMLData(html: string): { bedsBaths: string[]; prices: string[]; phones: string[] } {
+  const bedsBaths: string[] = [];
+  const prices: string[] = [];
+  const phones: string[] = [];
+  
+  try {
+    // Python: response.xpath("//section[@class='placard-content']//div[@class='property-wrapper']")
+    const placardSections = html.matchAll(/<section[^>]*class=["'][^"']*placard-content[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi);
+    
+    for (const section of placardSections) {
+      const content = section[1];
+      
+      // Python: li.xpath(".//div[@class='bed-range']/text()")
+      const bedRangeMatch = content.match(/<div[^>]*class=["'][^"']*bed-range[^"']*["'][^>]*>([^<]+)<\/div>/i);
+      bedsBaths.push(bedRangeMatch?.[1]?.trim() || '');
+      
+      // Python: li.xpath(".//div[@class='price-range']/text()")
+      const priceRangeMatch = content.match(/<div[^>]*class=["'][^"']*price-range[^"']*["'][^>]*>([^<]+)<\/div>/i);
+      prices.push(priceRangeMatch?.[1]?.trim() || '');
+      
+      // Python: li.xpath(".//button[@class='phone-link js-phone']/span/text()")
+      const phoneMatch = content.match(/<button[^>]*class=["'][^"']*phone-link[^"']*js-phone[^"']*["'][^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i) ||
+                        content.match(/<button[^>]*class=["'][^"']*js-phone[^"']*["'][^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i);
+      phones.push(phoneMatch?.[1]?.trim() || '');
+    }
+    
+    // Fallback: Try alternative patterns
+    if (bedsBaths.length === 0) {
+      const allBedRanges = html.matchAll(/<div[^>]*class=["'][^"']*bed-range[^"']*["'][^>]*>([^<]+)<\/div>/gi);
+      for (const match of allBedRanges) {
+        bedsBaths.push(match[1].trim());
+      }
+    }
+    
+    if (prices.length === 0) {
+      const allPriceRanges = html.matchAll(/<div[^>]*class=["'][^"']*price-range[^"']*["'][^>]*>([^<]+)<\/div>/gi);
+      for (const match of allPriceRanges) {
+        prices.push(match[1].trim());
+      }
+    }
+    
+    console.log(`[Apartments] HTML extraction: ${bedsBaths.length} beds/baths, ${prices.length} prices, ${phones.length} phones`);
+  } catch (error) {
+    console.error('[Apartments] Error extracting HTML data:', error);
+  }
+  
+  return { bedsBaths, prices, phones };
+}
+
+// Extract Apartments.com detail page data (matching Python parse_detail)
+function extractApartmentsDetailPage(html: string, sourceUrl: string): { listingTime: string } {
+  let listingTime = '';
+  
+  try {
+    // Python: response.xpath("//div[@class='freshnessContainer']/span[@class='lastUpdated']/span/text()")
+    const freshnessMatch = html.match(/<div[^>]*class=["'][^"']*freshnessContainer[^"']*["'][^>]*>[\s\S]*?<span[^>]*class=["'][^"']*lastUpdated[^"']*["'][^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i);
+    if (freshnessMatch) {
+      listingTime = freshnessMatch[1].trim();
+    }
+    
+    // Fallback: try simpler patterns
+    if (!listingTime) {
+      const altMatch = html.match(/lastUpdated[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i) ||
+                      html.match(/Updated[:\s]*([^<]+)/i);
+      if (altMatch) {
+        listingTime = altMatch[1].trim();
+      }
+    }
+  } catch (error) {
+    console.error('[Apartments] Error extracting detail page:', error);
+  }
+  
+  return { listingTime };
+}
+
+// Extract Apartments.com listings from JSON-LD and HTML (matching Python logic)
 function extractApartmentsListings(html: string, sourceUrl: string): EnrichedListing[] {
   const listings: EnrichedListing[] = [];
   
   try {
-    // Try to find all JSON-LD scripts (there may be multiple)
-    const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
-    let records: any[] = [];
+    // First extract HTML data (beds/baths, prices, phones from placards)
+    const htmlData = extractApartmentsHTMLData(html);
     
-    for (const match of jsonLdMatches) {
+    // Python: script_content = response.xpath("//script[@type='application/ld+json']/text()").get()
+    const jsonLdMatch = html.match(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+    
+    if (jsonLdMatch) {
       try {
-        const jsonData = JSON.parse(match[1]);
+        const data = JSON.parse(jsonLdMatch[1]);
+        // Python: records = data.get('about', [])
+        const records = data.about || [];
         
-        // Check for ItemList structure (newer format)
-        if (jsonData['@type'] === 'ItemList' && jsonData.itemListElement) {
-          for (const item of jsonData.itemListElement) {
-            if (item.item) {
-              records.push(item.item);
-            } else if (item['@type'] && item['@type'] !== 'ListItem') {
-              records.push(item);
-            }
+        console.log(`[Apartments] Found ${records.length} listings in JSON-LD 'about' array`);
+        
+        for (let idx = 0; idx < records.length; idx++) {
+          const record = records[idx];
+          
+          const url = record.url || '';
+          const telephone = cleanPhone(record.telephone || '');
+          const name = (record.name || '').trim();
+          
+          // Python: address = record.get('Address', {}) - note capital A
+          const address = record.Address || record.address || {};
+          const streetAddress = (address.streetAddress || '').trim();
+          const addressLocality = (address.addressLocality || '').trim();
+          const addressRegion = (address.addressRegion || '').trim();
+          const postalCode = (address.postalCode || '').trim();
+          const addressCountry = (address.addressCountry || '').trim();
+          
+          const fullAddress = `${streetAddress}, ${addressLocality}, ${addressRegion} ${postalCode} ${addressCountry}`
+            .replace(/^[,\s]+/, '')
+            .replace(/[,\s]+$/, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          if (!fullAddress) continue;
+          
+          // Get beds/baths and price from HTML data (by index, matching Python logic)
+          const bedsBaths = htmlData.bedsBaths[idx] || '';
+          const price = htmlData.prices[idx] || '';
+          const htmlPhone = htmlData.phones[idx] || '';
+          
+          // Parse beds/baths string
+          let bedrooms: number | undefined;
+          let bathrooms: number | undefined;
+          if (bedsBaths) {
+            const bedsMatch = bedsBaths.match(/(\d+)\s*(?:bed|br)/i);
+            const bathsMatch = bedsBaths.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+            if (bedsMatch) bedrooms = parseInt(bedsMatch[1]);
+            if (bathsMatch) bathrooms = parseFloat(bathsMatch[1]);
           }
-        }
-        // Check for about array (older format)
-        else if (jsonData.about && Array.isArray(jsonData.about)) {
-          records = records.concat(jsonData.about);
-        }
-        // Check for SearchResultsPage with mainEntity
-        else if (jsonData['@type'] === 'SearchResultsPage' && jsonData.mainEntity) {
-          const mainEntity = Array.isArray(jsonData.mainEntity) ? jsonData.mainEntity : [jsonData.mainEntity];
-          records = records.concat(mainEntity);
-        }
-        // Direct array of properties
-        else if (Array.isArray(jsonData)) {
-          records = records.concat(jsonData.filter(item => item.address || item.Address));
+          
+          const listing: EnrichedListing = {
+            address: fullAddress,
+            owner_name: name || undefined,
+            owner_phone: telephone || htmlPhone || undefined,
+            listing_url: url || undefined,
+            price: price || undefined,
+            bedrooms,
+            bathrooms,
+            listing_type: 'frbo',
+            source_url: sourceUrl,
+            source_platform: 'apartments',
+            scraped_at: new Date().toISOString(),
+            skip_trace_status: 'pending',
+          };
+          
+          listings.push(listing);
         }
       } catch (e) {
-        // Continue to next JSON-LD block
+        console.error('[Apartments] JSON-LD parse error:', e);
       }
     }
-
-    console.log(`[Apartments] Found ${records.length} listings in JSON-LD`);
-
-    // If no JSON-LD records, try HTML extraction
-    if (records.length === 0) {
+    
+    // If no JSON-LD listings, try HTML card fallback
+    if (listings.length === 0) {
       console.log('[Apartments] No JSON-LD listings, trying HTML extraction');
       return extractApartmentsFromHTML(html, sourceUrl);
     }
-
-    for (const record of records) {
-      const address = record.Address || record.address || {};
-      
-      const streetAddress = (address.streetAddress || address.street || '')?.trim() || '';
-      const addressLocality = (address.addressLocality || address.city || '')?.trim() || '';
-      const addressRegion = (address.addressRegion || address.state || '')?.trim() || '';
-      const postalCode = (address.postalCode || address.zip || '')?.trim() || '';
-      const fullAddress = [streetAddress, addressLocality, `${addressRegion} ${postalCode}`]
-        .filter(Boolean).join(', ').trim();
-
-      if (!fullAddress) continue;
-
-      // Get price from offers if available
-      let price = record.offers?.price || record.offers?.lowPrice || record.priceRange || undefined;
-      if (price && typeof price === 'number') {
-        price = `$${price.toLocaleString()}`;
-      }
-
-      const listing: EnrichedListing = {
-        address: fullAddress,
-        owner_name: record.name || undefined,
-        owner_phone: cleanPhone(record.telephone) || undefined,
-        listing_url: record.url || undefined,
-        price: price,
-        listing_type: 'frbo',
-        source_url: sourceUrl,
-        source_platform: 'apartments',
-        scraped_at: new Date().toISOString(),
-        skip_trace_status: 'pending',
-      };
-
-      // Extract beds/baths from numberOfRooms or description
-      if (record.numberOfRooms) {
-        listing.bedrooms = typeof record.numberOfRooms === 'number' ? record.numberOfRooms : parseInt(record.numberOfRooms);
-      }
-      if (record.numberOfBathroomsTotal) {
-        listing.bathrooms = typeof record.numberOfBathroomsTotal === 'number' ? record.numberOfBathroomsTotal : parseFloat(record.numberOfBathroomsTotal);
-      }
-
-      listings.push(listing);
-    }
+    
+    console.log(`[Apartments] Extracted ${listings.length} listings`);
   } catch (error) {
-    console.error('[Apartments] Error parsing JSON-LD:', error);
-    // Try HTML fallback on error
-    return extractApartmentsFromHTML(html, sourceUrl);
-  }
-
-  // If still no listings, try HTML fallback
-  if (listings.length === 0) {
+    console.error('[Apartments] Error parsing:', error);
     return extractApartmentsFromHTML(html, sourceUrl);
   }
 
   return listings;
 }
 
-// Fallback: Extract Apartments.com listings from HTML structure
+// Fallback: Extract Apartments.com listings from HTML structure (matching Python selectors)
 function extractApartmentsFromHTML(html: string, sourceUrl: string): EnrichedListing[] {
   const listings: EnrichedListing[] = [];
   
   try {
-    // Match property cards - multiple possible class patterns
-    const cardPatterns = [
-      /<article[^>]*class="[^"]*placard[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
-      /<li[^>]*class="[^"]*mortar-wrapper[^"]*"[^>]*>([\s\S]*?)<\/li>/gi,
-      /<div[^>]*class="[^"]*property-card[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    ];
-
-    let cards: string[] = [];
-    for (const pattern of cardPatterns) {
-      const matches = html.match(pattern) || [];
-      if (matches.length > 0) {
-        cards = matches;
-        break;
+    // Match property placard sections (matching Python selectors)
+    // Python: response.xpath("//section[@class='placard-content']")
+    const placardPattern = /<section[^>]*class=["'][^"']*placard-content[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi;
+    const placardMatches = [...html.matchAll(placardPattern)];
+    
+    // Convert to array of [full, content] tuples
+    let placards: Array<[string, string]> = placardMatches.map(m => [m[0], m[1] || m[0]]);
+    
+    // Also try article placard pattern
+    if (placards.length === 0) {
+      const articlePattern = /<article[^>]*class=["'][^"']*placard[^"']*"[^>]*>([\s\S]*?)<\/article>/gi;
+      const articles = html.match(articlePattern) || [];
+      for (const article of articles) {
+        placards.push([article, article]);
       }
     }
+    
+    console.log(`[Apartments] Found ${placards.length} property placards in HTML`);
 
-    console.log(`[Apartments] Found ${cards.length} property cards in HTML`);
-
-    for (const card of cards.slice(0, 50)) {
-      // Extract address
-      const addressMatch = card.match(/class="[^"]*property-address[^"]*"[^>]*>([^<]+)</i) ||
-                          card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i) ||
-                          card.match(/<span[^>]*title="([^"]+)"/i);
+    for (const [fullMatch, content] of placards.slice(0, 100)) {
+      // Extract address from title or address element
+      const addressMatch = content.match(/class=["'][^"']*property-address[^"']*["'][^>]*>([^<]+)</i) ||
+                          content.match(/class=["'][^"']*address[^"']*["'][^>]*>([^<]+)</i) ||
+                          content.match(/title=["']([^"']+)["']/i);
       
-      // Extract price
-      const priceMatch = card.match(/\$[\d,]+(?:\s*-\s*\$[\d,]+)?/);
+      // Python: li.xpath(".//div[@class='price-range']/text()")
+      const priceMatch = content.match(/<div[^>]*class=["'][^"']*price-range[^"']*["'][^>]*>([^<]+)<\/div>/i) ||
+                        content.match(/\$[\d,]+(?:\s*-\s*\$[\d,]+)?/);
       
-      // Extract phone
-      const phoneMatch = card.match(/tel:([^"]+)"/i) ||
-                        card.match(/>(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})</);
+      // Python: li.xpath(".//button[@class='phone-link js-phone']/span/text()")
+      const phoneMatch = content.match(/<button[^>]*class=["'][^"']*phone-link[^"']*["'][^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/i) ||
+                        content.match(/tel:([^"]+)"/i);
       
       // Extract URL
-      const urlMatch = card.match(/href="(https:\/\/www\.apartments\.com\/[^"]+)"/i) ||
-                      card.match(/href="(\/[^"]+)"/i);
+      const urlMatch = content.match(/href=["'](https:\/\/www\.apartments\.com\/[^"']+)["']/i);
 
-      // Extract beds/baths
-      const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
-      const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+      // Python: li.xpath(".//div[@class='bed-range']/text()")
+      const bedsBathsMatch = content.match(/<div[^>]*class=["'][^"']*bed-range[^"']*["'][^>]*>([^<]+)<\/div>/i);
+      let bedrooms: number | undefined;
+      let bathrooms: number | undefined;
+      if (bedsBathsMatch) {
+        const text = bedsBathsMatch[1];
+        const bedsMatch = text.match(/(\d+)\s*(?:bed|br)/i);
+        const bathsMatch = text.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+        if (bedsMatch) bedrooms = parseInt(bedsMatch[1]);
+        if (bathsMatch) bathrooms = parseFloat(bathsMatch[1]);
+      }
 
       if (addressMatch || urlMatch) {
         const listing: EnrichedListing = {
-          address: addressMatch?.[1]?.trim() || 'Unknown Address',
-          price: priceMatch?.[0] || undefined,
+          address: addressMatch?.[1]?.trim() || 'See listing',
+          price: typeof priceMatch?.[1] === 'string' ? priceMatch[1].trim() : priceMatch?.[0] || undefined,
           owner_phone: phoneMatch ? cleanPhone(phoneMatch[1]) || undefined : undefined,
-          listing_url: urlMatch?.[1]?.startsWith('http') ? urlMatch[1] : urlMatch?.[1] ? `https://www.apartments.com${urlMatch[1]}` : undefined,
+          listing_url: urlMatch?.[1] || undefined,
+          bedrooms,
+          bathrooms,
           listing_type: 'frbo',
           source_url: sourceUrl,
           source_platform: 'apartments',
@@ -490,10 +605,35 @@ function extractApartmentsFromHTML(html: string, sourceUrl: string): EnrichedLis
           skip_trace_status: 'pending',
         };
 
-        if (bedsMatch) listing.bedrooms = parseInt(bedsMatch[1]);
-        if (bathsMatch) listing.bathrooms = parseFloat(bathsMatch[1]);
-
         listings.push(listing);
+      }
+    }
+    
+    // Additional fallback: try mortar-wrapper cards
+    if (listings.length === 0) {
+      const cardPattern = /<li[^>]*class=["'][^"']*mortar-wrapper[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi;
+      const cards = html.match(cardPattern) || [];
+      
+      console.log(`[Apartments] Trying mortar-wrapper fallback: ${cards.length} cards`);
+      
+      for (const card of cards.slice(0, 100)) {
+        const addressMatch = card.match(/class=["'][^"']*address[^"']*["'][^>]*>([^<]+)</i);
+        const priceMatch = card.match(/\$[\d,]+/);
+        const urlMatch = card.match(/href=["'](https:\/\/www\.apartments\.com\/[^"']+)["']/i);
+        
+        if (addressMatch || urlMatch) {
+          const listing: EnrichedListing = {
+            address: addressMatch?.[1]?.trim() || 'See listing',
+            price: priceMatch?.[0] || undefined,
+            listing_url: urlMatch?.[1] || undefined,
+            listing_type: 'frbo',
+            source_url: sourceUrl,
+            source_platform: 'apartments',
+            scraped_at: new Date().toISOString(),
+            skip_trace_status: 'pending',
+          };
+          listings.push(listing);
+        }
       }
     }
   } catch (error) {
