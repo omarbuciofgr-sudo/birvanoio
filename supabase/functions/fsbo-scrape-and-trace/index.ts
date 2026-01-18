@@ -508,52 +508,134 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
   const listings: EnrichedListing[] = [];
   
   try {
-    const jsonLdMatch = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
-    if (!jsonLdMatch) {
-      console.log('[HotPads] No JSON-LD found');
-      return listings;
-    }
-
-    const jsonData = JSON.parse(jsonLdMatch[1]);
-    const graph = jsonData['@graph'] || [];
-
-    console.log(`[HotPads] Found ${graph.length} items in @graph`);
-
-    for (const detail of graph) {
-      const mainEntity = detail.mainEntity;
-      if (!mainEntity) continue;
-
-      const address = mainEntity.address || {};
-      const streetAddress = address.streetAddress?.trim() || '';
-      const addressLocality = address.addressLocality?.trim() || '';
-      const addressRegion = address.addressRegion?.trim() || '';
-      const postalCode = address.postalCode?.trim() || '';
-      const fullAddress = [streetAddress, addressLocality, `${addressRegion} ${postalCode}`]
-        .filter(Boolean).join(', ').trim();
-
-      const listing: EnrichedListing = {
-        address: fullAddress,
-        owner_name: mainEntity.name?.trim() || undefined,
-        owner_phone: cleanPhone(mainEntity.telephone) || undefined,
-        description: mainEntity.description?.trim()?.slice(0, 500) || undefined,
-        listing_type: 'frbo',
-        source_url: sourceUrl,
-        source_platform: 'hotpads',
-        scraped_at: new Date().toISOString(),
-        skip_trace_status: 'pending',
-      };
-
-      listings.push(listing);
-    }
-
-    // Extract beds/baths from HTML patterns
-    const bedMatch = html.match(/(\d+)\s*(?:bed|bedroom)/i);
-    const bathMatch = html.match(/(\d+(?:\.\d)?)\s*(?:bath|bathroom)/i);
+    // Find all JSON-LD blocks
+    const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
     
-    if (listings.length > 0) {
-      if (bedMatch) listings[0].bedrooms = parseInt(bedMatch[1]);
-      if (bathMatch) listings[0].bathrooms = parseFloat(bathMatch[1]);
+    for (const match of jsonLdMatches) {
+      try {
+        const jsonData = JSON.parse(match[1]);
+        
+        // Handle @graph array
+        const graph = jsonData['@graph'] || (Array.isArray(jsonData) ? jsonData : [jsonData]);
+        
+        console.log(`[HotPads] Processing ${graph.length} items from JSON-LD`);
+        
+        for (const item of graph) {
+          // Try mainEntity first (detail pages)
+          let entity = item.mainEntity || item;
+          
+          // Skip non-property types
+          const itemType = entity['@type'] || '';
+          if (!itemType.includes('Residence') && 
+              !itemType.includes('Apartment') && 
+              !itemType.includes('House') &&
+              !itemType.includes('Product') &&
+              !itemType.includes('Place') &&
+              itemType !== 'SingleFamilyResidence' &&
+              itemType !== 'ApartmentComplex') {
+            continue;
+          }
+          
+          const address = entity.address || {};
+          let fullAddress = '';
+          
+          if (typeof address === 'string') {
+            fullAddress = address;
+          } else {
+            const streetAddress = (address.streetAddress || '')?.trim();
+            const addressLocality = (address.addressLocality || '')?.trim();
+            const addressRegion = (address.addressRegion || '')?.trim();
+            const postalCode = (address.postalCode || '')?.trim();
+            fullAddress = [streetAddress, addressLocality, `${addressRegion} ${postalCode}`]
+              .filter(Boolean).join(', ').trim();
+          }
+          
+          if (!fullAddress) continue;
+          
+          // Get price
+          let price = entity.offers?.price || entity.offers?.lowPrice || entity.priceRange;
+          if (price && typeof price === 'number') {
+            price = `$${price.toLocaleString()}`;
+          }
+          
+          const listing: EnrichedListing = {
+            address: fullAddress,
+            owner_name: entity.name?.trim() || undefined,
+            owner_phone: cleanPhone(entity.telephone) || undefined,
+            description: entity.description?.trim()?.slice(0, 500) || undefined,
+            price: price?.toString() || undefined,
+            listing_url: entity.url || undefined,
+            listing_type: 'frbo',
+            source_url: sourceUrl,
+            source_platform: 'hotpads',
+            scraped_at: new Date().toISOString(),
+            skip_trace_status: 'pending',
+          };
+          
+          // Try to get beds/baths
+          if (entity.numberOfRooms) {
+            listing.bedrooms = typeof entity.numberOfRooms === 'number' 
+              ? entity.numberOfRooms 
+              : parseInt(entity.numberOfRooms);
+          }
+          if (entity.numberOfBathroomsTotal) {
+            listing.bathrooms = typeof entity.numberOfBathroomsTotal === 'number' 
+              ? entity.numberOfBathroomsTotal 
+              : parseFloat(entity.numberOfBathroomsTotal);
+          }
+          
+          listings.push(listing);
+        }
+      } catch (e) {
+        // Continue to next JSON-LD block
+      }
     }
+    
+    // If no listings from JSON-LD, try HTML extraction
+    if (listings.length === 0) {
+      console.log('[HotPads] No JSON-LD listings, trying HTML extraction');
+      
+      // HotPads listing cards pattern
+      const cardPatterns = [
+        /<div[^>]*class="[^"]*ListingCard[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<article[^>]*data-testid="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
+      ];
+      
+      for (const pattern of cardPatterns) {
+        const cards = html.match(pattern) || [];
+        if (cards.length > 0) {
+          console.log(`[HotPads] Found ${cards.length} listing cards in HTML`);
+          
+          for (const card of cards.slice(0, 50)) {
+            const addressMatch = card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i) ||
+                                card.match(/class="[^"]*location[^"]*"[^>]*>([^<]+)</i);
+            const priceMatch = card.match(/\$[\d,]+/);
+            const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
+            const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+            
+            if (addressMatch) {
+              const listing: EnrichedListing = {
+                address: addressMatch[1].trim(),
+                price: priceMatch?.[0] || undefined,
+                listing_type: 'frbo',
+                source_url: sourceUrl,
+                source_platform: 'hotpads',
+                scraped_at: new Date().toISOString(),
+                skip_trace_status: 'pending',
+              };
+              
+              if (bedsMatch) listing.bedrooms = parseInt(bedsMatch[1]);
+              if (bathsMatch) listing.bathrooms = parseFloat(bathsMatch[1]);
+              
+              listings.push(listing);
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    console.log(`[HotPads] Extracted ${listings.length} listings`);
   } catch (error) {
     console.error('[HotPads] Error parsing:', error);
   }
