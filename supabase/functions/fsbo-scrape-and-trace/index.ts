@@ -404,6 +404,33 @@ function extractZillowDetailPage(html: string, sourceUrl: string, listingType: '
     // Python: item['Favorite_Count'] = home.get('favoriteCount', '')
     const favoriteCount = home.favoriteCount;
     
+    // Python: Extract Phone_Number from listedBy array (lines 105-113 in Python spider)
+    // listed = home.get('listedBy')
+    // for b in listed:
+    //     owner = b.get('id')
+    //     if owner == 'PROPERTY_OWNER':
+    //         elements = b.get('elements')
+    //         for phone in elements:
+    //             phone_id = phone.get('id')
+    //             if phone_id == 'PHONE':
+    //                 item['Phone_Number'] = phone.get('text', '')
+    let ownerPhone = '';
+    const listedBy = home.listedBy || [];
+    for (const b of listedBy) {
+      const owner = b.id;
+      if (owner === 'PROPERTY_OWNER') {
+        const elements = b.elements || [];
+        for (const phone of elements) {
+          const phoneId = phone.id;
+          if (phoneId === 'PHONE') {
+            ownerPhone = phone.text || '';
+            break;
+          }
+        }
+        if (ownerPhone) break;
+      }
+    }
+    
     if (!address) {
       console.log('[Zillow Detail] No address found');
       return null;
@@ -427,6 +454,7 @@ function extractZillowDetailPage(html: string, sourceUrl: string, listingType: '
       scraped_at: new Date().toISOString(),
       skip_trace_status: 'pending',
       description: hoa ? `HOA: ${hoa}` : undefined,
+      owner_phone: cleanPhone(ownerPhone) || undefined,
     };
     
     return listing;
