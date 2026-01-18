@@ -153,18 +153,17 @@ Deno.serve(async (req) => {
 
     console.log('Skip tracing address:', addressData);
 
-    // Tracerfy API call
-    // Note: Tracerfy uses a simple REST API - adjust endpoint based on their actual docs
-    const tracerfyUrl = 'https://api.tracerfy.com/v1/skip-trace';
+    // Tracerfy API v2 endpoint
+    const tracerfyUrl = 'https://www.tracerfy.com/api/v2/trace';
     
     const response = await fetch(tracerfyUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        address: addressData.street,
+        street: addressData.street,
         city: addressData.city,
         state: addressData.state,
         zip: addressData.zip,
