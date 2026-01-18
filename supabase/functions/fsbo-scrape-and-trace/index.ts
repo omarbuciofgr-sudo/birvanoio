@@ -194,12 +194,15 @@ async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: 
       headers: {
         'Authorization': `Basic ${btoa(zyteApiKey + ':')}`,
         'Content-Type': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
       },
       body: JSON.stringify({
         url: url,
         browserHtml: true,
-        javascript: true,
-        actions: [{ action: 'waitForTimeout', timeout: 5000 }],
+        actions: [
+          { action: 'waitForSelector', selector: { type: 'css', value: 'body' }, timeout: 10 },
+          { action: 'waitForTimeout', timeout: 3 }
+        ],
       }),
     });
 
