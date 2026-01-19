@@ -1805,9 +1805,10 @@ Deno.serve(async (req) => {
 
         console.log(`[Extracted] ${listings.length} listings`);
 
-        // Filter by location
+        // Filter by location (skip placeholder addresses that need enrichment from detail pages)
         for (const listing of listings) {
-          if (location && listing.address && !listingMatchesLocation(listing.address, expectedCity, expectedStateAbbrev)) {
+          const isPlaceholderAddress = !listing.address || listing.address === 'See listing' || listing.address.length < 10;
+          if (location && listing.address && !isPlaceholderAddress && !listingMatchesLocation(listing.address, expectedCity, expectedStateAbbrev)) {
             console.log(`[Filtered] "${listing.address}" doesn't match ${expectedCity}, ${expectedStateAbbrev}`);
             continue;
           }
