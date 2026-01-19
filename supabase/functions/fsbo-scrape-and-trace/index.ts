@@ -1670,8 +1670,8 @@ Deno.serve(async (req) => {
             
             // If we have detail URLs, scrape them for richer data (Python's detail_page method)
             if (zillowDetailUrls.length > 0) {
-              // Limit to 10 detail pages to avoid edge function timeout (each Zyte request ~13s)
-              const maxZillowDetailPages = 10;
+              // Limit detail pages aggressively to avoid client/network timeouts (each Zyte request can be ~10-15s)
+              const maxZillowDetailPages = 3;
               console.log(`[Zillow] Scraping ${Math.min(zillowDetailUrls.length, maxZillowDetailPages)} detail pages (max ${maxZillowDetailPages} to avoid timeout)...`);
               const uniqueUrls = new Set<string>();
               const zillowDetailListings: EnrichedListing[] = [];
@@ -1743,8 +1743,8 @@ Deno.serve(async (req) => {
             // If we got placeholder listings (only URLs), scrape detail pages
             const detailUrls = extractHotpadsListingUrls(html);
             if (detailUrls.length > 0 && listings.every(l => l.address === 'See listing' || !l.owner_phone)) {
-              // Limit to 10 detail pages to avoid edge function timeout (each Zyte request ~13s)
-              const maxDetailPages = 10;
+              // Limit detail pages aggressively to avoid client/network timeouts (each Zyte request can be ~10-15s)
+              const maxDetailPages = 3;
               console.log(`[HotPads] Scraping ${Math.min(detailUrls.length, maxDetailPages)} detail pages (max ${maxDetailPages} to avoid timeout)...`);
               const detailListings: EnrichedListing[] = [];
               
