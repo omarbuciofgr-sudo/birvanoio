@@ -1128,15 +1128,16 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
             price = `$${price.toLocaleString()}`;
           }
           
+          const entityUrl = entity.url || undefined;
           const listing: EnrichedListing = {
             address: fullAddress,
             owner_name: entity.name?.trim() || undefined,
             owner_phone: cleanPhone(entity.telephone) || undefined,
             description: entity.description?.trim()?.slice(0, 500) || undefined,
             price: price?.toString() || undefined,
-            listing_url: entity.url || sourceUrl,
+            listing_url: entityUrl || sourceUrl,
             listing_type: 'frbo',
-            source_url: sourceUrl,
+            source_url: entityUrl || sourceUrl, // Use individual listing URL if available
             source_platform: 'hotpads',
             scraped_at: new Date().toISOString(),
             skip_trace_status: 'pending',
@@ -1199,7 +1200,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
               price: priceMatch?.[0] || undefined,
               listing_url: listingUrl || undefined,
               listing_type: 'frbo',
-              source_url: sourceUrl,
+              source_url: listingUrl || sourceUrl, // Use individual listing URL if available
               source_platform: 'hotpads',
               scraped_at: new Date().toISOString(),
               skip_trace_status: 'pending',
@@ -1234,12 +1235,13 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
               const urlMatch = card.match(/href=["']([^"']+)["']/i);
               
               if (addressMatch) {
+                const fullListingUrl = urlMatch?.[1]?.startsWith('/') ? `https://hotpads.com${urlMatch[1]}` : urlMatch?.[1] || undefined;
                 const listing: EnrichedListing = {
                   address: addressMatch[1].trim(),
                   price: priceMatch?.[0] || undefined,
-                  listing_url: urlMatch?.[1]?.startsWith('/') ? `https://hotpads.com${urlMatch[1]}` : urlMatch?.[1] || undefined,
+                  listing_url: fullListingUrl,
                   listing_type: 'frbo',
-                  source_url: sourceUrl,
+                  source_url: fullListingUrl || sourceUrl, // Use individual listing URL if available
                   source_platform: 'hotpads',
                   scraped_at: new Date().toISOString(),
                   skip_trace_status: 'pending',
@@ -1265,7 +1267,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
           address: 'See listing',
           listing_url: url,
           listing_type: 'frbo',
-          source_url: sourceUrl,
+          source_url: url, // Use individual listing URL so "View Original" works
           source_platform: 'hotpads',
           scraped_at: new Date().toISOString(),
           skip_trace_status: 'pending',
