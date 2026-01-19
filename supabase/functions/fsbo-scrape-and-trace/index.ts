@@ -1166,26 +1166,75 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
     if (listings.length === 0) {
       console.log('[HotPads] No JSON-LD listings, trying HTML card extraction');
       
+      // Build a map of URL -> extracted data from HTML
+      const urlToData = new Map<string, { address?: string; price?: string; beds?: number; baths?: number }>();
+      
       // Extract from listing cards (search results page)
       // Python: response.xpath("//ul[@class='AreaListingsContainer-listings']/li")
       const containerMatch = html.match(/<ul[^>]*class=["'][^"']*AreaListingsContainer-listings[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i);
       if (containerMatch) {
         const listItems = [...containerMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)];
-        console.log(`[HotPads] Found ${listItems.length} listing cards in HTML`);
+        console.log(`[HotPads] Found ${listItems.length} listing cards in container`);
         
         for (const li of listItems.slice(0, 100)) {
           const card = li[1];
           
-          // Get listing URL
-          const urlMatch = card.match(/href=["']([^"']+)["']/i);
+          // Get listing URL from ListingCardAnchor
+          const urlMatch = card.match(/<a[^>]*data-name=["']ListingCardAnchor["'][^>]*href=["']([^"']+)["']/i) ||
+                          card.match(/<a[^>]*href=["']([^"']+)["'][^>]*data-name=["']ListingCardAnchor["']/i) ||
+                          card.match(/href=["'](\/[^"']+\/pad)["']/i);
+          
           let listingUrl = '';
           if (urlMatch?.[1]) {
             listingUrl = urlMatch[1].startsWith('/') ? `https://hotpads.com${urlMatch[1]}` : urlMatch[1];
           }
           
-          // Extract address from card
-          const addressMatch = card.match(/class=["'][^"']*(?:address|location)[^"']*["'][^>]*>([^<]+)</i) ||
-                              card.match(/<span[^>]*>(\d+[^<]+(?:St|Ave|Rd|Dr|Blvd|Ln|Way|Ct)[^<]*)</i);
+          if (!listingUrl) continue;
+          
+          // Extract address - try multiple patterns based on HotPads HTML structure
+          // The address is often in the anchor text or in specific data attributes
+          let address = '';
+          
+          // Try: extract from aria-label (often contains full address)
+          const ariaMatch = card.match(/aria-label=["']([^"']+)["']/i);
+          if (ariaMatch) {
+            // aria-label often has format like "2636 Greenbriar Dr #2, Houston, TX 77098"
+            const ariaText = ariaMatch[1];
+            if (/\d+\s+\w+.*(?:St|Ave|Rd|Dr|Blvd|Ln|Way|Ct|Street|Avenue|Road|Drive|Boulevard|Lane|Court)/i.test(ariaText)) {
+              address = ariaText.split(/\s*-\s*/)[0].trim(); // Take part before dash if present
+            }
+          }
+          
+          // Try: extract from URL slug (e.g., /2636-greenbriar-dr-houston-tx-77098-1tw7k7t/2/pad)
+          if (!address && listingUrl) {
+            const urlSlugMatch = listingUrl.match(/hotpads\.com\/([^/]+)\//);
+            if (urlSlugMatch) {
+              const slug = urlSlugMatch[1];
+              // Convert slug to address: "2636-greenbriar-dr-houston-tx-77098" -> "2636 Greenbriar Dr, Houston, TX 77098"
+              const slugParts = slug.split('-');
+              // Find zip code position (5 digits)
+              const zipIndex = slugParts.findIndex(p => /^\d{5}$/.test(p));
+              if (zipIndex > 0) {
+                const streetParts = slugParts.slice(0, zipIndex - 2); // everything before city-state-zip
+                const city = slugParts[zipIndex - 2];
+                const state = slugParts[zipIndex - 1];
+                const zip = slugParts[zipIndex];
+                
+                // Capitalize words
+                const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+                const street = streetParts.map(capitalize).join(' ');
+                address = `${street}, ${capitalize(city)}, ${state.toUpperCase()} ${zip}`;
+              }
+            }
+          }
+          
+          // Try: look for address-like text in card
+          if (!address) {
+            const addressTextMatch = card.match(/>(\d+\s+[A-Za-z][^<]{5,50}(?:St|Ave|Rd|Dr|Blvd|Ln|Way|Ct)[^<]{0,30})</i);
+            if (addressTextMatch) {
+              address = addressTextMatch[1].replace(/\s+/g, ' ').trim();
+            }
+          }
           
           // Extract price
           const priceMatch = card.match(/\$[\d,]+/);
@@ -1194,24 +1243,35 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
           const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
           const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
           
-          if (addressMatch || listingUrl) {
-            const listing: EnrichedListing = {
-              address: addressMatch?.[1]?.trim() || 'See listing',
-              price: priceMatch?.[0] || undefined,
-              listing_url: listingUrl || undefined,
-              listing_type: 'frbo',
-              source_url: listingUrl || sourceUrl, // Use individual listing URL if available
-              source_platform: 'hotpads',
-              scraped_at: new Date().toISOString(),
-              skip_trace_status: 'pending',
-            };
-            
-            if (bedsMatch) listing.bedrooms = parseInt(bedsMatch[1]);
-            if (bathsMatch) listing.bathrooms = parseFloat(bathsMatch[1]);
-            
-            listings.push(listing);
-          }
+          urlToData.set(listingUrl, {
+            address: address || undefined,
+            price: priceMatch?.[0] || undefined,
+            beds: bedsMatch ? parseInt(bedsMatch[1]) : undefined,
+            baths: bathsMatch ? parseFloat(bathsMatch[1]) : undefined,
+          });
         }
+      }
+      
+      console.log(`[HotPads] Extracted data for ${urlToData.size} listings from HTML`);
+      
+      // Now create listings from the listingUrls, using extracted data where available
+      for (const url of listingUrls.slice(0, 100)) {
+        const data = urlToData.get(url) || {};
+        const listing: EnrichedListing = {
+          address: data.address || 'See listing',
+          price: data.price || undefined,
+          listing_url: url,
+          listing_type: 'frbo',
+          source_url: url,
+          source_platform: 'hotpads',
+          scraped_at: new Date().toISOString(),
+          skip_trace_status: 'pending',
+        };
+        
+        if (data.beds) listing.bedrooms = data.beds;
+        if (data.baths) listing.bathrooms = data.baths;
+        
+        listings.push(listing);
       }
       
       // Additional fallback: Look for any property card patterns
@@ -1259,15 +1319,34 @@ function extractHotpadsListings(html: string, sourceUrl: string): EnrichedListin
       }
     }
     
-    // Store listing URLs for potential detail page scraping
+    // Final fallback: if still no listings but we have URLs, create entries with URL-derived addresses
     if (listings.length === 0 && listingUrls.length > 0) {
-      console.log(`[HotPads] Creating placeholder listings from ${listingUrls.length} URLs`);
+      console.log(`[HotPads] Creating listings from ${listingUrls.length} URLs with URL-derived addresses`);
       for (const url of listingUrls.slice(0, 100)) {
+        let address = 'See listing';
+        
+        // Try to derive address from URL slug
+        const urlSlugMatch = url.match(/hotpads\.com\/([^/]+)\//);
+        if (urlSlugMatch) {
+          const slug = urlSlugMatch[1];
+          const slugParts = slug.split('-');
+          const zipIndex = slugParts.findIndex(p => /^\d{5}$/.test(p));
+          if (zipIndex > 0) {
+            const streetParts = slugParts.slice(0, zipIndex - 2);
+            const city = slugParts[zipIndex - 2];
+            const state = slugParts[zipIndex - 1];
+            const zip = slugParts[zipIndex];
+            const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+            const street = streetParts.map(capitalize).join(' ');
+            address = `${street}, ${capitalize(city)}, ${state.toUpperCase()} ${zip}`;
+          }
+        }
+        
         listings.push({
-          address: 'See listing',
+          address,
           listing_url: url,
           listing_type: 'frbo',
-          source_url: url, // Use individual listing URL so "View Original" works
+          source_url: url,
           source_platform: 'hotpads',
           scraped_at: new Date().toISOString(),
           skip_trace_status: 'pending',
