@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -33,8 +33,8 @@ export function LeadEditDialog({ lead, open, onClose }: LeadEditDialogProps) {
   const [formData, setFormData] = useState<Partial<ScrapedLead>>({});
 
   // Initialize form data when lead changes
-  useState(() => {
-    if (lead) {
+  useEffect(() => {
+    if (lead && open) {
       setFormData({
         full_name: lead.full_name,
         best_email: lead.best_email,
@@ -46,8 +46,9 @@ export function LeadEditDialog({ lead, open, onClose }: LeadEditDialogProps) {
         qc_notes: lead.qc_notes,
         rejection_reason: lead.rejection_reason,
       });
+      setEditReason('');
     }
-  });
+  }, [lead, open]);
 
   const updateMutation = useMutation({
     mutationFn: async (updates: { lead: Partial<ScrapedLead>; reason: string }) => {
