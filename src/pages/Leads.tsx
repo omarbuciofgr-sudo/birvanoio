@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { CommunicationPanel } from "@/components/leads/CommunicationPanel";
 import { CSVImportDialog } from "@/components/leads/CSVImportDialog";
+import { CreateLeadDialog } from "@/components/leads/CreateLeadDialog";
 import { LeadScoreBadge } from "@/components/leads/LeadScoreBadge";
 import { LeadKanbanBoard } from "@/components/leads/LeadKanbanBoard";
 import { LeadActivityTimeline } from "@/components/leads/LeadActivityTimeline";
@@ -35,7 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Search, ExternalLink, Download, Filter, Upload, Sparkles, LayoutGrid, List } from "lucide-react";
+import { Search, ExternalLink, Download, Filter, Upload, Sparkles, LayoutGrid, List, Plus } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
@@ -60,6 +61,7 @@ const Leads = () => {
   const [notes, setNotes] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
   useEffect(() => {
@@ -223,6 +225,10 @@ const Leads = () => {
                 <span className="hidden sm:inline">Kanban</span>
               </ToggleGroupItem>
             </ToggleGroup>
+            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Lead</span>
+            </Button>
             <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="gap-2">
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">Import CSV</span>
@@ -533,6 +539,13 @@ const Leads = () => {
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
           onImportComplete={fetchLeads}
+        />
+
+        {/* Create Lead Dialog */}
+        <CreateLeadDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          onLeadCreated={fetchLeads}
         />
       </div>
     </DashboardLayout>
