@@ -58,7 +58,12 @@ const Leads = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
   const [notes, setNotes] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -79,6 +84,14 @@ const Leads = () => {
   useEffect(() => {
     filterLeads();
   }, [leads, searchQuery, statusFilter]);
+
+  useEffect(() => {
+    if (!selectedLead) return;
+    setNotes(selectedLead.notes || "");
+    setContactName(selectedLead.contact_name || "");
+    setEmail(selectedLead.email || "");
+    setPhone(selectedLead.phone || "");
+  }, [selectedLead]);
 
   const fetchLeads = async () => {
     const { data, error } = await supabase
@@ -142,14 +155,14 @@ const Leads = () => {
 
   const updateLeadNotes = async () => {
     if (!selectedLead) return;
-    
+
     // Validate notes before submitting
     const validation = notesSchema.safeParse(notes);
     if (!validation.success) {
       toast.error(validation.error.errors[0].message);
       return;
     }
-    
+
     setIsUpdating(true);
     const { error } = await supabase
       .from("leads")
@@ -162,6 +175,54 @@ const Leads = () => {
       toast.success("Notes saved");
       fetchLeads();
       setSelectedLead({ ...selectedLead, notes: notes.trim() || null });
+    }
+    setIsUpdating(false);
+  };
+
+  const updateLeadContactInfo = async () => {
+    if (!selectedLead) return;
+
+    const contactSchema = z.object({
+      contact_name: z.string().trim().max(255).optional(),
+      email: z
+        .string()
+        .trim()
+        .max(255)
+        .email("Please enter a valid email")
+        .or(z.literal(""))
+        .optional(),
+      phone: z.string().trim().max(50).optional(),
+    });
+
+    const validation = contactSchema.safeParse({
+      contact_name: contactName,
+      email,
+      phone,
+    });
+
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
+      return;
+    }
+
+    const payload = {
+      contact_name: contactName.trim() || null,
+      email: email.trim() || null,
+      phone: phone.trim() || null,
+    };
+
+    setIsUpdating(true);
+    const { error } = await supabase
+      .from("leads")
+      .update(payload)
+      .eq("id", selectedLead.id);
+
+    if (error) {
+      toast.error("Failed to save contact info. Please try again.");
+    } else {
+      toast.success("Contact info saved");
+      fetchLeads();
+      setSelectedLead({ ...selectedLead, ...payload });
     }
     setIsUpdating(false);
   };
@@ -415,24 +476,60 @@ const Leads = () => {
                   </div>
 
                   {/* Contact Info */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Contact</p>
-                      <p className="text-foreground">{selectedLead.contact_name || "—"}</p>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Contact</p>
+                        <Input
+                          value={contactName}
+                          onChange={(e) => setContactName(e.target.value)}
+                          placeholder="Contact name"
+                          className="bg-secondary/50 border-border"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Email</p>
+                        <Input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="Email"
+                          className="bg-secondary/50 border-border"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Phone</p>
+                        <Input
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="Phone"
+                          className="bg-secondary/50 border-border"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Location</p>
+                        <p className="text-foreground">
+                          {selectedLead.city}, {selectedLead.state} {selectedLead.zip_code}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="text-foreground">{selectedLead.email || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Phone</p>
-                      <p className="text-foreground">{selectedLead.phone || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Location</p>
-                      <p className="text-foreground">
-                        {selectedLead.city}, {selectedLead.state} {selectedLead.zip_code}
-                      </p>
+
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={updateLeadContactInfo}
+                        disabled={
+                          isUpdating ||
+                          (
+                            contactName === (selectedLead.contact_name || "") &&
+                            email === (selectedLead.email || "") &&
+                            phone === (selectedLead.phone || "")
+                          )
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        Save Contact Info
+                      </Button>
                     </div>
                   </div>
 
