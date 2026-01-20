@@ -66,6 +66,43 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const cronSecret = Deno.env.get('CRON_SECRET');
+
+  // Authentication: Verify the request is authorized
+  // Accept either:
+  // 1. A valid CRON_SECRET header (for pg_cron triggers)
+  // 2. The service role key in Authorization header (for internal Supabase calls)
+  const authHeader = req.headers.get('Authorization');
+  const cronSecretHeader = req.headers.get('X-Cron-Secret');
+
+  let isAuthorized = false;
+
+  // Check cron secret header
+  if (cronSecret && cronSecretHeader === cronSecret) {
+    isAuthorized = true;
+    console.log('[RUN-SCHEDULED-JOBS] Authorized via CRON_SECRET');
+  }
+
+  // Check service role key in Authorization header
+  if (!isAuthorized && authHeader) {
+    const token = authHeader.replace('Bearer ', '');
+    // Only allow service role key - not anon key
+    if (token === supabaseServiceKey) {
+      isAuthorized = true;
+      console.log('[RUN-SCHEDULED-JOBS] Authorized via service role key');
+    }
+  }
+
+  if (!isAuthorized) {
+    console.warn('[RUN-SCHEDULED-JOBS] Unauthorized request attempt');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { 
+        status: 401, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -203,7 +240,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in run-scheduled-jobs:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ success: false, error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
