@@ -61,6 +61,66 @@ export interface ProspectSearchParams {
   use_waterfall?: boolean;
 }
 
+// Company Contact Lookup params
+export interface CompanyLookupParams {
+  company_name?: string;
+  company_domain?: string;
+  target_roles?: string[];
+  contacts_per_role?: number;
+  limit?: number;
+  include_all_employees?: boolean;
+}
+
+// Company info from lookup
+export interface CompanyInfo {
+  name: string | null;
+  domain: string | null;
+  website: string | null;
+  industry: string | null;
+  employee_count: number | null;
+  annual_revenue: number | null;
+  founded_year: number | null;
+  linkedin_url: string | null;
+  description: string | null;
+  headquarters_city: string | null;
+  headquarters_state: string | null;
+  headquarters_country: string | null;
+  phone: string | null;
+  technologies: string[];
+}
+
+// Contact result from company lookup
+export interface ContactResult {
+  full_name: string | null;
+  email: string | null;
+  email_status: 'verified' | 'likely_valid' | 'unverified' | null;
+  phone: string | null;
+  mobile_phone: string | null;
+  direct_phone: string | null;
+  job_title: string | null;
+  seniority_level: string | null;
+  department: string | null;
+  linkedin_url: string | null;
+  headline: string | null;
+  photo_url: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  confidence_score: number;
+  source: string;
+}
+
+// Company lookup response
+export interface CompanyLookupResponse {
+  success: boolean;
+  company: CompanyInfo | null;
+  contacts: ContactResult[];
+  total_contacts_found: number;
+  roles_searched: string[];
+  contacts_by_role: Record<string, ContactResult[]>;
+  error?: string;
+}
+
 // Google Places result
 export interface PlaceResult {
   place_id: string;
@@ -119,6 +179,25 @@ export interface ProspectSearchResponse {
   };
   error?: string;
 }
+
+// Available role categories for company lookup
+export const ROLE_CATEGORIES = [
+  { value: 'executives', label: 'Executives (CEO, CFO, COO, etc.)' },
+  { value: 'sales', label: 'Sales Leadership' },
+  { value: 'marketing', label: 'Marketing Leadership' },
+  { value: 'technology', label: 'Technology Leadership' },
+  { value: 'operations', label: 'Operations' },
+  { value: 'hr', label: 'HR & People' },
+];
+
+// Common specific titles for direct search
+export const SPECIFIC_TITLES = [
+  'CEO', 'CFO', 'CTO', 'COO', 'CMO',
+  'Owner', 'Founder', 'President',
+  'VP of Sales', 'VP of Marketing', 'VP of Engineering',
+  'Director of Sales', 'Director of Marketing',
+  'General Manager', 'Managing Partner',
+];
 
 // Common US industries for autocomplete
 export const INDUSTRIES = [
@@ -191,6 +270,31 @@ export const US_STATES = [
 ];
 
 export const prospectSearchApi = {
+  /**
+   * Company Contact Lookup - Find specific decision-makers at a company
+   * Enter a company name or domain and get contacts by role (CEO, CFO, etc.)
+   */
+  async companyLookup(params: CompanyLookupParams): Promise<CompanyLookupResponse> {
+    const { data, error } = await supabase.functions.invoke('company-contact-lookup', {
+      body: params,
+    });
+
+    if (error) {
+      console.error('Company lookup error:', error);
+      return { 
+        success: false, 
+        company: null, 
+        contacts: [], 
+        total_contacts_found: 0, 
+        roles_searched: [], 
+        contacts_by_role: {},
+        error: error.message 
+      };
+    }
+
+    return data as CompanyLookupResponse;
+  },
+
   /**
    * Search for prospects/decision-makers by industry, location, and criteria
    * This is the ZoomInfo-style search that finds contacts directly

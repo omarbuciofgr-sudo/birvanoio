@@ -42,10 +42,15 @@ import {
   PlaceResult,
   ScoredProspect,
   ScoringSummary,
+  ContactResult,
+  CompanyInfo,
+  CompanyLookupResponse,
   INDUSTRIES,
   DECISION_MAKER_TITLES,
   SENIORITY_LEVELS,
   US_STATES,
+  ROLE_CATEGORIES,
+  SPECIFIC_TITLES,
 } from '@/lib/api/prospectSearch';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -94,9 +99,16 @@ const placesSearchSchema = z.object({
   query: z.string().min(3, 'Enter at least 3 characters'),
 });
 
+const companyLookupSchema = z.object({
+  companyInput: z.string().min(2, 'Enter company name or domain'),
+  targetRoles: z.array(z.string()).default(['executives']),
+  limit: z.number().min(1).max(50).default(25),
+});
+
 type QuickSearchForm = z.infer<typeof quickSearchSchema>;
 type AdvancedSearchForm = z.infer<typeof advancedSearchSchema>;
 type PlacesSearchForm = z.infer<typeof placesSearchSchema>;
+type CompanyLookupForm = z.infer<typeof companyLookupSchema>;
 
 interface ProspectSearchDialogProps {
   open: boolean;
@@ -109,7 +121,7 @@ export function ProspectSearchDialog({
   onOpenChange,
   onSaveProspects,
 }: ProspectSearchDialogProps) {
-  const [searchMode, setSearchMode] = useState<'quick' | 'advanced' | 'places'>('quick');
+  const [searchMode, setSearchMode] = useState<'quick' | 'advanced' | 'places' | 'company'>('quick');
   const [results, setResults] = useState<ProspectResult[]>([]);
   const [scoredResults, setScoredResults] = useState<ScoredProspect[]>([]);
   const [scoringSummary, setScoringSummary] = useState<ScoringSummary | null>(null);
@@ -118,6 +130,10 @@ export function ProspectSearchDialog({
   const [selectedPlaces, setSelectedPlaces] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
   const [enrichmentProgress, setEnrichmentProgress] = useState<{ completed: number; total: number } | null>(null);
+  
+  // Company lookup state
+  const [companyLookupResult, setCompanyLookupResult] = useState<CompanyLookupResponse | null>(null);
+  const [selectedContacts, setSelectedContacts] = useState<Set<number>>(new Set());
 
   const quickForm = useForm<QuickSearchForm>({
     resolver: zodResolver(quickSearchSchema),
@@ -139,6 +155,15 @@ export function ProspectSearchDialog({
   const placesForm = useForm<PlacesSearchForm>({
     resolver: zodResolver(placesSearchSchema),
     defaultValues: { query: '' },
+  });
+
+  const companyForm = useForm<CompanyLookupForm>({
+    resolver: zodResolver(companyLookupSchema),
+    defaultValues: { 
+      companyInput: '', 
+      targetRoles: ['executives'],
+      limit: 25,
+    },
   });
 
   const searchMutation = useMutation({
@@ -236,6 +261,33 @@ export function ProspectSearchDialog({
       } else {
         toast.error(result.error || 'Failed to save leads');
       }
+    },
+  });
+
+  // Company lookup mutation
+  const companyLookupMutation = useMutation({
+    mutationFn: async (data: CompanyLookupForm) => {
+      // Determine if input is domain or company name
+      const isDomain = data.companyInput.includes('.') || data.companyInput.includes('://');
+      return prospectSearchApi.companyLookup({
+        company_name: isDomain ? undefined : data.companyInput,
+        company_domain: isDomain ? data.companyInput : undefined,
+        target_roles: data.targetRoles,
+        limit: data.limit,
+      });
+    },
+    onSuccess: (response) => {
+      if (response.success) {
+        setCompanyLookupResult(response);
+        setSelectedContacts(new Set());
+        setHasSearched(true);
+        toast.success(`Found ${response.total_contacts_found} contacts at ${response.company?.name || 'company'}`);
+      } else {
+        toast.error(response.error || 'Company lookup failed');
+      }
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Company lookup failed');
     },
   });
 
@@ -340,16 +392,63 @@ export function ProspectSearchDialog({
     toast.success(`Exported ${selectedResults.length} prospects to CSV`);
   };
 
+  // Export company contacts to CSV
+  const exportContactsToCsv = () => {
+    if (!companyLookupResult?.contacts.length) return;
+    
+    const selectedResults = selectedContacts.size > 0 
+      ? companyLookupResult.contacts.filter((_, i) => selectedContacts.has(i))
+      : companyLookupResult.contacts;
+
+    const headers = [
+      'Full Name', 'Email', 'Email Status', 'Phone', 'Mobile', 'Direct Phone',
+      'Job Title', 'Seniority', 'Department', 'LinkedIn', 'City', 'State', 'Confidence'
+    ];
+    
+    const rows = selectedResults.map(c => [
+      c.full_name || '',
+      c.email || '',
+      c.email_status || '',
+      c.phone || '',
+      c.mobile_phone || '',
+      c.direct_phone || '',
+      c.job_title || '',
+      c.seniority_level || '',
+      c.department || '',
+      c.linkedin_url || '',
+      c.city || '',
+      c.state || '',
+      c.confidence_score.toString(),
+    ]);
+
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `company-contacts-${companyLookupResult.company?.name || 'unknown'}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast.success(`Exported ${selectedResults.length} contacts to CSV`);
+  };
+
   const getConfidenceBadge = (score: number) => {
-    if (score >= 70) return <Badge variant="default" className="bg-green-500">High</Badge>;
+    if (score >= 70) return <Badge className="bg-emerald-500 text-white">High</Badge>;
     if (score >= 40) return <Badge variant="secondary">Medium</Badge>;
     return <Badge variant="outline">Low</Badge>;
+  };
+
+  const getEmailStatusBadge = (status: string | null) => {
+    if (status === 'verified') return <Badge className="bg-emerald-500 text-white">Verified</Badge>;
+    if (status === 'likely_valid') return <Badge variant="secondary">Likely Valid</Badge>;
+    return <Badge variant="outline">Unverified</Badge>;
   };
 
   const getPriorityBadge = (priority: 'high' | 'medium' | 'low') => {
     switch (priority) {
       case 'high':
-        return <Badge className="bg-red-500 text-white">🔥 High Priority</Badge>;
+        return <Badge className="bg-destructive text-destructive-foreground">🔥 High Priority</Badge>;
       case 'medium':
         return <Badge className="bg-amber-500 text-white">⚡ Medium</Badge>;
       case 'low':
@@ -372,6 +471,19 @@ export function ProspectSearchDialog({
     scoringMutation.mutate(results);
   };
 
+  const handleCompanyLookup = (data: CompanyLookupForm) => {
+    companyLookupMutation.mutate(data);
+  };
+
+  const handleSelectAllContacts = () => {
+    if (!companyLookupResult) return;
+    if (selectedContacts.size === companyLookupResult.contacts.length) {
+      setSelectedContacts(new Set());
+    } else {
+      setSelectedContacts(new Set(companyLookupResult.contacts.map((_, i) => i)));
+    }
+  };
+
   // Use scored results if available, otherwise use regular results
   const displayResults = scoredResults.length > 0 ? scoredResults : results;
 
@@ -391,15 +503,19 @@ export function ProspectSearchDialog({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pb-6">
-          <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as 'quick' | 'advanced' | 'places')} className="flex flex-col h-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as 'quick' | 'advanced' | 'places' | 'company')} className="flex flex-col h-full">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="quick">
               <Sparkles className="h-4 w-4 mr-2" />
-              Quick Search
+              Quick
+            </TabsTrigger>
+            <TabsTrigger value="company">
+              <Building2 className="h-4 w-4 mr-2" />
+              Company
             </TabsTrigger>
             <TabsTrigger value="places">
               <MapPinned className="h-4 w-4 mr-2" />
-              Google Places
+              Places
             </TabsTrigger>
             <TabsTrigger value="advanced">
               <Search className="h-4 w-4 mr-2" />
@@ -464,6 +580,304 @@ export function ProspectSearchDialog({
                 </Button>
               ))}
             </div>
+          </TabsContent>
+
+          {/* Company Contact Lookup */}
+          <TabsContent value="company" className="mt-4">
+            <Form {...companyForm}>
+              <form onSubmit={companyForm.handleSubmit(handleCompanyLookup)} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={companyForm.control}
+                    name="companyInput"
+                    render={({ field }) => (
+                      <FormItem className="col-span-full">
+                        <FormLabel>Company Name or Domain</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g., Apple, apple.com, or https://microsoft.com"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Enter a company name or website domain to find contacts
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={companyForm.control}
+                    name="limit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Max Contacts</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={50}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 25)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <FormLabel className="mb-2 block">Target Roles</FormLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {ROLE_CATEGORIES.map((cat) => {
+                      const isSelected = companyForm.watch('targetRoles')?.includes(cat.value);
+                      return (
+                        <Badge
+                          key={cat.value}
+                          variant={isSelected ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            const current = companyForm.getValues('targetRoles') || [];
+                            if (isSelected) {
+                              companyForm.setValue('targetRoles', current.filter(t => t !== cat.value));
+                            } else {
+                              companyForm.setValue('targetRoles', [...current, cat.value]);
+                            }
+                          }}
+                        >
+                          {cat.label}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Click to select role categories to search
+                  </p>
+                </div>
+
+                <div>
+                  <FormLabel className="mb-2 block">Or Search Specific Titles</FormLabel>
+                  <div className="flex flex-wrap gap-1">
+                    {SPECIFIC_TITLES.slice(0, 10).map((title) => {
+                      const isSelected = companyForm.watch('targetRoles')?.includes(title);
+                      return (
+                        <Badge
+                          key={title}
+                          variant={isSelected ? 'default' : 'outline'}
+                          className="cursor-pointer text-xs"
+                          onClick={() => {
+                            const current = companyForm.getValues('targetRoles') || [];
+                            if (isSelected) {
+                              companyForm.setValue('targetRoles', current.filter(t => t !== title));
+                            } else {
+                              companyForm.setValue('targetRoles', [...current, title]);
+                            }
+                          }}
+                        >
+                          {title}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Button type="submit" disabled={companyLookupMutation.isPending} className="w-full">
+                  {companyLookupMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Searching Company...
+                    </>
+                  ) : (
+                    <>
+                      <Building2 className="h-4 w-4 mr-2" />
+                      Find Contacts at Company
+                    </>
+                  )}
+                </Button>
+              </form>
+            </Form>
+
+            {/* Company info card */}
+            {companyLookupResult?.company && (
+              <Card className="mt-4">
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">{companyLookupResult.company.name}</CardTitle>
+                      <CardDescription className="flex items-center gap-2 mt-1">
+                        {companyLookupResult.company.domain && (
+                          <a 
+                            href={`https://${companyLookupResult.company.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline flex items-center gap-1"
+                          >
+                            <Globe className="h-3 w-3" />
+                            {companyLookupResult.company.domain}
+                          </a>
+                        )}
+                        {companyLookupResult.company.linkedin_url && (
+                          <a 
+                            href={companyLookupResult.company.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            <Linkedin className="h-4 w-4" />
+                          </a>
+                        )}
+                      </CardDescription>
+                    </div>
+                    {companyLookupResult.company.industry && (
+                      <Badge variant="secondary">{companyLookupResult.company.industry}</Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                    {companyLookupResult.company.employee_count && (
+                      <span className="flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        {companyLookupResult.company.employee_count.toLocaleString()} employees
+                      </span>
+                    )}
+                    {companyLookupResult.company.headquarters_city && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4" />
+                        {companyLookupResult.company.headquarters_city}, {companyLookupResult.company.headquarters_state}
+                      </span>
+                    )}
+                    {companyLookupResult.company.founded_year && (
+                      <span>Founded {companyLookupResult.company.founded_year}</span>
+                    )}
+                    {companyLookupResult.company.annual_revenue && (
+                      <span>${(companyLookupResult.company.annual_revenue / 1000000).toFixed(1)}M revenue</span>
+                    )}
+                  </div>
+                  {companyLookupResult.company.description && (
+                    <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                      {companyLookupResult.company.description}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Company contacts results */}
+            {companyLookupResult && companyLookupResult.contacts.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{companyLookupResult.total_contacts_found} Contacts Found</span>
+                    {selectedContacts.size > 0 && (
+                      <Badge variant="secondary">{selectedContacts.size} selected</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleSelectAllContacts}>
+                      {selectedContacts.size === companyLookupResult.contacts.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={exportContactsToCsv}>
+                      <Download className="h-4 w-4 mr-1" />
+                      Export CSV
+                    </Button>
+                  </div>
+                </div>
+
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2">
+                    {companyLookupResult.contacts.map((contact, index) => (
+                      <Card 
+                        key={index} 
+                        className={`cursor-pointer transition-colors ${
+                          selectedContacts.has(index) ? 'border-primary bg-primary/5' : ''
+                        }`}
+                        onClick={() => {
+                          const newSelected = new Set(selectedContacts);
+                          if (newSelected.has(index)) {
+                            newSelected.delete(index);
+                          } else {
+                            newSelected.add(index);
+                          }
+                          setSelectedContacts(newSelected);
+                        }}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <Checkbox 
+                                checked={selectedContacts.has(index)}
+                                onCheckedChange={() => {}}
+                              />
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">
+                                    {contact.full_name || 'Unknown Contact'}
+                                  </span>
+                                  {contact.job_title && (
+                                    <Badge variant="secondary">{contact.job_title}</Badge>
+                                  )}
+                                  {contact.seniority_level && (
+                                    <Badge variant="outline" className="text-xs capitalize">
+                                      {contact.seniority_level.replace('_', ' ')}
+                                    </Badge>
+                                  )}
+                                  {getConfidenceBadge(contact.confidence_score)}
+                                </div>
+                                <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                                  {contact.email && (
+                                    <div className="flex items-center gap-1">
+                                      <a 
+                                        href={`mailto:${contact.email}`}
+                                        className="text-primary hover:underline flex items-center gap-1"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <Mail className="h-3 w-3" />
+                                        {contact.email}
+                                      </a>
+                                      {getEmailStatusBadge(contact.email_status)}
+                                    </div>
+                                  )}
+                                  {(contact.phone || contact.direct_phone || contact.mobile_phone) && (
+                                    <a 
+                                      href={`tel:${contact.direct_phone || contact.mobile_phone || contact.phone}`}
+                                      className="flex items-center gap-1 hover:text-primary"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Phone className="h-3 w-3" />
+                                      {contact.direct_phone || contact.mobile_phone || contact.phone}
+                                      {contact.mobile_phone && <span className="text-xs">(mobile)</span>}
+                                    </a>
+                                  )}
+                                  {contact.linkedin_url && (
+                                    <a 
+                                      href={contact.linkedin_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Linkedin className="h-4 w-4" />
+                                    </a>
+                                  )}
+                                </div>
+                                {contact.department && (
+                                  <div className="text-xs text-muted-foreground capitalize">
+                                    {contact.department} Department
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
           </TabsContent>
 
           {/* Google Places Search */}
