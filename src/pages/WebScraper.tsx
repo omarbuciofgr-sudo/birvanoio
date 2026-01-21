@@ -557,6 +557,58 @@ export default function WebScraper() {
     }
   };
 
+  // Retry skip trace for listings that previously failed
+  const handleRetrySkipTrace = async (listing: any, index: number) => {
+    if (!listing.address) {
+      toast.error('No address available for skip trace');
+      return;
+    }
+
+    // Clear the previous status and retry
+    setReListings(prev => prev.map((l, i) => {
+      if (i !== index) return l;
+      return { ...l, skip_trace_status: undefined };
+    }));
+
+    setSkipTracingIndex(index);
+    try {
+      const parsed = skipTraceApi.parseAddress(listing.address);
+      const result = await skipTraceApi.lookupOwner(parsed);
+
+      if (result.success && result.data) {
+        setReListings(prev => prev.map((l, i) => {
+          if (i !== index) return l;
+          return {
+            ...l,
+            owner_name: result.data!.fullName || l.owner_name,
+            owner_phone: result.data!.phones[0]?.number || l.owner_phone,
+            owner_email: result.data!.emails[0]?.address || l.owner_email,
+            all_phones: result.data!.phones,
+            all_emails: result.data!.emails,
+            skip_trace_confidence: result.data!.confidence,
+            skip_trace_status: 'success',
+          };
+        }));
+        toast.success(`Found owner info: ${result.data.fullName || 'Contact data retrieved'}`);
+      } else {
+        toast.error(result.error || result.message || 'Still no owner info found');
+        setReListings(prev => prev.map((l, i) => {
+          if (i !== index) return l;
+          return { ...l, skip_trace_status: 'not_found' };
+        }));
+      }
+    } catch (error) {
+      console.error('Retry skip trace error:', error);
+      toast.error('Failed to retry skip trace');
+      setReListings(prev => prev.map((l, i) => {
+        if (i !== index) return l;
+        return { ...l, skip_trace_status: 'not_found' };
+      }));
+    } finally {
+      setSkipTracingIndex(null);
+    }
+  };
+
   // Save a single listing to database
   const handleSaveListing = async (listing: any, index: number) => {
     if (!user?.id) {
@@ -1097,6 +1149,7 @@ export default function WebScraper() {
                             {/* Action buttons */}
                             <div className="flex items-center justify-between flex-wrap gap-2">
                               <div className="flex gap-2">
+                                {/* Show Skip Trace for listings without owner phone and no prior attempt */}
                                 {!listing.owner_phone && !listing.skip_trace_status && (
                                   <Button
                                     variant="outline"
@@ -1110,6 +1163,23 @@ export default function WebScraper() {
                                       <RotateCw className="mr-2 h-4 w-4" />
                                     )}
                                     Skip Trace
+                                  </Button>
+                                )}
+                                {/* Show Retry Skip Trace for listings that failed (not_found status) */}
+                                {listing.skip_trace_status === 'not_found' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRetrySkipTrace(listing, index)}
+                                    disabled={skipTracingIndex === index}
+                                    className="border-orange-500/50 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                  >
+                                    {skipTracingIndex === index ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <RotateCw className="mr-2 h-4 w-4" />
+                                    )}
+                                    Retry Skip Trace
                                   </Button>
                                 )}
                                 {!listing.saved_to_db && (
