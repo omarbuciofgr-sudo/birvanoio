@@ -414,12 +414,23 @@ export const prospectSearchApi = {
     jobId?: string
   ): Promise<{ success: boolean; savedCount: number; error?: string }> {
     try {
+      // Determine source type based on the prospect source
+      const getSourceType = (source?: string): string => {
+        if (!source) return 'prospect_search';
+        if (source.includes('google_places')) return 'google_places';
+        if (source.includes('apollo')) return 'apollo';
+        if (source.includes('firecrawl')) return 'firecrawl';
+        return 'prospect_search';
+      };
+
       const leadsToInsert = prospects.map(prospect => ({
         domain: prospect.company_domain || 'unknown',
         full_name: prospect.full_name,
         best_email: prospect.email,
         best_phone: prospect.phone || prospect.mobile_phone || prospect.direct_phone,
         best_contact_title: prospect.job_title,
+        lead_type: 'company' as const,
+        source_type: getSourceType(prospect.source),
         schema_data: {
           company_name: prospect.company_name,
           industry: prospect.industry,
@@ -436,7 +447,7 @@ export const prospectSearchApi = {
         source_url: prospect.company_website,
         status: 'new' as const,
         job_id: jobId || null,
-        enrichment_providers_used: prospect.enrichment_providers,
+        enrichment_providers_used: prospect.enrichment_providers || [],
       }));
 
       const { data, error } = await supabase

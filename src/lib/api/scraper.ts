@@ -352,6 +352,7 @@ export const scrapedLeadsApi = {
     status?: ScrapedLeadStatus;
     assigned_to_org?: string;
     unassigned_only?: boolean;
+    source_type?: string;
   }): Promise<ScrapedLead[]> {
     let query = supabase
       .from('scraped_leads')
@@ -369,6 +370,9 @@ export const scrapedLeadsApi = {
     }
     if (filters?.unassigned_only) {
       query = query.is('assigned_to_org', null);
+    }
+    if (filters?.source_type) {
+      query = query.eq('source_type', filters.source_type);
     }
     
     const { data, error } = await query;

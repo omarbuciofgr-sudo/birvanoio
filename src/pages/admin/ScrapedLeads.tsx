@@ -67,15 +67,17 @@ export default function ScrapedLeads() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [jobFilter, setJobFilter] = useState<string>('all');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('all');
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<ScrapedLead | null>(null);
   const [editingLead, setEditingLead] = useState<ScrapedLead | null>(null);
 
   const { data: leads = [], isLoading } = useQuery({
-    queryKey: ['scraped-leads', statusFilter, jobFilter],
+    queryKey: ['scraped-leads', statusFilter, jobFilter, sourceTypeFilter],
     queryFn: () => scrapedLeadsApi.list({
       status: statusFilter !== 'all' ? statusFilter as ScrapedLeadStatus : undefined,
       job_id: jobFilter !== 'all' ? jobFilter : undefined,
+      source_type: sourceTypeFilter !== 'all' ? sourceTypeFilter : undefined,
     }),
   });
 
@@ -365,6 +367,21 @@ export default function ScrapedLeads() {
                       {job.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={sourceTypeFilter} onValueChange={setSourceTypeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All sources" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  <SelectItem value="scrape">Web Scraper</SelectItem>
+                  <SelectItem value="real_estate_scraper">Real Estate</SelectItem>
+                  <SelectItem value="prospect_search">Prospect Search</SelectItem>
+                  <SelectItem value="google_places">Google Places</SelectItem>
+                  <SelectItem value="apollo">Apollo</SelectItem>
+                  <SelectItem value="firecrawl">Firecrawl</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -628,6 +628,8 @@ export default function WebScraper() {
         all_phones: listing.all_phones?.map((p: any) => p.number || p) || (listing.owner_phone ? [listing.owner_phone] : []),
         status: 'new',
         confidence_score: listing.skip_trace_confidence || 50,
+        lead_type: 'person',
+        source_type: 'real_estate_scraper',
         schema_data: {
           address: listing.address,
           bedrooms: listing.bedrooms,
@@ -760,6 +762,8 @@ export default function WebScraper() {
           all_phones: listing.all_phones?.map((p: any) => p.number || p) || (listing.owner_phone ? [listing.owner_phone] : []),
           status: 'new',
           confidence_score: listing.skip_trace_confidence || 50,
+          lead_type: 'person',
+          source_type: 'real_estate_scraper',
           schema_data: {
             address: listing.address,
             bedrooms: listing.bedrooms,
