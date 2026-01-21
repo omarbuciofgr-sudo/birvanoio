@@ -377,18 +377,21 @@ export function ProspectSearchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-primary" />
-            Prospect Search
-          </DialogTitle>
-          <DialogDescription>
-            Find decision-makers by industry, location, and title — like ZoomInfo
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0">
+        <div className="flex-shrink-0 p-6 pb-0">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              Prospect Search
+            </DialogTitle>
+            <DialogDescription>
+              Find decision-makers by industry, location, and title — like ZoomInfo
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as 'quick' | 'advanced' | 'places')} className="flex-1 flex flex-col">
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as 'quick' | 'advanced' | 'places')} className="flex flex-col h-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="quick">
               <Sparkles className="h-4 w-4 mr-2" />
@@ -985,6 +988,7 @@ export function ProspectSearchDialog({
             </ScrollArea>
           </>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );
