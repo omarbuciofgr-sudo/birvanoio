@@ -79,9 +79,9 @@ export function AssignLeadsDialog({
               </SelectTrigger>
               <SelectContent>
                 {activeOrgs.length === 0 ? (
-                  <SelectItem value="" disabled>
-                    No active organizations
-                  </SelectItem>
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    No active organizations available
+                  </div>
                 ) : (
                   activeOrgs.map(org => (
                     <SelectItem key={org.id} value={org.id}>
