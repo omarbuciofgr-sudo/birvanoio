@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
+import { skipTraceApi } from '@/lib/api/skipTrace';
 import { supabase } from '@/integrations/supabase/client';
 import { ProspectSearchDialog } from '@/components/scraper/ProspectSearchDialog';
 import { 
@@ -30,6 +31,11 @@ import {
   Home,
   Building,
   Target,
+  Phone as PhoneIcon,
+  Mail as MailIcon,
+  Save,
+  Users,
+  RotateCw,
 } from 'lucide-react';
 import {
   Select,
@@ -137,6 +143,11 @@ export default function WebScraper() {
   const [reListings, setReListings] = useState<any[]>([]);
   const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
   const [reSkipTraceStats, setReSkipTraceStats] = useState<{ attempted: number; successful: number; rate: number } | null>(null);
+  const [skipTracingIndex, setSkipTracingIndex] = useState<number | null>(null);
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const [selectedListings, setSelectedListings] = useState<Set<number>>(new Set());
+  const [bulkSkipTracing, setBulkSkipTracing] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
@@ -503,6 +514,232 @@ export default function WebScraper() {
     toast.success('Exported listings to CSV');
   };
 
+  // Skip trace a single listing
+  const handleSkipTraceListing = async (listing: any, index: number) => {
+    if (!listing.address) {
+      toast.error('No address available for skip trace');
+      return;
+    }
+
+    setSkipTracingIndex(index);
+    try {
+      const parsed = skipTraceApi.parseAddress(listing.address);
+      const result = await skipTraceApi.lookupOwner(parsed);
+
+      if (result.success && result.data) {
+        // Update the listing with the skip trace data
+        setReListings(prev => prev.map((l, i) => {
+          if (i !== index) return l;
+          return {
+            ...l,
+            owner_name: result.data!.fullName || l.owner_name,
+            owner_phone: result.data!.phones[0]?.number || l.owner_phone,
+            owner_email: result.data!.emails[0]?.address || l.owner_email,
+            all_phones: result.data!.phones,
+            all_emails: result.data!.emails,
+            skip_trace_confidence: result.data!.confidence,
+            skip_trace_status: 'success',
+          };
+        }));
+        toast.success(`Found owner info: ${result.data.fullName || 'Contact data retrieved'}`);
+      } else {
+        toast.error(result.error || result.message || 'No owner info found');
+        setReListings(prev => prev.map((l, i) => {
+          if (i !== index) return l;
+          return { ...l, skip_trace_status: 'not_found' };
+        }));
+      }
+    } catch (error) {
+      console.error('Skip trace error:', error);
+      toast.error('Failed to skip trace');
+    } finally {
+      setSkipTracingIndex(null);
+    }
+  };
+
+  // Save a single listing to database
+  const handleSaveListing = async (listing: any, index: number) => {
+    if (!user?.id) {
+      toast.error('You must be logged in');
+      return;
+    }
+
+    setSavingIndex(index);
+    try {
+      const { error } = await supabase.from('scraped_leads').insert({
+        domain: listing.source_url ? new URL(listing.source_url).hostname : 'unknown',
+        source_url: listing.source_url || listing.listing_url,
+        full_name: listing.owner_name,
+        best_email: listing.owner_email,
+        best_phone: listing.owner_phone,
+        all_emails: listing.all_emails?.map((e: any) => e.address || e) || (listing.owner_email ? [listing.owner_email] : []),
+        all_phones: listing.all_phones?.map((p: any) => p.number || p) || (listing.owner_phone ? [listing.owner_phone] : []),
+        status: 'new',
+        confidence_score: listing.skip_trace_confidence || 50,
+        schema_data: {
+          address: listing.address,
+          bedrooms: listing.bedrooms,
+          bathrooms: listing.bathrooms,
+          price: listing.price,
+          days_on_market: listing.days_on_market,
+          property_type: listing.property_type,
+          square_feet: listing.square_feet,
+          year_built: listing.year_built,
+          listing_type: listing.listing_type,
+          source_platform: listing.source_platform,
+        },
+        enrichment_providers_used: listing.skip_trace_status === 'success' ? ['tracerfy'] : [],
+      });
+
+      if (error) throw error;
+
+      // Mark as saved
+      setReListings(prev => prev.map((l, i) => {
+        if (i !== index) return l;
+        return { ...l, saved_to_db: true };
+      }));
+      toast.success('Lead saved to database');
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error('Failed to save lead');
+    } finally {
+      setSavingIndex(null);
+    }
+  };
+
+  // Toggle selection for bulk actions
+  const toggleListingSelection = (index: number) => {
+    setSelectedListings(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  // Select/deselect all listings
+  const toggleSelectAllListings = () => {
+    if (selectedListings.size === reListings.filter(l => !l.saved_to_db).length) {
+      setSelectedListings(new Set());
+    } else {
+      setSelectedListings(new Set(reListings.map((l, i) => l.saved_to_db ? -1 : i).filter(i => i >= 0)));
+    }
+  };
+
+  // Bulk skip trace selected listings
+  const handleBulkSkipTrace = async () => {
+    const toProcess = Array.from(selectedListings)
+      .filter(i => reListings[i] && !reListings[i].owner_phone && !reListings[i].skip_trace_status);
+    
+    if (toProcess.length === 0) {
+      toast.error('No listings to skip trace (already have contact info or already traced)');
+      return;
+    }
+
+    setBulkSkipTracing(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const index of toProcess) {
+      const listing = reListings[index];
+      if (!listing.address) continue;
+
+      try {
+        const parsed = skipTraceApi.parseAddress(listing.address);
+        const result = await skipTraceApi.lookupOwner(parsed);
+
+        if (result.success && result.data) {
+          setReListings(prev => prev.map((l, i) => {
+            if (i !== index) return l;
+            return {
+              ...l,
+              owner_name: result.data!.fullName || l.owner_name,
+              owner_phone: result.data!.phones[0]?.number || l.owner_phone,
+              owner_email: result.data!.emails[0]?.address || l.owner_email,
+              all_phones: result.data!.phones,
+              all_emails: result.data!.emails,
+              skip_trace_confidence: result.data!.confidence,
+              skip_trace_status: 'success',
+            };
+          }));
+          successCount++;
+        } else {
+          setReListings(prev => prev.map((l, i) => {
+            if (i !== index) return l;
+            return { ...l, skip_trace_status: 'not_found' };
+          }));
+          errorCount++;
+        }
+      } catch (error) {
+        errorCount++;
+      }
+    }
+
+    setBulkSkipTracing(false);
+    toast.success(`Skip traced ${successCount} listings (${errorCount} not found)`);
+  };
+
+  // Bulk save selected listings
+  const handleBulkSave = async () => {
+    const toSave = Array.from(selectedListings).filter(i => reListings[i] && !reListings[i].saved_to_db);
+    
+    if (toSave.length === 0) {
+      toast.error('No new listings to save');
+      return;
+    }
+
+    setBulkSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const index of toSave) {
+      const listing = reListings[index];
+      try {
+        const { error } = await supabase.from('scraped_leads').insert({
+          domain: listing.source_url ? new URL(listing.source_url).hostname : 'unknown',
+          source_url: listing.source_url || listing.listing_url,
+          full_name: listing.owner_name,
+          best_email: listing.owner_email,
+          best_phone: listing.owner_phone,
+          all_emails: listing.all_emails?.map((e: any) => e.address || e) || (listing.owner_email ? [listing.owner_email] : []),
+          all_phones: listing.all_phones?.map((p: any) => p.number || p) || (listing.owner_phone ? [listing.owner_phone] : []),
+          status: 'new',
+          confidence_score: listing.skip_trace_confidence || 50,
+          schema_data: {
+            address: listing.address,
+            bedrooms: listing.bedrooms,
+            bathrooms: listing.bathrooms,
+            price: listing.price,
+            days_on_market: listing.days_on_market,
+            property_type: listing.property_type,
+            square_feet: listing.square_feet,
+            year_built: listing.year_built,
+            listing_type: listing.listing_type,
+            source_platform: listing.source_platform,
+          },
+          enrichment_providers_used: listing.skip_trace_status === 'success' ? ['tracerfy'] : [],
+        });
+
+        if (error) throw error;
+        
+        setReListings(prev => prev.map((l, i) => {
+          if (i !== index) return l;
+          return { ...l, saved_to_db: true };
+        }));
+        successCount++;
+      } catch (error) {
+        errorCount++;
+      }
+    }
+
+    setSelectedListings(new Set());
+    setBulkSaving(false);
+    toast.success(`Saved ${successCount} leads (${errorCount} failed)`);
+  };
+
   return (
     <DashboardLayout>
       <div className="mb-6 flex items-center justify-between">
@@ -692,106 +929,217 @@ export default function WebScraper() {
 
           {reListings.length > 0 && (
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <div>
-                  <CardTitle>{reListings.length} Listings Found</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    {reListings.length} Listings Found
+                    {selectedListings.size > 0 && (
+                      <Badge variant="secondary">{selectedListings.size} selected</Badge>
+                    )}
+                  </CardTitle>
                   <CardDescription>FSBO/FRBO listings with owner contact info</CardDescription>
                 </div>
-                <Button variant="outline" onClick={exportListingsToCSV}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export CSV
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={toggleSelectAllListings}>
+                    <Users className="mr-2 h-4 w-4" />
+                    {selectedListings.size === reListings.filter(l => !l.saved_to_db).length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  {selectedListings.size > 0 && (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleBulkSkipTrace}
+                        disabled={bulkSkipTracing}
+                      >
+                        {bulkSkipTracing ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RotateCw className="mr-2 h-4 w-4" />
+                        )}
+                        Skip Trace Selected
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        onClick={handleBulkSave}
+                        disabled={bulkSaving}
+                      >
+                        {bulkSaving ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Save Selected
+                      </Button>
+                    </>
+                  )}
+                  <Button variant="outline" size="sm" onClick={exportListingsToCSV}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[500px]">
                   <div className="space-y-4">
                     {reListings.map((listing, index) => (
-                      <div key={index} className="rounded-lg border p-4 space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h4 className="font-semibold">{listing.address || 'Address not available'}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {listing.property_type} • {listing.bedrooms} bed • {listing.bathrooms} bath
-                              {listing.square_feet && ` • ${listing.square_feet.toLocaleString()} sq ft`}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-primary">{listing.price || 'Price N/A'}</p>
-                            {listing.days_on_market && (
-                              <p className="text-xs text-muted-foreground">{listing.days_on_market} days on market</p>
+                      <div 
+                        key={index} 
+                        className={`rounded-lg border p-4 space-y-3 transition-colors ${
+                          selectedListings.has(index) ? 'border-primary bg-primary/5' : ''
+                        } ${listing.saved_to_db ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Selection checkbox */}
+                          {!listing.saved_to_db && (
+                            <Checkbox
+                              checked={selectedListings.has(index)}
+                              onCheckedChange={() => toggleListingSelection(index)}
+                              className="mt-1"
+                            />
+                          )}
+                          {listing.saved_to_db && (
+                            <div className="mt-1">
+                              <Check className="h-4 w-4 text-green-500" />
+                            </div>
+                          )}
+                          
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-semibold">{listing.address || 'Address not available'}</h4>
+                                  {listing.saved_to_db && (
+                                    <Badge variant="secondary" className="text-xs">Saved</Badge>
+                                  )}
+                                  {listing.skip_trace_status === 'success' && (
+                                    <Badge className="bg-green-500/20 text-green-600 text-xs">Skip Traced</Badge>
+                                  )}
+                                  {listing.skip_trace_status === 'not_found' && (
+                                    <Badge variant="outline" className="text-xs">No Owner Found</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  {listing.property_type} • {listing.bedrooms} bed • {listing.bathrooms} bath
+                                  {listing.square_feet && ` • ${listing.square_feet.toLocaleString()} sq ft`}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-bold text-primary">{listing.price || 'Price N/A'}</p>
+                                {listing.days_on_market && (
+                                  <p className="text-xs text-muted-foreground">{listing.days_on_market} days on market</p>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                              {listing.favorites_count !== undefined && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Favorites:</span>
+                                  <Badge variant="outline">{listing.favorites_count}</Badge>
+                                </div>
+                              )}
+                              {listing.views_count !== undefined && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Views:</span>
+                                  <Badge variant="outline">{listing.views_count}</Badge>
+                                </div>
+                              )}
+                              {listing.listing_type && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Type:</span>
+                                  <Badge variant="secondary">{listing.listing_type.toUpperCase()}</Badge>
+                                </div>
+                              )}
+                              {listing.source_platform && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">Source:</span>
+                                  <Badge>{listing.source_platform}</Badge>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Owner Contact Section */}
+                            {(listing.owner_name || listing.owner_phone || listing.owner_email) ? (
+                              <div className="rounded-md bg-primary/10 p-3">
+                                <h5 className="text-sm font-medium mb-1">Owner Contact</h5>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                                  {listing.owner_name && (
+                                    <div>
+                                      <span className="text-muted-foreground">Name: </span>
+                                      <span className="font-medium">{listing.owner_name}</span>
+                                    </div>
+                                  )}
+                                  {listing.owner_phone && (
+                                    <div className="flex items-center gap-1">
+                                      <PhoneIcon className="h-3 w-3 text-muted-foreground" />
+                                      <a href={`tel:${listing.owner_phone}`} className="font-medium text-primary hover:underline">
+                                        {listing.owner_phone}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {listing.owner_email && (
+                                    <div className="flex items-center gap-1">
+                                      <MailIcon className="h-3 w-3 text-muted-foreground" />
+                                      <a href={`mailto:${listing.owner_email}`} className="font-medium text-primary hover:underline">
+                                        {listing.owner_email}
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+                                No owner contact info available. Use Skip Trace to find the owner.
+                              </div>
                             )}
+
+                            {/* Action buttons */}
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex gap-2">
+                                {!listing.owner_phone && !listing.skip_trace_status && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSkipTraceListing(listing, index)}
+                                    disabled={skipTracingIndex === index}
+                                  >
+                                    {skipTracingIndex === index ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <RotateCw className="mr-2 h-4 w-4" />
+                                    )}
+                                    Skip Trace
+                                  </Button>
+                                )}
+                                {!listing.saved_to_db && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSaveListing(listing, index)}
+                                    disabled={savingIndex === index}
+                                  >
+                                    {savingIndex === index ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Save className="mr-2 h-4 w-4" />
+                                    )}
+                                    Save Lead
+                                  </Button>
+                                )}
+                              </div>
+                              {listing.source_url && (
+                                <a 
+                                  href={listing.source_url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                                >
+                                  View Original <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                          {listing.favorites_count !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-muted-foreground">Favorites:</span>
-                              <Badge variant="outline">{listing.favorites_count}</Badge>
-                            </div>
-                          )}
-                          {listing.views_count !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-muted-foreground">Views:</span>
-                              <Badge variant="outline">{listing.views_count}</Badge>
-                            </div>
-                          )}
-                          {listing.listing_type && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-muted-foreground">Type:</span>
-                              <Badge variant="secondary">{listing.listing_type.toUpperCase()}</Badge>
-                            </div>
-                          )}
-                          {listing.source_platform && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-muted-foreground">Source:</span>
-                              <Badge>{listing.source_platform}</Badge>
-                            </div>
-                          )}
-                        </div>
-
-                        {(listing.owner_name || listing.owner_phone || listing.owner_email) && (
-                          <div className="rounded-md bg-primary/10 p-3">
-                            <h5 className="text-sm font-medium mb-1">Owner Contact</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                              {listing.owner_name && (
-                                <div>
-                                  <span className="text-muted-foreground">Name: </span>
-                                  <span className="font-medium">{listing.owner_name}</span>
-                                </div>
-                              )}
-                              {listing.owner_phone && (
-                                <div>
-                                  <span className="text-muted-foreground">Phone: </span>
-                                  <a href={`tel:${listing.owner_phone}`} className="font-medium text-primary hover:underline">
-                                    {listing.owner_phone}
-                                  </a>
-                                </div>
-                              )}
-                              {listing.owner_email && (
-                                <div>
-                                  <span className="text-muted-foreground">Email: </span>
-                                  <a href={`mailto:${listing.owner_email}`} className="font-medium text-primary hover:underline">
-                                    {listing.owner_email}
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {listing.source_url && (
-                          <div className="flex justify-end">
-                            <a 
-                              href={listing.source_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline flex items-center gap-1"
-                            >
-                              View Original <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>

@@ -475,21 +475,51 @@ function extractPhones(text: string): string[] {
 
 // Extract company name from page content
 function extractCompanyName(markdown: string, domain: string): string | null {
+  // Blacklist of garbage patterns that are not company names
+  const blacklistPatterns = [
+    /^#\s*$/,                                    // Empty heading
+    /manage\s*cookies/i,                         // Cookie consent
+    /privacy\s*policy/i,
+    /terms\s*(of\s*service|and\s*conditions)/i,
+    /cookie\s*settings/i,
+    /accept\s*all/i,
+    /skip\s*to\s*content/i,
+    /navigation/i,
+    /menu/i,
+    /search/i,
+    /sign\s*(in|up)/i,
+    /log\s*(in|out)/i,
+    /subscribe/i,
+    /newsletter/i,
+    /loading/i,
+    /error/i,
+    /^\d+$/,                                     // Just numbers
+  ];
+  
   // Try to find company name from title patterns
   const patterns = [
-    /^#\s*([^|\n]+)/m,  // First H1
+    /^#\s*([^|\n#]+)/m,                           // First H1
     /(?:Welcome to|About)\s+([A-Z][A-Za-z0-9\s&]+(?:LLC|Inc|Corp|Co\.?)?)/i,
     /©\s*\d{4}\s+([A-Z][A-Za-z0-9\s&]+)/,
+    /^##\s*About\s+([A-Z][A-Za-z0-9\s&]+)/m,     // About section
   ];
   
   for (const pattern of patterns) {
     const match = markdown.match(pattern);
-    if (match?.[1] && match[1].length < 100) {
-      return match[1].trim();
+    if (match?.[1]) {
+      const candidate = match[1].trim();
+      // Check against blacklist
+      const isBlacklisted = blacklistPatterns.some(bp => bp.test(candidate));
+      if (!isBlacklisted && candidate.length >= 2 && candidate.length < 80) {
+        // Additional validation: must contain at least one letter
+        if (/[a-zA-Z]/.test(candidate)) {
+          return candidate;
+        }
+      }
     }
   }
   
-  // Fall back to domain name
+  // Fall back to domain name - clean it up nicely
   const domainName = domain.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
   return domainName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
