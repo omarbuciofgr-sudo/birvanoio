@@ -10,7 +10,6 @@ interface SkipTraceRequest {
   city?: string;
   state?: string;
   zip?: string;
-  // Alternative: full address string
   fullAddress?: string;
 }
 
@@ -44,6 +43,282 @@ interface SkipTraceResult {
     confidence?: number;
   };
   error?: string;
+  message?: string;
+  provider?: string;
+}
+
+// Try BatchData API
+async function tryBatchData(addressData: Record<string, string>): Promise<SkipTraceResult | null> {
+  const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
+  if (!batchDataKey) {
+    console.log('[Skip Trace] BatchData API key not configured, skipping');
+    return null;
+  }
+
+  try {
+    console.log('[Skip Trace] Trying BatchData API...');
+    const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${batchDataKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: [{
+          streetAddress: addressData.street,
+          city: addressData.city || '',
+          state: addressData.state || '',
+          zipCode: addressData.zip || '',
+        }],
+      }),
+    });
+
+    console.log('[Skip Trace] BatchData response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Skip Trace] BatchData error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('[Skip Trace] BatchData response:', JSON.stringify(data).slice(0, 500));
+
+    // BatchData returns results in an array
+    const results = data.results || data.data || [];
+    if (results.length === 0) {
+      return {
+        success: true,
+        data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+        message: 'No owner information found',
+        provider: 'batchdata',
+      };
+    }
+
+    const owner = results[0]?.owner || results[0]?.owners?.[0] || results[0];
+    const phones: Array<{ number: string; type: string; lineType?: string }> = [];
+    const emails: Array<{ address: string; type?: string }> = [];
+
+    // Extract phones
+    if (owner.phones) {
+      for (const p of owner.phones) {
+        if (p.phoneNumber || p.number || p.phone) {
+          phones.push({
+            number: p.phoneNumber || p.number || p.phone,
+            type: p.phoneType || p.type || 'unknown',
+            lineType: p.lineType,
+          });
+        }
+      }
+    }
+    if (owner.phoneNumber) {
+      phones.push({ number: owner.phoneNumber, type: 'primary' });
+    }
+
+    // Extract emails
+    if (owner.emails) {
+      for (const e of owner.emails) {
+        const addr = typeof e === 'string' ? e : e.emailAddress || e.email || e.address;
+        if (addr) {
+          emails.push({ address: addr, type: typeof e === 'object' ? e.type : undefined });
+        }
+      }
+    }
+    if (owner.emailAddress) {
+      emails.push({ address: owner.emailAddress });
+    }
+
+    const fullName = owner.fullName || owner.name || 
+      (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : null);
+
+    if (!fullName && phones.length === 0 && emails.length === 0) {
+      return {
+        success: true,
+        data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+        message: 'No owner information found',
+        provider: 'batchdata',
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        fullName,
+        firstName: owner.firstName || null,
+        lastName: owner.lastName || null,
+        phones,
+        emails,
+        propertyAddress: {
+          street: addressData.street,
+          city: addressData.city || '',
+          state: addressData.state || '',
+          zip: addressData.zip || '',
+        },
+        confidence: owner.confidence || 80,
+      },
+      provider: 'batchdata',
+    };
+  } catch (error) {
+    console.error('[Skip Trace] BatchData exception:', error);
+    return null;
+  }
+}
+
+// Try Tracerfy API with updated authentication
+async function tryTracerfy(addressData: Record<string, string>): Promise<SkipTraceResult | null> {
+  const apiKey = Deno.env.get('TRACERFY_API_KEY');
+  if (!apiKey) {
+    console.log('[Skip Trace] Tracerfy API key not configured, skipping');
+    return null;
+  }
+
+  try {
+    console.log('[Skip Trace] Trying Tracerfy API...');
+    
+    // Tracerfy now uses Bearer token auth and updated endpoint
+    // Try the new API endpoint format
+    const response = await fetch('https://www.tracerfy.com/api/trace/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        properties: [{
+          street: addressData.street,
+          city: addressData.city || '',
+          state: addressData.state || '',
+          zip: addressData.zip || '',
+        }],
+      }),
+    });
+
+    console.log('[Skip Trace] Tracerfy response status:', response.status);
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      // If the new endpoint fails, try legacy format with x-api-key
+      console.log('[Skip Trace] New Tracerfy endpoint failed, trying legacy...');
+      
+      const legacyResponse = await fetch('https://www.tracerfy.com/api/v2/trace', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          street: addressData.street,
+          city: addressData.city || '',
+          state: addressData.state || '',
+          zip: addressData.zip || '',
+        }),
+      });
+
+      console.log('[Skip Trace] Legacy Tracerfy response status:', legacyResponse.status);
+
+      if (!legacyResponse.ok) {
+        const legacyText = await legacyResponse.text();
+        console.error('[Skip Trace] Legacy Tracerfy error:', legacyText.slice(0, 300));
+        
+        if (legacyResponse.status === 404) {
+          return {
+            success: true,
+            data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+            message: 'No owner information found',
+            provider: 'tracerfy',
+          };
+        }
+        return null;
+      }
+
+      const legacyData = await legacyResponse.json();
+      return parseTracerfyResponse(legacyData, addressData);
+    }
+
+    // Check if response is HTML (error page)
+    if (responseText.includes('<!doctype html>') || responseText.includes('<html')) {
+      console.error('[Skip Trace] Tracerfy returned HTML instead of JSON');
+      return null;
+    }
+
+    const tracerfyData = JSON.parse(responseText);
+    return parseTracerfyResponse(tracerfyData, addressData);
+  } catch (error) {
+    console.error('[Skip Trace] Tracerfy exception:', error);
+    return null;
+  }
+}
+
+function parseTracerfyResponse(data: any, addressData: Record<string, string>): SkipTraceResult {
+  // Handle job-based response (new API)
+  if (data.job_id || data.queue_id) {
+    console.log('[Skip Trace] Tracerfy returned job ID - async processing not supported yet');
+    return {
+      success: true,
+      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+      message: 'Skip trace job queued - async processing',
+      provider: 'tracerfy',
+    };
+  }
+
+  // Handle direct results
+  const result = data.results?.[0] || data.data?.[0] || data;
+  
+  const phones: Array<{ number: string; type: string; lineType?: string }> = [];
+  const emails: Array<{ address: string; type?: string }> = [];
+
+  // Extract phones
+  const phoneList = result.phones || result.phone_numbers || [];
+  for (const p of phoneList) {
+    const number = typeof p === 'string' ? p : p.number || p.phone || p.phoneNumber;
+    if (number) {
+      phones.push({
+        number,
+        type: typeof p === 'string' ? 'unknown' : p.type || 'unknown',
+        lineType: typeof p === 'string' ? undefined : p.line_type || p.lineType,
+      });
+    }
+  }
+
+  // Extract emails
+  const emailList = result.emails || result.email_addresses || [];
+  for (const e of emailList) {
+    const address = typeof e === 'string' ? e : e.address || e.email || e.emailAddress;
+    if (address) {
+      emails.push({
+        address,
+        type: typeof e === 'string' ? undefined : e.type,
+      });
+    }
+  }
+
+  const fullName = result.full_name || result.name || result.fullName ||
+    (result.first_name && result.last_name ? `${result.first_name} ${result.last_name}` : null);
+
+  return {
+    success: true,
+    data: {
+      fullName,
+      firstName: result.first_name || result.firstName || null,
+      lastName: result.last_name || result.lastName || null,
+      phones,
+      emails,
+      mailingAddress: result.mailing_address ? {
+        street: result.mailing_address.street,
+        city: result.mailing_address.city,
+        state: result.mailing_address.state,
+        zip: result.mailing_address.zip,
+      } : undefined,
+      propertyAddress: {
+        street: addressData.street,
+        city: addressData.city || '',
+        state: addressData.state || '',
+        zip: addressData.zip || '',
+      },
+      confidence: result.confidence_score || result.confidence || undefined,
+    },
+    provider: 'tracerfy',
+  };
 }
 
 Deno.serve(async (req) => {
@@ -104,16 +379,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate Tracerfy API key
-    const apiKey = Deno.env.get('TRACERFY_API_KEY');
-    if (!apiKey) {
-      console.error('TRACERFY_API_KEY not configured');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Skip trace service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const body: SkipTraceRequest = await req.json();
     
     // Validate input
@@ -134,7 +399,15 @@ Deno.serve(async (req) => {
         addressData.street = parts[0];
         addressData.city = parts[1];
         // Last part might be "STATE ZIP" or just "STATE"
-        const stateZip = parts[parts.length - 1].trim().split(' ');
+        const stateZip = parts[parts.length - 1].trim().split(/\s+/);
+        addressData.state = stateZip[0];
+        if (stateZip.length > 1) {
+          addressData.zip = stateZip[stateZip.length - 1];
+        }
+      } else if (parts.length === 2) {
+        addressData.street = parts[0];
+        const stateZip = parts[1].trim().split(/\s+/);
+        addressData.city = '';
         addressData.state = stateZip[0];
         if (stateZip.length > 1) {
           addressData.zip = stateZip[stateZip.length - 1];
@@ -151,117 +424,49 @@ Deno.serve(async (req) => {
       };
     }
 
-    console.log('Skip tracing address:', addressData);
+    console.log('[Skip Trace] Processing address:', addressData);
 
-    // Tracerfy API v2 endpoint
-    const tracerfyUrl = 'https://www.tracerfy.com/api/v2/trace';
-    
-    const response = await fetch(tracerfyUrl, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        street: addressData.street,
-        city: addressData.city,
-        state: addressData.state,
-        zip: addressData.zip,
-      }),
-    });
+    // Try providers in order: BatchData (more reliable) → Tracerfy
+    let result: SkipTraceResult | null = null;
 
-    const responseText = await response.text();
-    console.log('Tracerfy response status:', response.status);
-
-    if (!response.ok) {
-      console.error('Tracerfy API error:', responseText);
-      
-      // Handle specific error codes
-      if (response.status === 401) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Invalid API key' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (response.status === 404) {
-        // No results found - this is not an error, just no data
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            data: {
-              fullName: null,
-              firstName: null,
-              lastName: null,
-              phones: [],
-              emails: [],
-              confidence: 0,
-            },
-            message: 'No owner information found for this address'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
+    // 1. Try BatchData first
+    result = await tryBatchData(addressData);
+    if (result?.data?.fullName || (result?.data?.phones && result.data.phones.length > 0)) {
+      console.log('[Skip Trace] Success via BatchData');
       return new Response(
-        JSON.stringify({ success: false, error: `API error: ${response.status}` }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse the Tracerfy response
-    let tracerfyData;
-    try {
-      tracerfyData = JSON.parse(responseText);
-    } catch {
-      console.error('Failed to parse Tracerfy response:', responseText);
+    // 2. Fallback to Tracerfy
+    result = await tryTracerfy(addressData);
+    if (result) {
+      console.log('[Skip Trace] Result via Tracerfy');
       return new Response(
-        JSON.stringify({ success: false, error: 'Invalid response from skip trace service' }),
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // No providers configured or all failed
+    const hasAnyKey = Deno.env.get('BATCHDATA_API_KEY') || Deno.env.get('TRACERFY_API_KEY');
+    if (!hasAnyKey) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'No skip trace providers configured. Add BATCHDATA_API_KEY or TRACERFY_API_KEY.' 
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Normalize the response to our standard format
-    // Adjust field mappings based on actual Tracerfy API response structure
-    const result: SkipTraceResult = {
-      success: true,
-      data: {
-        fullName: tracerfyData.full_name || tracerfyData.name || null,
-        firstName: tracerfyData.first_name || null,
-        lastName: tracerfyData.last_name || null,
-        phones: (tracerfyData.phones || tracerfyData.phone_numbers || []).map((p: any) => ({
-          number: typeof p === 'string' ? p : p.number || p.phone,
-          type: typeof p === 'string' ? 'unknown' : p.type || 'unknown',
-          lineType: typeof p === 'string' ? undefined : p.line_type,
-        })),
-        emails: (tracerfyData.emails || tracerfyData.email_addresses || []).map((e: any) => ({
-          address: typeof e === 'string' ? e : e.address || e.email,
-          type: typeof e === 'string' ? undefined : e.type,
-        })),
-        mailingAddress: tracerfyData.mailing_address ? {
-          street: tracerfyData.mailing_address.street,
-          city: tracerfyData.mailing_address.city,
-          state: tracerfyData.mailing_address.state,
-          zip: tracerfyData.mailing_address.zip,
-        } : undefined,
-        propertyAddress: {
-          street: addressData.street,
-          city: addressData.city,
-          state: addressData.state,
-          zip: addressData.zip,
-        },
-        confidence: tracerfyData.confidence_score || tracerfyData.confidence || undefined,
-      },
-    };
-
-    console.log('Skip trace successful, found:', {
-      hasName: !!result.data?.fullName,
-      phoneCount: result.data?.phones.length || 0,
-      emailCount: result.data?.emails.length || 0,
-    });
-
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({ 
+        success: true, 
+        data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+        message: 'No owner information found from available providers',
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
