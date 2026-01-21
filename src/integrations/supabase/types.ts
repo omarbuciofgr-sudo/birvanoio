@@ -2338,6 +2338,37 @@ export type Database = {
         Args: { session_uuid: string }
         Returns: boolean
       }
+      get_organization_api_keys: {
+        Args: { p_organization_id: string }
+        Returns: {
+          api_key_prefix: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          is_active: boolean
+          key_name: string
+          last_used_at: string
+          organization_id: string
+          permissions: Json
+          rate_limit_per_minute: number
+        }[]
+      }
+      get_organization_webhooks: {
+        Args: { p_organization_id: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          events: Json
+          failure_count: number
+          id: string
+          is_active: boolean
+          last_triggered_at: string
+          name: string
+          organization_id: string
+          webhook_url: string
+        }[]
+      }
       get_user_organization: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
