@@ -132,16 +132,55 @@ function normalizeForMatch(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function listingMatchesLocation(listingAddress: unknown, expectedCity: string, expectedStateAbbrev?: string): boolean {
+function listingMatchesLocation(
+  listingAddress: unknown, 
+  expectedCity: string, 
+  expectedStateAbbrev?: string,
+  sourceUrl?: string
+): boolean {
   if (typeof listingAddress !== 'string') return false;
+  
+  // IMPORTANT: If the address is short (just street without city), check the source URL
+  // Real estate sites structure URLs like hotpads.com/houston-tx/... so we can trust the URL
+  const hasCity = listingAddress.includes(',') || 
+                  normalizeForMatch(listingAddress).includes(normalizeForMatch(expectedCity));
+  
+  if (!hasCity && sourceUrl) {
+    // Check if the URL contains the city-state pattern
+    const urlNormalized = sourceUrl.toLowerCase();
+    const citySlug = expectedCity.toLowerCase().replace(/\s+/g, '-');
+    const stateSlug = expectedStateAbbrev?.toLowerCase() || '';
+    
+    // URL patterns like hotpads.com/houston-tx/ or zillow.com/houston-tx/
+    if (urlNormalized.includes(`/${citySlug}-${stateSlug}`) || 
+        urlNormalized.includes(`/${citySlug}${stateSlug}`) ||
+        urlNormalized.includes(`${citySlug}-${stateSlug}-`)) {
+      return true; // Trust the URL - listing is in the searched city
+    }
+  }
+  
+  // Standard check: address contains city and state
   const addr = normalizeForMatch(listingAddress);
   const city = normalizeForMatch(expectedCity);
-  if (city && !addr.includes(city)) return false;
-  if (expectedStateAbbrev) {
-    const st = expectedStateAbbrev.toUpperCase();
-    const stateRe = new RegExp(`(^|[^A-Z])${st}([^A-Z]|$)`);
-    if (!stateRe.test(listingAddress.toUpperCase())) return false;
+  
+  // Check for city name in address
+  if (city && addr.includes(city)) {
+    // City found - now check state if required
+    if (expectedStateAbbrev) {
+      const st = expectedStateAbbrev.toUpperCase();
+      const stateRe = new RegExp(`(^|[^A-Z])${st}([^A-Z]|$)`);
+      if (!stateRe.test(listingAddress.toUpperCase())) return false;
+    }
+    return true;
   }
+  
+  // City not found in address - only fail if address looks complete (has comma)
+  if (city && listingAddress.includes(',') && !addr.includes(city)) {
+    return false;
+  }
+  
+  // For addresses without city (just street), allow them through
+  // They likely came from the correct search URL and will be validated by skip trace
   return true;
 }
 
@@ -1889,7 +1928,9 @@ Deno.serve(async (req) => {
         // Filter by location (skip placeholder addresses that need enrichment from detail pages)
         for (const listing of listings) {
           const isPlaceholderAddress = !listing.address || listing.address === 'See listing' || listing.address.length < 10;
-          if (location && listing.address && !isPlaceholderAddress && !listingMatchesLocation(listing.address, expectedCity, expectedStateAbbrev)) {
+          // Pass source URL to help validate listings where address doesn't include city
+          const sourceUrl = listing.source_url || listing.listing_url || targetUrl;
+          if (location && listing.address && !isPlaceholderAddress && !listingMatchesLocation(listing.address, expectedCity, expectedStateAbbrev, sourceUrl)) {
             console.log(`[Filtered] "${listing.address}" doesn't match ${expectedCity}, ${expectedStateAbbrev}`);
             continue;
           }

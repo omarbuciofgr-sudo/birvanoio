@@ -670,14 +670,17 @@ export function ProspectSearchDialog({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>State</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select 
+                          onValueChange={(val) => field.onChange(val === "any_state" ? "" : val)} 
+                          value={field.value || "any_state"}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select state" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">Any State</SelectItem>
+                            <SelectItem value="any_state">Any State</SelectItem>
                             {US_STATES.map((state) => (
                               <SelectItem key={state} value={state}>{state}</SelectItem>
                             ))}
