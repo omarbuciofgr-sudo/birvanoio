@@ -829,7 +829,7 @@ export function ProspectSearchDialog({
               </div>
             </div>
 
-            <ScrollArea className="flex-1 max-h-[300px]">
+            <ScrollArea className="flex-1 h-[400px]">
               <TooltipProvider>
                 <div className="space-y-2">
                   {displayResults.map((prospect, index) => {
