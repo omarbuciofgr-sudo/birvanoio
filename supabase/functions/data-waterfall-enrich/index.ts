@@ -389,6 +389,39 @@ async function enrichWithClearbit(
   return { data: null, fields: [] };
 }
 
+// ZeroBounce email validation
+async function validateEmailWithZeroBounce(
+  email: string,
+  apiKey: string
+): Promise<{ valid: boolean; status: string; sub_status?: string }> {
+  try {
+    const response = await fetchWithRetry(
+      `https://api.zerobounce.net/v2/validate?api_key=${apiKey}&email=${encodeURIComponent(email)}`,
+      { method: 'GET' }
+    );
+    
+    if (!response.ok) {
+      console.error('ZeroBounce API error:', response.status);
+      return { valid: true, status: 'api_error' }; // Don't block on API errors
+    }
+    
+    const data = await response.json();
+    
+    // ZeroBounce statuses: valid, invalid, catch-all, unknown, spamtrap, abuse, do_not_mail
+    const validStatuses = ['valid', 'catch-all'];
+    const isValid = validStatuses.includes(data.status?.toLowerCase());
+    
+    return {
+      valid: isValid,
+      status: data.status || 'unknown',
+      sub_status: data.sub_status,
+    };
+  } catch (error) {
+    console.error('ZeroBounce validation error:', error);
+    return { valid: true, status: 'validation_error' }; // Don't block on errors
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -540,6 +573,31 @@ Deno.serve(async (req) => {
       }
       
       console.log(`Clearbit: ${clearbit.fields.length} fields found`);
+    }
+    
+    // Step 5: ZeroBounce email validation (if we have an email)
+    const zerobounceApiKey = Deno.env.get('ZEROBOUNCE_API_KEY');
+    if (zerobounceApiKey && result.email) {
+      const startTime = Date.now();
+      const zbResult = await validateEmailWithZeroBounce(result.email, zerobounceApiKey);
+      const duration = Date.now() - startTime;
+      
+      waterfallLog.push({
+        provider: 'zerobounce',
+        success: zbResult.valid,
+        fields_found: zbResult.valid ? ['email_validated'] : [],
+        fields_missing: [],
+        duration_ms: duration,
+      });
+      
+      if (zbResult.valid) {
+        (result.providers_used as string[]).push('zerobounce');
+        console.log(`ZeroBounce: Email validated - ${zbResult.status}`);
+      } else {
+        console.log(`ZeroBounce: Email invalid - ${zbResult.status}. Clearing email.`);
+        // Clear invalid email so we don't use bad data
+        result.email = null;
+      }
     }
     
     result.waterfall_log = waterfallLog;
