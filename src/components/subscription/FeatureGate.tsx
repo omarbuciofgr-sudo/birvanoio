@@ -16,6 +16,7 @@ const TIER_NAMES: Record<string, string> = {
   starter: "Starter",
   growth: "Growth",
   scale: "Scale",
+  enterprise: "Enterprise",
 };
 
 const FEATURE_TIER_MAP: Record<Feature, SubscriptionTier> = {
@@ -41,6 +42,17 @@ const FEATURE_TIER_MAP: Record<Feature, SubscriptionTier> = {
   call_transcription: "scale",
   webhook_integrations: "scale",
   api_access: "scale",
+  basic_scraper: "scale",
+  scraper_50_leads_month: "scale",
+  // Enterprise features
+  unlimited_scraper: "enterprise",
+  prospect_search: "enterprise",
+  industry_search: "enterprise",
+  real_estate_scraper: "enterprise",
+  skip_tracing: "enterprise",
+  waterfall_enrichment: "enterprise",
+  priority_support: "enterprise",
+  custom_integrations: "enterprise",
 };
 
 export const FeatureGate: React.FC<FeatureGateProps> = ({

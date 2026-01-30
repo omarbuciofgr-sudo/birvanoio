@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type SubscriptionTier = "starter" | "growth" | "scale" | null;
+export type SubscriptionTier = "starter" | "growth" | "scale" | "enterprise" | null;
 
 // Feature definitions by tier
 export const TIER_FEATURES = {
@@ -56,6 +56,42 @@ export const TIER_FEATURES = {
     "call_transcription",
     "webhook_integrations",
     "api_access",
+    // Self-service scraper
+    "basic_scraper",
+    "scraper_50_leads_month",
+  ],
+  enterprise: [
+    // All scale features plus unlimited scraping
+    "crm_access",
+    "click_to_call",
+    "call_recording",
+    "sms_tools",
+    "email_tools",
+    "csv_import",
+    "csv_export",
+    "basic_templates",
+    "kanban_view",
+    "ai_call_recaps",
+    "lead_scoring",
+    "sentiment_analysis",
+    "ai_templates",
+    "ai_voice_agent_limited",
+    "ai_voice_agent_unlimited",
+    "ai_weekly_digest",
+    "call_transcription",
+    "webhook_integrations",
+    "api_access",
+    "basic_scraper",
+    "scraper_50_leads_month",
+    // Enterprise scraper features
+    "unlimited_scraper",
+    "prospect_search",
+    "industry_search",
+    "real_estate_scraper",
+    "skip_tracing",
+    "waterfall_enrichment",
+    "priority_support",
+    "custom_integrations",
   ],
 } as const;
 
@@ -77,7 +113,7 @@ interface SubscriptionContextType extends SubscriptionState {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
-const TIER_HIERARCHY: SubscriptionTier[] = ["starter", "growth", "scale"];
+const TIER_HIERARCHY: SubscriptionTier[] = ["starter", "growth", "scale", "enterprise"];
 
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<SubscriptionState>({

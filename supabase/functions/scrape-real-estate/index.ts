@@ -11,10 +11,10 @@ const SUPPORTED_PLATFORMS = [
   { name: 'apartments', pattern: /apartments\.com/i, ownerFilter: 'owner', requiresZyte: false, strategy: 'apartments' },
   { name: 'hotpads', pattern: /hotpads\.com/i, ownerFilter: 'owner', requiresZyte: true, strategy: 'hotpads' },
   { name: 'fsbo', pattern: /fsbo\.com/i, ownerFilter: null, requiresZyte: false, strategy: 'generic' },
-  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'generic' },
-  { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'generic' },
+  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'trulia' },
+  { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'redfin' },
   { name: 'craigslist', pattern: /craigslist\.(org|com)/i, ownerFilter: null, requiresZyte: false, strategy: 'generic' },
-  { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'generic' },
+  { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'realtor' },
 ];
 
 // State abbreviation mapping
@@ -663,6 +663,259 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
   return listings;
 }
 
+// Extract Redfin listings
+function extractRedfinListings(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Try __NEXT_DATA__ first (Redfin uses Next.js)
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch) {
+      try {
+        const jsonData = JSON.parse(nextDataMatch[1]);
+        const homes = jsonData?.props?.pageProps?.homes || 
+                     jsonData?.props?.pageProps?.searchResults?.homes ||
+                     jsonData?.props?.pageProps?.reactServerState?.QueryClientState?.queries?.[0]?.state?.data?.homes || [];
+        
+        console.log(`[Redfin] Found ${homes.length} homes in __NEXT_DATA__`);
+        
+        for (const home of homes) {
+          const listing: any = {
+            address: home.streetAddress?.assembledAddress || home.address || '',
+            bedrooms: home.beds || null,
+            bathrooms: home.baths || null,
+            price: formatPrice(home.price?.value || home.listingPrice),
+            square_feet: home.sqFt?.value || home.sqft || null,
+            listing_url: home.url ? `https://www.redfin.com${home.url}` : null,
+            listing_id: home.listingId || home.propertyId || null,
+            property_type: home.propertyType || null,
+            listing_type: home.listingType?.includes('fsbo') ? 'fsbo' : 'for_sale',
+            days_on_market: home.dom || home.daysOnMarket || null,
+            year_built: home.yearBuilt || null,
+            source_url: sourceUrl,
+            source_platform: 'redfin',
+            scraped_at: new Date().toISOString(),
+          };
+          
+          if (listing.address) listings.push(listing);
+        }
+      } catch (e) {
+        console.error('[Redfin] Error parsing __NEXT_DATA__:', e);
+      }
+    }
+    
+    // HTML fallback
+    if (listings.length === 0) {
+      const cardPatterns = [
+        /<div[^>]*class="[^"]*HomeCard[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<article[^>]*class="[^"]*homecard[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
+      ];
+      
+      for (const pattern of cardPatterns) {
+        const cards = html.match(pattern) || [];
+        if (cards.length > 0) {
+          console.log(`[Redfin] Found ${cards.length} property cards`);
+          for (const card of cards.slice(0, 50)) {
+            const addressMatch = card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i);
+            const priceMatch = card.match(/\$[\d,]+/);
+            const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
+            const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+            
+            if (addressMatch) {
+              listings.push({
+                address: addressMatch[1].trim(),
+                price: priceMatch?.[0] || null,
+                bedrooms: bedsMatch ? parseInt(bedsMatch[1]) : null,
+                bathrooms: bathsMatch ? parseFloat(bathsMatch[1]) : null,
+                listing_type: 'for_sale',
+                source_url: sourceUrl,
+                source_platform: 'redfin',
+                scraped_at: new Date().toISOString(),
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    console.log(`[Redfin] Extracted ${listings.length} listings`);
+  } catch (error) {
+    console.error('[Redfin] Error:', error);
+  }
+  
+  return listings;
+}
+
+// Extract Trulia listings
+function extractTruliaListings(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Trulia uses React hydration data
+    const stateMatch = html.match(/<script>window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});?<\/script>/i) ||
+                       html.match(/<script[^>]*>window\["__PRELOADED_STATE__"\]\s*=\s*(\{[\s\S]*?\})<\/script>/i);
+    
+    if (stateMatch) {
+      try {
+        const stateData = JSON.parse(stateMatch[1]);
+        const homes = stateData?.searchResults?.homes || stateData?.data?.searchResults?.homes || [];
+        
+        console.log(`[Trulia] Found ${homes.length} homes in state data`);
+        
+        for (const home of homes) {
+          const listing: any = {
+            address: home.address?.formattedAddress || home.location?.fullAddress || '',
+            bedrooms: home.beds || home.bedrooms || null,
+            bathrooms: home.baths || home.bathrooms || null,
+            price: formatPrice(home.price || home.listPrice),
+            square_feet: home.sqft || home.floorSpace?.value || null,
+            listing_url: home.url ? `https://www.trulia.com${home.url}` : null,
+            listing_id: home.id || home.listingId || null,
+            listing_type: home.listingType?.toLowerCase()?.includes('fsbo') ? 'fsbo' : 'for_sale',
+            days_on_market: home.daysOnMarket || home.dom || null,
+            source_url: sourceUrl,
+            source_platform: 'trulia',
+            scraped_at: new Date().toISOString(),
+          };
+          
+          if (listing.address) listings.push(listing);
+        }
+      } catch (e) {
+        console.error('[Trulia] Error parsing state data:', e);
+      }
+    }
+    
+    // JSON-LD fallback
+    if (listings.length === 0) {
+      const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+      
+      for (const match of jsonLdMatches) {
+        try {
+          const jsonData = JSON.parse(match[1]);
+          const items = jsonData['@graph'] || (Array.isArray(jsonData) ? jsonData : [jsonData]);
+          
+          for (const item of items) {
+            if (item['@type']?.includes('Residence') || item['@type']?.includes('Product')) {
+              const address = item.address || {};
+              const fullAddress = typeof address === 'string' ? address :
+                [address.streetAddress, address.addressLocality, address.addressRegion].filter(Boolean).join(', ');
+              
+              if (fullAddress) {
+                listings.push({
+                  address: fullAddress,
+                  price: formatPrice(item.offers?.price),
+                  listing_url: item.url || null,
+                  listing_type: 'for_sale',
+                  source_url: sourceUrl,
+                  source_platform: 'trulia',
+                  scraped_at: new Date().toISOString(),
+                });
+              }
+            }
+          }
+        } catch (e) {
+          // Continue to next JSON-LD
+        }
+      }
+    }
+    
+    console.log(`[Trulia] Extracted ${listings.length} listings`);
+  } catch (error) {
+    console.error('[Trulia] Error:', error);
+  }
+  
+  return listings;
+}
+
+// Extract Realtor.com listings
+function extractRealtorListings(html: string, sourceUrl: string): any[] {
+  const listings: any[] = [];
+  
+  try {
+    // Realtor.com uses __NEXT_DATA__
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch) {
+      try {
+        const jsonData = JSON.parse(nextDataMatch[1]);
+        const homes = jsonData?.props?.pageProps?.properties || 
+                     jsonData?.props?.pageProps?.searchResults?.home_search?.results ||
+                     jsonData?.props?.pageProps?.homeSearch?.results || [];
+        
+        console.log(`[Realtor] Found ${homes.length} homes in __NEXT_DATA__`);
+        
+        for (const home of homes) {
+          const location = home.location || {};
+          const address = location.address || home.address || {};
+          const fullAddress = address.line ? 
+            `${address.line}, ${address.city}, ${address.state_code} ${address.postal_code}` :
+            `${address.street_address || ''}, ${address.city || ''}, ${address.state || ''}`.trim();
+          
+          const listing: any = {
+            address: fullAddress,
+            bedrooms: home.description?.beds || home.beds || null,
+            bathrooms: home.description?.baths || home.baths || null,
+            price: formatPrice(home.list_price || home.price),
+            square_feet: home.description?.sqft || home.sqft || null,
+            listing_url: home.permalink ? `https://www.realtor.com/realestateandhomes-detail/${home.permalink}` : null,
+            listing_id: home.property_id || home.listing_id || null,
+            property_type: home.description?.type || home.prop_type || null,
+            listing_type: home.flags?.is_fsbo ? 'fsbo' : 'for_sale',
+            days_on_market: home.list_date ? 
+              Math.floor((Date.now() - new Date(home.list_date).getTime()) / (1000 * 60 * 60 * 24)) : null,
+            year_built: home.description?.year_built || null,
+            source_url: sourceUrl,
+            source_platform: 'realtor',
+            scraped_at: new Date().toISOString(),
+          };
+          
+          if (listing.address && listing.address.length > 5) listings.push(listing);
+        }
+      } catch (e) {
+        console.error('[Realtor] Error parsing __NEXT_DATA__:', e);
+      }
+    }
+    
+    // HTML card fallback
+    if (listings.length === 0) {
+      const cardPatterns = [
+        /<div[^>]*data-testid="property-card"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<li[^>]*class="[^"]*component_property-card[^"]*"[^>]*>([\s\S]*?)<\/li>/gi,
+      ];
+      
+      for (const pattern of cardPatterns) {
+        const cards = html.match(pattern) || [];
+        if (cards.length > 0) {
+          console.log(`[Realtor] Found ${cards.length} property cards`);
+          for (const card of cards.slice(0, 50)) {
+            const addressMatch = card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i) ||
+                                card.match(/data-testid="card-address[^"]*"[^>]*>([^<]+)</i);
+            const priceMatch = card.match(/\$[\d,]+/);
+            
+            if (addressMatch) {
+              listings.push({
+                address: addressMatch[1].trim(),
+                price: priceMatch?.[0] || null,
+                listing_type: 'for_sale',
+                source_url: sourceUrl,
+                source_platform: 'realtor',
+                scraped_at: new Date().toISOString(),
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    console.log(`[Realtor] Extracted ${listings.length} listings`);
+  } catch (error) {
+    console.error('[Realtor] Error:', error);
+  }
+  
+  return listings;
+}
+
 // Generic extraction using regex patterns (fallback)
 function extractGenericListings(html: string, sourceUrl: string): any[] {
   const listings: any[] = [];
@@ -951,6 +1204,15 @@ Deno.serve(async (req) => {
             break;
           case 'hotpads':
             listings = extractHotpadsListings(html, formattedUrl);
+            break;
+          case 'redfin':
+            listings = extractRedfinListings(html, formattedUrl);
+            break;
+          case 'trulia':
+            listings = extractTruliaListings(html, formattedUrl);
+            break;
+          case 'realtor':
+            listings = extractRealtorListings(html, formattedUrl);
             break;
           default:
             listings = extractGenericListings(html, formattedUrl);
