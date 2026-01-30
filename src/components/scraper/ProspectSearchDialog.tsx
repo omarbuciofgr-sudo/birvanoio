@@ -52,6 +52,13 @@ import {
   ROLE_CATEGORIES,
   SPECIFIC_TITLES,
 } from '@/lib/api/prospectSearch';
+import {
+  industrySearchApi,
+  CompanySearchInput,
+  CompanyResult,
+  INDUSTRIES as INDUSTRY_OPTIONS,
+  EMPLOYEE_RANGES,
+} from '@/lib/api/industrySearch';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -107,10 +114,19 @@ const companyLookupSchema = z.object({
   limit: z.number().min(1).max(100).default(25),
 });
 
+const industrySearchSchema = z.object({
+  industry: z.string().min(1, 'Select an industry'),
+  employee_range: z.string().optional(),
+  location: z.string().optional(),
+  keywords: z.string().optional(),
+  limit: z.number().min(1).max(100).default(50),
+});
+
 type QuickSearchForm = z.infer<typeof quickSearchSchema>;
 type AdvancedSearchForm = z.infer<typeof advancedSearchSchema>;
 type PlacesSearchForm = z.infer<typeof placesSearchSchema>;
 type CompanyLookupForm = z.infer<typeof companyLookupSchema>;
+type IndustrySearchForm = z.infer<typeof industrySearchSchema>;
 
 interface ProspectSearchDialogProps {
   open: boolean;
@@ -123,7 +139,7 @@ export function ProspectSearchDialog({
   onOpenChange,
   onSaveProspects,
 }: ProspectSearchDialogProps) {
-  const [searchMode, setSearchMode] = useState<'quick' | 'advanced' | 'places' | 'company'>('quick');
+  const [searchMode, setSearchMode] = useState<'quick' | 'advanced' | 'places' | 'company' | 'industry'>('quick');
   const [results, setResults] = useState<ProspectResult[]>([]);
   const [scoredResults, setScoredResults] = useState<ScoredProspect[]>([]);
   const [scoringSummary, setScoringSummary] = useState<ScoringSummary | null>(null);
@@ -136,6 +152,10 @@ export function ProspectSearchDialog({
   // Company lookup state
   const [companyLookupResult, setCompanyLookupResult] = useState<CompanyLookupResponse | null>(null);
   const [selectedContacts, setSelectedContacts] = useState<Set<number>>(new Set());
+  
+  // Industry search state
+  const [industryResults, setIndustryResults] = useState<CompanyResult[]>([]);
+  const [selectedIndustryCompanies, setSelectedIndustryCompanies] = useState<Set<number>>(new Set());
 
   const quickForm = useForm<QuickSearchForm>({
     resolver: zodResolver(quickSearchSchema),
@@ -165,6 +185,17 @@ export function ProspectSearchDialog({
       companyInput: '', 
       targetRoles: ['executives'],
       limit: 25,
+    },
+  });
+
+  const industryForm = useForm<IndustrySearchForm>({
+    resolver: zodResolver(industrySearchSchema),
+    defaultValues: {
+      industry: '',
+      employee_range: '',
+      location: '',
+      keywords: '',
+      limit: 50,
     },
   });
 
@@ -293,6 +324,26 @@ export function ProspectSearchDialog({
     },
   });
 
+  // Industry search mutation
+  const industrySearchMutation = useMutation({
+    mutationFn: async (params: CompanySearchInput) => {
+      return industrySearchApi.searchCompanies(params);
+    },
+    onSuccess: (response) => {
+      if (response.success && response.companies) {
+        setIndustryResults(response.companies);
+        setSelectedIndustryCompanies(new Set());
+        setHasSearched(true);
+        toast.success(`Found ${response.companies.length} companies`);
+      } else {
+        toast.error(response.error || 'Industry search failed');
+      }
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Industry search failed');
+    },
+  });
+
   const handleQuickSearch = (data: QuickSearchForm) => {
     const parsed = prospectSearchApi.parseSearchQuery(data.query);
     searchMutation.mutate({
@@ -300,6 +351,18 @@ export function ProspectSearchDialog({
       searchType: 'hybrid',
       limit: data.limit || 25,
       enrichWebResults: true,
+    });
+  };
+
+  const handleIndustrySearch = (data: IndustrySearchForm) => {
+    const employeeRange = EMPLOYEE_RANGES.find(r => r.value === data.employee_range);
+    industrySearchMutation.mutate({
+      industry: data.industry,
+      employee_count_min: employeeRange?.min,
+      employee_count_max: employeeRange?.max,
+      location: data.location || undefined,
+      keywords: data.keywords || undefined,
+      limit: data.limit || 50,
     });
   };
 
