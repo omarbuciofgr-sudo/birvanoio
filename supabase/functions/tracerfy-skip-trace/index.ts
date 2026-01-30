@@ -47,7 +47,7 @@ interface SkipTraceResult {
   provider?: string;
 }
 
-// Try BatchData API
+// Try BatchData API - Updated with correct endpoint and format
 async function tryBatchData(addressData: Record<string, string>): Promise<SkipTraceResult | null> {
   const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
   if (!batchDataKey) {
@@ -56,112 +56,195 @@ async function tryBatchData(addressData: Record<string, string>): Promise<SkipTr
   }
 
   try {
-    console.log('[Skip Trace] Trying BatchData API...');
+    console.log('[Skip Trace] Trying BatchData API with address:', addressData);
+    
+    // BatchData Property Skip Trace API - correct endpoint format
+    // API Docs: https://developer.batchdata.com/docs/batchdata/skip-trace
+    const requestBody = {
+      requests: [{
+        street: addressData.street,
+        city: addressData.city || '',
+        state: addressData.state || '',
+        zip: addressData.zip || '',
+      }],
+    };
+    
+    console.log('[Skip Trace] BatchData request:', JSON.stringify(requestBody));
+    
     const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${batchDataKey}`,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        requests: [{
-          streetAddress: addressData.street,
-          city: addressData.city || '',
-          state: addressData.state || '',
-          zipCode: addressData.zip || '',
-        }],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log('[Skip Trace] BatchData response status:', response.status);
+    const responseText = await response.text();
+    console.log('[Skip Trace] BatchData raw response:', responseText.slice(0, 1000));
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Skip Trace] BatchData error:', errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    console.log('[Skip Trace] BatchData response:', JSON.stringify(data).slice(0, 500));
-
-    // BatchData returns results in an array
-    const results = data.results || data.data || [];
-    if (results.length === 0) {
-      return {
-        success: true,
-        data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-        message: 'No owner information found',
-        provider: 'batchdata',
-      };
-    }
-
-    const owner = results[0]?.owner || results[0]?.owners?.[0] || results[0];
-    const phones: Array<{ number: string; type: string; lineType?: string }> = [];
-    const emails: Array<{ address: string; type?: string }> = [];
-
-    // Extract phones
-    if (owner.phones) {
-      for (const p of owner.phones) {
-        if (p.phoneNumber || p.number || p.phone) {
-          phones.push({
-            number: p.phoneNumber || p.number || p.phone,
-            type: p.phoneType || p.type || 'unknown',
-            lineType: p.lineType,
-          });
-        }
-      }
-    }
-    if (owner.phoneNumber) {
-      phones.push({ number: owner.phoneNumber, type: 'primary' });
-    }
-
-    // Extract emails
-    if (owner.emails) {
-      for (const e of owner.emails) {
-        const addr = typeof e === 'string' ? e : e.emailAddress || e.email || e.address;
-        if (addr) {
-          emails.push({ address: addr, type: typeof e === 'object' ? e.type : undefined });
-        }
-      }
-    }
-    if (owner.emailAddress) {
-      emails.push({ address: owner.emailAddress });
-    }
-
-    const fullName = owner.fullName || owner.name || 
-      (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : null);
-
-    if (!fullName && phones.length === 0 && emails.length === 0) {
-      return {
-        success: true,
-        data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-        message: 'No owner information found',
-        provider: 'batchdata',
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        fullName,
-        firstName: owner.firstName || null,
-        lastName: owner.lastName || null,
-        phones,
-        emails,
-        propertyAddress: {
-          street: addressData.street,
-          city: addressData.city || '',
-          state: addressData.state || '',
-          zip: addressData.zip || '',
+      console.error('[Skip Trace] BatchData error status:', response.status);
+      
+      // Try alternate endpoint format if first fails
+      console.log('[Skip Trace] Trying alternate BatchData endpoint...');
+      const altResponse = await fetch('https://api.batchdata.com/api/v1/skip-trace/lookup', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${batchDataKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        confidence: owner.confidence || 80,
-      },
-      provider: 'batchdata',
-    };
+        body: JSON.stringify({
+          address: {
+            street: addressData.street,
+            city: addressData.city || '',
+            state: addressData.state || '',
+            zip: addressData.zip || '',
+          },
+        }),
+      });
+      
+      if (!altResponse.ok) {
+        console.error('[Skip Trace] Alternate BatchData endpoint also failed');
+        return null;
+      }
+      
+      const altData = await altResponse.json();
+      return parseBatchDataResponse(altData, addressData);
+    }
+
+    const data = JSON.parse(responseText);
+    return parseBatchDataResponse(data, addressData);
   } catch (error) {
     console.error('[Skip Trace] BatchData exception:', error);
     return null;
   }
+}
+
+// Parse BatchData response - handles multiple response formats
+function parseBatchDataResponse(data: any, addressData: Record<string, string>): SkipTraceResult {
+  console.log('[Skip Trace] Parsing BatchData response:', JSON.stringify(data).slice(0, 500));
+  
+  // BatchData returns results in various formats depending on endpoint
+  const results = data.results || data.data || data.records || [];
+  const firstResult = Array.isArray(results) ? results[0] : results;
+  
+  if (!firstResult) {
+    return {
+      success: true,
+      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+      message: 'No owner information found',
+      provider: 'batchdata',
+    };
+  }
+
+  // Navigate to owner data - BatchData has nested structure
+  const owner = firstResult.owner || firstResult.owners?.[0] || firstResult.person || firstResult;
+  const phones: Array<{ number: string; type: string; lineType?: string }> = [];
+  const emails: Array<{ address: string; type?: string }> = [];
+
+  // Extract phones from various possible locations
+  const phoneSources = [
+    owner.phones,
+    owner.phoneNumbers, 
+    firstResult.phones,
+    firstResult.phoneNumbers,
+    owner.contacts?.phones,
+  ];
+  
+  for (const phoneList of phoneSources) {
+    if (Array.isArray(phoneList)) {
+      for (const p of phoneList) {
+        const number = typeof p === 'string' ? p : 
+          (p.phoneNumber || p.number || p.phone || p.value);
+        if (number && !phones.some(existing => existing.number === number)) {
+          phones.push({
+            number: number,
+            type: typeof p === 'string' ? 'unknown' : (p.phoneType || p.type || 'unknown'),
+            lineType: typeof p === 'string' ? undefined : (p.lineType || p.line_type),
+          });
+        }
+      }
+    }
+  }
+  
+  // Check for single phone fields
+  if (owner.phoneNumber && !phones.some(p => p.number === owner.phoneNumber)) {
+    phones.push({ number: owner.phoneNumber, type: 'primary' });
+  }
+  if (owner.phone && !phones.some(p => p.number === owner.phone)) {
+    phones.push({ number: owner.phone, type: 'primary' });
+  }
+
+  // Extract emails from various possible locations
+  const emailSources = [
+    owner.emails,
+    owner.emailAddresses,
+    firstResult.emails,
+    firstResult.emailAddresses,
+    owner.contacts?.emails,
+  ];
+  
+  for (const emailList of emailSources) {
+    if (Array.isArray(emailList)) {
+      for (const e of emailList) {
+        const address = typeof e === 'string' ? e : 
+          (e.emailAddress || e.email || e.address || e.value);
+        if (address && !emails.some(existing => existing.address === address)) {
+          emails.push({ 
+            address: address, 
+            type: typeof e === 'object' ? e.type : undefined 
+          });
+        }
+      }
+    }
+  }
+  
+  // Check for single email fields
+  if (owner.emailAddress && !emails.some(e => e.address === owner.emailAddress)) {
+    emails.push({ address: owner.emailAddress });
+  }
+  if (owner.email && !emails.some(e => e.address === owner.email)) {
+    emails.push({ address: owner.email });
+  }
+
+  // Build full name from various possible fields
+  const fullName = owner.fullName || owner.name || owner.full_name ||
+    (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : null) ||
+    (owner.first_name && owner.last_name ? `${owner.first_name} ${owner.last_name}` : null);
+
+  if (!fullName && phones.length === 0 && emails.length === 0) {
+    return {
+      success: true,
+      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+      message: 'No owner information found',
+      provider: 'batchdata',
+    };
+  }
+
+  console.log(`[Skip Trace] BatchData found: name=${fullName}, phones=${phones.length}, emails=${emails.length}`);
+
+  return {
+    success: true,
+    data: {
+      fullName,
+      firstName: owner.firstName || owner.first_name || null,
+      lastName: owner.lastName || owner.last_name || null,
+      phones,
+      emails,
+      propertyAddress: {
+        street: addressData.street,
+        city: addressData.city || '',
+        state: addressData.state || '',
+        zip: addressData.zip || '',
+      },
+      confidence: owner.confidence || (phones.length > 0 || emails.length > 0 ? 80 : 0),
+    },
+    provider: 'batchdata',
+  };
 }
 
 // Try Tracerfy API with updated authentication
