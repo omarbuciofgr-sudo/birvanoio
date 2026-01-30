@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag } from 'lucide-react';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag, ListTodo, Webhook } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
@@ -43,6 +43,10 @@ import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
 import { EnrichmentAnalyticsDashboard } from '@/components/scraper/EnrichmentAnalyticsDashboard';
 import { LeadTagsManager, BulkTagOperations } from '@/components/scraper/LeadTagsManager';
 import { SavedSearchesManager, SearchFilters } from '@/components/scraper/SavedSearchesManager';
+import { LeadDeduplicationPanel } from '@/components/scraper/LeadDeduplicationPanel';
+import { EnrichmentQueuePanel } from '@/components/scraper/EnrichmentQueuePanel';
+import { WebhookNotificationsManager } from '@/components/scraper/WebhookNotificationsManager';
+import { BulkExportDialog } from '@/components/scraper/BulkExportDialog';
 import { supabase } from '@/integrations/supabase/client';
 
 const statusColors: Record<ScrapedLeadStatus, string> = {
@@ -249,7 +253,7 @@ export default function ScrapedLeads() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="pipeline" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Pipeline
@@ -262,13 +266,25 @@ export default function ScrapedLeads() {
               <TrendingUp className="h-4 w-4" />
               Analytics
             </TabsTrigger>
+            <TabsTrigger value="dedupe" className="flex items-center gap-2">
+              <Copy className="h-4 w-4" />
+              Deduplication
+            </TabsTrigger>
+            <TabsTrigger value="queue" className="flex items-center gap-2">
+              <ListTodo className="h-4 w-4" />
+              Queue
+            </TabsTrigger>
+            <TabsTrigger value="webhooks" className="flex items-center gap-2">
+              <Webhook className="h-4 w-4" />
+              Webhooks
+            </TabsTrigger>
             <TabsTrigger value="suppression" className="flex items-center gap-2">
               <Ban className="h-4 w-4" />
-              Suppression Lists
+              Suppression
             </TabsTrigger>
             <TabsTrigger value="audit" className="flex items-center gap-2">
               <History className="h-4 w-4" />
-              Audit History
+              Audit
             </TabsTrigger>
           </TabsList>
 
@@ -278,6 +294,18 @@ export default function ScrapedLeads() {
 
           <TabsContent value="analytics" className="mt-6">
             <EnrichmentAnalyticsDashboard />
+          </TabsContent>
+
+          <TabsContent value="dedupe" className="mt-6">
+            <LeadDeduplicationPanel />
+          </TabsContent>
+
+          <TabsContent value="queue" className="mt-6">
+            <EnrichmentQueuePanel />
+          </TabsContent>
+
+          <TabsContent value="webhooks" className="mt-6">
+            <WebhookNotificationsManager />
           </TabsContent>
 
           <TabsContent value="leads" className="mt-6 space-y-6">
@@ -342,14 +370,10 @@ export default function ScrapedLeads() {
                   if (filters.search) setSearchTerm(filters.search);
                 }}
               />
-              <Button variant="outline" onClick={handleExportCsv}>
-                <Download className="h-4 w-4 mr-2" />
-                CSV
-              </Button>
-              <Button variant="outline" onClick={handleExportJson}>
-                <FileJson className="h-4 w-4 mr-2" />
-                JSON
-              </Button>
+              <BulkExportDialog 
+                leads={filteredLeads} 
+                selectedIds={selectedLeads.size > 0 ? Array.from(selectedLeads) : undefined}
+              />
             </div>
 
         {/* Filters */}
