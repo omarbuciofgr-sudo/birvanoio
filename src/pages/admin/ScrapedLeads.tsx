@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3 } from 'lucide-react';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
@@ -40,6 +40,9 @@ import { AssignLeadsDialog } from '@/components/scraper/AssignLeadsDialog';
 import { SuppressionListManager } from '@/components/scraper/SuppressionListManager';
 import { AuditLogViewer } from '@/components/scraper/AuditLogViewer';
 import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
+import { EnrichmentAnalyticsDashboard } from '@/components/scraper/EnrichmentAnalyticsDashboard';
+import { LeadTagsManager, BulkTagOperations } from '@/components/scraper/LeadTagsManager';
+import { SavedSearchesManager, SearchFilters } from '@/components/scraper/SavedSearchesManager';
 import { supabase } from '@/integrations/supabase/client';
 
 const statusColors: Record<ScrapedLeadStatus, string> = {
@@ -255,6 +258,10 @@ export default function ScrapedLeads() {
               <Users className="h-4 w-4" />
               Leads ({leads.length})
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="suppression" className="flex items-center gap-2">
               <Ban className="h-4 w-4" />
               Suppression Lists
@@ -267,6 +274,10 @@ export default function ScrapedLeads() {
 
           <TabsContent value="pipeline" className="mt-6">
             <LeadPipelineView leads={leads} />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="mt-6">
+            <EnrichmentAnalyticsDashboard />
           </TabsContent>
 
           <TabsContent value="leads" className="mt-6 space-y-6">
@@ -298,6 +309,10 @@ export default function ScrapedLeads() {
                     <Copy className="h-4 w-4 mr-2" />
                     {dedupeMutation.isPending ? 'Checking...' : `Dedupe (${selectedLeads.size})`}
                   </Button>
+                  <BulkTagOperations 
+                    selectedLeadIds={Array.from(selectedLeads)} 
+                    onComplete={() => setSelectedLeads(new Set())}
+                  />
                   <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
                     <Users className="h-4 w-4 mr-2" />
                     Assign ({selectedLeads.size})
@@ -313,6 +328,20 @@ export default function ScrapedLeads() {
                 </>
               )}
               <div className="flex-1" />
+              <SavedSearchesManager
+                currentFilters={{
+                  status: statusFilter,
+                  job_id: jobFilter,
+                  source_type: sourceTypeFilter,
+                  search: searchTerm,
+                }}
+                onLoadSearch={(filters) => {
+                  if (filters.status) setStatusFilter(filters.status);
+                  if (filters.job_id) setJobFilter(filters.job_id);
+                  if (filters.source_type) setSourceTypeFilter(filters.source_type);
+                  if (filters.search) setSearchTerm(filters.search);
+                }}
+              />
               <Button variant="outline" onClick={handleExportCsv}>
                 <Download className="h-4 w-4 mr-2" />
                 CSV

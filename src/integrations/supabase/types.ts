@@ -1189,6 +1189,39 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_searches: {
+        Row: {
+          created_at: string
+          description: string | null
+          filters: Json
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          filters?: Json
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          filters?: Json
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       scheduled_messages: {
         Row: {
           body: string
@@ -1538,6 +1571,7 @@ export type Database = {
           source_url: string | null
           status: Database["public"]["Enums"]["scraped_lead_status"]
           suppression_reason: string | null
+          tags: string[] | null
           updated_at: string
         }
         Insert: {
@@ -1611,6 +1645,7 @@ export type Database = {
           source_url?: string | null
           status?: Database["public"]["Enums"]["scraped_lead_status"]
           suppression_reason?: string | null
+          tags?: string[] | null
           updated_at?: string
         }
         Update: {
@@ -1684,6 +1719,7 @@ export type Database = {
           source_url?: string | null
           status?: Database["public"]["Enums"]["scraped_lead_status"]
           suppression_reason?: string | null
+          tags?: string[] | null
           updated_at?: string
         }
         Relationships: [
