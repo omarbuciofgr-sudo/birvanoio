@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,16 +8,21 @@ import { EnrichmentRulesManager } from '@/components/scraper/EnrichmentRulesMana
 import { LeadRoutingRulesManager } from '@/components/scraper/LeadRoutingRulesManager';
 import { ScheduledJobsManager } from '@/components/scraper/ScheduledJobsManager';
 import { ScraperAnalyticsDashboard } from '@/components/scraper/ScraperAnalyticsDashboard';
-import { Loader2, Zap, Route, Calendar, BarChart3, Settings } from 'lucide-react';
+import { SuppressionListManager } from '@/components/scraper/SuppressionListManager';
+import { AuditLogViewer } from '@/components/scraper/AuditLogViewer';
+import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
+import { ScraperMonitoringPanel } from '@/components/scraper/ScraperMonitoringPanel';
+import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import type { ClientOrganization, ScrapedLead } from '@/types/scraper';
 
 export default function ScraperSettings() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState('analytics');
+  const [activeTab, setActiveTab] = useState('monitoring');
 
   useEffect(() => {
     const checkAdminRole = async () => {
@@ -36,6 +42,36 @@ export default function ScraperSettings() {
 
     checkAdminRole();
   }, [user?.id, authLoading]);
+
+  // Fetch organizations for suppression list
+  const { data: organizations = [] } = useQuery({
+    queryKey: ['client-organizations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_organizations')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data as ClientOrganization[];
+    },
+    enabled: isAdmin === true,
+  });
+
+  // Fetch leads for pipeline view
+  const { data: leads = [] } = useQuery({
+    queryKey: ['pipeline-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('scraped_leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data as unknown as ScrapedLead[];
+    },
+    enabled: isAdmin === true && activeTab === 'pipeline',
+  });
 
   if (isAdmin === null) {
     return (
@@ -70,10 +106,18 @@ export default function ScraperSettings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
+            <TabsTrigger value="monitoring" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Monitoring
+            </TabsTrigger>
             <TabsTrigger value="analytics" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
+            </TabsTrigger>
+            <TabsTrigger value="pipeline" className="flex items-center gap-2">
+              <Kanban className="h-4 w-4" />
+              Pipeline
             </TabsTrigger>
             <TabsTrigger value="enrichment" className="flex items-center gap-2">
               <Zap className="h-4 w-4" />
@@ -87,10 +131,26 @@ export default function ScraperSettings() {
               <Calendar className="h-4 w-4" />
               Scheduled Jobs
             </TabsTrigger>
+            <TabsTrigger value="suppression" className="flex items-center gap-2">
+              <Ban className="h-4 w-4" />
+              Suppression
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              Audit Log
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="monitoring">
+            <ScraperMonitoringPanel />
+          </TabsContent>
 
           <TabsContent value="analytics">
             <ScraperAnalyticsDashboard />
+          </TabsContent>
+
+          <TabsContent value="pipeline">
+            <LeadPipelineView leads={leads} />
           </TabsContent>
 
           <TabsContent value="enrichment">
@@ -103,6 +163,14 @@ export default function ScraperSettings() {
 
           <TabsContent value="scheduled">
             <ScheduledJobsManager />
+          </TabsContent>
+
+          <TabsContent value="suppression">
+            <SuppressionListManager organizations={organizations} />
+          </TabsContent>
+
+          <TabsContent value="audit">
+            <AuditLogViewer limit={100} />
           </TabsContent>
         </Tabs>
       </div>
