@@ -14,7 +14,8 @@ import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
 import { ScraperMonitoringPanel } from '@/components/scraper/ScraperMonitoringPanel';
 import { EnrichmentAnalyticsDashboard } from '@/components/scraper/EnrichmentAnalyticsDashboard';
 import { IntentSignalsConfig } from '@/components/scraper/IntentSignalsConfig';
-import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target } from 'lucide-react';
+import { ClientWebhooksManager } from '@/components/scraper/ClientWebhooksManager';
+import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target, Webhook } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ClientOrganization, ScrapedLead } from '@/types/scraper';
@@ -148,6 +149,10 @@ export default function ScraperSettings() {
               <Target className="h-4 w-4" />
               Intent Signals
             </TabsTrigger>
+            <TabsTrigger value="webhooks" className="flex items-center gap-2">
+              <Webhook className="h-4 w-4" />
+              Webhooks
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="monitoring">
@@ -188,6 +193,10 @@ export default function ScraperSettings() {
 
           <TabsContent value="intent-signals">
             <IntentSignalsConfig />
+          </TabsContent>
+
+          <TabsContent value="webhooks">
+            <ClientWebhooksManager organizations={organizations} />
           </TabsContent>
         </Tabs>
       </div>
