@@ -353,12 +353,83 @@ function formatPropertyType(type: string | null | undefined): string | null {
   return type.replace(/_/g, ' ').replace('HOME_TYPE', '').replace('PROPERTY_TYPE', '').trim() || null;
 }
 
-// Extract Apartments.com listings from JSON-LD and HTML (proven pattern from scrapy)
+// Extract Apartments.com listings from JSON-LD, __NEXT_DATA__, and HTML
 function extractApartmentsListings(html: string, sourceUrl: string): any[] {
   const listings: any[] = [];
   
   try {
-    // Try to find all JSON-LD scripts (there may be multiple)
+    // Method 1: Try __NEXT_DATA__ JSON (newer React-based pages)
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch) {
+      try {
+        const jsonData = JSON.parse(nextDataMatch[1]);
+        
+        // Multiple possible paths for listings data
+        const possiblePaths = [
+          jsonData?.props?.pageProps?.listings,
+          jsonData?.props?.pageProps?.searchResults?.listings,
+          jsonData?.props?.pageProps?.properties,
+          jsonData?.props?.pageProps?.initialState?.listings?.items,
+          jsonData?.props?.pageProps?.data?.listings,
+        ];
+        
+        for (const path of possiblePaths) {
+          if (Array.isArray(path) && path.length > 0) {
+            console.log(`[Apartments] Found ${path.length} listings in __NEXT_DATA__`);
+            
+            for (const item of path) {
+              const address = item.address || item.location || {};
+              let fullAddress = '';
+              
+              if (typeof address === 'string') {
+                fullAddress = address;
+              } else {
+                fullAddress = [
+                  address.streetAddress || address.line1 || item.streetAddress || '',
+                  address.city || address.addressLocality || item.city || '',
+                  `${address.state || address.addressRegion || item.state || ''} ${address.postalCode || address.zip || item.zipCode || ''}`
+                ].filter(Boolean).join(', ').trim();
+              }
+              
+              if (!fullAddress && item.displayAddress) {
+                fullAddress = item.displayAddress;
+              }
+              
+              if (!fullAddress) continue;
+              
+              let price = item.price || item.rent || item.rentRange?.min;
+              if (price && typeof price === 'number') {
+                price = `$${price.toLocaleString()}`;
+              }
+              
+              const listing: any = {
+                address: fullAddress,
+                owner_name: item.propertyName || item.name || null,
+                owner_phone: cleanPhone(item.phone || item.phoneNumber),
+                listing_url: item.url || item.listingUrl || item.propertyUrl || null,
+                price: price?.toString() || null,
+                bedrooms: item.beds || item.bedrooms || item.minBeds || null,
+                bathrooms: item.baths || item.bathrooms || item.minBaths || null,
+                square_feet: item.sqft || item.squareFeet || item.minSqft || null,
+                listing_type: 'frbo',
+                source_url: sourceUrl,
+                source_platform: 'apartments',
+                scraped_at: new Date().toISOString(),
+                favorites_count: item.favoriteCount || item.saves || null,
+              };
+              
+              listings.push(listing);
+            }
+            
+            if (listings.length > 0) return listings;
+          }
+        }
+      } catch (e) {
+        console.log('[Apartments] Error parsing __NEXT_DATA__, trying JSON-LD');
+      }
+    }
+    
+    // Method 2: Try JSON-LD scripts
     const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
     let records: any[] = [];
     
@@ -376,6 +447,14 @@ function extractApartmentsListings(html: string, sourceUrl: string): any[] {
             }
           }
         }
+        // Check for @graph array
+        else if (jsonData['@graph'] && Array.isArray(jsonData['@graph'])) {
+          for (const item of jsonData['@graph']) {
+            if (item.address || item['@type']?.includes('Residence') || item['@type']?.includes('Apartment')) {
+              records.push(item);
+            }
+          }
+        }
         // Check for about array (older format)
         else if (jsonData.about && Array.isArray(jsonData.about)) {
           records = records.concat(jsonData.about);
@@ -384,6 +463,10 @@ function extractApartmentsListings(html: string, sourceUrl: string): any[] {
         else if (jsonData['@type'] === 'SearchResultsPage' && jsonData.mainEntity) {
           const mainEntity = Array.isArray(jsonData.mainEntity) ? jsonData.mainEntity : [jsonData.mainEntity];
           records = records.concat(mainEntity);
+        }
+        // Direct ApartmentComplex or Residence types
+        else if (jsonData['@type']?.includes('Apartment') || jsonData['@type']?.includes('Residence')) {
+          records.push(jsonData);
         }
         // Direct array of properties
         else if (Array.isArray(jsonData)) {
@@ -396,7 +479,7 @@ function extractApartmentsListings(html: string, sourceUrl: string): any[] {
 
     console.log(`[Apartments] Found ${records.length} listings in JSON-LD`);
 
-    // If no JSON-LD records, try HTML extraction
+    // If no records from JSON-LD, try HTML extraction
     if (records.length === 0) {
       console.log('[Apartments] No JSON-LD listings, trying HTML extraction');
       return extractApartmentsFromHTML(html, sourceUrl);
@@ -432,12 +515,15 @@ function extractApartmentsListings(html: string, sourceUrl: string): any[] {
         scraped_at: new Date().toISOString(),
       };
 
-      // Extract beds/baths from numberOfRooms or description
+      // Extract beds/baths from numberOfRooms or floorSize
       if (record.numberOfRooms) {
         listing.bedrooms = typeof record.numberOfRooms === 'number' ? record.numberOfRooms : parseInt(record.numberOfRooms);
       }
       if (record.numberOfBathroomsTotal) {
         listing.bathrooms = typeof record.numberOfBathroomsTotal === 'number' ? record.numberOfBathroomsTotal : parseFloat(record.numberOfBathroomsTotal);
+      }
+      if (record.floorSize?.value) {
+        listing.square_feet = parseInt(record.floorSize.value);
       }
 
       listings.push(listing);

@@ -131,7 +131,7 @@ export default function APISettings() {
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
                   {provider.name}
-                  {isEnabled && <Badge variant="outline" className="bg-green-500/10 text-green-600">Active</Badge>}
+                  {isEnabled && <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">Active</Badge>}
                 </CardTitle>
                 <CardDescription>{provider.description}</CardDescription>
               </div>
@@ -172,26 +172,44 @@ export default function APISettings() {
           </div>
 
           {provider.id === 'firecrawl' && (
-            <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-              <div className="flex items-center gap-2 text-green-600">
+            <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <Check className="h-4 w-4" />
                 <span className="text-sm font-medium">Connected via Lovable Connector</span>
               </div>
             </div>
           )}
 
+          {provider.id === 'apollo' && (
+            <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <Check className="h-4 w-4" />
+                <span className="text-sm font-medium">Configured (APOLLO_API_KEY)</span>
+              </div>
+            </div>
+          )}
+
           {provider.id === 'hunter' && (
-            <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-              <div className="flex items-center gap-2 text-green-600">
+            <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <Check className="h-4 w-4" />
                 <span className="text-sm font-medium">Configured (HUNTER_API_KEY)</span>
               </div>
             </div>
           )}
 
+          {provider.id === 'zerobounce' && (
+            <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <Check className="h-4 w-4" />
+                <span className="text-sm font-medium">Configured (ZEROBOUNCE_API_KEY)</span>
+              </div>
+            </div>
+          )}
+
           {provider.id === 'twilio' && (
-            <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-              <div className="flex items-center gap-2 text-green-600">
+            <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <Check className="h-4 w-4" />
                 <span className="text-sm font-medium">Configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)</span>
               </div>
