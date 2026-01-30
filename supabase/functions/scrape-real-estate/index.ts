@@ -189,55 +189,168 @@ async function scrapeWithZyte(url: string, zyteApiKey: string): Promise<{ html: 
 
 // ==================== PLATFORM-SPECIFIC EXTRACTORS ====================
 
-// Extract Zillow listings from #__NEXT_DATA__ JSON (proven pattern from scrapy)
+// Extract Zillow listings from #__NEXT_DATA__ JSON and gdpClientCache (proven patterns)
 function extractZillowListings(html: string, sourceUrl: string, listingType: 'sale' | 'rent'): any[] {
   const listings: any[] = [];
   
   try {
-    // Extract __NEXT_DATA__ JSON
+    // Method 1: Extract __NEXT_DATA__ JSON
     const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>([\s\S]*?)<\/script>/i);
-    if (!nextDataMatch) {
-      console.log('[Zillow] No __NEXT_DATA__ found');
-      return listings;
+    if (nextDataMatch) {
+      try {
+        const jsonData = JSON.parse(nextDataMatch[1]);
+        
+        // Try multiple paths for search results (Zillow changes these frequently)
+        const possiblePaths = [
+          jsonData?.props?.pageProps?.searchPageState?.cat1?.searchResults?.listResults,
+          jsonData?.props?.pageProps?.searchPageState?.cat2?.searchResults?.listResults,
+          jsonData?.props?.pageProps?.searchPageState?.cat1?.searchResults?.mapResults,
+          jsonData?.props?.pageProps?.initialReduxState?.search?.results?.results,
+          jsonData?.props?.pageProps?.componentProps?.searchResults?.listResults,
+          jsonData?.props?.pageProps?.listResults,
+          jsonData?.props?.pageProps?.searchResults,
+        ];
+        
+        let searchResults: any[] = [];
+        for (const path of possiblePaths) {
+          if (Array.isArray(path) && path.length > 0) {
+            searchResults = path;
+            console.log(`[Zillow] Found ${searchResults.length} listings in __NEXT_DATA__`);
+            break;
+          }
+        }
+
+        for (const home of searchResults) {
+          const detailUrl = home.detailUrl || home.hdpUrl || home.url || '';
+          const fullUrl = detailUrl.startsWith('https') ? detailUrl : `https://www.zillow.com${detailUrl}`;
+          
+          // Extract days on market
+          const daysOnMarket = home.daysOnZillow || home.timeOnZillow || 
+            (home.dateSold ? Math.floor((Date.now() - new Date(home.dateSold).getTime()) / (1000 * 60 * 60 * 24)) : null);
+          
+          const listing: any = {
+            address: home.address || home.streetAddress || '',
+            bedrooms: home.beds || home.bedrooms || home.bd || null,
+            bathrooms: home.baths || home.bathrooms || home.ba || null,
+            price: formatPrice(home.price || home.unformattedPrice),
+            square_feet: home.area || home.sqft || home.livingArea || null,
+            listing_url: fullUrl,
+            listing_id: home.zpid?.toString() || home.id?.toString() || null,
+            property_type: formatPropertyType(home.homeType || home.propertyType),
+            listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
+            days_on_market: daysOnMarket,
+            favorites_count: home.favoriteCount || null,
+            views_count: home.viewCount || null,
+            year_built: home.yearBuilt || null,
+            source_url: sourceUrl,
+            source_platform: 'zillow',
+            scraped_at: new Date().toISOString(),
+            _zpid: home.zpid || null,
+          };
+          
+          listings.push(listing);
+        }
+      } catch (parseError) {
+        console.error('[Zillow] Error parsing __NEXT_DATA__:', parseError);
+      }
     }
-
-    const jsonData = JSON.parse(nextDataMatch[1]);
-    const searchResults = 
-      jsonData?.props?.pageProps?.searchPageState?.cat1?.searchResults?.listResults ||
-      jsonData?.props?.pageProps?.searchPageState?.cat2?.searchResults?.listResults ||
-      [];
-
-    console.log(`[Zillow] Found ${searchResults.length} listings in __NEXT_DATA__`);
-
-    for (const home of searchResults) {
-      const detailUrl = home.detailUrl || '';
-      const fullUrl = detailUrl.startsWith('https') ? detailUrl : `https://www.zillow.com${detailUrl}`;
-      
-      const listing: any = {
-        address: home.address || '',
-        bedrooms: home.beds || home.bedrooms || null,
-        bathrooms: home.baths || home.bathrooms || null,
-        price: home.price || home.unformattedPrice ? `$${home.unformattedPrice || home.price}` : null,
-        square_feet: home.area || home.sqft || null,
-        listing_url: fullUrl,
-        listing_id: home.zpid?.toString() || home.id || null,
-        property_type: home.homeType?.replace('_', ' ').replace('HOME_TYPE', '').trim() || null,
-        listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
-        source_url: sourceUrl,
-        source_platform: 'zillow',
-        scraped_at: new Date().toISOString(),
-      };
-
-      // Try to get zpid for later agent lookup
-      listing._zpid = home.zpid || null;
-      
-      listings.push(listing);
+    
+    // Method 2: Try gdpClientCache (older Zillow format)
+    if (listings.length === 0) {
+      const gdpMatch = html.match(/gdpClientCache"\s*:\s*({[^}]+})/);
+      if (gdpMatch) {
+        try {
+          const gdpData = JSON.parse(gdpMatch[1]);
+          for (const key in gdpData) {
+            if (gdpData[key]?.property) {
+              const prop = gdpData[key].property;
+              listings.push({
+                address: `${prop.streetAddress || ''}, ${prop.city || ''}, ${prop.state || ''} ${prop.zipcode || ''}`.trim(),
+                bedrooms: prop.bedrooms || null,
+                bathrooms: prop.bathrooms || null,
+                price: formatPrice(prop.price),
+                square_feet: prop.livingArea || null,
+                listing_url: `https://www.zillow.com/homedetails/${prop.zpid}_zpid/`,
+                listing_id: prop.zpid?.toString() || null,
+                property_type: formatPropertyType(prop.homeType),
+                listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
+                days_on_market: prop.daysOnZillow || null,
+                year_built: prop.yearBuilt || null,
+                source_url: sourceUrl,
+                source_platform: 'zillow',
+                scraped_at: new Date().toISOString(),
+                _zpid: prop.zpid || null,
+              });
+            }
+          }
+          console.log(`[Zillow] Found ${listings.length} listings from gdpClientCache`);
+        } catch (e) {
+          console.error('[Zillow] Error parsing gdpClientCache:', e);
+        }
+      }
     }
+    
+    // Method 3: Try property card HTML extraction as fallback
+    if (listings.length === 0) {
+      console.log('[Zillow] No JSON data found, trying HTML card extraction');
+      const cardPatterns = [
+        /<article[^>]*data-test="property-card"[^>]*>([\s\S]*?)<\/article>/gi,
+        /<div[^>]*class="[^"]*property-card[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<li[^>]*class="[^"]*ListItem[^"]*"[^>]*>([\s\S]*?)<\/li>/gi,
+      ];
+      
+      for (const pattern of cardPatterns) {
+        const cards = html.match(pattern) || [];
+        if (cards.length > 0) {
+          console.log(`[Zillow] Found ${cards.length} property cards in HTML`);
+          for (const card of cards.slice(0, 50)) {
+            const addressMatch = card.match(/address[^>]*>([^<]+)</i) || 
+                                card.match(/data-test="property-card-addr"[^>]*>([^<]+)</i);
+            const priceMatch = card.match(/\$[\d,]+/);
+            const bedsMatch = card.match(/(\d+)\s*(?:bd|bed|br)/i);
+            const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:ba|bath)/i);
+            const sqftMatch = card.match(/([\d,]+)\s*(?:sqft|sq\s*ft)/i);
+            const zpidMatch = card.match(/zpid[=_]?(\d+)/i) || card.match(/homedetails\/(\d+)/i);
+            
+            if (addressMatch || priceMatch) {
+              listings.push({
+                address: addressMatch?.[1]?.trim() || 'Address not found',
+                bedrooms: bedsMatch ? parseInt(bedsMatch[1]) : null,
+                bathrooms: bathsMatch ? parseFloat(bathsMatch[1]) : null,
+                price: priceMatch?.[0] || null,
+                square_feet: sqftMatch ? parseInt(sqftMatch[1].replace(/,/g, '')) : null,
+                listing_url: zpidMatch ? `https://www.zillow.com/homedetails/${zpidMatch[1]}_zpid/` : sourceUrl,
+                listing_id: zpidMatch?.[1] || null,
+                listing_type: listingType === 'sale' ? 'fsbo' : 'frbo',
+                source_url: sourceUrl,
+                source_platform: 'zillow',
+                scraped_at: new Date().toISOString(),
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    console.log(`[Zillow] Total extracted: ${listings.length} listings`);
   } catch (error) {
-    console.error('[Zillow] Error parsing __NEXT_DATA__:', error);
+    console.error('[Zillow] Error in extraction:', error);
   }
 
   return listings;
+}
+
+function formatPrice(price: number | string | null | undefined): string | null {
+  if (!price) return null;
+  if (typeof price === 'string' && price.startsWith('$')) return price;
+  const num = typeof price === 'string' ? parseInt(price.replace(/[^0-9]/g, '')) : price;
+  return num ? `$${num.toLocaleString()}` : null;
+}
+
+function formatPropertyType(type: string | null | undefined): string | null {
+  if (!type) return null;
+  return type.replace(/_/g, ' ').replace('HOME_TYPE', '').replace('PROPERTY_TYPE', '').trim() || null;
 }
 
 // Extract Apartments.com listings from JSON-LD and HTML (proven pattern from scrapy)
@@ -875,28 +988,58 @@ Deno.serve(async (req) => {
       
       for (const listing of allListings) {
         try {
+          // Use a sanitized address slug as domain for better identification
+          // Instead of just storing "hotpads" or "zillow"
+          const addressSlug = listing.address 
+            ? listing.address.toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '')
+                .replace(/\s+/g, '-')
+                .slice(0, 100)
+            : listing.listing_id || 'unknown';
+          
+          // Create a meaningful domain identifier: platform + address slug
+          const domainIdentifier = `${listing.source_platform}-${addressSlug}`;
+          
           await adminSupabase.from('scraped_leads').insert({
             job_id: jobId,
-            domain: listing.source_platform || new URL(listing.source_url).hostname,
+            // Use full address as the primary identifier, platform as secondary
+            domain: domainIdentifier,
             source_url: listing.listing_url || listing.source_url,
+            source_type: 'real_estate_scraper',
             full_name: listing.owner_name || null,
             best_email: listing.owner_email || null,
             best_phone: listing.owner_phone || null,
             address: listing.address || null,
             lead_type: listing.listing_type || 'fsbo',
             status: 'new',
+            // Store comprehensive schema data including all property details
             schema_data: {
+              // Property details
               bedrooms: listing.bedrooms,
               bathrooms: listing.bathrooms,
               price: listing.price,
-              days_on_market: listing.days_on_market,
-              property_type: listing.property_type,
               square_feet: listing.square_feet,
               year_built: listing.year_built,
+              property_type: listing.property_type,
+              
+              // Market data
+              days_on_market: listing.days_on_market,
+              favorites_count: listing.favorites_count,
+              views_count: listing.views_count,
+              
+              // Listing identification
               listing_id: listing.listing_id,
-              description: listing.description,
+              listing_url: listing.listing_url,
+              description: listing.description?.slice(0, 2000), // Limit description length
+              
+              // Source tracking
               source_platform: listing.source_platform,
+              source_url: listing.source_url,
               scraped_via: listing.scraped_via,
+              scraped_at: listing.scraped_at,
+              
+              // Full address for display (stored in both address column and here)
+              full_address: listing.address,
             },
           });
           savedCount++;

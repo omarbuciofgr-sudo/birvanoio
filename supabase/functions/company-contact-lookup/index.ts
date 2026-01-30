@@ -189,19 +189,17 @@ async function searchApollo(
   const domain = params.company_domain ? normalizeDomain(params.company_domain) : '';
   
   try {
-    // Organization enrichment if we have domain
+    // Organization enrichment if we have domain - Use GET with query params (correct Apollo API format)
     if (domain) {
       console.log(`Enriching organization: ${domain}`);
-      const orgResponse = await fetch('https://api.apollo.io/v1/organizations/enrich', {
-        method: 'POST',
+      const orgUrl = `https://api.apollo.io/v1/organizations/enrich?api_key=${apolloApiKey}&domain=${encodeURIComponent(domain)}`;
+      const orgResponse = await fetch(orgUrl, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-        body: JSON.stringify({
-          api_key: apolloApiKey,
-          domain: domain,
-        }),
       });
       
       const orgData = await orgResponse.json();
+      console.log(`Apollo org enrich response status: ${orgResponse.status}`);
       
       if (orgData.organization) {
         const org = orgData.organization;
@@ -221,6 +219,9 @@ async function searchApollo(
           phone: org.phone,
           technologies: org.technologies?.map((t: any) => t.name) || [],
         };
+        console.log(`Found company: ${org.name}`);
+      } else {
+        console.log('No organization data returned from Apollo, trying people search...');
       }
     }
     

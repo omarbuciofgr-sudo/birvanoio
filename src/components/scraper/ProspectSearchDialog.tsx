@@ -84,6 +84,7 @@ import {
 
 const quickSearchSchema = z.object({
   query: z.string().min(3, 'Enter at least 3 characters'),
+  limit: z.number().min(1).max(500).default(25),
 });
 
 const advancedSearchSchema = z.object({
@@ -92,17 +93,18 @@ const advancedSearchSchema = z.object({
   state: z.string().optional(),
   targetTitles: z.array(z.string()).optional(),
   employeeCountMax: z.number().optional(),
-  limit: z.number().min(1).max(100).default(25),
+  limit: z.number().min(1).max(500).default(50),
 });
 
 const placesSearchSchema = z.object({
   query: z.string().min(3, 'Enter at least 3 characters'),
+  limit: z.number().min(1).max(60).default(20), // Google Places has stricter limits
 });
 
 const companyLookupSchema = z.object({
   companyInput: z.string().min(2, 'Enter company name or domain'),
   targetRoles: z.array(z.string()).default(['executives']),
-  limit: z.number().min(1).max(50).default(25),
+  limit: z.number().min(1).max(100).default(25),
 });
 
 type QuickSearchForm = z.infer<typeof quickSearchSchema>;
@@ -137,7 +139,7 @@ export function ProspectSearchDialog({
 
   const quickForm = useForm<QuickSearchForm>({
     resolver: zodResolver(quickSearchSchema),
-    defaultValues: { query: '' },
+    defaultValues: { query: '', limit: 25 },
   });
 
   const advancedForm = useForm<AdvancedSearchForm>({
@@ -154,7 +156,7 @@ export function ProspectSearchDialog({
 
   const placesForm = useForm<PlacesSearchForm>({
     resolver: zodResolver(placesSearchSchema),
-    defaultValues: { query: '' },
+    defaultValues: { query: '', limit: 20 },
   });
 
   const companyForm = useForm<CompanyLookupForm>({
@@ -209,8 +211,8 @@ export function ProspectSearchDialog({
   });
 
   const placesSearchMutation = useMutation({
-    mutationFn: async (query: string) => {
-      return prospectSearchApi.searchPlaces(query, 20);
+    mutationFn: async ({ query, limit }: { query: string; limit: number }) => {
+      return prospectSearchApi.searchPlaces(query, limit);
     },
     onSuccess: (response) => {
       if (response.success && response.data) {
@@ -296,7 +298,7 @@ export function ProspectSearchDialog({
     searchMutation.mutate({
       ...parsed,
       searchType: 'hybrid',
-      limit: 25,
+      limit: data.limit || 25,
       enrichWebResults: true,
     });
   };
@@ -312,13 +314,13 @@ export function ProspectSearchDialog({
       targetTitles: data.targetTitles?.length ? data.targetTitles : undefined,
       employeeCountMax: data.employeeCountMax || undefined,
       searchType: 'hybrid',
-      limit: data.limit,
+      limit: data.limit || 50,
       enrichWebResults: true,
     });
   };
 
   const handlePlacesSearch = (data: PlacesSearchForm) => {
-    placesSearchMutation.mutate(data.query);
+    placesSearchMutation.mutate({ query: data.query, limit: data.limit || 20 });
   };
 
   const handleEnrichSelected = () => {
