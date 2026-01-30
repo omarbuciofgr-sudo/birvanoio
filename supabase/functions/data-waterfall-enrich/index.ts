@@ -422,6 +422,60 @@ async function validateEmailWithZeroBounce(
   }
 }
 
+// Twilio phone validation using Lookup API
+async function validatePhoneWithTwilio(
+  phone: string,
+  accountSid: string,
+  authToken: string
+): Promise<{ valid: boolean; line_type: string | null; carrier: string | null }> {
+  try {
+    // Clean phone number
+    const cleanedPhone = phone.replace(/[^0-9+]/g, '');
+    if (cleanedPhone.length < 10) {
+      return { valid: false, line_type: null, carrier: null };
+    }
+    
+    const response = await fetchWithRetry(
+      `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(cleanedPhone)}?Fields=line_type_intelligence`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('Twilio: Phone number not found');
+        return { valid: false, line_type: null, carrier: null };
+      }
+      console.error('Twilio Lookup API error:', response.status);
+      return { valid: true, line_type: null, carrier: null }; // Don't block on API errors
+    }
+    
+    const data = await response.json();
+    
+    // Extract line type info
+    const lineTypeInfo = data.line_type_intelligence || {};
+    const lineType = lineTypeInfo.type || null;
+    const carrier = lineTypeInfo.carrier_name || null;
+    
+    // Mobile and landline are valid, voip may be valid
+    const validTypes = ['mobile', 'landline', 'fixedVoip', 'nonFixedVoip'];
+    const isValid = data.valid !== false && (!lineType || validTypes.includes(lineType));
+    
+    return {
+      valid: isValid,
+      line_type: lineType,
+      carrier: carrier,
+    };
+  } catch (error) {
+    console.error('Twilio validation error:', error);
+    return { valid: true, line_type: null, carrier: null }; // Don't block on errors
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -597,6 +651,32 @@ Deno.serve(async (req) => {
         console.log(`ZeroBounce: Email invalid - ${zbResult.status}. Clearing email.`);
         // Clear invalid email so we don't use bad data
         result.email = null;
+      }
+    }
+    
+    // Step 6: Twilio phone validation (if we have a phone)
+    const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    if (twilioAccountSid && twilioAuthToken && result.phone) {
+      const startTime = Date.now();
+      const twilioResult = await validatePhoneWithTwilio(result.phone, twilioAccountSid, twilioAuthToken);
+      const duration = Date.now() - startTime;
+      
+      waterfallLog.push({
+        provider: 'twilio',
+        success: twilioResult.valid,
+        fields_found: twilioResult.valid ? ['phone_validated', ...(twilioResult.line_type ? ['line_type'] : [])] : [],
+        fields_missing: [],
+        duration_ms: duration,
+      });
+      
+      if (twilioResult.valid) {
+        (result.providers_used as string[]).push('twilio');
+        console.log(`Twilio: Phone validated - ${twilioResult.line_type || 'unknown type'}`);
+      } else {
+        console.log(`Twilio: Phone invalid. Clearing phone.`);
+        // Clear invalid phone so we don't use bad data
+        result.phone = null;
       }
     }
     
