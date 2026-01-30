@@ -341,21 +341,20 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // Verify the user's JWT
-    const token = authHeader.replace('Bearer ', '');
     const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: claimsData, error: claimsError } = await authedClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) {
-      console.error('tracerfy-skip-trace auth error:', claimsError);
+    const { data: { user }, error: userError } = await authedClient.auth.getUser();
+    if (userError || !user) {
+      console.error('tracerfy-skip-trace auth error:', userError);
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized - Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = claimsData.claims.sub;
+    const userId = user.id;
 
     // Check if user has admin role
     const adminClient = createClient(supabaseUrl, serviceKey);
