@@ -180,6 +180,15 @@ export default function APISettings() {
             </div>
           )}
 
+          {provider.id === 'hunter' && (
+            <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+              <div className="flex items-center gap-2 text-green-600">
+                <Check className="h-4 w-4" />
+                <span className="text-sm font-medium">Configured (HUNTER_API_KEY)</span>
+              </div>
+            </div>
+          )}
+
           {provider.id === 'twilio' && (
             <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
               <div className="flex items-center gap-2 text-green-600">
