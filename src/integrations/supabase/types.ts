@@ -552,6 +552,36 @@ export type Database = {
           },
         ]
       }
+      credit_purchases: {
+        Row: {
+          amount_paid_cents: number
+          created_at: string
+          credits_purchased: number
+          id: string
+          status: string
+          stripe_session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_paid_cents: number
+          created_at?: string
+          credits_purchased: number
+          id?: string
+          status?: string
+          stripe_session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_paid_cents?: number
+          created_at?: string
+          credits_purchased?: number
+          id?: string
+          status?: string
+          stripe_session_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       crm_integrations: {
         Row: {
           api_key_secret_name: string | null
@@ -2221,6 +2251,33 @@ export type Database = {
           targets_failed?: number | null
           targets_processed?: number | null
           targets_success?: number | null
+        }
+        Relationships: []
+      }
+      search_credits: {
+        Row: {
+          created_at: string
+          free_searches_used: number
+          id: string
+          purchased_credits: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          free_searches_used?: number
+          id?: string
+          purchased_credits?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          free_searches_used?: number
+          id?: string
+          purchased_credits?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
