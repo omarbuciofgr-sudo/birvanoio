@@ -5,10 +5,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Retry helper with exponential backoff
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // Don't retry on 4xx errors (client errors)
+      if (response.status >= 400 && response.status < 500) {
+        return response;
+      }
+      
+      // Retry on 5xx errors
+      if (response.status >= 500) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError || new Error('Fetch failed after retries');
+}
+
 /**
  * Data Waterfall Enrichment - Chain multiple providers for maximum coverage
  * 
- * Order: Apollo → Hunter → PDL
+ * Order: Apollo → Hunter → PDL → Clearbit
  * 
  * Each provider fills in missing data from the previous one.
  * Stops when we have complete contact info (name, email, phone).
@@ -291,6 +329,66 @@ async function enrichWithPDL(
   return { data: null, fields: [] };
 }
 
+// Clearbit enrichment (if API key available)
+async function enrichWithClearbit(
+  input: EnrichmentInput,
+  currentData: Partial<EnrichmentResult>,
+  apiKey: string
+): Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }> {
+  try {
+    // Try company lookup first
+    const response = await fetch(
+      `https://company.clearbit.com/v2/companies/find?domain=${input.domain}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      }
+    );
+    
+    if (!response.ok) return { data: null, fields: [] };
+    
+    const company = await response.json();
+    const fields: string[] = [];
+    const result: Partial<EnrichmentResult> = {};
+    
+    if (!currentData.company_name && company.name) {
+      result.company_name = company.name;
+      fields.push('company_name');
+    }
+    if (!currentData.industry && company.category?.industry) {
+      result.industry = company.category.industry;
+      fields.push('industry');
+    }
+    if (!currentData.employee_count && company.metrics?.employees) {
+      result.employee_count = company.metrics.employees;
+      fields.push('employee_count');
+    }
+    if (!currentData.annual_revenue && company.metrics?.estimatedAnnualRevenue) {
+      result.annual_revenue = parseInt(company.metrics.estimatedAnnualRevenue.replace(/[^0-9]/g, ''));
+      fields.push('annual_revenue');
+    }
+    if (!currentData.company_linkedin_url && company.linkedin?.handle) {
+      result.company_linkedin_url = `https://www.linkedin.com/company/${company.linkedin.handle}`;
+      fields.push('company_linkedin_url');
+    }
+    if (!currentData.headquarters_city && company.geo?.city) {
+      result.headquarters_city = company.geo.city;
+      fields.push('headquarters_city');
+    }
+    if (!currentData.headquarters_state && company.geo?.stateCode) {
+      result.headquarters_state = company.geo.stateCode;
+      fields.push('headquarters_state');
+    }
+    
+    return { data: result, fields };
+  } catch (error) {
+    console.error('Clearbit waterfall error:', error);
+  }
+  
+  return { data: null, fields: [] };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -301,17 +399,19 @@ Deno.serve(async (req) => {
     const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
     const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
     const pdlApiKey = Deno.env.get('PDL_API_KEY');
+    const clearbitApiKey = Deno.env.get('CLEARBIT_API_KEY');
     
     const availableProviders: string[] = [];
     if (apolloApiKey) availableProviders.push('apollo');
     if (hunterApiKey) availableProviders.push('hunter');
     if (pdlApiKey) availableProviders.push('pdl');
+    if (clearbitApiKey) availableProviders.push('clearbit');
     
     if (availableProviders.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'No enrichment providers configured. Add APOLLO_API_KEY, HUNTER_API_KEY, or PDL_API_KEY.' 
+          error: 'No enrichment providers configured. Add APOLLO_API_KEY, HUNTER_API_KEY, PDL_API_KEY, or CLEARBIT_API_KEY.' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -418,6 +518,28 @@ Deno.serve(async (req) => {
       }
       
       console.log(`PDL: ${pdl.fields.length} fields found`);
+    }
+    
+    // Step 4: Clearbit (for company data if still missing)
+    if (clearbitApiKey && (!result.company_name || !result.industry || !result.employee_count)) {
+      const startTime = Date.now();
+      const clearbit = await enrichWithClearbit(input, result, clearbitApiKey);
+      const duration = Date.now() - startTime;
+      
+      waterfallLog.push({
+        provider: 'clearbit',
+        success: !!clearbit.data,
+        fields_found: clearbit.fields,
+        fields_missing: getMissingFields({ ...result, ...clearbit.data }),
+        duration_ms: duration,
+      });
+      
+      if (clearbit.data) {
+        result = { ...result, ...clearbit.data };
+        (result.providers_used as string[]).push('clearbit');
+      }
+      
+      console.log(`Clearbit: ${clearbit.fields.length} fields found`);
     }
     
     result.waterfall_log = waterfallLog;
