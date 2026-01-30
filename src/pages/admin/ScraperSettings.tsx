@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,9 +12,10 @@ import { SuppressionListManager } from '@/components/scraper/SuppressionListMana
 import { AuditLogViewer } from '@/components/scraper/AuditLogViewer';
 import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
 import { ScraperMonitoringPanel } from '@/components/scraper/ScraperMonitoringPanel';
-import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity } from 'lucide-react';
+import { EnrichmentAnalyticsDashboard } from '@/components/scraper/EnrichmentAnalyticsDashboard';
+import { IntentSignalsConfig } from '@/components/scraper/IntentSignalsConfig';
+import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useEffect } from 'react';
 import { toast } from 'sonner';
 import type { ClientOrganization, ScrapedLead } from '@/types/scraper';
 
@@ -139,6 +140,14 @@ export default function ScraperSettings() {
               <History className="h-4 w-4" />
               Audit Log
             </TabsTrigger>
+            <TabsTrigger value="enrichment-analytics" className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Enrichment Costs
+            </TabsTrigger>
+            <TabsTrigger value="intent-signals" className="flex items-center gap-2">
+              <Target className="h-4 w-4" />
+              Intent Signals
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="monitoring">
@@ -171,6 +180,14 @@ export default function ScraperSettings() {
 
           <TabsContent value="audit">
             <AuditLogViewer limit={100} />
+          </TabsContent>
+
+          <TabsContent value="enrichment-analytics">
+            <EnrichmentAnalyticsDashboard />
+          </TabsContent>
+
+          <TabsContent value="intent-signals">
+            <IntentSignalsConfig />
           </TabsContent>
         </Tabs>
       </div>
