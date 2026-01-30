@@ -100,6 +100,35 @@ const Pricing = () => {
     }
   };
 
+  const handleBuyCredits = async () => {
+    setLoadingPlan("credits");
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.info("Please sign in to purchase credits");
+        navigate("/auth");
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId: "price_1SvQ752K2aKgw8lL4wTDLFsD" },
+      });
+
+      if (error) throw error;
+      
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      toast.error("Failed to start checkout. Please try again.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
   return (
     <section id="pricing" className="py-24 relative">
       <div className="absolute inset-0 bg-gradient-to-b from-background via-secondary/10 to-background" />
@@ -207,6 +236,41 @@ const Pricing = () => {
               </Button>
             </div>
           ))}
+        </div>
+
+        {/* One-Time Credits Section */}
+        <div className="mt-16 p-8 rounded-2xl bg-gradient-to-br from-secondary/50 to-secondary/20 border border-border">
+          <div className="max-w-2xl mx-auto text-center">
+            <h3 className="font-display text-2xl font-bold text-foreground mb-2">
+              Not ready for a subscription?
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Try our one-time search credits to explore prospects and companies without commitment.
+            </p>
+            <div className="inline-flex items-center gap-6 p-6 rounded-xl bg-card border border-border">
+              <div className="text-left">
+                <div className="font-display text-xl font-bold text-foreground">
+                  10 Search Credits
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Prospect & company discovery
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-display text-3xl font-bold text-foreground">
+                  $9.99
+                </div>
+                <div className="text-xs text-muted-foreground">one-time</div>
+              </div>
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => handleBuyCredits()}
+                disabled={loadingPlan === "credits"}
+              >
+                {loadingPlan === "credits" ? "Loading..." : "Buy Credits"}
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Enterprise CTA */}
