@@ -15,7 +15,12 @@ import { ScraperMonitoringPanel } from '@/components/scraper/ScraperMonitoringPa
 import { EnrichmentAnalyticsDashboard } from '@/components/scraper/EnrichmentAnalyticsDashboard';
 import { IntentSignalsConfig } from '@/components/scraper/IntentSignalsConfig';
 import { ClientWebhooksManager } from '@/components/scraper/ClientWebhooksManager';
-import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target, Webhook } from 'lucide-react';
+import { LeadScoringConfig } from '@/components/scraper/LeadScoringConfig';
+import { NotificationChannelsManager } from '@/components/scraper/NotificationChannelsManager';
+import { CRMIntegrationsManager } from '@/components/scraper/CRMIntegrationsManager';
+import { BackupJobsManager } from '@/components/scraper/BackupJobsManager';
+import { PerformanceDashboard } from '@/components/scraper/PerformanceDashboard';
+import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target, Webhook, Brain, Bell, Link2, HardDrive, Gauge } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ClientOrganization, ScrapedLead } from '@/types/scraper';
@@ -153,6 +158,26 @@ export default function ScraperSettings() {
               <Webhook className="h-4 w-4" />
               Webhooks
             </TabsTrigger>
+            <TabsTrigger value="scoring" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              Lead Scoring
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Alerts
+            </TabsTrigger>
+            <TabsTrigger value="crm" className="flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              CRM
+            </TabsTrigger>
+            <TabsTrigger value="backups" className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4" />
+              Backups
+            </TabsTrigger>
+            <TabsTrigger value="performance" className="flex items-center gap-2">
+              <Gauge className="h-4 w-4" />
+              Performance
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="monitoring">
@@ -197,6 +222,26 @@ export default function ScraperSettings() {
 
           <TabsContent value="webhooks">
             <ClientWebhooksManager organizations={organizations} />
+          </TabsContent>
+
+          <TabsContent value="scoring">
+            <LeadScoringConfig />
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <NotificationChannelsManager />
+          </TabsContent>
+
+          <TabsContent value="crm">
+            <CRMIntegrationsManager />
+          </TabsContent>
+
+          <TabsContent value="backups">
+            <BackupJobsManager />
+          </TabsContent>
+
+          <TabsContent value="performance">
+            <PerformanceDashboard />
           </TabsContent>
         </Tabs>
       </div>

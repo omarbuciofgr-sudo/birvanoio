@@ -53,6 +53,75 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date_range_days: number | null
+          day_of_week: number | null
+          destination_config: Json | null
+          destination_type: string
+          export_format: string | null
+          frequency: string
+          hour: number | null
+          id: string
+          include_analytics: boolean | null
+          include_audit_log: boolean | null
+          include_leads: boolean | null
+          is_active: boolean | null
+          last_run_at: string | null
+          last_run_record_count: number | null
+          last_run_status: string | null
+          lead_status_filter: string[] | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date_range_days?: number | null
+          day_of_week?: number | null
+          destination_config?: Json | null
+          destination_type: string
+          export_format?: string | null
+          frequency?: string
+          hour?: number | null
+          id?: string
+          include_analytics?: boolean | null
+          include_audit_log?: boolean | null
+          include_leads?: boolean | null
+          is_active?: boolean | null
+          last_run_at?: string | null
+          last_run_record_count?: number | null
+          last_run_status?: string | null
+          lead_status_filter?: string[] | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date_range_days?: number | null
+          day_of_week?: number | null
+          destination_config?: Json | null
+          destination_type?: string
+          export_format?: string | null
+          frequency?: string
+          hour?: number | null
+          id?: string
+          include_analytics?: boolean | null
+          include_audit_log?: boolean | null
+          include_leads?: boolean | null
+          is_active?: boolean | null
+          last_run_at?: string | null
+          last_run_record_count?: number | null
+          last_run_status?: string | null
+          lead_status_filter?: string[] | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       blocked_domains: {
         Row: {
           block_count: number | null
@@ -479,6 +548,122 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_integrations: {
+        Row: {
+          api_key_secret_name: string | null
+          auto_sync_enabled: boolean | null
+          created_at: string
+          created_by: string | null
+          crm_type: string
+          field_mapping: Json | null
+          id: string
+          instance_url: string | null
+          is_active: boolean | null
+          last_sync_at: string | null
+          leads_synced_count: number | null
+          name: string
+          sync_error: string | null
+          sync_on_status: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          api_key_secret_name?: string | null
+          auto_sync_enabled?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          crm_type: string
+          field_mapping?: Json | null
+          id?: string
+          instance_url?: string | null
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          leads_synced_count?: number | null
+          name: string
+          sync_error?: string | null
+          sync_on_status?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          api_key_secret_name?: string | null
+          auto_sync_enabled?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          crm_type?: string
+          field_mapping?: Json | null
+          id?: string
+          instance_url?: string | null
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          leads_synced_count?: number | null
+          name?: string
+          sync_error?: string | null
+          sync_on_status?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      digest_subscriptions: {
+        Row: {
+          created_at: string
+          digest_day_of_week: number | null
+          digest_frequency: string
+          digest_hour: number | null
+          email_address: string
+          id: string
+          include_alerts: boolean | null
+          include_job_summary: boolean | null
+          include_metrics: boolean | null
+          include_new_leads: boolean | null
+          is_active: boolean | null
+          last_sent_at: string | null
+          organization_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          digest_day_of_week?: number | null
+          digest_frequency?: string
+          digest_hour?: number | null
+          email_address: string
+          id?: string
+          include_alerts?: boolean | null
+          include_job_summary?: boolean | null
+          include_metrics?: boolean | null
+          include_new_leads?: boolean | null
+          is_active?: boolean | null
+          last_sent_at?: string | null
+          organization_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          digest_day_of_week?: number | null
+          digest_frequency?: string
+          digest_hour?: number | null
+          email_address?: string
+          id?: string
+          include_alerts?: boolean | null
+          include_job_summary?: boolean | null
+          include_metrics?: boolean | null
+          include_new_leads?: boolean | null
+          is_active?: boolean | null
+          last_sent_at?: string | null
+          organization_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "digest_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "client_organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1024,6 +1209,78 @@ export type Database = {
           },
         ]
       }
+      lead_scoring_config: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          threshold_cold: number | null
+          threshold_hot: number | null
+          threshold_warm: number | null
+          updated_at: string
+          weight_company_size_match: number | null
+          weight_email_verified: number | null
+          weight_has_address: number | null
+          weight_has_email: number | null
+          weight_has_phone: number | null
+          weight_industry_match: number | null
+          weight_intent_signal: number | null
+          weight_location_match: number | null
+          weight_phone_verified: number | null
+          weight_recent_activity: number | null
+          weight_website_quality: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          threshold_cold?: number | null
+          threshold_hot?: number | null
+          threshold_warm?: number | null
+          updated_at?: string
+          weight_company_size_match?: number | null
+          weight_email_verified?: number | null
+          weight_has_address?: number | null
+          weight_has_email?: number | null
+          weight_has_phone?: number | null
+          weight_industry_match?: number | null
+          weight_intent_signal?: number | null
+          weight_location_match?: number | null
+          weight_phone_verified?: number | null
+          weight_recent_activity?: number | null
+          weight_website_quality?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          threshold_cold?: number | null
+          threshold_hot?: number | null
+          threshold_warm?: number | null
+          updated_at?: string
+          weight_company_size_match?: number | null
+          weight_email_verified?: number | null
+          weight_has_address?: number | null
+          weight_has_email?: number | null
+          weight_has_phone?: number | null
+          weight_industry_match?: number | null
+          weight_intent_signal?: number | null
+          weight_location_match?: number | null
+          weight_phone_verified?: number | null
+          weight_recent_activity?: number | null
+          weight_website_quality?: number | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           business_name: string
@@ -1141,6 +1398,99 @@ export type Database = {
           type?: string
           updated_at?: string
           usage_count?: number
+        }
+        Relationships: []
+      }
+      notification_channels: {
+        Row: {
+          channel_type: string
+          config: Json | null
+          created_at: string
+          created_by: string | null
+          failure_count: number | null
+          high_value_lead_score: number | null
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          name: string
+          notify_on_daily_summary: boolean | null
+          notify_on_high_value_lead: boolean | null
+          notify_on_job_complete: boolean | null
+          notify_on_job_failure: boolean | null
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          channel_type: string
+          config?: Json | null
+          created_at?: string
+          created_by?: string | null
+          failure_count?: number | null
+          high_value_lead_score?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name: string
+          notify_on_daily_summary?: boolean | null
+          notify_on_high_value_lead?: boolean | null
+          notify_on_job_complete?: boolean | null
+          notify_on_job_failure?: boolean | null
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          channel_type?: string
+          config?: Json | null
+          created_at?: string
+          created_by?: string | null
+          failure_count?: number | null
+          high_value_lead_score?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name?: string
+          notify_on_daily_summary?: boolean | null
+          notify_on_high_value_lead?: boolean | null
+          notify_on_job_complete?: boolean | null
+          notify_on_job_failure?: boolean | null
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      performance_metrics: {
+        Row: {
+          endpoint: string | null
+          id: string
+          metric_type: string
+          operation: string | null
+          period_end: string | null
+          period_start: string | null
+          recorded_at: string
+          value_json: Json | null
+          value_numeric: number | null
+        }
+        Insert: {
+          endpoint?: string | null
+          id?: string
+          metric_type: string
+          operation?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          recorded_at?: string
+          value_json?: Json | null
+          value_numeric?: number | null
+        }
+        Update: {
+          endpoint?: string | null
+          id?: string
+          metric_type?: string
+          operation?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          recorded_at?: string
+          value_json?: Json | null
+          value_numeric?: number | null
         }
         Relationships: []
       }
