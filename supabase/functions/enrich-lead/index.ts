@@ -3,7 +3,10 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  // Keep a safe default list, but in OPTIONS we will echo whatever the browser requests.
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
 // Input validation schema
@@ -611,7 +614,14 @@ async function enrichWithPDL(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    // CORS preflight: echo requested headers to avoid mismatches with evolving client headers.
+    const requestedHeaders = req.headers.get('access-control-request-headers');
+    return new Response(null, {
+      headers: {
+        ...corsHeaders,
+        ...(requestedHeaders ? { 'Access-Control-Allow-Headers': requestedHeaders } : {}),
+      },
+    });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
