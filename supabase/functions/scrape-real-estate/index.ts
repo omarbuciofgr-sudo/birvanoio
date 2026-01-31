@@ -611,11 +611,78 @@ function extractApartmentsFromHTML(html: string, sourceUrl: string): any[] {
   return listings;
 }
 
+// Parse address from HotPads URL slug (fallback when JSON-LD fails)
+// URLs like: https://hotpads.com/2162-n-bell-ave-chicago-il-60647-1msm73f/building
+function parseHotpadsAddressFromUrl(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    
+    if (pathParts.length === 0) return null;
+    
+    // The first path segment contains the address slug
+    // Format: 2162-n-bell-ave-chicago-il-60647-1msm73f
+    const slug = pathParts[0];
+    
+    // Skip if it's just a city search page
+    if (slug.match(/^[a-z-]+-[a-z]{2}$/i)) return null; // e.g., "chicago-il"
+    
+    // Parse address components from slug
+    // Remove the trailing listing ID (alphanumeric code at the end)
+    const cleanedSlug = slug.replace(/-[a-z0-9]{6,}$/i, '');
+    
+    // Match pattern: street-number-street-name-city-state-zip
+    const stateZipMatch = cleanedSlug.match(/^(.+?)-([a-z]{2})-(\d{5})$/i);
+    if (stateZipMatch) {
+      const [, addressPart, state, zip] = stateZipMatch;
+      
+      // Find where city starts (usually after the last street suffix like ave, st, dr, etc.)
+      const streetSuffixes = ['ave', 'st', 'rd', 'dr', 'blvd', 'ln', 'way', 'ct', 'pl', 'cir', 'pkwy', 'ter'];
+      let cityStartIndex = -1;
+      const words = addressPart.split('-');
+      
+      for (let i = 0; i < words.length; i++) {
+        if (streetSuffixes.includes(words[i].toLowerCase())) {
+          cityStartIndex = i + 1;
+          break;
+        }
+      }
+      
+      if (cityStartIndex > 0 && cityStartIndex < words.length) {
+        const streetParts = words.slice(0, cityStartIndex);
+        const cityParts = words.slice(cityStartIndex);
+        
+        // Capitalize properly
+        const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const street = streetParts.map(capitalize).join(' ');
+        const city = cityParts.map(capitalize).join(' ');
+        
+        return `${street}, ${city}, ${state.toUpperCase()} ${zip}`;
+      }
+    }
+    
+    // Fallback: just format the slug nicely
+    const formattedAddress = cleanedSlug
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    
+    return formattedAddress || null;
+  } catch (e) {
+    console.error('[HotPads] Error parsing URL for address:', e);
+    return null;
+  }
+}
+
 // Extract HotPads listings from JSON-LD @graph
 function extractHotpadsListings(html: string, sourceUrl: string): any[] {
   const listings: any[] = [];
   
   try {
+    // First, try to parse address from URL in case JSON-LD fails
+    const urlParsedAddress = parseHotpadsAddressFromUrl(sourceUrl);
+    console.log(`[HotPads] URL-parsed address fallback: ${urlParsedAddress || 'none'}`);
+    
     // Find all JSON-LD blocks
     const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
     
@@ -658,6 +725,12 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
               .filter(Boolean).join(', ').trim();
           }
           
+          // If no address from JSON-LD, use URL-parsed address
+          if (!fullAddress && urlParsedAddress) {
+            fullAddress = urlParsedAddress;
+            console.log(`[HotPads] Using URL-parsed address: ${fullAddress}`);
+          }
+          
           if (!fullAddress) continue;
           
           // Get price
@@ -672,7 +745,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
             owner_phone: cleanPhone(entity.telephone),
             description: entity.description?.trim()?.slice(0, 500) || null,
             price: price?.toString() || null,
-            listing_url: entity.url || null,
+            listing_url: entity.url || sourceUrl,
             listing_type: 'frbo',
             source_url: sourceUrl,
             source_platform: 'hotpads',
@@ -698,7 +771,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
       }
     }
     
-    // If no listings from JSON-LD, try HTML extraction
+    // If no listings from JSON-LD, try HTML extraction with URL fallback
     if (listings.length === 0) {
       console.log('[HotPads] No JSON-LD listings, trying HTML extraction');
       
@@ -706,6 +779,7 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
       const cardPatterns = [
         /<div[^>]*class="[^"]*ListingCard[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
         /<article[^>]*data-testid="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/article>/gi,
+        /<a[^>]*aria-label="([^"]+)"[^>]*href="([^"]+hotpads[^"]+)"[^>]*>/gi,
       ];
       
       for (const pattern of cardPatterns) {
@@ -714,17 +788,40 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
           console.log(`[HotPads] Found ${cards.length} listing cards in HTML`);
           
           for (const card of cards.slice(0, 50)) {
+            // Try to extract address from aria-label or class content
+            const ariaMatch = card.match(/aria-label="([^"]+)"/i);
             const addressMatch = card.match(/class="[^"]*address[^"]*"[^>]*>([^<]+)</i) ||
                                 card.match(/class="[^"]*location[^"]*"[^>]*>([^<]+)</i);
             const priceMatch = card.match(/\$[\d,]+/);
             const bedsMatch = card.match(/(\d+)\s*(?:bed|br)/i);
             const bathsMatch = card.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+            const hrefMatch = card.match(/href="([^"]+hotpads\.com[^"]+)"/i);
             
-            if (addressMatch) {
+            let address = '';
+            
+            // Try aria-label first (contains full address info)
+            if (ariaMatch && ariaMatch[1] && !ariaMatch[1].toLowerCase().includes('see listing')) {
+              address = ariaMatch[1].trim();
+            } else if (addressMatch && !addressMatch[1].toLowerCase().includes('see listing')) {
+              address = addressMatch[1].trim();
+            }
+            
+            // If still no address, try to parse from href
+            if (!address && hrefMatch) {
+              address = parseHotpadsAddressFromUrl(hrefMatch[1]) || '';
+            }
+            
+            // Last resort: use URL-parsed address
+            if (!address && urlParsedAddress) {
+              address = urlParsedAddress;
+            }
+            
+            if (address) {
               const listing: any = {
-                address: addressMatch[1].trim(),
+                address: address,
                 price: priceMatch?.[0] || null,
                 listing_type: 'frbo',
+                listing_url: hrefMatch?.[1] || sourceUrl,
                 source_url: sourceUrl,
                 source_platform: 'hotpads',
                 scraped_at: new Date().toISOString(),
@@ -739,6 +836,30 @@ function extractHotpadsListings(html: string, sourceUrl: string): any[] {
           break;
         }
       }
+    }
+    
+    // If still no listings but we have a detail page URL, create a single listing from URL
+    if (listings.length === 0 && urlParsedAddress && sourceUrl.includes('/pad') || sourceUrl.includes('/building')) {
+      console.log('[HotPads] Creating listing from URL-parsed address for detail page');
+      
+      // Extract any additional info from HTML
+      const priceMatch = html.match(/\$[\d,]+(?:\s*\/\s*mo)?/);
+      const bedsMatch = html.match(/(\d+)\s*(?:bed|bedroom|br)/i);
+      const bathsMatch = html.match(/(\d+(?:\.\d)?)\s*(?:bath|ba)/i);
+      const phoneMatch = html.match(/(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/);
+      
+      listings.push({
+        address: urlParsedAddress,
+        price: priceMatch?.[0] || null,
+        bedrooms: bedsMatch ? parseInt(bedsMatch[1]) : null,
+        bathrooms: bathsMatch ? parseFloat(bathsMatch[1]) : null,
+        owner_phone: phoneMatch ? cleanPhone(phoneMatch[1]) : null,
+        listing_type: 'frbo',
+        listing_url: sourceUrl,
+        source_url: sourceUrl,
+        source_platform: 'hotpads',
+        scraped_at: new Date().toISOString(),
+      });
     }
     
     console.log(`[HotPads] Extracted ${listings.length} listings`);
