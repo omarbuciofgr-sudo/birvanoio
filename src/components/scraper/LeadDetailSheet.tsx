@@ -33,8 +33,8 @@ const validationBadge = (status: string | undefined) => {
 export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
   if (!lead) return null;
 
-  const schemaData = lead.schema_data || {};
-  const schemaEvidence = lead.schema_evidence || {};
+  const schemaData = (lead.schema_data || {}) as Record<string, any>;
+  const schemaEvidence = (lead.schema_evidence || {}) as Record<string, string>;
 
   return (
     <Sheet open={!!lead} onOpenChange={() => onClose()}>
@@ -209,29 +209,58 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
                 <Separator />
                 <div className="space-y-4">
                   <h3 className="font-semibold">Schema-Specific Data</h3>
-                  {Object.entries(schemaData).map(([key, value]) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Building className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground capitalize">
-                          {key.replace(/_/g, ' ')}:
-                        </span>
-                        <span className="font-medium">
-                          {Array.isArray(value) ? value.join(', ') : String(value)}
-                        </span>
+                  {Object.entries(schemaData).map(([key, value]) => {
+                    // For address, show full formatted address
+                    if (key === 'address' || key === 'full_address') {
+                      const street = schemaData.address || schemaData.full_address || '';
+                      const city = schemaData.city || '';
+                      const state = schemaData.state || '';
+                      const zip = schemaData.zip || schemaData.zip_code || '';
+                      const fullAddress = [street, city, state, zip].filter(Boolean).join(', ');
+                      
+                      // Skip city/state/zip as separate entries if we're showing full address
+                      if (key !== 'address' && key !== 'full_address') return null;
+                      
+                      return (
+                        <div key={key} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Address:</span>
+                            <span className="font-medium">{fullAddress || '-'}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    // Skip individual city/state/zip fields if address is present
+                    if (['city', 'state', 'zip', 'zip_code'].includes(key) && (schemaData.address || schemaData.full_address)) {
+                      return null;
+                    }
+                    
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground capitalize">
+                            {key.replace(/_/g, ' ')}:
+                          </span>
+                          <span className="font-medium">
+                            {Array.isArray(value) ? value.join(', ') : String(value)}
+                          </span>
+                        </div>
+                        {schemaEvidence[key] && (
+                          <a
+                            href={schemaEvidence[key]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-muted-foreground hover:underline flex items-center gap-1 ml-6"
+                          >
+                            Source <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
-                      {schemaEvidence[key] && (
-                        <a
-                          href={schemaEvidence[key]}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-muted-foreground hover:underline flex items-center gap-1 ml-6"
-                        >
-                          Source <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}

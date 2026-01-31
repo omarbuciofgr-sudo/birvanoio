@@ -39,7 +39,6 @@ const PROVIDER_COLORS: Record<string, string> = {
   zerobounce: '#8b5cf6',
   twilio: '#ef4444',
   batchdata: '#ec4899',
-  tracerfy: '#14b8a6',
 };
 
 export function EnrichmentAnalyticsDashboard() {

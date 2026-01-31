@@ -44,7 +44,7 @@ export interface SkipTraceResult {
 export const skipTraceApi = {
   /**
    * Perform skip tracing on a property address to find owner contact info
-   * Uses BatchData (real-estate skip trace)
+   * Uses BatchData exclusively for residential property skip tracing
    */
   async lookupOwner(input: SkipTraceInput): Promise<SkipTraceResult> {
     const { data, error } = await supabase.functions.invoke('tracerfy-skip-trace', {
