@@ -399,6 +399,7 @@ export default function ClientLeads() {
                     <TableRow>
                       {scoredLeads.size > 0 && <TableHead>Priority</TableHead>}
                       <TableHead>Domain</TableHead>
+                      <TableHead>Full Address</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
@@ -415,6 +416,14 @@ export default function ClientLeads() {
                   <TableBody>
                     {sortedLeads.map((lead) => {
                       const scored = scoredLeads.get(lead.id);
+                      const schema = (lead.schema_data || {}) as Record<string, any>;
+                      // Build full address
+                      const street = lead.address || schema?.address || schema?.full_address || '';
+                      const city = schema?.city || '';
+                      const state = schema?.state || '';
+                      const zip = schema?.zip || schema?.zip_code || '';
+                      const fullAddress = [street, city, state, zip].filter(Boolean).join(', ') || '-';
+                      
                       return (
                         <TableRow 
                           key={lead.id} 
@@ -443,6 +452,11 @@ export default function ClientLeads() {
                                 </a>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="truncate max-w-[200px] block" title={fullAddress}>
+                              {fullAddress}
+                            </span>
                           </TableCell>
                           <TableCell>
                             {lead.full_name || '-'}

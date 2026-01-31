@@ -345,7 +345,7 @@ const Leads = () => {
                 <TableRow className="bg-secondary/50">
                   <TableHead>Business</TableHead>
                   <TableHead className="hidden md:table-cell">Contact</TableHead>
-                  <TableHead className="hidden lg:table-cell">Location</TableHead>
+                  <TableHead className="hidden lg:table-cell">Full Address</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="hidden sm:table-cell">Score</TableHead>
                   <TableHead className="hidden sm:table-cell">Source</TableHead>
@@ -359,75 +359,83 @@ const Leads = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLeads.map((lead) => (
-                    <TableRow
-                      key={lead.id}
-                      className="cursor-pointer hover:bg-secondary/30"
-                      onClick={() => {
-                        setSelectedLead(lead);
-                        setNotes(lead.notes || "");
-                      }}
-                    >
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-foreground">{lead.business_name}</p>
-                          <p className="text-sm text-muted-foreground md:hidden">
-                            {lead.contact_name}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div>
-                          <p className="text-foreground">{lead.contact_name}</p>
-                          <p className="text-sm text-muted-foreground">{lead.email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground">
-                        {lead.city}, {lead.state}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                            lead.status === "new"
-                              ? "bg-status-new/20 text-status-new"
-                              : lead.status === "contacted"
-                              ? "bg-status-contacted/20 text-status-contacted"
-                              : lead.status === "qualified"
-                              ? "bg-status-qualified/20 text-status-qualified"
-                              : lead.status === "converted"
-                              ? "bg-status-converted/20 text-status-converted"
-                              : "bg-status-lost/20 text-status-lost"
-                          }`}
-                        >
-                          {lead.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
-                        <LeadScoreBadge 
-                          leadId={lead.id} 
-                          score={lead.lead_score ?? null}
-                          onScoreUpdate={(newScore) => {
-                            setLeads(prev => prev.map(l => 
-                              l.id === lead.id ? { ...l, lead_score: newScore } : l
-                            ));
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {lead.source_url && (
-                          <a
-                            href={lead.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline inline-flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
+                  filteredLeads.map((lead) => {
+                    // Build full address from city, state, zip
+                    const addressParts = [lead.city, lead.state, lead.zip_code].filter(Boolean);
+                    const fullAddress = addressParts.join(", ") || "-";
+                    
+                    return (
+                      <TableRow
+                        key={lead.id}
+                        className="cursor-pointer hover:bg-secondary/30"
+                        onClick={() => {
+                          setSelectedLead(lead);
+                          setNotes(lead.notes || "");
+                        }}
+                      >
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-foreground">{lead.business_name}</p>
+                            <p className="text-sm text-muted-foreground md:hidden">
+                              {lead.contact_name}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div>
+                            <p className="text-foreground">{lead.contact_name}</p>
+                            <p className="text-sm text-muted-foreground">{lead.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground">
+                          <span className="truncate max-w-[200px] block" title={fullAddress}>
+                            {fullAddress}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                              lead.status === "new"
+                                ? "bg-status-new/20 text-status-new"
+                                : lead.status === "contacted"
+                                ? "bg-status-contacted/20 text-status-contacted"
+                                : lead.status === "qualified"
+                                ? "bg-status-qualified/20 text-status-qualified"
+                                : lead.status === "converted"
+                                ? "bg-status-converted/20 text-status-converted"
+                                : "bg-status-lost/20 text-status-lost"
+                            }`}
                           >
-                            View <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                            {lead.status}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                          <LeadScoreBadge 
+                            leadId={lead.id} 
+                            score={lead.lead_score ?? null}
+                            onScoreUpdate={(newScore) => {
+                              setLeads(prev => prev.map(l => 
+                                l.id === lead.id ? { ...l, lead_score: newScore } : l
+                              ));
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {lead.source_url && (
+                            <a
+                              href={lead.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline inline-flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              View <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

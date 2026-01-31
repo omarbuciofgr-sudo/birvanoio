@@ -272,9 +272,15 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
                 <div className="space-y-4">
                   <h3 className="font-semibold">Enrichment Sources</h3>
                   <div className="flex flex-wrap gap-2">
-                    {lead.enrichment_providers_used.map((provider, i) => (
-                      <Badge key={i} variant="outline">{provider}</Badge>
-                    ))}
+                    {lead.enrichment_providers_used.map((provider, i) => {
+                      // Show legacy → current for Tracerfy entries
+                      const displayProvider = provider.toLowerCase() === 'tracerfy' 
+                        ? 'Tracerfy (legacy) → BatchData'
+                        : provider;
+                      return (
+                        <Badge key={i} variant="outline">{displayProvider}</Badge>
+                      );
+                    })}
                   </div>
                 </div>
               </>
