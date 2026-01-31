@@ -94,6 +94,7 @@ function isRealEstateLead(lead: any): boolean {
   const sourceType = lead.source_type || '';
   const leadType = lead.lead_type || '';
   const domain = lead.domain || '';
+  const sourceUrl = lead.source_url || '';
   
   // Check source type
   if (sourceType.includes('real_estate') || sourceType.includes('fsbo')) return true;
@@ -106,10 +107,123 @@ function isRealEstateLead(lead: any): boolean {
       domain.includes('apartments-') || domain.includes('redfin-') ||
       domain.includes('trulia-') || domain.includes('realtor-')) return true;
   
+  // Check source URL for real estate platforms
+  if (sourceUrl.includes('hotpads.com') || sourceUrl.includes('zillow.com') ||
+      sourceUrl.includes('apartments.com') || sourceUrl.includes('redfin.com') ||
+      sourceUrl.includes('trulia.com') || sourceUrl.includes('realtor.com')) return true;
+  
   // Check if has address but no website domain
   if (lead.address && (!domain || domain.includes('-'))) return true;
   
   return false;
+}
+
+// Parse address from HotPads URL slug (for enrichment when address is null)
+function parseHotpadsAddressFromUrl(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    
+    if (pathParts.length === 0) return null;
+    
+    // The first path segment contains the address slug
+    const slug = pathParts[0];
+    
+    // Skip if it's just a city search page
+    if (slug.match(/^[a-z-]+-[a-z]{2}$/i)) return null;
+    
+    // Remove the trailing listing ID (alphanumeric code at the end)
+    const cleanedSlug = slug.replace(/-[a-z0-9]{6,}$/i, '');
+    
+    // Match pattern: street-number-street-name-city-state-zip
+    const stateZipMatch = cleanedSlug.match(/^(.+?)-([a-z]{2})-(\d{5})$/i);
+    if (stateZipMatch) {
+      const [, addressPart, state, zip] = stateZipMatch;
+      
+      // Find where city starts (after street suffix like ave, st, dr, etc.)
+      const streetSuffixes = ['ave', 'st', 'rd', 'dr', 'blvd', 'ln', 'way', 'ct', 'pl', 'cir', 'pkwy', 'ter'];
+      let cityStartIndex = -1;
+      const words = addressPart.split('-');
+      
+      for (let i = 0; i < words.length; i++) {
+        if (streetSuffixes.includes(words[i].toLowerCase())) {
+          cityStartIndex = i + 1;
+          break;
+        }
+      }
+      
+      if (cityStartIndex > 0 && cityStartIndex < words.length) {
+        const streetParts = words.slice(0, cityStartIndex);
+        const cityParts = words.slice(cityStartIndex);
+        
+        const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const street = streetParts.map(capitalize).join(' ');
+        const city = cityParts.map(capitalize).join(' ');
+        
+        return `${street}, ${city}, ${state.toUpperCase()} ${zip}`;
+      }
+    }
+    
+    // Fallback: format the slug nicely
+    const formattedAddress = cleanedSlug
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    
+    return formattedAddress || null;
+  } catch {
+    return null;
+  }
+}
+
+// Get address for skip tracing - from lead.address or parse from source_url
+function getAddressForSkipTrace(lead: any): string | null {
+  // First try the address field
+  if (lead.address) {
+    return lead.address;
+  }
+  
+  // Try schema_data.full_address
+  if (lead.schema_data?.full_address) {
+    return lead.schema_data.full_address;
+  }
+  
+  // Parse from source URL for HotPads and similar platforms
+  const sourceUrl = lead.source_url || '';
+  if (sourceUrl.includes('hotpads.com')) {
+    const parsed = parseHotpadsAddressFromUrl(sourceUrl);
+    if (parsed) {
+      console.log(`[EnrichLead] Parsed address from HotPads URL: ${parsed}`);
+      return parsed;
+    }
+  }
+  
+  // Try to parse address from Zillow/Apartments/etc URL patterns
+  if (sourceUrl.includes('zillow.com') || sourceUrl.includes('apartments.com') ||
+      sourceUrl.includes('redfin.com') || sourceUrl.includes('trulia.com')) {
+    try {
+      const urlObj = new URL(sourceUrl);
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      
+      // Look for address-like segments
+      for (const part of pathParts) {
+        // Pattern like: 123-main-st-city-state-12345
+        if (part.match(/^\d+-[a-z-]+-[a-z]{2}-\d{5}$/i)) {
+          const formatted = part
+            .replace(/-([a-z]{2})-(\d{5})$/i, ', $1 $2')
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+          console.log(`[EnrichLead] Parsed address from URL: ${formatted}`);
+          return formatted;
+        }
+      }
+    } catch {
+      // Ignore URL parse errors
+    }
+  }
+  
+  return null;
 }
 
 // Extract city and state from address for skip trace
@@ -124,6 +238,19 @@ function parseAddressForSkipTrace(address: string): { street: string; city: stri
       state: stateZip[0] || '',
       zip: stateZip.length > 1 ? stateZip[stateZip.length - 1] : '',
     };
+  }
+  
+  // Try to parse "Street, City State ZIP" format (only 2 comma-separated parts)
+  if (parts.length === 2) {
+    const stateZipMatch = parts[1].match(/^(.+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+    if (stateZipMatch) {
+      return {
+        street: parts[0],
+        city: stateZipMatch[1].trim(),
+        state: stateZipMatch[2].toUpperCase(),
+        zip: stateZipMatch[3],
+      };
+    }
   }
   
   return { street: address, city: '', state: '', zip: '' };
@@ -582,9 +709,19 @@ Deno.serve(async (req) => {
       if (isRealEstateLead(lead)) {
         console.log(`[RealEstate] Using skip trace for lead ${leadId}`);
         
+        // Get address for skip tracing - from lead.address or parse from source_url
+        const addressForSkipTrace = getAddressForSkipTrace(lead);
+        
         // For real estate, use skip trace based on address
-        if (lead.address && (needsName || needsEmail || needsPhone || force_skip_trace)) {
-          const skipTraceResult = await enrichWithSkipTrace(lead.address, batchDataApiKey, tracerfyApiKey);
+        if (addressForSkipTrace && (needsName || needsEmail || needsPhone || force_skip_trace)) {
+          console.log(`[SkipTrace] Using address: ${addressForSkipTrace}`);
+          
+          // Update the lead's address if we parsed it from URL and it was previously null
+          if (!lead.address && addressForSkipTrace) {
+            updates.address = addressForSkipTrace;
+          }
+          
+          const skipTraceResult = await enrichWithSkipTrace(addressForSkipTrace, batchDataApiKey, tracerfyApiKey);
           
           if (skipTraceResult) {
             enrichments.push(skipTraceResult);
@@ -609,8 +746,10 @@ Deno.serve(async (req) => {
             
             console.log(`[SkipTrace] Found: name=${!!skipTraceResult.full_name}, phone=${!!skipTraceResult.phone}, email=${!!skipTraceResult.email}`);
           } else {
-            console.log(`[SkipTrace] No results found for address: ${lead.address}`);
+            console.log(`[SkipTrace] No results found for address: ${addressForSkipTrace}`);
           }
+        } else if (!addressForSkipTrace) {
+          console.log(`[SkipTrace] No address available for lead ${leadId} - cannot perform skip trace`);
         }
       } else {
         // For B2B leads, use Apollo/Hunter/PDL
