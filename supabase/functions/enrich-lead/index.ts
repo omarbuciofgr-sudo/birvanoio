@@ -185,6 +185,11 @@ function getAddressForSkipTrace(lead: any): string | null {
   if (lead.address) {
     return lead.address;
   }
+
+  // Some real-estate scrapers store address in schema_data.address
+  if (lead.schema_data?.address) {
+    return lead.schema_data.address;
+  }
   
   // Try schema_data.full_address
   if (lead.schema_data?.full_address) {
@@ -259,11 +264,10 @@ function parseAddressForSkipTrace(address: string): { street: string; city: stri
   return { street: address, city: '', state: '', zip: '' };
 }
 
-// Skip trace for real estate leads using BatchData/Tracerfy
+// Skip trace for real estate leads using BatchData only
 async function enrichWithSkipTrace(
   address: string,
-  batchDataApiKey?: string,
-  tracerfyApiKey?: string
+  batchDataApiKey?: string
 ): Promise<EnrichmentResult | null> {
   const parsed = parseAddressForSkipTrace(address);
   
@@ -323,59 +327,7 @@ async function enrichWithSkipTrace(
       console.error('[SkipTrace-BatchData] Error:', error);
     }
   }
-  
-  // Fallback to Tracerfy
-  if (tracerfyApiKey) {
-    try {
-      console.log('[SkipTrace-Tracerfy] Looking up:', address);
-      
-      const response = await fetch('https://www.tracerfy.com/api/v2/trace', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tracerfyApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          address: parsed.street,
-          city: parsed.city,
-          state: parsed.state,
-          zip: parsed.zip,
-        }),
-      });
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.success && data.data) {
-          const result = data.data;
-          const fieldsEnriched: string[] = [];
-          
-          const fullName = result.fullName || result.full_name || 
-            [result.firstName || result.first_name, result.lastName || result.last_name].filter(Boolean).join(' ');
-          
-          const phones = result.phones || result.phoneNumbers || [];
-          const emails = result.emails || result.emailAddresses || [];
-          
-          if (fullName) fieldsEnriched.push('full_name');
-          if (phones.length > 0) fieldsEnriched.push('phone');
-          if (emails.length > 0) fieldsEnriched.push('email');
-          
-          if (fieldsEnriched.length > 0) {
-            return {
-              full_name: fullName || undefined,
-              phone: typeof phones[0] === 'object' ? phones[0].number : phones[0],
-              email: typeof emails[0] === 'object' ? emails[0].address : emails[0],
-              provider: 'tracerfy_skip_trace',
-              fields_enriched: fieldsEnriched,
-            };
-          }
-        }
-      }
-    } catch (error) {
-      console.error('[SkipTrace-Tracerfy] Error:', error);
-    }
-  }
-  
   return null;
 }
 
@@ -631,7 +583,6 @@ Deno.serve(async (req) => {
   const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
   const pdlApiKey = Deno.env.get('PDL_API_KEY');
   const batchDataApiKey = Deno.env.get('BATCHDATA_API_KEY');
-  const tracerfyApiKey = Deno.env.get('TRACERFY_API_KEY');
 
   // Authentication check
   const authHeader = req.headers.get('authorization');
@@ -731,7 +682,7 @@ Deno.serve(async (req) => {
             updates.address = addressForSkipTrace;
           }
           
-          const skipTraceResult = await enrichWithSkipTrace(addressForSkipTrace, batchDataApiKey, tracerfyApiKey);
+          const skipTraceResult = await enrichWithSkipTrace(addressForSkipTrace, batchDataApiKey);
           
           if (skipTraceResult) {
             enrichments.push(skipTraceResult);

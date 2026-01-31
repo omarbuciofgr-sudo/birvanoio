@@ -264,162 +264,9 @@ function parseBatchDataResponse(data: any, addressData: Record<string, string>):
   };
 }
 
-// Try Tracerfy API with updated authentication
-async function tryTracerfy(addressData: Record<string, string>): Promise<SkipTraceResult | null> {
-  const apiKey = Deno.env.get('TRACERFY_API_KEY');
-  if (!apiKey) {
-    console.log('[Skip Trace] Tracerfy API key not configured, skipping');
-    return null;
-  }
-
-  try {
-    console.log('[Skip Trace] Trying Tracerfy API...');
-    
-    // Tracerfy now uses Bearer token auth and updated endpoint
-    // Try the new API endpoint format
-    const response = await fetch('https://www.tracerfy.com/api/trace/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        properties: [{
-          street: addressData.street,
-          city: addressData.city || '',
-          state: addressData.state || '',
-          zip: addressData.zip || '',
-        }],
-      }),
-    });
-
-    console.log('[Skip Trace] Tracerfy response status:', response.status);
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      // If the new endpoint fails, try legacy format with x-api-key
-      console.log('[Skip Trace] New Tracerfy endpoint failed, trying legacy...');
-      
-      const legacyResponse = await fetch('https://www.tracerfy.com/api/v2/trace', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          street: addressData.street,
-          city: addressData.city || '',
-          state: addressData.state || '',
-          zip: addressData.zip || '',
-        }),
-      });
-
-      console.log('[Skip Trace] Legacy Tracerfy response status:', legacyResponse.status);
-
-      if (!legacyResponse.ok) {
-        const legacyText = await legacyResponse.text();
-        console.error('[Skip Trace] Legacy Tracerfy error:', legacyText.slice(0, 300));
-        
-        if (legacyResponse.status === 404) {
-          return {
-            success: true,
-            data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-            message: 'No owner information found',
-            provider: 'tracerfy',
-          };
-        }
-        return null;
-      }
-
-      const legacyData = await legacyResponse.json();
-      return parseTracerfyResponse(legacyData, addressData);
-    }
-
-    // Check if response is HTML (error page)
-    if (responseText.includes('<!doctype html>') || responseText.includes('<html')) {
-      console.error('[Skip Trace] Tracerfy returned HTML instead of JSON');
-      return null;
-    }
-
-    const tracerfyData = JSON.parse(responseText);
-    return parseTracerfyResponse(tracerfyData, addressData);
-  } catch (error) {
-    console.error('[Skip Trace] Tracerfy exception:', error);
-    return null;
-  }
-}
-
-function parseTracerfyResponse(data: any, addressData: Record<string, string>): SkipTraceResult {
-  // Handle job-based response (new API)
-  if (data.job_id || data.queue_id) {
-    console.log('[Skip Trace] Tracerfy returned job ID - async processing not supported yet');
-    return {
-      success: true,
-      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-      message: 'Skip trace job queued - async processing',
-      provider: 'tracerfy',
-    };
-  }
-
-  // Handle direct results
-  const result = data.results?.[0] || data.data?.[0] || data;
-  
-  const phones: Array<{ number: string; type: string; lineType?: string }> = [];
-  const emails: Array<{ address: string; type?: string }> = [];
-
-  // Extract phones
-  const phoneList = result.phones || result.phone_numbers || [];
-  for (const p of phoneList) {
-    const number = typeof p === 'string' ? p : p.number || p.phone || p.phoneNumber;
-    if (number) {
-      phones.push({
-        number,
-        type: typeof p === 'string' ? 'unknown' : p.type || 'unknown',
-        lineType: typeof p === 'string' ? undefined : p.line_type || p.lineType,
-      });
-    }
-  }
-
-  // Extract emails
-  const emailList = result.emails || result.email_addresses || [];
-  for (const e of emailList) {
-    const address = typeof e === 'string' ? e : e.address || e.email || e.emailAddress;
-    if (address) {
-      emails.push({
-        address,
-        type: typeof e === 'string' ? undefined : e.type,
-      });
-    }
-  }
-
-  const fullName = result.full_name || result.name || result.fullName ||
-    (result.first_name && result.last_name ? `${result.first_name} ${result.last_name}` : null);
-
-  return {
-    success: true,
-    data: {
-      fullName,
-      firstName: result.first_name || result.firstName || null,
-      lastName: result.last_name || result.lastName || null,
-      phones,
-      emails,
-      mailingAddress: result.mailing_address ? {
-        street: result.mailing_address.street,
-        city: result.mailing_address.city,
-        state: result.mailing_address.state,
-        zip: result.mailing_address.zip,
-      } : undefined,
-      propertyAddress: {
-        street: addressData.street,
-        city: addressData.city || '',
-        state: addressData.state || '',
-        zip: addressData.zip || '',
-      },
-      confidence: result.confidence_score || result.confidence || undefined,
-    },
-    provider: 'tracerfy',
-  };
-}
+// NOTE: Tracerfy has been removed from the real-estate enrichment process.
+// This function remains for backwards compatibility (clients still invoke 'tracerfy-skip-trace'),
+// but it will only use BatchData.
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -513,7 +360,7 @@ Deno.serve(async (req) => {
 
     console.log('[Skip Trace] Processing address:', addressData);
 
-    // Try providers in order: BatchData (more reliable) → Tracerfy
+    // BatchData only
     let result: SkipTraceResult | null = null;
 
     // 1. Try BatchData first
@@ -526,23 +373,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Fallback to Tracerfy
-    result = await tryTracerfy(addressData);
-    if (result) {
-      console.log('[Skip Trace] Result via Tracerfy');
-      return new Response(
-        JSON.stringify(result),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // No providers configured or all failed
-    const hasAnyKey = Deno.env.get('BATCHDATA_API_KEY') || Deno.env.get('TRACERFY_API_KEY');
+    // No providers configured or BatchData failed
+    const hasAnyKey = Deno.env.get('BATCHDATA_API_KEY');
     if (!hasAnyKey) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'No skip trace providers configured. Add BATCHDATA_API_KEY or TRACERFY_API_KEY.' 
+          error: 'No skip trace providers configured. Add BATCHDATA_API_KEY.' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

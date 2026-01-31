@@ -44,7 +44,7 @@ export interface SkipTraceResult {
 export const skipTraceApi = {
   /**
    * Perform skip tracing on a property address to find owner contact info
-   * Cost: ~$0.009 - $0.02 per lookup via Tracerfy
+   * Uses BatchData (real-estate skip trace)
    */
   async lookupOwner(input: SkipTraceInput): Promise<SkipTraceResult> {
     const { data, error } = await supabase.functions.invoke('tracerfy-skip-trace', {
