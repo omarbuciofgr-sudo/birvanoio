@@ -393,9 +393,9 @@ async function enrichWithApollo(
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
+        'X-Api-Key': apiKey,
       },
       body: JSON.stringify({
-        api_key: apiKey,
         q_organization_domains: domain,
         page: 1,
         per_page: 10,

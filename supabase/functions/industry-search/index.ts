@@ -2,7 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
 /**
@@ -39,7 +40,13 @@ interface CompanyResult {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    const requestedHeaders = req.headers.get('access-control-request-headers');
+    return new Response(null, { 
+      headers: {
+        ...corsHeaders,
+        ...(requestedHeaders ? { 'Access-Control-Allow-Headers': requestedHeaders } : {}),
+      }
+    });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -88,9 +95,8 @@ Deno.serve(async (req) => {
 
     console.log(`Industry search: industry=${industry}, location=${location}, employees=${employee_count_min}-${employee_count_max}`);
 
-    // Build Apollo organization search params
+    // Build Apollo organization search params - api_key goes in header, not body
     const searchParams: Record<string, unknown> = {
-      api_key: apolloApiKey,
       page: 1,
       per_page: Math.min(limit, 100),
     };
@@ -140,12 +146,13 @@ Deno.serve(async (req) => {
 
     console.log('Apollo search params:', JSON.stringify(searchParams, null, 2));
 
-    // Call Apollo organization search
+    // Call Apollo organization search - use X-Api-Key header
     const response = await fetch('https://api.apollo.io/v1/mixed_companies/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
+        'X-Api-Key': apolloApiKey,
       },
       body: JSON.stringify(searchParams),
     });
