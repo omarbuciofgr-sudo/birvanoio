@@ -462,28 +462,9 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
+    console.log('[Skip Trace] Authenticated user:', userId);
 
-    // Check if user has admin role
-    const adminClient = createClient(supabaseUrl, serviceKey);
-    const { data: hasAdminRole, error: roleError } = await adminClient.rpc('has_role', {
-      _user_id: userId,
-      _role: 'admin',
-    });
-
-    if (roleError) {
-      console.error('tracerfy-skip-trace role check error:', roleError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Authorization check failed' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!hasAdminRole) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Forbidden - Admin access required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Skip trace is allowed for any authenticated user (scraper uses it internally)
 
     const body: SkipTraceRequest = await req.json();
     
