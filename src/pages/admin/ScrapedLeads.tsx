@@ -182,7 +182,8 @@ export default function ScrapedLeads() {
       lead.domain.toLowerCase().includes(search) ||
       lead.full_name?.toLowerCase().includes(search) ||
       lead.best_email?.toLowerCase().includes(search) ||
-      lead.best_phone?.includes(search)
+      lead.best_phone?.includes(search) ||
+      lead.address?.toLowerCase().includes(search)
     );
   });
 
@@ -384,7 +385,7 @@ export default function ScrapedLeads() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by domain, name, email, phone..."
+                    placeholder="Search by domain, name, email, phone, address..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-9"
@@ -467,6 +468,7 @@ export default function ScrapedLeads() {
                       />
                     </TableHead>
                     <TableHead>Domain</TableHead>
+                    <TableHead>Address</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
@@ -498,6 +500,11 @@ export default function ScrapedLeads() {
                             </a>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        <span className="truncate max-w-[200px] block" title={lead.address || ''}>
+                          {lead.address || '-'}
+                        </span>
                       </TableCell>
                       <TableCell onClick={() => setSelectedLead(lead)}>
                         {lead.full_name || '-'}
