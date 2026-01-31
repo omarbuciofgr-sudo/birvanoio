@@ -1435,8 +1435,8 @@ function extractGenericListings(html: string, sourceUrl: string): EnrichedListin
   return listings;
 }
 
-// Skip trace a single address using Tracerfy or BatchData
-async function skipTraceAddress(address: string, tracerfyApiKey: string): Promise<SkipTraceResult> {
+// Skip trace a single address using BatchData only
+async function skipTraceAddress(address: string, _unused?: string): Promise<SkipTraceResult> {
   if (!address || address.trim().length < 5) {
     return { success: false, error: 'Invalid address' };
   }
@@ -1464,114 +1464,69 @@ async function skipTraceAddress(address: string, tracerfyApiKey: string): Promis
     addressData.street = address;
   }
 
-  // Try BatchData API first (more reliable)
+  // Use BatchData API only (removed Tracerfy)
   const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
-  if (batchDataKey) {
-    try {
-      const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${batchDataKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: [{
-            street: addressData.street,
-            city: addressData.city || '',
-            state: addressData.state || '',
-            zip: addressData.zip || '',
-          }],
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const result = data.results?.[0];
-        if (result?.persons?.[0]) {
-          const person = result.persons[0];
-          return {
-            success: true,
-            data: {
-              fullName: person.names?.[0]?.fullName || null,
-              firstName: person.names?.[0]?.firstName || null,
-              lastName: person.names?.[0]?.lastName || null,
-              phones: (person.phones || []).map((p: any) => ({
-                number: p.phoneNumber || p.number,
-                type: p.phoneType || 'unknown',
-                lineType: p.carrierType,
-              })),
-              emails: (person.emails || []).map((e: any) => ({
-                address: e.emailAddress || e.email,
-                type: e.emailType,
-              })),
-              confidence: result.confidenceScore || 0,
-            },
-          };
-        }
-        return {
-          success: true,
-          data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-          message: 'No owner information found',
-        };
-      }
-    } catch (error) {
-      console.error('[BatchData] Error:', error);
-    }
+  if (!batchDataKey) {
+    return { success: false, error: 'BATCHDATA_API_KEY not configured' };
   }
 
-  // Fallback to Tracerfy - using correct endpoint
   try {
-    // Tracerfy API v2 endpoint
-    const response = await fetch('https://www.tracerfy.com/api/v2/trace', {
+    console.log(`[BatchData] Skip tracing: ${addressData.street}, ${addressData.city}, ${addressData.state} ${addressData.zip}`);
+    
+    const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
       method: 'POST',
       headers: {
-        'x-api-key': tracerfyApiKey,
+        'Authorization': `Bearer ${batchDataKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        street: addressData.street,
-        city: addressData.city || '',
-        state: addressData.state || '',
-        zip: addressData.zip || '',
+        requests: [{
+          street: addressData.street,
+          city: addressData.city || '',
+          state: addressData.state || '',
+          zip: addressData.zip || '',
+        }],
       }),
     });
 
     if (!response.ok) {
-      if (response.status === 404 || response.status === 422) {
-        return {
-          success: true,
-          data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-          message: 'No owner information found',
-        };
-      }
       const errorText = await response.text();
-      console.error('[Tracerfy] API error:', response.status, errorText);
-      return { success: false, error: `API error: ${response.status}` };
+      console.error('[BatchData] API error:', response.status, errorText);
+      return { success: false, error: `BatchData API error: ${response.status}` };
     }
 
     const data = await response.json();
+    const result = data.results?.[0];
+    
+    if (result?.persons?.[0]) {
+      const person = result.persons[0];
+      return {
+        success: true,
+        data: {
+          fullName: person.names?.[0]?.fullName || null,
+          firstName: person.names?.[0]?.firstName || null,
+          lastName: person.names?.[0]?.lastName || null,
+          phones: (person.phones || []).map((p: any) => ({
+            number: p.phoneNumber || p.number,
+            type: p.phoneType || 'unknown',
+            lineType: p.carrierType,
+          })),
+          emails: (person.emails || []).map((e: any) => ({
+            address: e.emailAddress || e.email,
+            type: e.emailType,
+          })),
+          confidence: result.confidenceScore || 0,
+        },
+      };
+    }
     
     return {
       success: true,
-      data: {
-        fullName: data.full_name || data.name || null,
-        firstName: data.first_name || null,
-        lastName: data.last_name || null,
-        phones: (data.phones || data.phone_numbers || []).map((p: any) => ({
-          number: typeof p === 'string' ? p : p.number || p.phone,
-          type: typeof p === 'string' ? 'unknown' : p.type || 'unknown',
-          lineType: typeof p === 'string' ? undefined : p.line_type,
-        })),
-        emails: (data.emails || data.email_addresses || []).map((e: any) => ({
-          address: typeof e === 'string' ? e : e.address || e.email,
-          type: typeof e === 'string' ? undefined : e.type,
-        })),
-        mailingAddress: data.mailing_address,
-        confidence: data.confidence_score || data.confidence,
-      },
+      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
+      message: 'No owner information found',
     };
   } catch (error) {
-    console.error('Skip trace error:', error);
+    console.error('[BatchData] Skip trace error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Skip trace failed' };
   }
 }
@@ -1658,11 +1613,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Skip tracing requires BatchData or Tracerfy
+    // Skip tracing requires BatchData only
     const batchDataApiKey = Deno.env.get('BATCHDATA_API_KEY');
-    if (enableSkipTrace && !tracerfyApiKey && !batchDataApiKey) {
+    if (enableSkipTrace && !batchDataApiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No skip trace API configured (need BATCHDATA_API_KEY or TRACERFY_API_KEY)' }),
+        JSON.stringify({ success: false, error: 'BATCHDATA_API_KEY is required for skip tracing' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -1958,9 +1913,9 @@ Deno.serve(async (req) => {
 
     console.log(`\n[Scraped] ${allListings.length} total listings`);
 
-    // Step 2: Skip trace listings
-    if (enableSkipTrace && tracerfyApiKey && allListings.length > 0) {
-      console.log('\n[Skip Trace] Starting...');
+    // Step 2: Skip trace listings using BatchData only
+    if (enableSkipTrace && batchDataApiKey && allListings.length > 0) {
+      console.log('\n[Skip Trace] Starting with BatchData...');
       
       for (const listing of allListings) {
         if (!listing.address) {
@@ -1979,7 +1934,7 @@ Deno.serve(async (req) => {
         
         try {
           console.log(`[Skip Trace] ${listing.address}`);
-          const traceResult = await skipTraceAddress(listing.address, tracerfyApiKey);
+          const traceResult = await skipTraceAddress(listing.address);
           
           if (traceResult.success && traceResult.data) {
             const data = traceResult.data;
