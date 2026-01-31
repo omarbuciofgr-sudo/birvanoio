@@ -48,7 +48,7 @@ interface SkipTraceResult {
   provider?: string;
 }
 
-// Try BatchData API - Updated with correct endpoint and format
+// Try BatchData API - Primary skip trace provider
 async function tryBatchData(addressData: Record<string, string>): Promise<SkipTraceResult | null> {
   const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
   if (!batchDataKey) {
@@ -57,10 +57,11 @@ async function tryBatchData(addressData: Record<string, string>): Promise<SkipTr
   }
 
   try {
-    console.log('[Skip Trace] Trying BatchData API with address:', addressData);
+    console.log('[Skip Trace] Trying BatchData API with address:', JSON.stringify(addressData));
     
-    // BatchData Property Skip Trace API - correct endpoint format
-    // API Docs: https://developer.batchdata.com/docs/batchdata/skip-trace
+    // BatchData Property Skip Trace API
+    // Endpoint: https://api.batchdata.com/api/v1/property/skip-trace
+    // Docs: https://developer.batchdata.com/docs/batchdata/batchdata-v1/operations/create-a-property-skip-trace
     const requestBody = {
       requests: [{
         street: addressData.street,
@@ -70,7 +71,7 @@ async function tryBatchData(addressData: Record<string, string>): Promise<SkipTr
       }],
     };
     
-    console.log('[Skip Trace] BatchData request:', JSON.stringify(requestBody));
+    console.log('[Skip Trace] BatchData request body:', JSON.stringify(requestBody));
     
     const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
       method: 'POST',
@@ -84,40 +85,55 @@ async function tryBatchData(addressData: Record<string, string>): Promise<SkipTr
 
     console.log('[Skip Trace] BatchData response status:', response.status);
     const responseText = await response.text();
-    console.log('[Skip Trace] BatchData raw response:', responseText.slice(0, 1000));
+    console.log('[Skip Trace] BatchData raw response (first 2000 chars):', responseText.slice(0, 2000));
 
     if (!response.ok) {
-      console.error('[Skip Trace] BatchData error status:', response.status);
+      console.error('[Skip Trace] BatchData error status:', response.status, responseText.slice(0, 500));
       
-      // Try alternate endpoint format if first fails
-      console.log('[Skip Trace] Trying alternate BatchData endpoint...');
-      const altResponse = await fetch('https://api.batchdata.com/api/v1/skip-trace/lookup', {
+      // Check if it's an auth error
+      if (response.status === 401 || response.status === 403) {
+        console.error('[Skip Trace] BatchData authentication failed - check API key');
+        return null;
+      }
+      
+      // Try the alternate batch endpoint format
+      console.log('[Skip Trace] Trying alternate BatchData batch endpoint...');
+      const altRequestBody = {
+        requests: [{
+          propertyAddress: {
+            street: addressData.street,
+            city: addressData.city || '',
+            state: addressData.state || '',
+            zip: addressData.zip || '',
+          },
+        }],
+      };
+      
+      const altResponse = await fetch('https://api.batchdata.com/api/v1/property/skip-trace/batch', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${batchDataKey}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          address: {
-            street: addressData.street,
-            city: addressData.city || '',
-            state: addressData.state || '',
-            zip: addressData.zip || '',
-          },
-        }),
+        body: JSON.stringify(altRequestBody),
       });
       
+      console.log('[Skip Trace] Alternate BatchData response status:', altResponse.status);
+      
       if (!altResponse.ok) {
-        console.error('[Skip Trace] Alternate BatchData endpoint also failed');
+        const altText = await altResponse.text();
+        console.error('[Skip Trace] Alternate BatchData endpoint also failed:', altText.slice(0, 500));
         return null;
       }
       
       const altData = await altResponse.json();
+      console.log('[Skip Trace] Alternate BatchData parsed response:', JSON.stringify(altData).slice(0, 1000));
       return parseBatchDataResponse(altData, addressData);
     }
 
     const data = JSON.parse(responseText);
+    console.log('[Skip Trace] BatchData parsed response:', JSON.stringify(data).slice(0, 1000));
     return parseBatchDataResponse(data, addressData);
   } catch (error) {
     console.error('[Skip Trace] BatchData exception:', error);

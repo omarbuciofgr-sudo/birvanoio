@@ -641,7 +641,14 @@ async function waterfallEnrich(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    // Echo requested headers for CORS preflight
+    const requestedHeaders = req.headers.get('access-control-request-headers');
+    return new Response(null, {
+      headers: {
+        ...corsHeaders,
+        ...(requestedHeaders ? { 'Access-Control-Allow-Headers': requestedHeaders } : {}),
+      },
+    });
   }
 
   try {
