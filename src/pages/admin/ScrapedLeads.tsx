@@ -178,12 +178,18 @@ export default function ScrapedLeads() {
   const filteredLeads = leads.filter(lead => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
+    const normalizedAddress =
+      lead.address ||
+      (typeof lead.schema_data === 'object' && lead.schema_data
+        ? // Real-estate scrapers often store address in schema_data instead of the top-level column
+          ((lead.schema_data as any).address || (lead.schema_data as any).full_address)
+        : null);
     return (
       lead.domain.toLowerCase().includes(search) ||
       lead.full_name?.toLowerCase().includes(search) ||
       lead.best_email?.toLowerCase().includes(search) ||
       lead.best_phone?.includes(search) ||
-      lead.address?.toLowerCase().includes(search)
+      normalizedAddress?.toLowerCase().includes(search)
     );
   });
 
@@ -502,9 +508,18 @@ export default function ScrapedLeads() {
                         </div>
                       </TableCell>
                       <TableCell onClick={() => setSelectedLead(lead)}>
-                        <span className="truncate max-w-[200px] block" title={lead.address || ''}>
-                          {lead.address || '-'}
-                        </span>
+                        {(() => {
+                          const normalizedAddress =
+                            lead.address ||
+                            (lead.schema_data as any)?.address ||
+                            (lead.schema_data as any)?.full_address ||
+                            '';
+                          return (
+                            <span className="truncate max-w-[200px] block" title={normalizedAddress}>
+                              {normalizedAddress || '-'}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell onClick={() => setSelectedLead(lead)}>
                         {lead.full_name || '-'}

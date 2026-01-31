@@ -1604,7 +1604,6 @@ Deno.serve(async (req) => {
 
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     const zyteApiKey = Deno.env.get('ZYTE_API_KEY');
-    const tracerfyApiKey = Deno.env.get('TRACERFY_API_KEY');
     
     if (!firecrawlApiKey && !zyteApiKey) {
       return new Response(
