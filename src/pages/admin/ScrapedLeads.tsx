@@ -178,18 +178,21 @@ export default function ScrapedLeads() {
   const filteredLeads = leads.filter(lead => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
-    const normalizedAddress =
-      lead.address ||
-      (typeof lead.schema_data === 'object' && lead.schema_data
-        ? // Real-estate scrapers often store address in schema_data instead of the top-level column
-          ((lead.schema_data as any).address || (lead.schema_data as any).full_address)
-        : null);
+    const schema = lead.schema_data as any;
+    
+    // Build full address for search
+    const street = lead.address || schema?.address || schema?.full_address || '';
+    const city = schema?.city || '';
+    const state = schema?.state || '';
+    const zip = schema?.zip || schema?.zip_code || '';
+    const fullAddress = [street, city, state, zip].filter(Boolean).join(' ').toLowerCase();
+    
     return (
       lead.domain.toLowerCase().includes(search) ||
       lead.full_name?.toLowerCase().includes(search) ||
       lead.best_email?.toLowerCase().includes(search) ||
       lead.best_phone?.includes(search) ||
-      normalizedAddress?.toLowerCase().includes(search)
+      fullAddress.includes(search)
     );
   });
 
@@ -509,14 +512,23 @@ export default function ScrapedLeads() {
                       </TableCell>
                       <TableCell onClick={() => setSelectedLead(lead)}>
                         {(() => {
-                          const normalizedAddress =
-                            lead.address ||
-                            (lead.schema_data as any)?.address ||
-                            (lead.schema_data as any)?.full_address ||
-                            '';
+                          const schema = lead.schema_data as any;
+                          // Build full address with city, state, zip if available
+                          const street = lead.address || schema?.address || schema?.full_address || '';
+                          const city = schema?.city || '';
+                          const state = schema?.state || '';
+                          const zip = schema?.zip || schema?.zip_code || '';
+                          
+                          // Construct full address
+                          let fullAddress = street;
+                          if (city || state || zip) {
+                            const cityStateZip = [city, state, zip].filter(Boolean).join(', ');
+                            fullAddress = street ? `${street}, ${cityStateZip}` : cityStateZip;
+                          }
+                          
                           return (
-                            <span className="truncate max-w-[200px] block" title={normalizedAddress}>
-                              {normalizedAddress || '-'}
+                            <span className="truncate max-w-[250px] block" title={fullAddress}>
+                              {fullAddress || '-'}
                             </span>
                           );
                         })()}

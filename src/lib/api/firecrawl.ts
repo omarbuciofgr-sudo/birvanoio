@@ -178,7 +178,7 @@ export const firecrawlApi = {
 
   /**
    * Full FSBO/FRBO workflow: Scrape listings + Skip Trace owner info
-   * This combines Firecrawl scraping with Tracerfy skip tracing in one call.
+   * This combines Firecrawl scraping with BatchData skip tracing in one call.
    * Cost: Firecrawl credits + ~$0.009 per address for skip tracing
    */
   async scrapeAndTraceFSBO(options: FSBOScrapeAndTraceOptions): Promise<FSBOScrapeAndTraceResponse> {

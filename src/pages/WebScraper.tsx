@@ -642,7 +642,7 @@ export default function WebScraper() {
           listing_type: listing.listing_type,
           source_platform: listing.source_platform,
         },
-        enrichment_providers_used: listing.skip_trace_status === 'success' ? ['tracerfy'] : [],
+        enrichment_providers_used: listing.skip_trace_status === 'success' ? ['batchdata'] : [],
       });
 
       if (error) throw error;
@@ -776,7 +776,7 @@ export default function WebScraper() {
             listing_type: listing.listing_type,
             source_platform: listing.source_platform,
           },
-          enrichment_providers_used: listing.skip_trace_status === 'success' ? ['tracerfy'] : [],
+          enrichment_providers_used: listing.skip_trace_status === 'success' ? ['batchdata'] : [],
         });
 
         if (error) throw error;
@@ -918,7 +918,7 @@ export default function WebScraper() {
                   />
                   <Label htmlFor="enable-skip-trace" className="cursor-pointer">
                     <span className="font-medium">Auto Skip Trace</span>
-                    <span className="text-xs text-muted-foreground ml-2">~$0.009/address via Tracerfy</span>
+                    <span className="text-xs text-muted-foreground ml-2">~$0.009/address via BatchData</span>
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
