@@ -147,3 +147,48 @@ export const competitorMonitoringApi = {
     return data;
   },
 };
+
+// ============================================
+// Clay Enrichment API
+// ============================================
+export const clayEnrichmentApi = {
+  async checkSetup(): Promise<{
+    success: boolean;
+    connected: boolean;
+    tables?: Array<{ id: string; name: string }>;
+  }> {
+    const { data, error } = await supabase.functions.invoke('clay-enrich', {
+      body: { mode: 'setup-check' },
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async enrich(leads: Array<{
+    lead_id: string;
+    domain?: string;
+    company_name?: string;
+    full_name?: string;
+    email?: string;
+    linkedin_url?: string;
+  }>, options?: { source_id?: string; table_id?: string }): Promise<{
+    success: boolean;
+    method: string;
+    results: Array<{
+      lead_id: string;
+      full_name?: string;
+      email?: string;
+      phone?: string;
+      job_title?: string;
+      linkedin_url?: string;
+      company_name?: string;
+    }>;
+    enriched_count: number;
+  }> {
+    const { data, error } = await supabase.functions.invoke('clay-enrich', {
+      body: { mode: 'enrich', leads, ...options },
+    });
+    if (error) throw error;
+    return data;
+  },
+};
