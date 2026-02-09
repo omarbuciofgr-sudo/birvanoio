@@ -11,7 +11,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center mb-3">
-              <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto" />
+              <img src={brivanoLogo} alt="Brivano" className="h-24 w-auto" />
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs">
               AI-powered lead generation. Fresh, verified data for any niche, any market.
