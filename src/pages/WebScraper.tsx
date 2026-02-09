@@ -644,75 +644,212 @@ export default function WebScraper() {
             )}
           </TabsContent>
 
-          {/* ── Search Tab ── */}
+          {/* ── Search Tab — Clay-like Rich Interface ── */}
           <TabsContent value="search" className="space-y-4 mt-0">
-            <Card className="border-border/60">
-              <CardContent className="p-5 space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium">Search & Discover Leads</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Search the web and import results as leads</p>
-                </div>
-                <div className="flex gap-3 items-end">
-                  <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Query</Label>
-                    <Input placeholder="e.g., roofing companies in Dallas Texas" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-9 text-sm" />
+            {/* Search Command Bar */}
+            <Card className="border-border/40 overflow-hidden">
+              <div className="bg-gradient-to-r from-primary/[0.04] to-transparent">
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Search className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">Search & Discover</h3>
+                      <p className="text-[10px] text-muted-foreground">Search the web to find and import business leads</p>
+                    </div>
                   </div>
-                  <div className="w-24 space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Results</Label>
-                    <Input type="number" min={1} max={100} value={searchLimit} onChange={(e) => setSearchLimit(parseInt(e.target.value) || 10)} className="h-9 text-sm" />
+
+                  {/* Search Categories */}
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { label: "All", icon: Search },
+                      { label: "Companies", icon: Building },
+                      { label: "People", icon: UserPlus },
+                      { label: "Local", icon: MapPin },
+                    ].map(cat => (
+                      <button
+                        key={cat.label}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-all text-muted-foreground hover:text-foreground"
+                      >
+                        <cat.icon className="h-3 w-3" />
+                        {cat.label}
+                      </button>
+                    ))}
                   </div>
-                  <Button onClick={handleSearch} disabled={searchLoading} size="sm" className="h-9">
-                    {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-3.5 w-3.5 mr-1.5" /> Search</>}
-                  </Button>
-                </div>
-              </CardContent>
+
+                  {/* Main Search Input */}
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                      <Input
+                        placeholder="Search for businesses, companies, or people..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                        className="h-10 pl-10 text-sm bg-background border-border/60 focus-visible:ring-primary/30"
+                      />
+                    </div>
+                    <div className="w-20">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={searchLimit}
+                        onChange={(e) => setSearchLimit(parseInt(e.target.value) || 10)}
+                        className="h-10 text-sm text-center"
+                        title="Max results"
+                      />
+                    </div>
+                    <Button onClick={handleSearch} disabled={searchLoading} className="h-10 px-5 gap-2">
+                      {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-3.5 w-3.5" /> Search</>}
+                    </Button>
+                  </div>
+
+                  {/* Quick Search Suggestions */}
+                  {searchResults.length === 0 && !searchLoading && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        "Roofing companies in Dallas TX",
+                        "SaaS startups San Francisco",
+                        "HVAC contractors Miami",
+                        "Dentists near Chicago IL",
+                        "Real estate agents Austin",
+                        "Marketing agencies NYC",
+                      ].map(suggestion => (
+                        <button
+                          key={suggestion}
+                          onClick={() => { setSearchQuery(suggestion); }}
+                          className="px-2.5 py-1 rounded-md bg-muted/50 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </div>
             </Card>
 
+            {/* Results Table */}
             {searchResults.length > 0 && (
-              <Card className="border-border/60">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-border/60">
-                  <h3 className="text-sm font-medium">{searchResults.length} Results</h3>
+              <Card className="border-border/40">
+                {/* Results Header */}
+                <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-semibold">{searchResults.length} Results</h3>
+                    {selectedResults.size > 0 && (
+                      <Badge variant="secondary" className="text-[10px] h-5">{selectedResults.size} selected</Badge>
+                    )}
+                  </div>
                   <div className="flex gap-1.5">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={toggleSelectAll}>
+                    <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2" onClick={toggleSelectAll}>
                       {selectedResults.size === searchResults.filter(r => !r.imported).length ? 'Deselect All' : 'Select All'}
                     </Button>
-                    <Button size="sm" className="h-7 text-xs" onClick={importSelectedLeads} disabled={selectedResults.size === 0 || bulkImporting}>
-                      {bulkImporting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
-                      Import ({selectedResults.size})
+                    <Button size="sm" className="h-7 text-[11px] gap-1.5" onClick={importSelectedLeads} disabled={selectedResults.size === 0 || bulkImporting}>
+                      {bulkImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                      Import {selectedResults.size > 0 ? `(${selectedResults.size})` : ''}
                     </Button>
                   </div>
                 </div>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[500px]">
-                    <div className="divide-y divide-border/40">
-                      {searchResults.map((result, i) => (
-                        <div key={i} className={`px-5 py-3 flex gap-3 hover:bg-muted/30 transition-colors ${result.imported ? 'opacity-50' : ''}`}>
-                          {!result.imported ? (
-                            <Checkbox checked={selectedResults.has(i)} onCheckedChange={() => toggleSelectResult(i)} className="mt-0.5" />
-                          ) : (
-                            <Check className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline truncate">{result.title}</a>
-                              {result.imported && <Badge variant="secondary" className="text-[10px] h-4 shrink-0">Imported</Badge>}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground truncate">{result.url}</p>
-                            {result.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{result.description}</p>}
-                          </div>
-                          <div className="flex gap-0.5 shrink-0">
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => copyToClipboard(result.markdown || result.url)}><Copy className="h-3 w-3" /></Button>
-                            {!result.imported && (
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => importAsLead(result, i)} disabled={importingIndex === i}>
-                                {importingIndex === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
+                        <tr className="border-b border-border/40">
+                          <th className="w-10 px-4 py-2.5 text-left">
+                            <Checkbox
+                              checked={selectedResults.size === searchResults.filter(r => !r.imported).length && searchResults.length > 0}
+                              onCheckedChange={toggleSelectAll}
+                            />
+                          </th>
+                          <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">#</th>
+                          <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Source</th>
+                          <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Preview</th>
+                          <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                          <th className="w-24 px-3 py-2.5 text-right font-medium text-muted-foreground">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {searchResults.map((result, i) => {
+                          let domain = '';
+                          try { domain = new URL(result.url).hostname.replace('www.', ''); } catch {}
+                          const favicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null;
+                          return (
+                            <tr
+                              key={i}
+                              className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${
+                                result.imported ? 'opacity-50' : ''
+                              } ${selectedResults.has(i) ? 'bg-primary/[0.03]' : ''}`}
+                            >
+                              <td className="px-4 py-3">
+                                {!result.imported ? (
+                                  <Checkbox checked={selectedResults.has(i)} onCheckedChange={() => toggleSelectResult(i)} />
+                                ) : (
+                                  <Check className="h-3.5 w-3.5 text-green-500" />
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-muted-foreground">{i + 1}</td>
+                              <td className="px-3 py-3 max-w-[300px]">
+                                <div className="flex items-center gap-2.5">
+                                  {favicon && (
+                                    <img src={favicon} alt="" className="h-5 w-5 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                  )}
+                                  <div className="min-w-0">
+                                    <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:text-primary hover:underline truncate block">
+                                      {result.title}
+                                    </a>
+                                    <p className="text-[10px] text-muted-foreground truncate">{domain}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 max-w-[300px]">
+                                <p className="text-[11px] text-muted-foreground line-clamp-2">{result.description || '—'}</p>
+                              </td>
+                              <td className="px-3 py-3">
+                                {result.imported ? (
+                                  <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-0 text-[10px] h-5">Imported</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] h-5 font-normal">New</Badge>
+                                )}
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex justify-end gap-0.5">
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => copyToClipboard(result.markdown || result.url)} title="Copy">
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => window.open(result.url, '_blank')} title="Open">
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                  {!result.imported && (
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-primary" onClick={() => importAsLead(result, i)} disabled={importingIndex === i} title="Import as lead">
+                                      {importingIndex === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </ScrollArea>
                 </CardContent>
+
+                {/* Bottom Summary Bar */}
+                <div className="flex items-center justify-between px-5 py-2.5 border-t border-border/40 bg-muted/20">
+                  <p className="text-[10px] text-muted-foreground">
+                    {searchResults.filter(r => r.imported).length} imported · {searchResults.filter(r => !r.imported).length} available
+                  </p>
+                  <div className="flex gap-1.5">
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => {
+                      const csv = searchResults.map(r => `"${r.title}","${r.url}","${r.description || ''}"`).join('\n');
+                      downloadAsFile('Title,URL,Description\n' + csv, `search-results-${new Date().toISOString().slice(0,10)}.csv`);
+                    }}>
+                      <Download className="h-2.5 w-2.5 mr-1" /> Export CSV
+                    </Button>
+                  </div>
+                </div>
               </Card>
             )}
           </TabsContent>
