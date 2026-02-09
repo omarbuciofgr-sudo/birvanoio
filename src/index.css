@@ -2,120 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Brivano Design System - Dark Premium Theme */
+/* Brivano Design System - Minimalist AI Theme */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    /* Light premium palette */
+    /* Clean white palette */
     --background: 0 0% 100%;
-    --foreground: 220 20% 10%;
+    --foreground: 220 14% 10%;
 
-    --card: 0 0% 98%;
-    --card-foreground: 220 20% 10%;
+    --card: 220 20% 98%;
+    --card-foreground: 220 14% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
+    --popover-foreground: 220 14% 10%;
 
-    /* Baby blue accent */
-    --primary: 200 85% 55%;
+    /* Refined blue accent */
+    --primary: 210 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 94%;
-    --secondary-foreground: 220 20% 10%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 14% 10%;
 
-    --muted: 220 15% 92%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 10% 46%;
 
-    --accent: 200 85% 55%;
+    --accent: 210 100% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 200 85% 55%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 210 100% 50%;
 
     --radius: 0.75rem;
 
     /* Brivano custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(200 85% 55%) 0%, hsl(210 80% 60%) 100%);
-    --gradient-dark: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 15% 97%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(220 15% 97%) 100%);
-    --glow-primary: 0 0 40px hsl(200 85% 55% / 0.2);
-    --glow-subtle: 0 0 60px hsl(200 85% 55% / 0.1);
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%) 0%, hsl(195 100% 45%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
+    --glow-primary: 0 0 30px hsl(210 100% 50% / 0.12);
+    --glow-subtle: 0 0 60px hsl(210 100% 50% / 0.06);
 
     /* Status colors */
-    --status-new: 200 85% 55%;
+    --status-new: 210 100% 50%;
     --status-contacted: 45 100% 45%;
     --status-qualified: 280 100% 55%;
     --status-converted: 145 70% 45%;
     --status-lost: 0 72% 51%;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 220 20% 20%;
-    --sidebar-primary: 200 85% 55%;
+    --sidebar-background: 220 14% 98%;
+    --sidebar-foreground: 220 14% 20%;
+    --sidebar-primary: 210 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 94%;
-    --sidebar-accent-foreground: 220 20% 10%;
-    --sidebar-border: 220 15% 90%;
-    --sidebar-ring: 200 85% 55%;
+    --sidebar-accent: 220 14% 95%;
+    --sidebar-accent-foreground: 220 14% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 210 100% 50%;
   }
 
   .dark {
-    /* Dark premium palette */
-    --background: 220 20% 4%;
-    --foreground: 210 20% 98%;
+    /* Dark palette */
+    --background: 220 16% 5%;
+    --foreground: 210 20% 96%;
 
-    --card: 220 20% 7%;
-    --card-foreground: 210 20% 98%;
+    --card: 220 16% 8%;
+    --card-foreground: 210 20% 96%;
 
-    --popover: 220 20% 7%;
-    --popover-foreground: 210 20% 98%;
+    --popover: 220 16% 8%;
+    --popover-foreground: 210 20% 96%;
 
-    --primary: 200 85% 60%;
-    --primary-foreground: 220 20% 4%;
+    --primary: 210 100% 55%;
+    --primary-foreground: 220 16% 5%;
 
-    --secondary: 220 20% 12%;
-    --secondary-foreground: 210 20% 98%;
+    --secondary: 220 16% 13%;
+    --secondary-foreground: 210 20% 96%;
 
-    --muted: 220 15% 15%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 215 12% 55%;
 
-    --accent: 200 85% 60%;
-    --accent-foreground: 220 20% 4%;
+    --accent: 210 100% 55%;
+    --accent-foreground: 220 16% 5%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive-foreground: 210 20% 96%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 200 85% 60%;
+    --border: 220 14% 18%;
+    --input: 220 14% 18%;
+    --ring: 210 100% 55%;
 
     /* Brivano custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(200 85% 60%) 0%, hsl(210 80% 65%) 100%);
-    --gradient-dark: linear-gradient(180deg, hsl(220 20% 4%) 0%, hsl(220 25% 8%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(220 20% 10%) 0%, hsl(220 20% 6%) 100%);
-    --glow-primary: 0 0 40px hsl(200 85% 60% / 0.3);
-    --glow-subtle: 0 0 60px hsl(200 85% 60% / 0.15);
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 55%) 0%, hsl(195 100% 50%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(220 16% 5%) 0%, hsl(220 18% 9%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(220 16% 10%) 0%, hsl(220 16% 7%) 100%);
+    --glow-primary: 0 0 30px hsl(210 100% 55% / 0.2);
+    --glow-subtle: 0 0 60px hsl(210 100% 55% / 0.1);
 
     /* Status colors */
-    --status-new: 200 85% 60%;
+    --status-new: 210 100% 55%;
     --status-contacted: 45 100% 50%;
     --status-qualified: 280 100% 60%;
     --status-converted: 145 70% 50%;
     --status-lost: 0 72% 51%;
 
-    --sidebar-background: 220 20% 6%;
+    --sidebar-background: 220 16% 7%;
     --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 200 85% 60%;
-    --sidebar-primary-foreground: 220 20% 4%;
-    --sidebar-accent: 220 15% 12%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 220 15% 15%;
-    --sidebar-ring: 200 85% 60%;
+    --sidebar-primary: 210 100% 55%;
+    --sidebar-primary-foreground: 220 16% 5%;
+    --sidebar-accent: 220 14% 13%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 220 14% 16%;
+    --sidebar-ring: 210 100% 55%;
   }
 }
 
@@ -145,7 +145,7 @@
   }
 
   .glass-card {
-    @apply bg-card/50 backdrop-blur-xl border border-border/50;
+    @apply bg-card/60 backdrop-blur-xl border border-border/50;
   }
 
   .glow-box {
