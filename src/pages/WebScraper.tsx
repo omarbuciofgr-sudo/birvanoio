@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { FeatureGate } from '@/components/subscription/FeatureGate';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -67,42 +68,6 @@ type SearchResult = {
 export default function WebScraper() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-
-  // Check admin role
-  useEffect(() => {
-    const checkAdminRole = async () => {
-      // Wait until auth finishes resolving; otherwise we may set isAdmin=false
-      // briefly and trigger an incorrect redirect.
-      if (authLoading) return;
-
-      if (!user?.id) {
-        setIsAdmin(false);
-        return;
-      }
-
-      // Use backend check to avoid client-side RPC permission/config issues
-      const { data, error } = await supabase.functions.invoke('check-admin');
-
-      if (error) {
-        console.error('Admin check failed:', error);
-        toast.error(`Admin check failed: ${error.message}`);
-        setIsAdmin(false);
-        return;
-      }
-
-      if (data?.error) {
-        console.error('Admin check returned error:', data.error);
-        toast.error(`Admin check failed: ${data.error}`);
-        setIsAdmin(false);
-        return;
-      }
-
-      setIsAdmin(!!data?.isAdmin);
-    };
-
-    checkAdminRole();
-  }, [user?.id, authLoading]);
 
   // Scrape state
   const [scrapeUrl, setScrapeUrl] = useState('');
@@ -152,22 +117,8 @@ export default function WebScraper() {
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
 
-  if (isAdmin === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   if (!user) {
     navigate('/auth');
-    return null;
-  }
-
-  if (!isAdmin) {
-    navigate('/dashboard');
-    toast.error('Access denied. Admin privileges required.');
     return null;
   }
 
