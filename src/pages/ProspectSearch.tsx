@@ -1,16 +1,25 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
 import { SearchChat } from '@/components/prospect-search/SearchChat';
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ProspectSearch() {
   const { user } = useAuth();
@@ -19,10 +28,30 @@ export default function ProspectSearch() {
   const [results, setResults] = useState<CompanyResult[]>([]);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [searchName, setSearchName] = useState('');
+  const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+
+  // Load saved searches
+  const loadSavedSearches = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('saved_searches')
+      .select('id, name, filters')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (data) {
+      setSavedSearches(data.map((d) => ({
+        id: d.id,
+        name: d.name,
+        filters: d.filters as unknown as ProspectSearchFilters,
+      })));
+    }
+  }, [user]);
 
   const searchMutation = useMutation({
     mutationFn: async () => {
-      // Map filters to API params
       const industry = filters.industries
         .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
         .join(', ');
@@ -37,7 +66,6 @@ export default function ProspectSearch() {
         filters.productsDescription,
       ].filter(Boolean).join(', ') || undefined;
 
-      // Parse employee range from first selected size
       let employee_count_min: number | undefined;
       let employee_count_max: number | undefined;
       if (filters.companySizes.length > 0) {
@@ -88,11 +116,12 @@ export default function ProspectSearch() {
     const selected = selectedRows.size > 0
       ? results.filter((_, i) => selectedRows.has(i))
       : results;
-    const headers = ['Name', 'Domain', 'Industry', 'Employees', 'City', 'State', 'Country', 'LinkedIn'];
+    const headers = ['Name', 'Domain', 'Industry', 'Employees', 'Employee Range', 'Revenue', 'Founded', 'City', 'State', 'Country', 'LinkedIn', 'Technologies'];
     const rows = selected.map((c) => [
-      c.name, c.domain, c.industry || '', c.employee_range || '',
+      c.name, c.domain, c.industry || '', c.employee_count?.toString() || '', c.employee_range || '',
+      c.annual_revenue?.toString() || '', c.founded_year?.toString() || '',
       c.headquarters_city || '', c.headquarters_state || '', c.headquarters_country || '',
-      c.linkedin_url || '',
+      c.linkedin_url || '', (c.technologies || []).join('; '),
     ]);
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -103,6 +132,33 @@ export default function ProspectSearch() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`Exported ${selected.length} companies`);
+  };
+
+  const handleApplyFilters = useCallback((partial: Partial<ProspectSearchFilters>) => {
+    setFilters((prev) => ({ ...prev, ...partial }));
+    toast.success('Filters updated by AI assistant');
+  }, []);
+
+  const handleSaveSearch = async () => {
+    if (!user || !searchName.trim()) return;
+    const { error } = await supabase.from('saved_searches').insert([{
+      user_id: user.id,
+      name: searchName.trim(),
+      filters: JSON.parse(JSON.stringify(filters)),
+    }]);
+    if (error) {
+      toast.error('Failed to save search');
+    } else {
+      toast.success('Search saved!');
+      setSaveDialogOpen(false);
+      setSearchName('');
+    }
+  };
+
+  const handleLoadSearch = (search: { filters: ProspectSearchFilters }) => {
+    setFilters(search.filters);
+    setLoadDialogOpen(false);
+    toast.success('Filters loaded');
   };
 
   if (!user) {
@@ -119,6 +175,65 @@ export default function ProspectSearch() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="font-display text-sm font-semibold">Find companies</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Save search */}
+          <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5">
+                <Bookmark className="h-3.5 w-3.5" />
+                Save search
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Save current filters</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Input
+                  placeholder="e.g. SaaS companies in California"
+                  value={searchName}
+                  onChange={(e) => setSearchName(e.target.value)}
+                  className="text-sm"
+                />
+                <Button onClick={handleSaveSearch} disabled={!searchName.trim()} className="w-full">
+                  Save
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Load search */}
+          <Dialog open={loadDialogOpen} onOpenChange={(open) => {
+            setLoadDialogOpen(open);
+            if (open) loadSavedSearches();
+          }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5">
+                <BookmarkCheck className="h-3.5 w-3.5" />
+                Load
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Saved searches</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {savedSearches.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No saved searches yet.</p>
+                )}
+                {savedSearches.map((s) => (
+                  <button
+                    key={s.id}
+                    className="w-full text-left px-3 py-2.5 rounded-md border border-border hover:bg-accent transition-colors"
+                    onClick={() => handleLoadSearch(s)}
+                  >
+                    <span className="text-sm font-medium">{s.name}</span>
+                  </button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -151,7 +266,7 @@ export default function ProspectSearch() {
 
         {/* Right: Chat */}
         <div className="w-[320px] flex-shrink-0 overflow-hidden">
-          <SearchChat />
+          <SearchChat onApplyFilters={handleApplyFilters} />
         </div>
       </div>
     </div>
