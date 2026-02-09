@@ -9,10 +9,12 @@ import {
   Loader2,
   Globe,
   Linkedin,
-  ExternalLink,
+  Users,
+  Calendar,
+  DollarSign,
+  MapPin,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
-import { INDUSTRIES } from './constants';
 
 interface SearchResultsProps {
   results: CompanyResult[];
@@ -33,6 +35,19 @@ function getEmployeeBadgeColor(range: string | null): string {
   if (range.includes('201-500')) return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300';
   if (range.includes('501') || range.includes('1000') || range.includes('5000')) return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
   return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+}
+
+function formatRevenue(revenue: number | null): string {
+  if (!revenue) return '—';
+  if (revenue >= 1_000_000_000) return `$${(revenue / 1_000_000_000).toFixed(1)}B`;
+  if (revenue >= 1_000_000) return `$${(revenue / 1_000_000).toFixed(1)}M`;
+  if (revenue >= 1_000) return `$${(revenue / 1_000).toFixed(0)}K`;
+  return `$${revenue}`;
+}
+
+function formatEmployeeCount(count: number | null): string {
+  if (!count) return '';
+  return count.toLocaleString();
 }
 
 export function SearchResults({
@@ -105,18 +120,21 @@ export function SearchResults({
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-border flex items-center justify-between">
-        <h3 className="font-display text-sm font-semibold">Preview</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-display text-sm font-semibold">Results</h3>
+          <Badge variant="secondary" className="text-[10px]">{results.length} companies</Badge>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onExport} className="text-xs h-7">
             <Download className="h-3 w-3 mr-1" />
-            Export CSV
+            Export
           </Button>
         </div>
       </div>
 
       {/* Table */}
       <ScrollArea className="flex-1">
-        <div className="min-w-[700px]">
+        <div className="min-w-[1100px]">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
               <tr className="border-b border-border">
@@ -127,11 +145,22 @@ export function SearchResults({
                   />
                 </th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">#</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Description</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Company</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Domain</th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Industry</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Size</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Location</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  <div className="flex items-center gap-1"><Users className="h-3 w-3" /> Employees</div>
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  <div className="flex items-center gap-1"><DollarSign className="h-3 w-3" /> Revenue</div>
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  <div className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Founded</div>
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  <div className="flex items-center gap-1"><MapPin className="h-3 w-3" /> Location</div>
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Technologies</th>
                 <th className="w-16 px-3 py-2 text-left font-medium text-muted-foreground">Links</th>
               </tr>
             </thead>
@@ -151,34 +180,74 @@ export function SearchResults({
                     />
                   </td>
                   <td className="px-3 py-2.5 text-muted-foreground">{index + 1}</td>
-                  <td className="px-3 py-2.5 font-medium max-w-[180px] truncate">
+                  <td className="px-3 py-2.5 max-w-[200px]">
                     <div className="flex items-center gap-1.5">
                       <Building2 className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                      {company.name}
+                      <span className="font-medium truncate">{company.name}</span>
                     </div>
+                    {company.description && (
+                      <p className="text-[10px] text-muted-foreground truncate mt-0.5 ml-[18px]">
+                        {company.description}
+                      </p>
+                    )}
                   </td>
-                  <td className="px-3 py-2.5 text-muted-foreground max-w-[200px] truncate">
-                    {company.description || '—'}
+                  <td className="px-3 py-2.5 text-muted-foreground max-w-[120px] truncate">
+                    {company.domain ? (
+                      <a
+                        href={`https://${company.domain}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {company.domain}
+                      </a>
+                    ) : '—'}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5 max-w-[120px] truncate">
                     {company.industry || '—'}
                   </td>
                   <td className="px-3 py-2.5">
-                    {company.employee_range ? (
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] px-1.5 py-0 ${getEmployeeBadgeColor(company.employee_range)}`}
-                      >
-                        {company.employee_range}
-                      </Badge>
-                    ) : (
-                      '—'
-                    )}
+                    <div className="flex flex-col gap-0.5">
+                      {company.employee_count ? (
+                        <span className="font-medium">{formatEmployeeCount(company.employee_count)}</span>
+                      ) : null}
+                      {company.employee_range ? (
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] px-1.5 py-0 w-fit ${getEmployeeBadgeColor(company.employee_range)}`}
+                        >
+                          {company.employee_range}
+                        </Badge>
+                      ) : !company.employee_count ? '—' : null}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 font-medium">
+                    {formatRevenue(company.annual_revenue)}
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground">
+                    {company.founded_year || '—'}
                   </td>
                   <td className="px-3 py-2.5 text-muted-foreground max-w-[150px] truncate">
-                    {[company.headquarters_city, company.headquarters_state]
+                    {[company.headquarters_city, company.headquarters_state, company.headquarters_country]
                       .filter(Boolean)
                       .join(', ') || '—'}
+                  </td>
+                  <td className="px-3 py-2.5 max-w-[150px]">
+                    {company.technologies && company.technologies.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {company.technologies.slice(0, 3).map((tech, i) => (
+                          <Badge key={i} variant="outline" className="text-[9px] px-1 py-0">
+                            {tech}
+                          </Badge>
+                        ))}
+                        {company.technologies.length > 3 && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0">
+                            +{company.technologies.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    ) : '—'}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1">
