@@ -379,28 +379,23 @@ export default function WebScraper() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Web Scraper</h1>
-            <p className="text-sm text-muted-foreground mt-1">Extract data from websites, find prospects, and scrape listings</p>
-          </div>
-          <Button 
-            onClick={() => setProspectSearchOpen(true)} 
-            size="sm"
-            className="gap-2"
-          >
-            <Target className="h-4 w-4" />
-            Prospect Search
-          </Button>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Web Scraper</h1>
+          <p className="text-sm text-muted-foreground mt-1">Extract data from websites, find prospects, and scrape listings</p>
         </div>
 
         <ProspectSearchDialog open={prospectSearchOpen} onOpenChange={setProspectSearchOpen} />
 
         {/* Tabs */}
-        <Tabs defaultValue="ai-chat" className="space-y-4">
+        <Tabs defaultValue="ai-chat" className="space-y-4" onValueChange={(v) => {
+          if (v === 'prospect-search') setProspectSearchOpen(true);
+        }}>
           <TabsList className="h-9 p-0.5 bg-muted/60">
             <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Sparkles className="h-3.5 w-3.5" /> AI Assistant
+            </TabsTrigger>
+            <TabsTrigger value="prospect-search" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Target className="h-3.5 w-3.5" /> Prospect Search
             </TabsTrigger>
             <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Home className="h-3.5 w-3.5" /> Real Estate
@@ -418,6 +413,26 @@ export default function WebScraper() {
               <Layers className="h-3.5 w-3.5" /> Crawl
             </TabsTrigger>
           </TabsList>
+
+          {/* ── Prospect Search Tab ── */}
+          <TabsContent value="prospect-search" className="mt-0">
+            <Card className="border-border/60">
+              <CardContent className="p-8 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <Target className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Prospect Search</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    Find decision-makers by industry, location, and title. Search by company, places, or use quick AI-powered search.
+                  </p>
+                </div>
+                <Button onClick={() => setProspectSearchOpen(true)} size="sm" className="gap-2">
+                  <Target className="h-3.5 w-3.5" /> Open Prospect Search
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* ── AI Chat Tab ── */}
           <TabsContent value="ai-chat" className="mt-0">
