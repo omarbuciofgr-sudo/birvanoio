@@ -11,6 +11,10 @@ import { LeadActivityTimeline } from "@/components/leads/LeadActivityTimeline";
 import { TeamAssignment } from "@/components/leads/TeamAssignment";
 import { AIQualifyPanel } from "@/components/leads/AIQualifyPanel";
 import { AIOutreachPanel } from "@/components/leads/AIOutreachPanel";
+import { AISmartReply } from "@/components/leads/AISmartReply";
+import { AISubjectOptimizer } from "@/components/leads/AISubjectOptimizer";
+import { AICallPrep } from "@/components/leads/AICallPrep";
+import { AIMeetingNotes } from "@/components/leads/AIMeetingNotes";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -622,12 +626,24 @@ const Leads = () => {
                   </div>
                 </TabsContent>
                 
-                <TabsContent value="ai" className="mt-4">
+                <TabsContent value="ai" className="mt-4 space-y-6">
                   <AIQualifyPanel lead={selectedLead} />
+                  <div className="border-t border-border pt-4">
+                    <AICallPrep lead={selectedLead} />
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <AIMeetingNotes lead={selectedLead} />
+                  </div>
                 </TabsContent>
 
-                <TabsContent value="outreach" className="mt-4">
+                <TabsContent value="outreach" className="mt-4 space-y-6">
                   <AIOutreachPanel lead={selectedLead} />
+                  <div className="border-t border-border pt-4">
+                    <AISubjectOptimizer />
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <AISmartReply lead={selectedLead} />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="team" className="mt-4">

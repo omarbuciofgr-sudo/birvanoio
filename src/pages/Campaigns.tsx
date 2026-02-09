@@ -25,8 +25,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock } from "lucide-react";
+import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock, Sparkles } from "lucide-react";
 import { format } from "date-fns";
+import { AICampaignOptimizer } from "@/components/campaigns/AICampaignOptimizer";
 
 interface Campaign {
   id: string;
@@ -468,6 +469,24 @@ const Campaigns = () => {
                         ))}
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* AI Campaign Optimizer */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      AI Campaign Optimizer
+                    </CardTitle>
+                    <CardDescription>
+                      Get AI-powered suggestions to improve this campaign
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AICampaignOptimizer
+                      campaignId={selectedCampaign.id}
+                    />
                   </CardContent>
                 </Card>
 

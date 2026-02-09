@@ -561,6 +561,54 @@ const Dashboard = () => {
           </Card>
         </div>
 
+        {/* AI Intelligence Section */}
+        <div className="grid lg:grid-cols-2 gap-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">AI Deal Forecast</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AIDealForecast />
+            </CardContent>
+          </Card>
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">AI Smart Priority</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AISmartPriority />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">Churn Risk Detection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AIChurnDetection />
+            </CardContent>
+          </Card>
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">Anomaly Detection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AIAnomalyDetection />
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-border/60">
+          <CardHeader className="pb-2 px-5 pt-4">
+            <CardTitle className="text-sm font-medium">Natural Language Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AINLReports />
+          </CardContent>
+        </Card>
+
         {/* AI Weekly Digest */}
         <GatedAIWeeklyDigest />
       </div>

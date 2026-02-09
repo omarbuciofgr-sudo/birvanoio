@@ -17,6 +17,8 @@ import {
   Cell,
 } from "recharts";
 import type { Database } from "@/integrations/supabase/types";
+import { AINLReports } from "@/components/dashboard/AINLReports";
+import { AIAnomalyDetection } from "@/components/dashboard/AIAnomalyDetection";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -208,6 +210,26 @@ const Analytics = () => {
                   </PieChart>
                 </ResponsiveContainer>
               )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* AI Analytics Section */}
+        <div className="grid lg:grid-cols-2 gap-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">Natural Language Reports</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AINLReports />
+            </CardContent>
+          </Card>
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">Anomaly Detection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AIAnomalyDetection />
             </CardContent>
           </Card>
         </div>
