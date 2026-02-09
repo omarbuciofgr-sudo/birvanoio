@@ -53,3 +53,24 @@ verify_jwt = false
 
 [functions.ai-company-summary]
 verify_jwt = false
+
+[functions.technographics-enrichment]
+verify_jwt = false
+
+[functions.review-sentiment-analysis]
+verify_jwt = false
+
+[functions.contact-page-extractor]
+verify_jwt = false
+
+[functions.auto-nurture-alerts]
+verify_jwt = false
+
+[functions.re-enrich-stale]
+verify_jwt = false
+
+[functions.bounce-tracking]
+verify_jwt = false
+
+[functions.competitor-monitoring]
+verify_jwt = false
