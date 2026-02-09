@@ -77,3 +77,39 @@ verify_jwt = false
 
 [functions.clay-enrich]
 verify_jwt = false
+
+[functions.ai-deal-forecast]
+verify_jwt = false
+
+[functions.ai-smart-priority]
+verify_jwt = false
+
+[functions.ai-churn-detection]
+verify_jwt = false
+
+[functions.ai-subject-optimizer]
+verify_jwt = false
+
+[functions.ai-smart-reply]
+verify_jwt = false
+
+[functions.ai-call-prep]
+verify_jwt = false
+
+[functions.ai-nl-reports]
+verify_jwt = false
+
+[functions.ai-anomaly-detection]
+verify_jwt = false
+
+[functions.ai-campaign-optimizer]
+verify_jwt = false
+
+[functions.ai-auto-tag]
+verify_jwt = false
+
+[functions.ai-smart-routing]
+verify_jwt = false
+
+[functions.ai-meeting-notes]
+verify_jwt = false
