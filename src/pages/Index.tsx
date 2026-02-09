@@ -5,13 +5,14 @@ import ProductDemo from "@/components/landing/ProductDemo";
 import CRMShowcase from "@/components/landing/CRMShowcase";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
+import UseCases from "@/components/landing/UseCases";
 
 import ComparisonTable from "@/components/landing/ComparisonTable";
 import ROICalculator from "@/components/landing/ROICalculator";
 import Pricing from "@/components/landing/Pricing";
 import FAQ from "@/components/landing/FAQ";
 import About from "@/components/landing/About";
-import Contact from "@/components/landing/Contact";
+import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
 import ChatWidget from "@/components/landing/ChatWidget";
 import ExitIntentPopup from "@/components/landing/ExitIntentPopup";
@@ -26,13 +27,14 @@ const Index = () => {
       <CRMShowcase />
       <HowItWorks />
       <Services />
+      <UseCases />
       
       <ComparisonTable />
       <ROICalculator />
       <Pricing />
       <FAQ />
       <About />
-      <Contact />
+      <CTASection />
       <Footer />
       <ChatWidget />
       <ExitIntentPopup />

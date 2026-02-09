@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Zap, Shield, Target, Globe } from "lucide-react";
-import SampleLeadsModal from "./SampleLeadsModal";
+import { ArrowRight, Zap, Sparkles, Database, Bot, Globe } from "lucide-react";
 
 const Hero = () => {
-  const [modalOpen, setModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
@@ -26,8 +26,8 @@ const Hero = () => {
         <div className="text-center max-w-4xl mx-auto">
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8 animate-fade-in">
-            <Zap className="w-4 h-4 text-primary" />
-            <span className="text-sm text-primary font-medium">Leads + CRM + AI Voice Agent</span>
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="text-sm text-primary font-medium">AI-Powered Lead Generation & CRM Platform</span>
           </div>
 
           {/* Headline */}
@@ -35,9 +35,9 @@ const Hero = () => {
             className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 animate-fade-in"
             style={{ animationDelay: "0.1s" }}
           >
-            <span className="gradient-text">Fresh Leads Delivered.</span>
+            <span className="gradient-text">Find, Enrich & Close</span>
             <br />
-            <span className="text-foreground">CRM Built In.</span>
+            <span className="text-foreground">Leads With AI.</span>
           </h1>
 
           {/* Subheadline */}
@@ -45,8 +45,8 @@ const Hero = () => {
             className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-in"
             style={{ animationDelay: "0.2s" }}
           >
-            Brivano delivers verified B2B leads into a powerful CRM with AI voice agents, call recording, 
-            lead scoring, and automated follow-ups. From solo reps to enterprise agencies — close more deals with AI.
+            Scrape leads from any industry, enrich with verified contact data, and automate outreach — 
+            all from one self-service platform powered by AI. No sales calls needed.
           </p>
 
           {/* CTA Buttons */}
@@ -57,18 +57,19 @@ const Hero = () => {
             <Button
               size="lg"
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-lg px-8 py-6 glow-box group"
-              onClick={() => setModalOpen(true)}
+              onClick={() => navigate("/auth")}
             >
-              Get 10 Sample Leads
+              Start Free
               <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="border-border hover:bg-secondary text-lg px-8 py-6"
-              onClick={() => document.querySelector("#pricing")?.scrollIntoView({ behavior: "smooth" })}
+              onClick={() => navigate("/auth?demo=true")}
             >
-              View Pricing
+              <Bot className="w-5 h-5 mr-2" />
+              Get a Demo
             </Button>
           </div>
 
@@ -78,26 +79,24 @@ const Hero = () => {
             style={{ animationDelay: "0.4s" }}
           >
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
-              <Target className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Verified Leads</span>
+              <Database className="w-5 h-5 text-primary" />
+              <span className="text-sm text-muted-foreground">Self-Service Scraping</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
-              <Shield className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">AI Voice Agent</span>
+              <Sparkles className="w-5 h-5 text-primary" />
+              <span className="text-sm text-muted-foreground">AI Enrichment</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Zap className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Call Recording</span>
+              <span className="text-sm text-muted-foreground">AI Voice Agent</span>
             </div>
             <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-card/50 border border-border/50">
               <Globe className="w-5 h-5 text-primary" />
-              <span className="text-sm text-muted-foreground">Lead Scoring</span>
+              <span className="text-sm text-muted-foreground">100+ Data Providers</span>
             </div>
           </div>
         </div>
       </div>
-
-      <SampleLeadsModal open={modalOpen} onOpenChange={setModalOpen} />
     </section>
   );
 };

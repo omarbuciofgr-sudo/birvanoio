@@ -1,35 +1,35 @@
-import { Database, Users, Lock, Sparkles, Building2, Bot } from "lucide-react";
+import { Database, Sparkles, Bot, Search, BarChart3, Workflow } from "lucide-react";
 
 const services = [
   {
-    icon: Database,
-    title: "Fresh, Verified Leads",
-    description: "Our proprietary scrapers collect live data from verified public sources. Every lead includes source URL and best available contact info.",
+    icon: Search,
+    title: "Self-Service Web Scraper",
+    description: "Scrape leads from any industry, any city. Our AI-powered scraper handles Google Places, real estate listings, FSBO data, and more — all on your own.",
   },
   {
-    icon: Lock,
-    title: "Exclusive Data",
-    description: "No recycled lists. Choose your cities, industries, and filters. Your leads are exclusively yours — not shared with competitors.",
+    icon: Database,
+    title: "Multi-Provider Enrichment",
+    description: "Waterfall enrichment across 100+ data providers. Automatically find verified emails, phones, LinkedIn profiles, and company data for every lead.",
   },
   {
     icon: Bot,
     title: "AI Voice Agent & Calling",
-    description: "Click-to-call from your dashboard or let our AI voice agent handle outreach. Every call is recorded, transcribed, and logged automatically.",
+    description: "Let your AI voice agent handle cold calls, qualify leads, and book meetings. Every call is recorded, transcribed, and summarized automatically.",
   },
   {
     icon: Sparkles,
     title: "AI-Powered Automation",
-    description: "Auto-generated follow-ups, lead scoring, sentiment analysis, and weekly pipeline digests — all powered by AI.",
+    description: "AI writes your outreach emails, scores leads, analyzes sentiment, detects intent signals, and generates weekly pipeline digests — hands-free.",
   },
   {
-    icon: Users,
-    title: "Team Collaboration",
-    description: "Assign leads to team members, track activity across your org, and manage permissions with full activity timelines.",
+    icon: Workflow,
+    title: "Workflow Orchestration",
+    description: "Build automated workflows: scrape → enrich → score → route → outreach. Chain actions together and let AI handle the repetitive work.",
   },
   {
-    icon: Building2,
-    title: "Scales With You",
-    description: "From solo reps to large agencies — get dedicated support, API access, webhook integrations, and custom solutions as you grow.",
+    icon: BarChart3,
+    title: "Analytics & Intelligence",
+    description: "Track conversion rates, enrichment ROI, campaign performance, and pipeline health. AI surfaces insights you'd otherwise miss.",
   },
 ];
 
@@ -42,10 +42,10 @@ const Services = () => {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Everything You Need to <span className="gradient-text">Close Deals</span>
+            Your All-in-One <span className="gradient-text">Growth Platform</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Leads, CRM, AI voice agents, and automation tools — all in one platform designed for sales teams that want results.
+            Everything you need to find, enrich, and close leads — powered by AI, built for self-service.
           </p>
         </div>
 
@@ -68,14 +68,6 @@ const Services = () => {
               </p>
             </div>
           ))}
-        </div>
-
-        {/* Bottom CTA */}
-        <div className="mt-16 text-center">
-          <div className="inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-full bg-card border border-border">
-            <span className="text-muted-foreground">Trusted by teams in:</span>
-            <span className="text-foreground font-medium">Real Estate • Insurance • SaaS • Healthcare • Agencies • and More</span>
-          </div>
         </div>
       </div>
     </section>
