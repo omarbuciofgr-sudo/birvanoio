@@ -277,64 +277,6 @@ const Pricing = () => {
           ))}
         </div>
 
-        {/* Credit Cost Breakdown */}
-        <div className="mt-16 p-8 rounded-2xl bg-card border border-border">
-          <h3 className="font-display text-2xl font-bold text-foreground mb-6 text-center">
-            How Credits Work
-          </h3>
-          <div className="max-w-2xl mx-auto">
-            <div className="grid grid-cols-3 gap-4 text-sm font-medium text-muted-foreground border-b border-border pb-3 mb-3">
-              <span>Action</span>
-              <span className="text-center">Cost</span>
-              <span className="text-right">Unit</span>
-            </div>
-            {creditCostRows.map((row) => (
-              <div key={row.action} className="grid grid-cols-3 gap-4 text-sm py-2.5 border-b border-border/50 last:border-0">
-                <span className="text-foreground">{row.action}</span>
-                <span className="text-center font-semibold text-primary">
-                  {row.cost === 0 ? "Free" : `${row.cost} credit${row.cost > 1 ? "s" : ""}`}
-                </span>
-                <span className="text-right text-muted-foreground">{row.unit}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Top-Up Credits */}
-        <div className="mt-8 p-8 rounded-2xl bg-gradient-to-br from-secondary/50 to-secondary/20 border border-border">
-          <div className="max-w-2xl mx-auto text-center">
-            <h3 className="font-display text-2xl font-bold text-foreground mb-2">
-              Need More Credits?
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              Buy top-up packs anytime. Bonus credits never expire and stack on top of your monthly allowance.
-            </p>
-            <div className="inline-flex items-center gap-6 p-6 rounded-xl bg-card border border-border">
-              <div className="text-left">
-                <div className="font-display text-xl font-bold text-foreground">
-                  500 Credits
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Use for any action
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-display text-3xl font-bold text-foreground">
-                  $29.99
-                </div>
-                <div className="text-xs text-muted-foreground">one-time</div>
-              </div>
-              <Button
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => handleBuyCredits()}
-                disabled={loadingPlan === "credits"}
-              >
-                {loadingPlan === "credits" ? "Loading..." : "Buy Credits"}
-              </Button>
-            </div>
-          </div>
-        </div>
-
         {/* Enterprise CTA */}
         <div className="mt-12 text-center">
           <p className="text-muted-foreground mb-2">Need unlimited credits or custom integrations?</p>
