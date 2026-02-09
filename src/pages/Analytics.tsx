@@ -101,55 +101,41 @@ const Analytics = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Analytics</h1>
-          <p className="text-muted-foreground">Track your lead performance and conversions.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Track your lead performance and conversions</p>
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Leads
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-foreground">{leads.length}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Card className="border-border/60">
+            <CardContent className="p-4">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Total Leads</span>
+              <div className="text-2xl font-bold mt-1">{leads.length}</div>
             </CardContent>
           </Card>
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Conversion Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-status-converted">{conversionRate}%</div>
+          <Card className="border-border/60">
+            <CardContent className="p-4">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Conversion Rate</span>
+              <div className="text-2xl font-bold mt-1 text-green-600 dark:text-green-400">{conversionRate}%</div>
             </CardContent>
           </Card>
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Converted
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-foreground">
-                {statusCounts.converted || 0}
-              </div>
+          <Card className="border-border/60">
+            <CardContent className="p-4">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Converted</span>
+              <div className="text-2xl font-bold mt-1">{statusCounts.converted || 0}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Leads Over Time */}
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Leads Over Time</CardTitle>
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">Leads Over Time</CardTitle>
             </CardHeader>
             <CardContent>
               {barData.length === 0 ? (
@@ -181,9 +167,9 @@ const Analytics = () => {
           </Card>
 
           {/* Status Distribution */}
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Status Distribution</CardTitle>
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-medium">Status Distribution</CardTitle>
             </CardHeader>
             <CardContent>
               {pieData.length === 0 ? (

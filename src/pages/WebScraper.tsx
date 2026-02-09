@@ -38,7 +38,12 @@ import {
   RotateCw,
   ArrowRight,
   MapPin,
+  MessageCircle,
+  Send,
+  Bot,
+  Sparkles,
 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -57,6 +62,8 @@ type ScrapeResult = {
     sourceURL?: string;
   };
 };
+
+type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
 type SearchResult = {
   url: string;
@@ -118,10 +125,43 @@ export default function WebScraper() {
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
 
+  // AI Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
   if (!user) {
     navigate('/auth');
     return null;
   }
+
+  // ── AI Chat Handler ──
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg: ChatMsg = { role: 'user', content: chatInput.trim() };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-chat', {
+        body: { messages: [...chatMessages, userMsg], context: 'web_scraper' },
+      });
+      if (error) throw error;
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data?.response || 'Sorry, I could not generate a response.' }]);
+    } catch {
+      toast.error('Failed to get AI response');
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const chatSuggestions = [
+    "Find FSBO listings in Miami, FL",
+    "Search for roofing companies in Dallas",
+    "Scrape contact info from example.com",
+    "Find plumbers near Austin, TX",
+  ];
 
   const handleScrape = async () => {
     if (!scrapeUrl.trim()) { toast.error('Please enter a URL'); return; }
@@ -357,8 +397,11 @@ export default function WebScraper() {
         <ProspectSearchDialog open={prospectSearchOpen} onOpenChange={setProspectSearchOpen} />
 
         {/* Tabs */}
-        <Tabs defaultValue="real-estate" className="space-y-4">
+        <Tabs defaultValue="ai-chat" className="space-y-4">
           <TabsList className="h-9 p-0.5 bg-muted/60">
+            <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" /> AI Assistant
+            </TabsTrigger>
             <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Home className="h-3.5 w-3.5" /> Real Estate
             </TabsTrigger>
@@ -375,6 +418,82 @@ export default function WebScraper() {
               <Layers className="h-3.5 w-3.5" /> Crawl
             </TabsTrigger>
           </TabsList>
+
+          {/* ── AI Chat Tab ── */}
+          <TabsContent value="ai-chat" className="mt-0">
+            <Card className="border-border/60">
+              <CardContent className="p-0">
+                <div className="flex flex-col h-[600px]">
+                  {/* Chat messages */}
+                  <ScrollArea className="flex-1 p-5">
+                    {chatMessages.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full py-16">
+                        <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                          <Bot className="h-6 w-6 text-primary" />
+                        </div>
+                        <h3 className="text-sm font-semibold mb-1">AI Scraper Assistant</h3>
+                        <p className="text-xs text-muted-foreground text-center max-w-sm mb-6">
+                          Tell me what you're looking for and I'll help you find leads, scrape websites, or search for prospects
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+                          {chatSuggestions.map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              onClick={() => { setChatInput(suggestion); }}
+                              className="text-left px-3 py-2.5 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-muted/30 transition-all text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {chatMessages.map((msg, i) => (
+                          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
+                              msg.role === 'user'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted/60'
+                            }`}>
+                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {chatLoading && (
+                          <div className="flex justify-start">
+                            <div className="bg-muted/60 rounded-xl px-4 py-2.5">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </ScrollArea>
+
+                  {/* Input */}
+                  <div className="border-t border-border/60 p-4">
+                    <div className="flex gap-2">
+                      <Textarea
+                        placeholder="Ask me to find leads, scrape a website, or search for prospects..."
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                        className="min-h-[40px] max-h-[100px] resize-none text-sm"
+                        rows={1}
+                      />
+                      <Button onClick={handleChatSend} disabled={chatLoading || !chatInput.trim()} size="sm" className="h-10 px-3 shrink-0">
+                        {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Or jump directly into the tools above: Real Estate, Scrape, Search, Map, Crawl
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* ── Real Estate Tab ── */}
           <TabsContent value="real-estate" className="space-y-4 mt-0">

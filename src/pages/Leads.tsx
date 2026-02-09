@@ -272,51 +272,51 @@ const Leads = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold text-foreground">Leads</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
               {filteredLeads.length} of {leads.length} leads
             </p>
           </div>
           <div className="flex items-center gap-2">
             <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban")}>
-              <ToggleGroupItem value="table" aria-label="Table view" className="gap-1.5">
-                <List className="w-4 h-4" />
+              <ToggleGroupItem value="table" aria-label="Table view" className="gap-1.5 h-8 text-xs">
+                <List className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Table</span>
               </ToggleGroupItem>
-              <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5">
-                <LayoutGrid className="w-4 h-4" />
+              <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5 h-8 text-xs">
+                <LayoutGrid className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Kanban</span>
               </ToggleGroupItem>
             </ToggleGroup>
-            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-              <Plus className="w-4 h-4" />
+            <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 text-xs">
+              <Plus className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Add Lead</span>
             </Button>
-            <Button onClick={() => setImportDialogOpen(true)} variant="outline" className="gap-2">
-              <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">Import CSV</span>
+            <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Upload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Import</span>
             </Button>
-            <Button onClick={exportLeads} variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export CSV</span>
+            <Button onClick={exportLeads} variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export</span>
             </Button>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               placeholder="Search leads..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-secondary/50 border-border"
+              className="pl-8 h-9 text-sm"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48 bg-secondary/50 border-border">
-              <Filter className="w-4 h-4 mr-2" />
+            <SelectTrigger className="w-full sm:w-40 h-9 text-sm">
+              <Filter className="w-3.5 h-3.5 mr-1.5" />
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -341,7 +341,7 @@ const Leads = () => {
             onLeadsUpdate={fetchLeads}
           />
         ) : (
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border/60 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-secondary/50">
@@ -446,22 +446,22 @@ const Leads = () => {
 
         {/* Lead Detail Dialog */}
         <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
-          <DialogContent className="bg-card border-border max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display text-2xl">
+              <DialogTitle className="text-lg font-semibold">
                 {selectedLead?.business_name}
               </DialogTitle>
             </DialogHeader>
 
             {selectedLead && user && (
               <Tabs defaultValue="details" className="w-full">
-                <TabsList className="grid w-full grid-cols-6">
-                  <TabsTrigger value="details">Details</TabsTrigger>
-                  <TabsTrigger value="ai">AI Insights</TabsTrigger>
-                  <TabsTrigger value="outreach">Outreach</TabsTrigger>
-                  <TabsTrigger value="activity">Activity</TabsTrigger>
-                  <TabsTrigger value="team">Team</TabsTrigger>
-                  <TabsTrigger value="communication">Comms</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-6 h-9 p-0.5 bg-muted/60">
+                  <TabsTrigger value="details" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">Details</TabsTrigger>
+                  <TabsTrigger value="ai" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">AI Insights</TabsTrigger>
+                  <TabsTrigger value="outreach" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">Outreach</TabsTrigger>
+                  <TabsTrigger value="activity" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">Activity</TabsTrigger>
+                  <TabsTrigger value="team" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">Team</TabsTrigger>
+                  <TabsTrigger value="communication" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">Comms</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="activity" className="mt-4">
