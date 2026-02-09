@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Bot } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -11,9 +11,9 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Services", href: "#services" },
+    { name: "How It Works", href: "#how-it-works" },
     { name: "Pricing", href: "#pricing" },
     { name: "About", href: "#about" },
-    { name: "Contact", href: "#contact" },
   ];
 
   const scrollToSection = (href: string) => {
@@ -55,10 +55,18 @@ const Navbar = () => {
               Sign In
             </Button>
             <Button
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => scrollToSection("#contact")}
+              variant="outline"
+              className="border-primary/50 text-primary hover:bg-primary/10"
+              onClick={() => navigate("/auth?demo=true")}
             >
-              Get Sample Leads
+              <Bot className="w-4 h-4 mr-1" />
+              Get a Demo
+            </Button>
+            <Button
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => navigate("/auth")}
+            >
+              Start Free
             </Button>
           </div>
 
@@ -97,10 +105,18 @@ const Navbar = () => {
                 Sign In
               </Button>
               <Button
-                className="w-full bg-primary text-primary-foreground"
-                onClick={() => scrollToSection("#contact")}
+                variant="outline"
+                className="w-full border-primary/50 text-primary"
+                onClick={() => navigate("/auth?demo=true")}
               >
-                Get Sample Leads
+                <Bot className="w-4 h-4 mr-1" />
+                Get a Demo
+              </Button>
+              <Button
+                className="w-full bg-primary text-primary-foreground"
+                onClick={() => navigate("/auth")}
+              >
+                Start Free
               </Button>
             </div>
           </div>

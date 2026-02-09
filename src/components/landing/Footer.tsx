@@ -40,8 +40,8 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="#contact" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Contact
+                <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Pricing
                 </a>
               </li>
             </ul>
