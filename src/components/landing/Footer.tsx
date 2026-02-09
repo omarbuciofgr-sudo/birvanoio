@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Instagram, Linkedin, Twitter } from "lucide-react";
+import { Instagram, Linkedin, Twitter, Mail, Phone } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
 const Footer = () => {
@@ -47,9 +47,23 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Social Links */}
+          {/* Contact & Social */}
           <div>
-            <h4 className="font-display font-semibold text-foreground mb-4">Follow Us</h4>
+            <h4 className="font-display font-semibold text-foreground mb-4">Contact Us</h4>
+            <ul className="space-y-3 mb-6">
+              <li>
+                <a href="mailto:info@brivano.io" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+                  <Mail className="w-4 h-4" />
+                  <span>info@brivano.io</span>
+                </a>
+              </li>
+              <li>
+                <a href="tel:8723070387" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+                  <Phone className="w-4 h-4" />
+                  <span>(872) 307-0387</span>
+                </a>
+              </li>
+            </ul>
             <div className="flex gap-4">
               <a
                 href="https://www.instagram.com/brivano.io/"
