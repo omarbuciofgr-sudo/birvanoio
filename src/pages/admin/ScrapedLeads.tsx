@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag, ListTodo, Webhook } from 'lucide-react';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag, ListTodo, Webhook, Cpu, MessageSquareText, Contact, Radar, RefreshCw, Bell } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
@@ -48,6 +48,14 @@ import { EnrichmentQueuePanel } from '@/components/scraper/EnrichmentQueuePanel'
 import { WebhookNotificationsManager } from '@/components/scraper/WebhookNotificationsManager';
 import { BulkExportDialog } from '@/components/scraper/BulkExportDialog';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  technographicsApi,
+  reviewSentimentApi,
+  contactPageApi,
+  autoNurtureApi,
+  reEnrichApi,
+  competitorMonitoringApi,
+} from '@/lib/api/advancedEnrichment';
 
 const statusColors: Record<ScrapedLeadStatus, string> = {
   new: 'bg-blue-500/20 text-blue-600',
@@ -175,6 +183,67 @@ export default function ScrapedLeads() {
     onError: (error) => toast.error(`Dedupe failed: ${error.message}`),
   });
 
+  // Advanced enrichment mutations
+  const techMutation = useMutation({
+    mutationFn: (leadIds: string[]) => technographicsApi.enrich(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Tech stack enriched for ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Tech enrichment failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (leadIds: string[]) => reviewSentimentApi.analyze(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      const analyzed = data.results?.filter(r => r.analysis).length || 0;
+      toast.success(`Analyzed reviews for ${analyzed} lead(s)`);
+    },
+    onError: (error) => toast.error(`Review analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const contactExtractMutation = useMutation({
+    mutationFn: (leadIds: string[]) => contactPageApi.extract(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      const totalPeople = data.results?.reduce((s, r) => s + r.people_found, 0) || 0;
+      toast.success(`Found ${totalPeople} contact(s) from ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Contact extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const competitorMutation = useMutation({
+    mutationFn: (leadIds: string[]) => competitorMonitoringApi.scan(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      const signals = data.results?.reduce((s, r) => s + r.signals_created, 0) || 0;
+      toast.success(`Detected ${signals} signal(s) across ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Competitor scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const reEnrichMutation = useMutation({
+    mutationFn: () => reEnrichApi.reEnrichStale(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      toast.success(`Re-enriched ${data.re_enriched} of ${data.total_stale} stale leads`);
+    },
+    onError: (error) => toast.error(`Re-enrichment failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const autoNurtureMutation = useMutation({
+    mutationFn: () => autoNurtureApi.trigger('auto'),
+    onSuccess: (data) => {
+      toast.success(`Alerts: ${data.hot_lead_alerts}, Nurture enrolled: ${data.nurture_enrolled}, Webhooks: ${data.webhooks_fired}`);
+    },
+    onError: (error) => toast.error(`Auto-nurture failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
   const filteredLeads = leads.filter(lead => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -250,7 +319,7 @@ export default function ScrapedLeads() {
     }
   };
 
-  const isProcessing = enrichMutation.isPending || validateMutation.isPending || dedupeMutation.isPending;
+  const isProcessing = enrichMutation.isPending || validateMutation.isPending || dedupeMutation.isPending || techMutation.isPending || reviewMutation.isPending || contactExtractMutation.isPending || competitorMutation.isPending;
 
   return (
     <DashboardLayout>
@@ -295,6 +364,10 @@ export default function ScrapedLeads() {
             <TabsTrigger value="audit" className="flex items-center gap-2">
               <History className="h-4 w-4" />
               Audit
+            </TabsTrigger>
+            <TabsTrigger value="automation" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Automation
             </TabsTrigger>
           </TabsList>
 
@@ -351,6 +424,38 @@ export default function ScrapedLeads() {
                     selectedLeadIds={Array.from(selectedLeads)} 
                     onComplete={() => setSelectedLeads(new Set())}
                   />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => techMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Cpu className="h-4 w-4 mr-2" />
+                    {techMutation.isPending ? 'Scanning...' : `Tech Stack (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => reviewMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <MessageSquareText className="h-4 w-4 mr-2" />
+                    {reviewMutation.isPending ? 'Analyzing...' : `Reviews (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => contactExtractMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Contact className="h-4 w-4 mr-2" />
+                    {contactExtractMutation.isPending ? 'Extracting...' : `Extract Contacts (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => competitorMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Radar className="h-4 w-4 mr-2" />
+                    {competitorMutation.isPending ? 'Scanning...' : `Competitor Scan (${selectedLeads.size})`}
+                  </Button>
                   <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
                     <Users className="h-4 w-4 mr-2" />
                     Assign ({selectedLeads.size})
@@ -628,6 +733,60 @@ export default function ScrapedLeads() {
 
           <TabsContent value="audit" className="mt-6">
             <AuditLogViewer tableName="scraped_leads" limit={100} />
+          </TabsContent>
+
+          <TabsContent value="automation" className="mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5" />
+                    Re-Enrich Stale Leads
+                  </CardTitle>
+                  <CardDescription>
+                    Automatically refresh enrichment data for leads older than 30 days
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => reEnrichMutation.mutate()}
+                    disabled={reEnrichMutation.isPending}
+                    className="w-full"
+                  >
+                    {reEnrichMutation.isPending ? (
+                      <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Re-Enriching...</>
+                    ) : (
+                      <><RefreshCw className="h-4 w-4 mr-2" /> Run Re-Enrichment</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    Auto-Nurture & Hot Alerts
+                  </CardTitle>
+                  <CardDescription>
+                    Trigger drip campaigns for warm leads (score ≥60) and alerts for hot leads (score ≥80)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => autoNurtureMutation.mutate()}
+                    disabled={autoNurtureMutation.isPending}
+                    className="w-full"
+                  >
+                    {autoNurtureMutation.isPending ? (
+                      <><Bell className="h-4 w-4 mr-2 animate-spin" /> Processing...</>
+                    ) : (
+                      <><Bell className="h-4 w-4 mr-2" /> Run Auto-Nurture & Alerts</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
 
