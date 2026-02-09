@@ -2,30 +2,31 @@ import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Send, Bot, User } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
+import { Sparkles, Send, Bot, User, Wand2 } from 'lucide-react';
+import { ProspectSearchFilters } from './constants';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  appliedFilters?: Partial<ProspectSearchFilters>;
 }
 
 interface SearchChatProps {
-  onSuggestion?: (suggestion: string) => void;
+  onApplyFilters?: (filters: Partial<ProspectSearchFilters>) => void;
 }
 
-export function SearchChat({ onSuggestion }: SearchChatProps) {
+export function SearchChat({ onApplyFilters }: SearchChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
       content:
-        "Hi! I'm your prospect search assistant. Tell me what kind of companies you're looking for and I'll help you configure your filters.\n\nFor example:\n- \"I need property management companies in California\"\n- \"Find SaaS companies with 50-200 employees in the US\"\n- \"Looking for restaurants in New York and New Jersey\"",
+        "Hi! I'm your prospect search assistant. Tell me what kind of companies you're looking for and I'll automatically configure your filters.\n\nFor example:\n- \"Property management companies in California\"\n- \"SaaS companies with 50-200 employees\"\n- \"Restaurants in New York and New Jersey\"",
     },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -74,73 +75,23 @@ export function SearchChat({ onSuggestion }: SearchChatProps) {
         return;
       }
 
-      if (!resp.ok || !resp.body) {
+      if (!resp.ok) {
         throw new Error('Failed to get response');
       }
 
-      // Stream the response
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = '';
-      let assistantContent = '';
-
-      const addOrUpdateAssistant = (content: string) => {
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === 'assistant' && prev.length > 1 && prev[prev.length - 2]?.role === 'user') {
-            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content } : m));
-          }
-          return [...prev, { role: 'assistant', content }];
-        });
+      const data = await resp.json();
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: data.content || 'I\'ve updated your filters based on your request.',
+        appliedFilters: data.filters || undefined,
       };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              assistantContent += delta;
-              addOrUpdateAssistant(assistantContent);
-            }
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
-          }
-        }
+      // Auto-apply filters if returned
+      if (data.filters && onApplyFilters) {
+        onApplyFilters(data.filters);
       }
 
-      // Final flush
-      if (textBuffer.trim()) {
-        for (let raw of textBuffer.split('\n')) {
-          if (!raw) continue;
-          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
-          if (raw.startsWith(':') || raw.trim() === '') continue;
-          if (!raw.startsWith('data: ')) continue;
-          const jsonStr = raw.slice(6).trim();
-          if (jsonStr === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              assistantContent += delta;
-              addOrUpdateAssistant(assistantContent);
-            }
-          } catch {}
-        }
-      }
+      setMessages((prev) => [...prev, assistantMsg]);
     } catch (error) {
       console.error('Chat error:', error);
       setMessages((prev) => [
@@ -155,6 +106,15 @@ export function SearchChat({ onSuggestion }: SearchChatProps) {
     }
   };
 
+  const filterKeys = (filters: Partial<ProspectSearchFilters>): string[] => {
+    return Object.entries(filters)
+      .filter(([_, v]) => {
+        if (Array.isArray(v)) return v.length > 0;
+        return v !== undefined && v !== '' && v !== null;
+      })
+      .map(([k]) => k);
+  };
+
   return (
     <div className="h-full flex flex-col border-l border-border">
       {/* Header */}
@@ -164,8 +124,8 @@ export function SearchChat({ onSuggestion }: SearchChatProps) {
             <Sparkles className="h-3.5 w-3.5 text-primary" />
           </div>
           <div>
-            <h3 className="font-display text-sm font-semibold">Search Assistant</h3>
-            <p className="text-[10px] text-muted-foreground">Ask what you're looking for</p>
+            <h3 className="font-display text-sm font-semibold">AI Search Assistant</h3>
+            <p className="text-[10px] text-muted-foreground">Describe what you need — I'll set your filters</p>
           </div>
         </div>
       </div>
@@ -180,14 +140,27 @@ export function SearchChat({ onSuggestion }: SearchChatProps) {
                   <Bot className="h-3.5 w-3.5 text-primary" />
                 </div>
               )}
-              <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                }`}
-              >
-                {msg.content}
+              <div className="max-w-[85%] space-y-1.5">
+                <div
+                  className={`rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+                {msg.appliedFilters && filterKeys(msg.appliedFilters).length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Wand2 className="h-3 w-3 text-primary flex-shrink-0" />
+                    <span className="text-[10px] text-primary font-medium">Applied:</span>
+                    {filterKeys(msg.appliedFilters).map((k) => (
+                      <Badge key={k} variant="secondary" className="text-[9px] px-1 py-0">
+                        {k.replace(/([A-Z])/g, ' $1').trim()}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
               {msg.role === 'user' && (
                 <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -196,7 +169,7 @@ export function SearchChat({ onSuggestion }: SearchChatProps) {
               )}
             </div>
           ))}
-          {isLoading && messages[messages.length - 1]?.role === 'user' && (
+          {isLoading && (
             <div className="flex gap-2">
               <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <Bot className="h-3.5 w-3.5 text-primary" />
@@ -213,13 +186,33 @@ export function SearchChat({ onSuggestion }: SearchChatProps) {
         </div>
       </ScrollArea>
 
+      {/* Suggested prompts */}
+      {messages.length <= 1 && (
+        <div className="flex-shrink-0 px-4 pb-2 space-y-1.5">
+          {[
+            'Property management in Texas',
+            'SaaS companies, 50-200 employees',
+            'Restaurants in California',
+          ].map((suggestion) => (
+            <button
+              key={suggestion}
+              className="w-full text-left text-[10px] px-2.5 py-1.5 rounded-md border border-border hover:bg-accent transition-colors text-muted-foreground"
+              onClick={() => {
+                setInput(suggestion);
+              }}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex-shrink-0 p-3 border-t border-border">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Sparkles className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
