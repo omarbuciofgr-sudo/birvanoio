@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CREDIT_COSTS } from "@/hooks/useCredits";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const plans = [
   {
@@ -97,6 +98,7 @@ const Pricing = () => {
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { ref, isVisible } = useScrollAnimation();
 
   const handleSubscribe = async (plan: typeof plans[0]) => {
     if (!plan.monthlyPriceId) {
@@ -167,9 +169,9 @@ const Pricing = () => {
     <section id="pricing" className="py-24 relative">
       <div className="absolute inset-0 bg-gradient-to-b from-background via-secondary/10 to-background" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={ref} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="text-center mb-16">
+        <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
             Simple, <span className="gradient-text">Credit-Based</span> Pricing
           </h2>
@@ -210,14 +212,15 @@ const Pricing = () => {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {plans.map((plan) => (
+          {plans.map((plan, index) => (
             <div
               key={plan.name}
-              className={`relative p-6 rounded-2xl ${
+              className={`relative p-6 rounded-2xl transition-all duration-500 hover:-translate-y-1 hover:shadow-xl ${
                 plan.popular
-                  ? "bg-card border-2 border-primary shadow-xl shadow-primary/10"
-                  : "bg-card border border-border"
-              }`}
+                  ? "bg-card border-2 border-primary shadow-xl shadow-primary/10 hover:shadow-primary/20"
+                  : "bg-card border border-border hover:border-primary/30 hover:shadow-primary/5"
+              } ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`}
+              style={{ transitionDelay: `${index * 100}ms` }}
             >
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium">

@@ -1,16 +1,18 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Bot, Sparkles } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const CTASection = () => {
   const navigate = useNavigate();
+  const { ref, isVisible } = useScrollAnimation();
 
   return (
     <section className="py-24 relative">
       <div className="absolute inset-0 bg-gradient-to-b from-background via-primary/5 to-background" />
       
-      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <div className="p-12 rounded-3xl bg-card border border-border relative overflow-hidden">
+      <div ref={ref} className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className={`p-12 rounded-3xl bg-card border border-border relative overflow-hidden transition-all duration-700 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
           {/* Glow */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5" />
           
