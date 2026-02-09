@@ -16,14 +16,14 @@ interface CreditLimitPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   creditsUsed: number;
-  creditLimit: number;
+  monthlyAllowance: number;
   currentTier: string;
 }
 
 const NEXT_TIER: Record<string, { name: string; credits: number }> = {
-  free: { name: "Starter", credits: 100 },
-  starter: { name: "Growth", credits: 300 },
-  growth: { name: "Scale", credits: 1000 },
+  free: { name: "Starter", credits: 500 },
+  starter: { name: "Growth", credits: 2000 },
+  growth: { name: "Scale", credits: 10000 },
   scale: { name: "Enterprise", credits: Infinity },
 };
 
@@ -31,7 +31,7 @@ export const CreditLimitPopup: React.FC<CreditLimitPopupProps> = ({
   open,
   onOpenChange,
   creditsUsed,
-  creditLimit,
+  monthlyAllowance,
   currentTier,
 }) => {
   const navigate = useNavigate();
@@ -72,17 +72,17 @@ export const CreditLimitPopup: React.FC<CreditLimitPopupProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-primary" />
-            Enrichment Credit Limit Reached
+            Credit Limit Reached
           </DialogTitle>
           <DialogDescription>
-            You've used all {creditLimit} enrichment credits for this month on your{" "}
+            You've used all {monthlyAllowance} credits for this month on your{" "}
             {currentTier === "free" ? "Free" : currentTier.charAt(0).toUpperCase() + currentTier.slice(1)} plan.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
           <div className="bg-secondary/50 rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{creditsUsed} / {creditLimit}</p>
+            <p className="text-2xl font-bold text-foreground">{creditsUsed} / {monthlyAllowance}</p>
             <p className="text-sm text-muted-foreground">credits used this month</p>
           </div>
 
@@ -90,7 +90,7 @@ export const CreditLimitPopup: React.FC<CreditLimitPopupProps> = ({
             {nextTier && (
               <Button onClick={handleUpgrade} className="w-full gap-2" size="lg">
                 <ArrowUp className="w-4 h-4" />
-                Upgrade to {nextTier.name} ({nextTier.credits === Infinity ? "Unlimited" : `${nextTier.credits} credits/mo`})
+                Upgrade to {nextTier.name} ({nextTier.credits === Infinity ? "Unlimited" : `${nextTier.credits.toLocaleString()} credits/mo`})
               </Button>
             )}
 
@@ -102,12 +102,12 @@ export const CreditLimitPopup: React.FC<CreditLimitPopupProps> = ({
               disabled={loadingCredits}
             >
               <Sparkles className="w-4 h-4" />
-              Buy 50 Credits — $19.99
+              Buy 500 Credits — $29.99
             </Button>
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            One-time credits never expire and stack on top of your monthly allowance.
+            Bonus credits never expire and stack on top of your monthly allowance.
           </p>
         </div>
       </DialogContent>

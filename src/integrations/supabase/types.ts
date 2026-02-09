@@ -552,6 +552,30 @@ export type Database = {
           },
         ]
       }
+      credit_balances: {
+        Row: {
+          bonus_credits: number
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bonus_credits?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bonus_credits?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       credit_purchases: {
         Row: {
           amount_paid_cents: number
@@ -578,6 +602,33 @@ export type Database = {
           id?: string
           status?: string
           stripe_session_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      credit_usage: {
+        Row: {
+          action: string
+          created_at: string
+          credits_spent: number
+          id: string
+          reference_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          credits_spent?: number
+          id?: string
+          reference_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          credits_spent?: number
+          id?: string
+          reference_id?: string | null
           user_id?: string
         }
         Relationships: []
