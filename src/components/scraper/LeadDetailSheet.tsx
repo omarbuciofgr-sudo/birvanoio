@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ExternalLink, Mail, Phone, Globe, User, Building, MapPin, Linkedin, Check, X, AlertCircle } from 'lucide-react';
+import { ExternalLink, Mail, Phone, Globe, User, Building, MapPin, Linkedin, Check, X, AlertCircle, Cpu, Star, MessageSquareText, Radar, TrendingUp } from 'lucide-react';
 import { ScrapedLead } from '@/types/scraper';
 
 interface LeadDetailSheetProps {
@@ -35,6 +35,14 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
 
   const schemaData = (lead.schema_data || {}) as Record<string, any>;
   const schemaEvidence = (lead.schema_evidence || {}) as Record<string, string>;
+  const enrichmentData = (lead.enrichment_data || {}) as Record<string, any>;
+
+  // Extract advanced enrichment data from schema_data and enrichment_data
+  const technologies = enrichmentData.technologies as string[] || schemaData.technologies as string[] || [];
+  const revenueEstimate = enrichmentData.revenue_estimate as string || schemaData.revenue_estimate as string || null;
+  const reviewSentiment = schemaData.google_places?.review_sentiment as Record<string, any> || null;
+  const competitorSignals = schemaData.competitor_signals as Record<string, any> || null;
+  const hiringSignals = enrichmentData.hiring_signals || schemaData.hiring_signals || null;
 
   return (
     <Sheet open={!!lead} onOpenChange={() => onClose()}>
@@ -203,13 +211,121 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
               )}
             </div>
 
+            {/* Tech Stack */}
+            {technologies.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Cpu className="h-4 w-4" /> Tech Stack
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {technologies.map((tech, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">{tech}</Badge>
+                    ))}
+                  </div>
+                  {revenueEstimate && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Est. Revenue:</span>
+                      <span className="font-medium">{revenueEstimate}</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Review Sentiment */}
+            {reviewSentiment && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MessageSquareText className="h-4 w-4" /> Review Intelligence
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Badge className={
+                      reviewSentiment.overall_sentiment === 'positive' ? 'bg-green-500/20 text-green-600' :
+                      reviewSentiment.overall_sentiment === 'negative' ? 'bg-destructive/20 text-destructive' :
+                      'bg-yellow-500/20 text-yellow-600'
+                    }>
+                      {reviewSentiment.overall_sentiment}
+                    </Badge>
+                    {reviewSentiment.avg_rating && (
+                      <span className="flex items-center gap-1 text-sm">
+                        <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+                        {reviewSentiment.avg_rating} ({reviewSentiment.review_count} reviews)
+                      </span>
+                    )}
+                  </div>
+                  {reviewSentiment.pain_points?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Pain Points:</p>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        {reviewSentiment.pain_points.map((p: string, i: number) => (
+                          <li key={i} className="flex items-start gap-1">
+                            <span className="text-destructive">•</span> {p}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {reviewSentiment.outreach_hooks?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Outreach Hooks:</p>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        {reviewSentiment.outreach_hooks.map((h: string, i: number) => (
+                          <li key={i} className="flex items-start gap-1">
+                            <span className="text-primary">💡</span> {h}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Competitor / Hiring Signals */}
+            {(competitorSignals || hiringSignals) && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Radar className="h-4 w-4" /> Market Signals
+                  </h3>
+                  {hiringSignals && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600">🧑‍💼 Hiring</Badge>
+                      <span className="text-muted-foreground">
+                        ~{typeof hiringSignals === 'object' ? hiringSignals.job_count_estimate || 0 : 0} open roles
+                      </span>
+                    </div>
+                  )}
+                  {competitorSignals?.competitor_mentions?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Competitor Mentions:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {competitorSignals.competitor_mentions.map((c: string, i: number) => (
+                          <Badge key={i} variant="outline" className="text-xs">{c}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
             {/* Schema Data */}
-            {Object.keys(schemaData).length > 0 && (
+            {Object.keys(schemaData).filter(k => !['google_places', 'technologies', 'competitor_signals', 'hiring_signals', 'revenue_estimate'].includes(k)).length > 0 && (
               <>
                 <Separator />
                 <div className="space-y-4">
                   <h3 className="font-semibold">Schema-Specific Data</h3>
                   {Object.entries(schemaData).map(([key, value]) => {
+                    // Skip keys already rendered above
+                    if (['google_places', 'technologies', 'competitor_signals', 'hiring_signals', 'revenue_estimate'].includes(key)) return null;
+                    
                     // For address, show full formatted address
                     if (key === 'address' || key === 'full_address') {
                       const street = schemaData.address || schemaData.full_address || '';
@@ -218,7 +334,6 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
                       const zip = schemaData.zip || schemaData.zip_code || '';
                       const fullAddress = [street, city, state, zip].filter(Boolean).join(', ');
                       
-                      // Skip city/state/zip as separate entries if we're showing full address
                       if (key !== 'address' && key !== 'full_address') return null;
                       
                       return (
@@ -273,7 +388,6 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
                   <h3 className="font-semibold">Enrichment Sources</h3>
                   <div className="flex flex-wrap gap-2">
                     {lead.enrichment_providers_used.map((provider, i) => {
-                      // Show legacy → current for Tracerfy entries
                       const displayProvider = provider.toLowerCase() === 'tracerfy' 
                         ? 'Tracerfy (legacy) → BatchData'
                         : provider;
