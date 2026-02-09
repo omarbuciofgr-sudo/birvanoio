@@ -1,16 +1,16 @@
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 
-import ProductDemo from "@/components/landing/ProductDemo";
-import CRMShowcase from "@/components/landing/CRMShowcase";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
+import CRMShowcase from "@/components/landing/CRMShowcase";
+import ProductDemo from "@/components/landing/ProductDemo";
 import UseCases from "@/components/landing/UseCases";
 
 import ComparisonTable from "@/components/landing/ComparisonTable";
-import ROICalculator from "@/components/landing/ROICalculator";
 import Pricing from "@/components/landing/Pricing";
 import FAQ from "@/components/landing/FAQ";
+import ROICalculator from "@/components/landing/ROICalculator";
 import About from "@/components/landing/About";
 import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
@@ -23,16 +23,20 @@ const Index = () => {
       <Navbar />
       <Hero />
       
-      <ProductDemo />
-      <CRMShowcase />
+      {/* Core value prop: what you get & how it works */}
       <HowItWorks />
       <Services />
+      <CRMShowcase />
+      <ProductDemo />
       <UseCases />
       
+      {/* Decision-making: compare, price, FAQ */}
       <ComparisonTable />
-      <ROICalculator />
       <Pricing />
       <FAQ />
+      
+      {/* Supporting: ROI, about, final CTA */}
+      <ROICalculator />
       <About />
       <CTASection />
       <Footer />
