@@ -20,6 +20,7 @@ import {
   Globe,
   Key,
   Briefcase,
+  Sparkles,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 
@@ -33,6 +34,7 @@ const navItems = [
   { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
   { name: "Templates", href: "/dashboard/templates", icon: FileText },
   { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
+  { name: "CSV Enrichment", href: "/dashboard/csv-enrichment", icon: Sparkles },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];

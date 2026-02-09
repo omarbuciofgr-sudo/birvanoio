@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.check-subscription]
 verify_jwt = false
+
+[functions.csv-enrich]
+verify_jwt = false
