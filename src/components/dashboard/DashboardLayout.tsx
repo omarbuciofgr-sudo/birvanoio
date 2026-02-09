@@ -21,6 +21,7 @@ import {
   Key,
   Briefcase,
   Sparkles,
+  ClipboardList,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
 import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
@@ -37,6 +38,7 @@ const navItems = [
   { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
   { name: "Templates", href: "/dashboard/templates", icon: FileText },
   { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
+  { name: "Reports", href: "/dashboard/reports", icon: ClipboardList },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];

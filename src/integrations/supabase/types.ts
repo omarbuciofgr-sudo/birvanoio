@@ -687,6 +687,42 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_reports: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_shared: boolean
+          name: string
+          report_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_shared?: boolean
+          name: string
+          report_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_shared?: boolean
+          name?: string
+          report_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       digest_subscriptions: {
         Row: {
           created_at: string
@@ -1566,6 +1602,45 @@ export type Database = {
           notify_on_job_failure?: boolean | null
           updated_at?: string
           webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          action_url: string | null
+          category: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string | null
+          metadata: Json | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          action_url?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string | null
+          metadata?: Json | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          action_url?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string | null
+          metadata?: Json | null
+          title?: string
+          type?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2493,6 +2568,44 @@ export type Database = {
         }
         Relationships: []
       }
+      team_activity_log: {
+        Row: {
+          action_type: string
+          created_at: string
+          description: string | null
+          id: string
+          lead_id: string | null
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_activity_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_assignments: {
         Row: {
           assigned_at: string
@@ -2527,6 +2640,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      team_performance_snapshots: {
+        Row: {
+          avg_response_time_minutes: number | null
+          calls_made: number
+          created_at: string
+          emails_sent: number
+          id: string
+          leads_contacted: number
+          leads_converted: number
+          leads_created: number
+          pipeline_value: number | null
+          revenue_generated: number | null
+          sms_sent: number
+          snapshot_date: string
+          user_id: string
+        }
+        Insert: {
+          avg_response_time_minutes?: number | null
+          calls_made?: number
+          created_at?: string
+          emails_sent?: number
+          id?: string
+          leads_contacted?: number
+          leads_converted?: number
+          leads_created?: number
+          pipeline_value?: number | null
+          revenue_generated?: number | null
+          sms_sent?: number
+          snapshot_date?: string
+          user_id: string
+        }
+        Update: {
+          avg_response_time_minutes?: number | null
+          calls_made?: number
+          created_at?: string
+          emails_sent?: number
+          id?: string
+          leads_contacted?: number
+          leads_converted?: number
+          leads_created?: number
+          pipeline_value?: number | null
+          revenue_generated?: number | null
+          sms_sent?: number
+          snapshot_date?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
