@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.competitor-monitoring]
 verify_jwt = false
+
+[functions.clay-enrich]
+verify_jwt = false

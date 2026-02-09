@@ -35,8 +35,10 @@ async function fetchWithRetry(
 /**
  * Data Waterfall Enrichment - Chain multiple providers for maximum coverage
  * 
- * Order: Apollo → Hunter → PDL → Snov.io → RocketReach → Lusha → ContactOut → Clearbit → Google Search
+ * Order: Clay → Apollo → Hunter → PDL → Snov.io → RocketReach → Lusha → ContactOut → Clearbit → Google Search
  * 
+ * Clay is the first provider in the waterfall since it orchestrates 75+ enrichment
+ * providers internally. If Clay returns complete data, subsequent providers are skipped.
  * Each provider fills in missing data from the previous one.
  * Stops when we have complete contact info (name, email, phone).
  */
@@ -94,6 +96,83 @@ function hasCompleteData(result: Partial<EnrichmentResult>): boolean {
 }
 
 // ========== PROVIDER FUNCTIONS ==========
+
+// Clay enrichment - orchestrates 75+ providers via Clay's API
+async function enrichWithClay(
+  input: EnrichmentInput,
+  apiKey: string
+): Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }> {
+  try {
+    // Try Clay's direct People & Company API
+    const params = new URLSearchParams();
+    if (input.domain) params.set('company_domain', input.domain);
+    if (input.name) params.set('name', input.name);
+    if (input.email) params.set('email', input.email);
+
+    const response = await fetchWithRetry(
+      `https://api.clay.com/v3/people/enrich?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // If 403/404 - endpoint not available on this plan, skip silently
+    if (response.status === 403 || response.status === 404) {
+      console.log('Clay direct API not available on this plan, skipping');
+      return { data: null, fields: [] };
+    }
+
+    if (!response.ok) {
+      console.error(`Clay API error: ${response.status}`);
+      return { data: null, fields: [] };
+    }
+
+    const data = await response.json();
+    const fields: string[] = [];
+    const result: Partial<EnrichmentResult> = {};
+
+    if (data.full_name || data.name) { result.full_name = data.full_name || data.name; fields.push('full_name'); }
+    if (data.work_email || data.email) { result.email = data.work_email || data.email; fields.push('email'); }
+    if (data.phone_number || data.mobile_phone || data.direct_phone) {
+      result.phone = data.phone_number || data.mobile_phone || data.direct_phone;
+      fields.push('phone');
+      if (data.mobile_phone) { result.mobile_phone = data.mobile_phone; fields.push('mobile_phone'); }
+      if (data.direct_phone) { result.direct_phone = data.direct_phone; fields.push('direct_phone'); }
+    }
+    if (data.job_title || data.title) { result.job_title = data.job_title || data.title; fields.push('job_title'); }
+    if (data.seniority) { result.seniority_level = data.seniority; fields.push('seniority_level'); }
+    if (data.linkedin_url) { result.linkedin_url = data.linkedin_url; fields.push('linkedin_url'); }
+    if (data.company_name || data.organization?.name) {
+      result.company_name = data.company_name || data.organization?.name;
+      fields.push('company_name');
+    }
+    if (data.company_linkedin_url || data.organization?.linkedin_url) {
+      result.company_linkedin_url = data.company_linkedin_url || data.organization?.linkedin_url;
+      fields.push('company_linkedin_url');
+    }
+    if (data.company_employee_count || data.organization?.employee_count) {
+      result.employee_count = data.company_employee_count || data.organization?.employee_count;
+      fields.push('employee_count');
+    }
+    if (data.company_industry || data.organization?.industry) {
+      result.industry = data.company_industry || data.organization?.industry;
+      fields.push('industry');
+    }
+    if (data.company_annual_revenue) {
+      result.annual_revenue = typeof data.company_annual_revenue === 'string'
+        ? parseInt(data.company_annual_revenue.replace(/[^0-9]/g, ''))
+        : data.company_annual_revenue;
+      fields.push('annual_revenue');
+    }
+
+    if (fields.length > 0) return { data: result, fields };
+  } catch (error) { console.error('Clay waterfall error:', error); }
+  return { data: null, fields: [] };
+}
 
 // Apollo enrichment
 async function enrichWithApollo(
@@ -675,6 +754,7 @@ Deno.serve(async (req) => {
 
   try {
     // Get all API keys
+    const clayApiKey = Deno.env.get('CLAY_API_KEY');
     const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
     const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
     const pdlApiKey = Deno.env.get('PDL_API_KEY');
@@ -686,6 +766,7 @@ Deno.serve(async (req) => {
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     
     const availableProviders: string[] = [];
+    if (clayApiKey) availableProviders.push('clay');
     if (apolloApiKey) availableProviders.push('apollo');
     if (hunterApiKey) availableProviders.push('hunter');
     if (pdlApiKey) availableProviders.push('pdl');
@@ -758,6 +839,10 @@ Deno.serve(async (req) => {
       }
       console.log(`${providerName}: ${stepResult.fields.length} fields found`);
     }
+    
+    // Step 0: Clay (orchestrates 75+ providers internally)
+    await runStep('clay', clayApiKey, !hasCompleteData(result),
+      () => enrichWithClay(input, clayApiKey!));
     
     // Step 1: Apollo
     await runStep('apollo', apolloApiKey, !hasCompleteData(result),

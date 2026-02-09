@@ -25,6 +25,16 @@ interface ProviderConfig {
 
 const PROVIDERS: ProviderConfig[] = [
   {
+    id: 'clay',
+    name: 'Clay',
+    description: 'AI-powered enrichment platform orchestrating 75+ data providers in a single waterfall',
+    icon: <Database className="h-5 w-5" />,
+    category: 'enrichment',
+    envVariable: 'CLAY_API_KEY',
+    docsUrl: 'https://docs.clay.com',
+    features: ['75+ providers', 'Email waterfall', 'Phone waterfall', 'Company enrichment', 'AI enrichment'],
+  },
+  {
     id: 'firecrawl',
     name: 'Firecrawl',
     description: 'Web scraping and crawling API for extracting content from websites',
@@ -171,6 +181,15 @@ export default function APISettings() {
             )}
           </div>
 
+          {provider.id === 'clay' && (
+            <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <Check className="h-4 w-4" />
+                <span className="text-sm font-medium">Configured (CLAY_API_KEY) — Priority #1 in waterfall</span>
+              </div>
+            </div>
+          )}
+
           {provider.id === 'firecrawl' && (
             <div className="p-3 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
@@ -285,28 +304,42 @@ export default function APISettings() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
-                  <span className="text-lg font-medium text-muted-foreground">1</span>
+                  <span className="text-lg font-medium text-muted-foreground">0</span>
                   <span>On-site scraping (Firecrawl)</span>
                 </div>
                 <Badge variant="outline">Always First</Badge>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-medium text-primary">1</span>
+                  <span className="font-medium">Clay (75+ providers)</span>
+                </div>
+                <Badge className="bg-primary/20 text-primary border-primary/30">Priority</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-medium text-muted-foreground">2</span>
                   <span>Apollo.io enrichment</span>
                 </div>
-                <Badge variant="outline">If enabled</Badge>
+                <Badge variant="outline">Fallback</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-medium text-muted-foreground">3</span>
-                  <span>Hunter.io email discovery</span>
+                  <span>Hunter.io + PDL + Snov.io + RocketReach + Lusha + ContactOut</span>
                 </div>
-                <Badge variant="outline">If enabled</Badge>
+                <Badge variant="outline">Fallback chain</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-medium text-muted-foreground">4</span>
+                  <span>Clearbit + Google Search</span>
+                </div>
+                <Badge variant="outline">Company data</Badge>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-medium text-muted-foreground">5</span>
                   <span>Validation (ZeroBounce/Twilio)</span>
                 </div>
                 <Badge variant="outline">Final step</Badge>
