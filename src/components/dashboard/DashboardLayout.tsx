@@ -23,6 +23,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import brivanoLogo from "@/assets/brivano-logo.png";
+import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -233,6 +234,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         {/* Page content */}
         <main className="p-4 lg:p-8">{children}</main>
       </div>
+
+      {/* AI Chat Assistant */}
+      <AIDashboardChat />
     </div>
   );
 };

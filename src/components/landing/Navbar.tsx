@@ -45,15 +45,8 @@ const Navbar = () => {
           </div>
 
           {/* CTA Buttons */}
-          <div className="hidden md:flex items-center space-x-2">
+          <div className="hidden md:flex items-center space-x-3">
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() => navigate("/auth")}
-            >
-              Sign In
-            </Button>
             <Button
               variant="outline"
               className="border-primary/50 text-primary hover:bg-primary/10"
@@ -61,6 +54,13 @@ const Navbar = () => {
             >
               <Bot className="w-4 h-4 mr-1" />
               Get a Demo
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => navigate("/auth")}
+            >
+              Sign In
             </Button>
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90"
