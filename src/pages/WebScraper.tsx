@@ -35,6 +35,7 @@ import {
   Send,
   Bot,
   Sparkles,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -331,6 +332,9 @@ export default function WebScraper() {
             </TabsTrigger>
             <TabsTrigger value="search" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Search className="h-3.5 w-3.5" /> Search
+            </TabsTrigger>
+            <TabsTrigger value="csv-enrichment" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <FileSpreadsheet className="h-3.5 w-3.5" /> CSV Enrichment
             </TabsTrigger>
           </TabsList>
 
@@ -711,6 +715,26 @@ export default function WebScraper() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* ── CSV Enrichment Tab ── */}
+          <TabsContent value="csv-enrichment" className="mt-0">
+            <Card className="border-border/60">
+              <CardContent className="p-8 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <FileSpreadsheet className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">CSV Enrichment</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    Upload a CSV of companies and enrich with contact info, emails, LinkedIn profiles, and AI insights.
+                  </p>
+                </div>
+                <Button onClick={() => window.location.href = '/dashboard/csv-enrichment'} size="sm" className="gap-2">
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Open CSV Enrichment
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
