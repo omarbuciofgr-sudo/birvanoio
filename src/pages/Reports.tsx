@@ -31,6 +31,11 @@ import {
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
   AreaChart, Area,
 } from "recharts";
+import { AINLReports } from "@/components/dashboard/AINLReports";
+import { AIAnomalyDetection } from "@/components/dashboard/AIAnomalyDetection";
+import type { Database } from "@/integrations/supabase/types";
+
+type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
 interface SavedReport {
   id: string;
@@ -52,7 +57,6 @@ const CHART_COLORS = [
   "hsl(195 100% 45%)",
 ];
 
-// Generate mock data for report previews
 const generateMockPerformanceData = () => {
   const days = Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
@@ -82,6 +86,14 @@ const generateMockTeamData = () => [
   { name: "Team Avg", calls: 32, emails: 48, conversions: 8, revenue: 18200, responseTime: 35 },
 ];
 
+const ANALYTICS_COLORS: Record<string, string> = {
+  New: "hsl(190, 100%, 50%)",
+  Contacted: "hsl(45, 100%, 50%)",
+  Qualified: "hsl(280, 100%, 60%)",
+  Converted: "hsl(145, 70%, 50%)",
+  Lost: "hsl(0, 72%, 51%)",
+};
+
 export default function Reports() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -96,6 +108,9 @@ export default function Reports() {
   const [saving, setSaving] = useState(false);
   const [loadingReports, setLoadingReports] = useState(true);
 
+  // Analytics data
+  const [leads, setLeads] = useState<Lead[]>([]);
+
   const performanceData = generateMockPerformanceData();
   const conversionData = generateMockConversionData();
   const teamData = generateMockTeamData();
@@ -105,15 +120,20 @@ export default function Reports() {
   }, [user, authLoading]);
 
   useEffect(() => {
-    if (user) fetchReports();
+    if (user) {
+      fetchReports();
+      fetchLeads();
+    }
   }, [user]);
+
+  const fetchLeads = async () => {
+    const { data, error } = await supabase.from("leads").select("*");
+    if (!error && data) setLeads(data);
+  };
 
   const fetchReports = async () => {
     setLoadingReports(true);
-    const { data } = await supabase
-      .from("custom_reports")
-      .select("*")
-      .order("updated_at", { ascending: false });
+    const { data } = await supabase.from("custom_reports").select("*").order("updated_at", { ascending: false });
     if (data) setSavedReports(data);
     setLoadingReports(false);
   };
@@ -123,45 +143,43 @@ export default function Reports() {
     if (!user?.id) return;
     setSaving(true);
     const { error } = await supabase.from("custom_reports").insert({
-      user_id: user.id,
-      name: newReportName,
-      description: newReportDesc || null,
-      report_type: newReportType,
-      config: { metrics: selectedMetrics, dateRange, filters: {} },
-      is_shared: isShared,
+      user_id: user.id, name: newReportName, description: newReportDesc || null,
+      report_type: newReportType, config: { metrics: selectedMetrics, dateRange, filters: {} }, is_shared: isShared,
     });
-    if (error) { toast.error("Failed to save report"); }
-    else {
-      toast.success("Report created");
-      setCreateDialogOpen(false);
-      setNewReportName("");
-      setNewReportDesc("");
-      setSelectedMetrics(["calls", "emails", "conversions"]);
-      fetchReports();
-    }
+    if (error) toast.error("Failed to save report");
+    else { toast.success("Report created"); setCreateDialogOpen(false); setNewReportName(""); setNewReportDesc(""); setSelectedMetrics(["calls", "emails", "conversions"]); fetchReports(); }
     setSaving(false);
   };
 
   const handleDeleteReport = async (id: string) => {
     const { error } = await supabase.from("custom_reports").delete().eq("id", id);
-    if (!error) {
-      setSavedReports(prev => prev.filter(r => r.id !== id));
-      toast.success("Report deleted");
-    }
+    if (!error) { setSavedReports(prev => prev.filter(r => r.id !== id)); toast.success("Report deleted"); }
   };
 
   const toggleMetric = (metric: string) => {
-    setSelectedMetrics(prev =>
-      prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]
-    );
+    setSelectedMetrics(prev => prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]);
   };
 
-  if (authLoading) {
-    return <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading...</div>
-    </div>;
-  }
+  if (authLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Loading...</div></div>;
   if (!user) return null;
+
+  // Analytics computed data
+  const statusCounts = leads.reduce((acc, lead) => { acc[lead.status] = (acc[lead.status] || 0) + 1; return acc; }, {} as Record<string, number>);
+  const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
+  const conversionRate = leads.length > 0 ? ((statusCounts.converted || 0) / leads.length * 100).toFixed(1) : "0";
+
+  const leadsByWeek = leads.reduce((acc, lead) => {
+    const date = new Date(lead.created_at);
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - date.getDay());
+    const key = weekStart.toISOString().split("T")[0];
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const barData = Object.entries(leadsByWeek).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([date, count]) => ({
+    week: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }), leads: count,
+  }));
 
   const availableMetrics = [
     { key: "calls", label: "Calls Made", icon: Phone },
@@ -174,21 +192,20 @@ export default function Reports() {
 
   const reportTemplates = [
     { type: "outreach", label: "Outreach Volume", desc: "Track calls, emails, and SMS activity", icon: Phone, color: "text-blue-500 bg-blue-500/10" },
-    { type: "conversion", label: "Conversion Funnel", desc: "Analyze lead progression through stages", icon: TrendingUp, color: "text-green-500 bg-green-500/10" },
-    { type: "revenue", label: "Revenue & Deals", desc: "Monitor pipeline value and deal sizes", icon: DollarSign, color: "text-yellow-500 bg-yellow-500/10" },
-    { type: "response_time", label: "Response Time & SLAs", desc: "Measure how fast your team responds", icon: Clock, color: "text-purple-500 bg-purple-500/10" },
+    { type: "conversion", label: "Conversion Funnel", desc: "Analyze lead progression", icon: TrendingUp, color: "text-green-500 bg-green-500/10" },
+    { type: "revenue", label: "Revenue & Deals", desc: "Monitor pipeline value", icon: DollarSign, color: "text-yellow-500 bg-yellow-500/10" },
+    { type: "response_time", label: "Response Time", desc: "Measure response speed", icon: Clock, color: "text-purple-500 bg-purple-500/10" },
   ];
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Analyze team performance and build custom reports</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Reports & Analytics</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Performance insights, analytics, and custom reports</p>
           </div>
-          <Button size="sm" className="gap-1.5 text-xs" onClick={() => setCreateDialogOpen(true)}>
+          <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> Build Report
           </Button>
         </div>
@@ -198,11 +215,14 @@ export default function Reports() {
             <TabsTrigger value="overview" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <BarChart3 className="h-3.5 w-3.5" /> Overview
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TrendingUp className="h-3.5 w-3.5" /> Analytics
+            </TabsTrigger>
             <TabsTrigger value="outreach" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Phone className="h-3.5 w-3.5" /> Outreach
             </TabsTrigger>
             <TabsTrigger value="conversions" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <TrendingUp className="h-3.5 w-3.5" /> Conversions
+              <Target className="h-3.5 w-3.5" /> Conversions
             </TabsTrigger>
             <TabsTrigger value="saved" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Save className="h-3.5 w-3.5" /> Saved
@@ -212,7 +232,6 @@ export default function Reports() {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4 mt-0">
-            {/* Summary cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 { label: "Total Outreach", value: "312", change: "+18%", up: true, icon: Activity, color: "text-blue-500 bg-blue-500/10" },
@@ -220,11 +239,11 @@ export default function Reports() {
                 { label: "Avg Deal Size", value: "$2,450", change: "-5%", up: false, icon: DollarSign, color: "text-yellow-500 bg-yellow-500/10" },
                 { label: "Avg Response", value: "22 min", change: "-8 min", up: true, icon: Clock, color: "text-purple-500 bg-purple-500/10" },
               ].map(metric => (
-                <Card key={metric.label} className="border-border/60">
+                <Card key={metric.label} className="border-border/40">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${metric.color}`}>
-                        <metric.icon className="h-3.5 w-3.5" />
+                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${metric.color}`}>
+                        <metric.icon className="h-4 w-4" />
                       </div>
                       <span className="text-[11px] font-medium text-muted-foreground">{metric.label}</span>
                     </div>
@@ -240,8 +259,7 @@ export default function Reports() {
               ))}
             </div>
 
-            {/* Performance chart */}
-            <Card className="border-border/60">
+            <Card className="border-border/40">
               <CardHeader className="pb-2 px-5 pt-4">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">Performance Overview</CardTitle>
@@ -260,18 +278,10 @@ export default function Reports() {
                     <Bar dataKey="conversions" fill={CHART_COLORS[2]} radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="flex gap-4 mt-2 justify-center">
-                  {["Calls", "Emails", "Conversions"].map((label, i) => (
-                    <div key={label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[i] }} /> {label}
-                    </div>
-                  ))}
-                </div>
               </CardContent>
             </Card>
 
-            {/* Your Performance vs Team */}
-            <Card className="border-border/60">
+            <Card className="border-border/40">
               <CardHeader className="pb-2 px-5 pt-4">
                 <CardTitle className="text-sm font-medium">Your Performance vs. Team Average</CardTitle>
               </CardHeader>
@@ -282,7 +292,7 @@ export default function Reports() {
                     { label: "Emails", you: teamData[0].emails, avg: teamData[1].emails },
                     { label: "Conversions", you: teamData[0].conversions, avg: teamData[1].conversions },
                     { label: "Revenue", you: teamData[0].revenue, avg: teamData[1].revenue, isCurrency: true },
-                    { label: "Response (min)", you: teamData[0].responseTime, avg: teamData[1].responseTime, lowerIsBetter: true },
+                    { label: "Response", you: teamData[0].responseTime, avg: teamData[1].responseTime, lowerIsBetter: true },
                   ].map(metric => {
                     const isAbove = metric.lowerIsBetter ? metric.you < metric.avg : metric.you > metric.avg;
                     return (
@@ -302,21 +312,12 @@ export default function Reports() {
               </CardContent>
             </Card>
 
-            {/* Report Templates */}
             <div>
               <h3 className="text-sm font-medium mb-3">Quick Report Templates</h3>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {reportTemplates.map(tpl => (
-                  <Card
-                    key={tpl.type}
-                    className="border-border/60 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
-                    onClick={() => {
-                      setNewReportType(tpl.type);
-                      setNewReportName(tpl.label);
-                      setNewReportDesc(tpl.desc);
-                      setCreateDialogOpen(true);
-                    }}
-                  >
+                  <Card key={tpl.type} className="border-border/40 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+                    onClick={() => { setNewReportType(tpl.type); setNewReportName(tpl.label); setNewReportDesc(tpl.desc); setCreateDialogOpen(true); }}>
                     <CardContent className="p-4">
                       <div className={`h-8 w-8 rounded-lg flex items-center justify-center mb-3 ${tpl.color}`}>
                         <tpl.icon className="h-4 w-4" />
@@ -330,12 +331,87 @@ export default function Reports() {
             </div>
           </TabsContent>
 
+          {/* Analytics Tab (merged from Analytics page) */}
+          <TabsContent value="analytics" className="space-y-4 mt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card className="border-border/40">
+                <CardContent className="p-4">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Total Leads</span>
+                  <div className="text-2xl font-bold mt-1">{leads.length}</div>
+                </CardContent>
+              </Card>
+              <Card className="border-border/40">
+                <CardContent className="p-4">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Conversion Rate</span>
+                  <div className="text-2xl font-bold mt-1 text-green-600 dark:text-green-400">{conversionRate}%</div>
+                </CardContent>
+              </Card>
+              <Card className="border-border/40">
+                <CardContent className="p-4">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Converted</span>
+                  <div className="text-2xl font-bold mt-1">{statusCounts.converted || 0}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="border-border/40">
+                <CardHeader className="pb-2 px-5 pt-4"><CardTitle className="text-sm font-medium">Leads Over Time</CardTitle></CardHeader>
+                <CardContent>
+                  {barData.length === 0 ? (
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">No data available yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={barData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="week" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                        <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                        <Bar dataKey="leads" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader className="pb-2 px-5 pt-4"><CardTitle className="text-sm font-medium">Status Distribution</CardTitle></CardHeader>
+                <CardContent>
+                  {pieData.length === 0 ? (
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">No data available yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={ANALYTICS_COLORS[entry.name] || "hsl(var(--muted))"} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card className="border-border/40">
+                <CardHeader className="pb-2 px-5 pt-4"><CardTitle className="text-sm font-medium">Natural Language Reports</CardTitle></CardHeader>
+                <CardContent><AINLReports /></CardContent>
+              </Card>
+              <Card className="border-border/40">
+                <CardHeader className="pb-2 px-5 pt-4"><CardTitle className="text-sm font-medium">Anomaly Detection</CardTitle></CardHeader>
+                <CardContent><AIAnomalyDetection /></CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           {/* Outreach Tab */}
           <TabsContent value="outreach" className="space-y-4 mt-0">
-            <Card className="border-border/60">
-              <CardHeader className="pb-2 px-5 pt-4">
-                <CardTitle className="text-sm font-medium">Outreach Activity Over Time</CardTitle>
-              </CardHeader>
+            <Card className="border-border/40">
+              <CardHeader className="pb-2 px-5 pt-4"><CardTitle className="text-sm font-medium">Outreach Activity Over Time</CardTitle></CardHeader>
               <CardContent className="px-5 pb-4">
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={performanceData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
@@ -356,93 +432,30 @@ export default function Reports() {
                     <Area type="monotone" dataKey="sms" stroke={CHART_COLORS[2]} fill={`url(#grad-sms)`} strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
-                <div className="flex gap-4 mt-2 justify-center">
-                  {["Calls", "Emails", "SMS"].map((label, i) => (
-                    <div key={label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[i] }} /> {label}
-                    </div>
-                  ))}
-                </div>
               </CardContent>
             </Card>
-
-            {/* Totals */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Total Calls", value: performanceData.reduce((s, d) => s + d.calls, 0), icon: Phone },
-                { label: "Total Emails", value: performanceData.reduce((s, d) => s + d.emails, 0), icon: Mail },
-                { label: "Total SMS", value: performanceData.reduce((s, d) => s + d.sms, 0), icon: FileText },
-              ].map(stat => (
-                <Card key={stat.label} className="border-border/60">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <stat.icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-muted-foreground font-medium">{stat.label}</p>
-                      <p className="text-xl font-bold">{stat.value}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
           </TabsContent>
 
           {/* Conversions Tab */}
           <TabsContent value="conversions" className="space-y-4 mt-0">
-            <Card className="border-border/60">
-              <CardHeader className="pb-2 px-5 pt-4">
-                <CardTitle className="text-sm font-medium">Conversion Funnel</CardTitle>
-              </CardHeader>
+            <Card className="border-border/40">
+              <CardHeader className="pb-2 px-5 pt-4"><CardTitle className="text-sm font-medium">Conversion Funnel</CardTitle></CardHeader>
               <CardContent className="px-5 pb-4">
                 <div className="space-y-3">
                   {conversionData.map((stage, i) => (
-                    <div key={stage.stage} className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CHART_COLORS[i] }} />
-                          <span className="text-xs font-medium">{stage.stage}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-semibold">{stage.count}</span>
-                          <span className="text-[10px] text-muted-foreground w-10 text-right">{stage.rate}%</span>
+                    <div key={stage.stage}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium">{stage.stage}</span>
+                        <span className="text-xs text-muted-foreground">{stage.count} · {stage.rate}%</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-8 overflow-hidden">
+                        <div className="h-full rounded-full flex items-center px-3 transition-all" style={{ width: `${stage.rate}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}>
+                          <span className="text-[10px] font-bold text-white">{stage.count}</span>
                         </div>
                       </div>
-                      <Progress value={stage.rate} className="h-2" />
                     </div>
                   ))}
                 </div>
-
-                <div className="mt-6 grid grid-cols-3 gap-3">
-                  {[
-                    { label: "Lead → Contact", value: "74.3%", desc: "Contact rate" },
-                    { label: "Contact → Qualified", value: "53.8%", desc: "Qualification rate" },
-                    { label: "Qualified → Won", value: "31.6%", desc: "Win rate" },
-                  ].map(metric => (
-                    <div key={metric.label} className="text-center p-3 rounded-lg bg-muted/40">
-                      <p className="text-[10px] text-muted-foreground">{metric.label}</p>
-                      <p className="text-lg font-bold mt-1">{metric.value}</p>
-                      <p className="text-[10px] text-muted-foreground">{metric.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/60">
-              <CardHeader className="pb-2 px-5 pt-4">
-                <CardTitle className="text-sm font-medium">Conversions Over Time</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-4">
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={performanceData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }} />
-                    <Line type="monotone" dataKey="conversions" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[1] }} />
-                  </LineChart>
-                </ResponsiveContainer>
               </CardContent>
             </Card>
           </TabsContent>
@@ -450,43 +463,35 @@ export default function Reports() {
           {/* Saved Reports Tab */}
           <TabsContent value="saved" className="space-y-4 mt-0">
             {loadingReports ? (
-              <div className="text-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-              </div>
+              <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
             ) : savedReports.length === 0 ? (
-              <Card className="border-border/60 border-dashed">
-                <CardContent className="text-center py-12">
-                  <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                  <h3 className="text-sm font-medium mb-1">No saved reports</h3>
-                  <p className="text-xs text-muted-foreground mb-4">Create your first custom report to track the metrics that matter most</p>
-                  <Button size="sm" className="gap-1.5 text-xs" onClick={() => setCreateDialogOpen(true)}>
+              <Card className="border-border/40">
+                <CardContent className="p-12 text-center">
+                  <Save className="w-8 h-8 mx-auto text-muted-foreground/30 mb-3" />
+                  <p className="text-sm font-medium">No saved reports</p>
+                  <p className="text-xs text-muted-foreground mt-1">Create a custom report to get started</p>
+                  <Button size="sm" className="mt-4 gap-1.5 text-xs" onClick={() => setCreateDialogOpen(true)}>
                     <Plus className="h-3.5 w-3.5" /> Build Report
                   </Button>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {savedReports.map(report => (
-                  <Card key={report.id} className="border-border/60 hover:border-primary/30 transition-colors">
+                  <Card key={report.id} className="border-border/40 hover:shadow-sm transition-shadow">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-medium truncate">{report.name}</h4>
-                            <Badge variant="secondary" className="text-[9px] h-4 shrink-0">{report.report_type}</Badge>
-                            {report.is_shared && <Share2 className="h-3 w-3 text-muted-foreground shrink-0" />}
-                          </div>
-                          {report.description && <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{report.description}</p>}
-                          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
-                            <span>Created {new Date(report.created_at).toLocaleDateString()}</span>
-                            {report.config?.metrics && (
-                              <span>{report.config.metrics.length} metrics</span>
-                            )}
-                          </div>
+                          <h4 className="text-sm font-semibold truncate">{report.name}</h4>
+                          {report.description && <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{report.description}</p>}
                         </div>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteReport(report.id)}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive shrink-0" onClick={() => handleDeleteReport(report.id)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <Badge variant="outline" className="text-[10px]">{report.report_type}</Badge>
+                        {report.is_shared && <Badge variant="secondary" className="text-[10px]"><Share2 className="h-2.5 w-2.5 mr-0.5" /> Shared</Badge>}
                       </div>
                     </CardContent>
                   </Card>
@@ -498,67 +503,38 @@ export default function Reports() {
 
         {/* Create Report Dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-base">Build Custom Report</DialogTitle>
+              <DialogTitle>Build Report</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-2">
+            <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">Report Name</Label>
-                <Input placeholder="e.g., Weekly Outreach Summary" value={newReportName} onChange={e => setNewReportName(e.target.value)} className="h-9 text-sm" />
+                <Label className="text-xs">Name</Label>
+                <Input value={newReportName} onChange={(e) => setNewReportName(e.target.value)} placeholder="Report name" className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Description</Label>
-                <Input placeholder="Optional description..." value={newReportDesc} onChange={e => setNewReportDesc(e.target.value)} className="h-9 text-sm" />
+                <Input value={newReportDesc} onChange={(e) => setNewReportDesc(e.target.value)} placeholder="Optional description" className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Report Type</Label>
-                <Select value={newReportType} onValueChange={setNewReportType}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="custom">Custom</SelectItem>
-                    <SelectItem value="outreach">Outreach Volume</SelectItem>
-                    <SelectItem value="conversion">Conversion Funnel</SelectItem>
-                    <SelectItem value="revenue">Revenue & Deals</SelectItem>
-                    <SelectItem value="response_time">Response Time</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Metrics to Include</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableMetrics.map(metric => (
-                    <label key={metric.key} className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-muted/50 transition-colors">
-                      <Checkbox checked={selectedMetrics.includes(metric.key)} onCheckedChange={() => toggleMetric(metric.key)} />
-                      <metric.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs">{metric.label}</span>
+                <Label className="text-xs">Metrics</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {availableMetrics.map(m => (
+                    <label key={m.key} className="flex items-center gap-2 p-2 rounded-md border border-border/60 cursor-pointer hover:bg-muted/30">
+                      <Checkbox checked={selectedMetrics.includes(m.key)} onCheckedChange={() => toggleMetric(m.key)} />
+                      <div className="flex items-center gap-1.5"><m.icon className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{m.label}</span></div>
                     </label>
                   ))}
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Date Range</Label>
-                <Select value={dateRange} onValueChange={setDateRange}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7d">Last 7 days</SelectItem>
-                    <SelectItem value="14d">Last 14 days</SelectItem>
-                    <SelectItem value="30d">Last 30 days</SelectItem>
-                    <SelectItem value="90d">Last 90 days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Switch checked={isShared} onCheckedChange={setIsShared} className="scale-90" />
+              <div className="flex items-center gap-2">
+                <Switch checked={isShared} onCheckedChange={setIsShared} />
                 <span className="text-xs">Share with team</span>
-              </label>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleCreateReport} disabled={saving} className="gap-1.5">
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save Report
-              </Button>
+              <Button size="sm" onClick={handleCreateReport} disabled={saving}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Create Report"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
