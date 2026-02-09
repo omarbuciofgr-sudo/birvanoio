@@ -29,9 +29,12 @@ import {
   AlertCircle,
   MinusCircle,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useEnrichmentCredits } from "@/hooks/useEnrichmentCredits";
+import { CreditLimitPopup } from "@/components/subscription/CreditLimitPopup";
 
 type EnrichmentStatus = "pending" | "enriching" | "enriched" | "partial" | "not_found" | "error";
 
@@ -108,6 +111,8 @@ const CSVEnrichment = () => {
   const [rows, setRows] = useState<EnrichedRow[]>([]);
   const [isEnrichingAll, setIsEnrichingAll] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
+  const [showCreditPopup, setShowCreditPopup] = useState(false);
+  const { creditsUsed, creditLimit, remaining, isAtLimit, deductCredits, refreshCredits, tier } = useEnrichmentCredits();
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -192,6 +197,11 @@ const CSVEnrichment = () => {
   };
 
   const enrichRow = async (rowIndex: number) => {
+    if (isAtLimit) {
+      setShowCreditPopup(true);
+      return;
+    }
+
     setRows((prev) =>
       prev.map((r) => (r.id === rowIndex ? { ...r, status: "enriching" as EnrichmentStatus } : r))
     );
@@ -210,6 +220,7 @@ const CSVEnrichment = () => {
       if (error) throw error;
       const result = data.results?.[0];
       if (result) {
+        await deductCredits(1);
         setRows((prev) =>
           prev.map((r) =>
             r.id === rowIndex
@@ -245,15 +256,25 @@ const CSVEnrichment = () => {
       return;
     }
 
+    if (isAtLimit) {
+      setShowCreditPopup(true);
+      return;
+    }
+
+    // Cap to remaining credits
+    const rowsToEnrich = creditLimit === Infinity ? pendingRows : pendingRows.slice(0, remaining);
+    if (rowsToEnrich.length < pendingRows.length) {
+      toast.info(`Only enriching ${rowsToEnrich.length} of ${pendingRows.length} rows (credit limit)`);
+    }
+
     setIsEnrichingAll(true);
-    setEnrichProgress({ done: 0, total: pendingRows.length });
+    setEnrichProgress({ done: 0, total: rowsToEnrich.length });
 
-    // Process in batches of 5
     const batchSize = 5;
-    for (let i = 0; i < pendingRows.length; i += batchSize) {
-      const batch = pendingRows.slice(i, i + batchSize);
+    let totalDeducted = 0;
+    for (let i = 0; i < rowsToEnrich.length; i += batchSize) {
+      const batch = rowsToEnrich.slice(i, i + batchSize);
 
-      // Mark batch as enriching
       setRows((prev) =>
         prev.map((r) =>
           batch.some((b) => b.id === r.id) ? { ...r, status: "enriching" as EnrichmentStatus } : r
@@ -273,6 +294,10 @@ const CSVEnrichment = () => {
         if (error) throw error;
 
         const results = data.results || [];
+        const successCount = results.filter((r: any) => r.status !== "error").length;
+        totalDeducted += successCount;
+        await deductCredits(successCount);
+
         setRows((prev) =>
           prev.map((r) => {
             const batchIdx = batch.findIndex((b) => b.id === r.id);
@@ -303,15 +328,15 @@ const CSVEnrichment = () => {
         );
       }
 
-      setEnrichProgress((prev) => ({ ...prev, done: Math.min(i + batchSize, pendingRows.length) }));
+      setEnrichProgress((prev) => ({ ...prev, done: Math.min(i + batchSize, rowsToEnrich.length) }));
 
-      // Small delay between batches to avoid rate limiting
-      if (i + batchSize < pendingRows.length) {
+      if (i + batchSize < rowsToEnrich.length) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
     setIsEnrichingAll(false);
+    await refreshCredits();
     toast.success("Enrichment complete!");
   };
 
@@ -361,6 +386,13 @@ const CSVEnrichment = () => {
 
   return (
     <DashboardLayout>
+      <CreditLimitPopup
+        open={showCreditPopup}
+        onOpenChange={setShowCreditPopup}
+        creditsUsed={creditsUsed}
+        creditLimit={creditLimit}
+        currentTier={tier}
+      />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -369,27 +401,33 @@ const CSVEnrichment = () => {
               Upload a CSV of companies and enrich with contact info, emails, and AI insights
             </p>
           </div>
-          {step === "table" && (
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={exportCSV} disabled={rows.length === 0}>
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
-              </Button>
-              <Button onClick={enrichAll} disabled={isEnrichingAll}>
-                {isEnrichingAll ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Enriching {enrichProgress.done}/{enrichProgress.total}...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Enrich All
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="gap-1 py-1 px-3">
+              <Zap className="w-3.5 h-3.5" />
+              {creditLimit === Infinity ? "Unlimited" : `${remaining} / ${creditLimit}`} credits
+            </Badge>
+            {step === "table" && (
+              <>
+                <Button variant="outline" onClick={exportCSV} disabled={rows.length === 0}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export CSV
+                </Button>
+                <Button onClick={enrichAll} disabled={isEnrichingAll}>
+                  {isEnrichingAll ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enriching {enrichProgress.done}/{enrichProgress.total}...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Enrich All
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Upload Step */}

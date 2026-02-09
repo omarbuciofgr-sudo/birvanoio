@@ -840,6 +840,36 @@ export type Database = {
         }
         Relationships: []
       }
+      enrichment_credit_usage: {
+        Row: {
+          created_at: string
+          credits_used: number
+          id: string
+          one_time_credits: number
+          period_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          id?: string
+          one_time_credits?: number
+          period_start?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          id?: string
+          one_time_credits?: number
+          period_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       enrichment_logs: {
         Row: {
           action: string
