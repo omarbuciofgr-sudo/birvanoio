@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import brivanoLogo from "@/assets/brivano-logo.png";
+import brivanoLogo from "@/assets/logo-min-4.png";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +27,7 @@ const Navbar = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <Link to="/" className="flex items-center">
-            <img src={brivanoLogo} alt="Brivano" className="h-28 w-auto dark:brightness-0 dark:invert" />
+            <img src={brivanoLogo} alt="Brivano" className="h-8 w-auto dark:invert" />
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
