@@ -6,19 +6,19 @@ import { GatedAIWeeklyDigest } from "@/components/dashboard/GatedAIWeeklyDigest"
 import { AIDealForecast } from "@/components/dashboard/AIDealForecast";
 import { AISmartPriority } from "@/components/dashboard/AISmartPriority";
 import { AIChurnDetection } from "@/components/dashboard/AIChurnDetection";
-import { AINLReports } from "@/components/dashboard/AINLReports";
-import { AIAnomalyDetection } from "@/components/dashboard/AIAnomalyDetection";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import {
   Users, Phone, CheckCircle, TrendingUp, ArrowRight, Plus,
   Mail, Globe, FileText, Bot, BarChart3, Bell, BellDot,
   Activity, Clock, DollarSign, Target, Zap, UserPlus,
   ArrowUpRight, ArrowDownRight, Calendar, Search,
+  Sparkles, Eye, MousePointer,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -196,17 +196,25 @@ const Dashboard = () => {
     lost: "bg-destructive/10 text-destructive",
   };
 
+  // Quick actions for executive shortcuts
+  const quickActions = [
+    { label: "Find Prospects", icon: Search, href: "/dashboard/scraper", color: "text-primary bg-primary/10" },
+    { label: "New Campaign", icon: Mail, href: "/dashboard/campaigns", color: "text-purple-500 bg-purple-500/10" },
+    { label: "View Reports", icon: BarChart3, href: "/dashboard/reports", color: "text-green-500 bg-green-500/10" },
+    { label: "Voice Agent", icon: Bot, href: "/dashboard/voice-agent", color: "text-yellow-500 bg-yellow-500/10" },
+  ];
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Welcome Header */}
-        <div className="flex items-center justify-between">
+        {/* Executive Header */}
+        <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
               Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}{user.email ? `, ${user.email.split('@')[0]}` : ''}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Here's what's happening with your pipeline today.
+              Here's your pipeline summary for {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -219,19 +227,38 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* Quick Actions */}
+        <div className="grid grid-cols-4 gap-3">
+          {quickActions.map(action => (
+            <Link
+              key={action.label}
+              to={action.href}
+              className="flex items-center gap-3 p-3.5 rounded-xl border border-border/40 bg-card/80 hover:bg-card hover:shadow-md hover:border-border/80 transition-all group"
+            >
+              <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${action.color} group-hover:scale-105 transition-transform`}>
+                <action.icon className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <span className="text-xs font-semibold">{action.label}</span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground transition-colors inline-block ml-1" />
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {/* KPI Cards — Premium */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
             { title: "Total Leads", value: stats.total, icon: Users, change: "+12%", up: true, desc: "All time" },
-            { title: "New Leads", value: stats.new, icon: TrendingUp, change: "+8%", up: true, desc: "This week" },
-            { title: "Contacted", value: stats.contacted, icon: Phone, change: `${contactRate}%`, up: true, desc: "Rate" },
-            { title: "Qualified", value: stats.qualified, icon: Target, change: "+5%", up: true, desc: "Pipeline" },
-            { title: "Converted", value: stats.converted, icon: CheckCircle, change: `${conversionRate}%`, up: true, desc: "Win rate" },
+            { title: "New This Week", value: stats.new, icon: TrendingUp, change: "+8%", up: true, desc: "vs last week" },
+            { title: "Contact Rate", value: `${contactRate}%`, icon: Phone, change: "+3%", up: true, desc: `${stats.contacted} contacted` },
+            { title: "In Pipeline", value: stats.qualified, icon: Target, change: "+5%", up: true, desc: "Qualified" },
+            { title: "Win Rate", value: `${conversionRate}%`, icon: CheckCircle, change: "+1.2%", up: true, desc: `${stats.converted} won` },
           ].map((stat) => (
-            <Card key={stat.title} className="border-border/40 bg-card/80 hover:shadow-md transition-shadow">
+            <Card key={stat.title} className="border-border/40 bg-card/80 hover:shadow-md transition-all group cursor-default">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="h-8 w-8 rounded-lg bg-primary/[0.07] flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-lg bg-primary/[0.06] flex items-center justify-center group-hover:bg-primary/[0.1] transition-colors">
                     <stat.icon className="h-4 w-4 text-primary" />
                   </div>
                   <span className={`text-[10px] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
@@ -248,14 +275,24 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Main Grid */}
+        {/* Main Grid — Chart + Pipeline */}
         <div className="grid lg:grid-cols-3 gap-4">
           {/* Lead Activity Chart */}
           <Card className="lg:col-span-2 border-border/40">
             <CardHeader className="pb-2 px-5 pt-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Weekly Pipeline Activity</CardTitle>
-                <Badge variant="secondary" className="text-[10px] h-5 font-normal">Last 7 days</Badge>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-sm font-medium">Pipeline Activity</CardTitle>
+                  <Badge variant="secondary" className="text-[10px] h-5 font-normal">7 days</Badge>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "hsl(210 100% 50%)" }} /> Leads
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "hsl(145 70% 45%)" }} /> Converted
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="px-5 pb-4">
@@ -263,30 +300,22 @@ const Dashboard = () => {
                 <AreaChart data={weeklyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(210 100% 50%)" stopOpacity={0.15} />
+                      <stop offset="5%" stopColor="hsl(210 100% 50%)" stopOpacity={0.12} />
                       <stop offset="95%" stopColor="hsl(210 100% 50%)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorConverted" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(145 70% 45%)" stopOpacity={0.15} />
+                      <stop offset="5%" stopColor="hsl(145 70% 45%)" stopOpacity={0.12} />
                       <stop offset="95%" stopColor="hsl(145 70% 45%)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
-                  <Area type="monotone" dataKey="leads" stroke="hsl(210 100% 50%)" fill="url(#colorLeads)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="converted" stroke="hsl(145 70% 45%)" fill="url(#colorConverted)" strokeWidth={2} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
+                  <Area type="monotone" dataKey="leads" stroke="hsl(210 100% 50%)" fill="url(#colorLeads)" strokeWidth={2} dot={false} />
+                  <Area type="monotone" dataKey="converted" stroke="hsl(145 70% 45%)" fill="url(#colorConverted)" strokeWidth={2} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
-              <div className="flex gap-4 mt-2 justify-center">
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "hsl(210 100% 50%)" }} /> New Leads
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: "hsl(145 70% 45%)" }} /> Converted
-                </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -302,9 +331,9 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent className="px-5 pb-4">
               <div className="flex justify-center mb-4">
-                <ResponsiveContainer width={150} height={150}>
+                <ResponsiveContainer width={140} height={140}>
                   <PieChart>
-                    <Pie data={funnelData} innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">
+                    <Pie data={funnelData} innerRadius={48} outerRadius={62} paddingAngle={4} dataKey="value" strokeWidth={0}>
                       {funnelData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
@@ -312,15 +341,15 @@ const Dashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {funnelData.map((stage) => (
-                  <div key={stage.name} className="flex items-center justify-between">
+                  <div key={stage.name} className="flex items-center justify-between group">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                       <span className="text-xs">{stage.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold">{stage.value}</span>
+                      <span className="text-xs font-bold">{stage.value}</span>
                       <span className="text-[10px] text-muted-foreground w-8 text-right">
                         {stats.total > 0 ? `${((stage.value / stats.total) * 100).toFixed(0)}%` : '0%'}
                       </span>
@@ -328,34 +357,39 @@ const Dashboard = () => {
                   </div>
                 ))}
               </div>
+              <Separator className="my-3" />
+              <div className="flex justify-between text-[10px]">
+                <span className="text-muted-foreground">Total pipeline</span>
+                <span className="font-bold">{stats.total} leads</span>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Bottom Grid */}
+        {/* Bottom Grid — Activity, Notifications, Recent */}
         <div className="grid lg:grid-cols-3 gap-4">
           {/* Activity Feed */}
           <Card className="border-border/40">
             <CardHeader className="pb-2 px-5 pt-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium">Activity</CardTitle>
-                <Activity className="h-3.5 w-3.5 text-muted-foreground/60" />
+                <Activity className="h-3.5 w-3.5 text-muted-foreground/40" />
               </div>
             </CardHeader>
             <CardContent className="px-0 pb-0">
               <ScrollArea className="h-[280px]">
                 {activities.length === 0 ? (
                   <div className="text-center py-12 px-5">
-                    <Activity className="h-8 w-8 mx-auto mb-3 text-muted-foreground/20" />
+                    <Activity className="h-8 w-8 mx-auto mb-3 text-muted-foreground/15" />
                     <p className="text-xs text-muted-foreground">No recent activity</p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/30">
+                  <div className="divide-y divide-border/20">
                     {activities.map((activity) => {
                       const Icon = getActionIcon(activity.action_type);
                       const colorClass = getActionColor(activity.action_type);
                       return (
-                        <div key={activity.id} className="flex gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
+                        <div key={activity.id} className="flex gap-3 px-5 py-3 hover:bg-muted/15 transition-colors">
                           <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}>
                             <Icon className="h-3.5 w-3.5" />
                           </div>
@@ -379,25 +413,25 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-sm font-medium">Notifications</CardTitle>
                   {unreadCount > 0 && (
-                    <Badge className="h-4 w-4 p-0 text-[9px] rounded-full flex items-center justify-center">{unreadCount}</Badge>
+                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">{unreadCount}</span>
                   )}
                 </div>
-                <Bell className="h-3.5 w-3.5 text-muted-foreground/60" />
+                <Bell className="h-3.5 w-3.5 text-muted-foreground/40" />
               </div>
             </CardHeader>
             <CardContent className="px-0 pb-0">
               <ScrollArea className="h-[280px]">
                 {notifications.length === 0 ? (
                   <div className="text-center py-12 px-5">
-                    <Bell className="h-8 w-8 mx-auto mb-3 text-muted-foreground/20" />
+                    <Bell className="h-8 w-8 mx-auto mb-3 text-muted-foreground/15" />
                     <p className="text-xs text-muted-foreground">No notifications</p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/30">
+                  <div className="divide-y divide-border/20">
                     {notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`flex gap-3 px-5 py-3 cursor-pointer transition-colors hover:bg-muted/20 ${!notification.is_read ? 'bg-primary/[0.02]' : ''}`}
+                        className={`flex gap-3 px-5 py-3 cursor-pointer transition-colors hover:bg-muted/15 ${!notification.is_read ? 'bg-primary/[0.02]' : ''}`}
                         onClick={() => {
                           markNotificationRead(notification.id);
                           if (notification.action_url) navigate(notification.action_url);
@@ -407,7 +441,7 @@ const Dashboard = () => {
                         <div className="min-w-0 flex-1">
                           <p className={`text-xs truncate ${!notification.is_read ? 'font-medium' : ''}`}>{notification.title}</p>
                           {notification.message && <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{notification.message}</p>}
-                          <p className="text-[10px] text-muted-foreground/60 mt-0.5">{timeAgo(notification.created_at)}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{timeAgo(notification.created_at)}</p>
                         </div>
                         {!notification.is_read && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />}
                       </div>
@@ -432,19 +466,19 @@ const Dashboard = () => {
               <ScrollArea className="h-[280px]">
                 {recentLeads.length === 0 ? (
                   <div className="text-center py-12 px-5">
-                    <Users className="h-8 w-8 mx-auto mb-3 text-muted-foreground/20" />
+                    <Users className="h-8 w-8 mx-auto mb-3 text-muted-foreground/15" />
                     <p className="text-xs text-muted-foreground">No leads yet</p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/30">
+                  <div className="divide-y divide-border/20">
                     {recentLeads.map((lead) => (
                       <Link
                         key={lead.id}
                         to="/dashboard/leads"
-                        className="flex items-center gap-3 px-5 py-3 hover:bg-muted/20 transition-colors"
+                        className="flex items-center gap-3 px-5 py-3 hover:bg-muted/15 transition-colors"
                       >
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                          <span className="text-xs font-medium text-muted-foreground">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center shrink-0 ring-1 ring-border/30">
+                          <span className="text-[10px] font-bold text-muted-foreground">
                             {lead.business_name?.[0]?.toUpperCase() || '?'}
                           </span>
                         </div>
@@ -454,7 +488,7 @@ const Dashboard = () => {
                             {lead.contact_name || lead.email || 'No contact'}
                           </p>
                         </div>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${statusColors[lead.status] || ''}`}>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColors[lead.status] || ''}`}>
                           {lead.status}
                         </span>
                       </Link>
@@ -470,9 +504,10 @@ const Dashboard = () => {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Zap className="h-3.5 w-3.5 text-primary" />
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
             </div>
             <h2 className="text-sm font-semibold">AI Insights</h2>
+            <Badge variant="secondary" className="text-[9px] h-4 font-normal">Powered by AI</Badge>
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
             <GatedAIWeeklyDigest />
