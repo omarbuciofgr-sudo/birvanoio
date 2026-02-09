@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { XCircle, ArrowLeft, MessageSquare } from "lucide-react";
-import brivanoLogo from "@/assets/brivano-logo.png";
+import brivanoLogo from "@/assets/logo-min-4.png";
 
 const CheckoutCancel = () => {
   return (

@@ -23,7 +23,7 @@ import {
   Sparkles,
   ClipboardList,
 } from "lucide-react";
-import brivanoLogo from "@/assets/brivano-logo.png";
+import brivanoLogo from "@/assets/logo-min-4.png";
 import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
 
 interface DashboardLayoutProps {
@@ -130,7 +130,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           {/* Logo */}
           <div className="flex items-center justify-between h-20 px-6 border-b border-border">
             <Link to="/" className="flex items-center">
-              <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto" />
+              <img src={brivanoLogo} alt="Brivano" className="h-6 w-auto" />
             </Link>
             <button
               className="lg:hidden text-muted-foreground"
