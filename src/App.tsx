@@ -28,6 +28,7 @@ import APISettings from "./pages/admin/APISettings";
 import ScraperSettings from "./pages/admin/ScraperSettings";
 import ClientLeads from "./pages/client/ClientLeads";
 import CSVEnrichment from "./pages/CSVEnrichment";
+import ProspectSearch from "./pages/ProspectSearch";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/admin/scraper-settings" element={<ProtectedRoute><ScraperSettings /></ProtectedRoute>} />
               <Route path="/client/leads" element={<ProtectedRoute><ClientLeads /></ProtectedRoute>} />
               <Route path="/dashboard/csv-enrichment" element={<ProtectedRoute><CSVEnrichment /></ProtectedRoute>} />
+              <Route path="/dashboard/prospect-search" element={<ProtectedRoute><ProspectSearch /></ProtectedRoute>} />
               <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
               <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
