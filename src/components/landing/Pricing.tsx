@@ -1,4 +1,4 @@
-import { Check, Star, Zap } from "lucide-react";
+import { Check, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -13,15 +13,8 @@ const plans = [
     monthlyPrice: 0,
     yearlyPrice: 0,
     credits: 50,
-    description: "Try the platform with no commitment.",
-    features: [
-      "50 credits/month",
-      "Web scraper (1 credit/lead)",
-      "CSV enrichment (2 credits/row)",
-      "AI lead scoring (1 credit)",
-      "Unlimited calls, email & SMS",
-      "Full CRM access",
-    ],
+    description: "Try with no commitment.",
+    features: ["50 credits/month", "Web scraper", "CSV enrichment", "AI lead scoring", "Unlimited calls & email", "Full CRM access"],
     popular: false,
     monthlyPriceId: null,
     yearlyPriceId: null,
@@ -31,15 +24,8 @@ const plans = [
     monthlyPrice: 49,
     yearlyPrice: 39,
     credits: 500,
-    description: "For solo reps ramping up outreach.",
-    features: [
-      "500 credits/month",
-      "Everything in Free",
-      "CSV import & export",
-      "Basic message templates",
-      "Click-to-call with recording",
-      "Email support",
-    ],
+    description: "For solo reps ramping up.",
+    features: ["500 credits/month", "Everything in Free", "CSV import & export", "Message templates", "Call recording", "Email support"],
     popular: false,
     monthlyPriceId: "price_1SnL6O2K2aKgw8lLpeaoYPSp",
     yearlyPriceId: "price_1SnLG42K2aKgw8lLL6TIsWBx",
@@ -49,16 +35,8 @@ const plans = [
     monthlyPrice: 99,
     yearlyPrice: 79,
     credits: 2000,
-    description: "For teams that need volume and AI tools.",
-    features: [
-      "2,000 credits/month",
-      "Everything in Starter",
-      "AI call recaps & transcription",
-      "AI lead scoring & sentiment",
-      "AI message templates",
-      "AI voice agent",
-      "Priority support",
-    ],
+    description: "For teams that need AI tools.",
+    features: ["2,000 credits/month", "Everything in Starter", "AI call recaps", "AI lead scoring & sentiment", "AI voice agent", "Priority support"],
     popular: true,
     monthlyPriceId: "price_1SnL7z2K2aKgw8lL9eBDzOyl",
     yearlyPriceId: "price_1SnLHI2K2aKgw8lLED3IgbcT",
@@ -68,30 +46,12 @@ const plans = [
     monthlyPrice: 249,
     yearlyPrice: 199,
     credits: 10000,
-    description: "For agencies that need massive volume.",
-    features: [
-      "10,000 credits/month",
-      "Everything in Growth",
-      "Prospect & industry search",
-      "Skip tracing (5 credits)",
-      "Webhook integrations & API",
-      "AI weekly digest reports",
-      "Dedicated account manager",
-    ],
+    description: "For agencies at volume.",
+    features: ["10,000 credits/month", "Everything in Growth", "Prospect & industry search", "Skip tracing", "Webhook & API access", "Dedicated manager"],
     popular: false,
     monthlyPriceId: "price_1SnLBL2K2aKgw8lLVLOgPcXu",
     yearlyPriceId: "price_1SnLJK2K2aKgw8lLBGXjTAgd",
   },
-];
-
-const creditCostRows = [
-  { action: "Web scrape", cost: CREDIT_COSTS.scrape, unit: "per lead" },
-  { action: "CSV enrichment", cost: CREDIT_COSTS.enrich, unit: "per row" },
-  { action: "Prospect / industry search", cost: CREDIT_COSTS.search, unit: "per result" },
-  { action: "AI lead scoring", cost: CREDIT_COSTS.lead_score, unit: "per lead" },
-  { action: "AI sentiment analysis", cost: CREDIT_COSTS.sentiment, unit: "per analysis" },
-  { action: "Skip tracing", cost: CREDIT_COSTS.skip_trace, unit: "per lookup" },
-  { action: "Calls, email & SMS", cost: 0, unit: "unlimited" },
 ];
 
 const Pricing = () => {
@@ -105,58 +65,18 @@ const Pricing = () => {
       navigate("/auth");
       return;
     }
-
     setLoadingPlan(plan.name);
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
-
       if (!session) {
         toast.info("Please sign in to subscribe");
         navigate("/auth");
         return;
       }
-
       const priceId = isYearly ? plan.yearlyPriceId : plan.monthlyPriceId;
-
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId },
-      });
-
+      const { data, error } = await supabase.functions.invoke("create-checkout", { body: { priceId } });
       if (error) throw error;
-
-      if (data?.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      toast.error("Failed to start checkout. Please try again.");
-    } finally {
-      setLoadingPlan(null);
-    }
-  };
-
-  const handleBuyCredits = async () => {
-    setLoadingPlan("credits");
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        toast.info("Please sign in to purchase credits");
-        navigate("/auth");
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId: "price_1SyxqL2K2aKgw8lLV9RTNSg2", mode: "payment" },
-      });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        window.open(data.url, "_blank");
-      }
+      if (data?.url) window.open(data.url, "_blank");
     } catch (error) {
       console.error("Checkout error:", error);
       toast.error("Failed to start checkout. Please try again.");
@@ -166,106 +86,82 @@ const Pricing = () => {
   };
 
   return (
-    <section id="pricing" className="py-24 relative">
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-secondary/10 to-background" />
-
-      <div ref={ref} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
+    <section id="pricing" className="py-24">
+      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Simple, <span className="gradient-text">Credit-Based</span> Pricing
+          <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Pricing</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            Simple, credit-based pricing
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-8">
+          <p className="text-muted-foreground max-w-lg mx-auto mb-8">
             Pay for what you use. Every plan includes unlimited calls, email & SMS.
-            Credits power scraping, enrichment, and AI tools.
           </p>
 
-          {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-4 p-1.5 rounded-full bg-card border border-border">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border bg-card">
             <button
               onClick={() => setIsYearly(false)}
-              className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
-                !isYearly
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+              className={`px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+                !isYearly ? "bg-primary text-primary-foreground" : "text-muted-foreground"
               }`}
             >
               Monthly
             </button>
             <button
               onClick={() => setIsYearly(true)}
-              className={`px-6 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
-                isYearly
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+              className={`px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+                isYearly ? "bg-primary text-primary-foreground" : "text-muted-foreground"
               }`}
             >
-              Yearly
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                isYearly ? "bg-primary-foreground/20" : "bg-primary/10 text-primary"
-              }`}>
-                Save 20%
-              </span>
+              Yearly <span className="text-xs opacity-75">-20%</span>
             </button>
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map((plan, index) => (
             <div
               key={plan.name}
-              className={`relative p-6 rounded-2xl transition-all duration-500 hover:-translate-y-1 hover:shadow-xl ${
+              className={`relative p-6 rounded-2xl transition-all duration-500 ${
                 plan.popular
-                  ? "bg-card border-2 border-primary shadow-xl shadow-primary/10 hover:shadow-primary/20"
-                  : "bg-card border border-border hover:border-primary/30 hover:shadow-primary/5"
+                  ? "bg-card border-2 border-primary"
+                  : "bg-card border border-border"
               } ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`}
-              style={{ transitionDelay: `${index * 100}ms` }}
+              style={{ transitionDelay: `${index * 80}ms` }}
             >
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                  <Star className="w-4 h-4" />
-                  Most Popular
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                  Popular
                 </div>
               )}
 
-              <div className="mb-4">
-                <h3 className="font-display text-xl font-bold text-foreground mb-1">
-                  {plan.name}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {plan.description}
-                </p>
-              </div>
+              <h3 className="font-display text-lg font-bold text-foreground mb-1">{plan.name}</h3>
+              <p className="text-xs text-muted-foreground mb-4">{plan.description}</p>
 
-              <div className="mb-2">
-                <span className="font-display text-4xl font-bold text-foreground">
+              <div className="mb-1">
+                <span className="font-display text-3xl font-bold text-foreground">
                   {plan.monthlyPrice === 0 ? "Free" : `$${isYearly ? plan.yearlyPrice : plan.monthlyPrice}`}
                 </span>
-                {plan.monthlyPrice > 0 && (
-                  <span className="text-muted-foreground">/mo</span>
-                )}
+                {plan.monthlyPrice > 0 && <span className="text-muted-foreground text-sm">/mo</span>}
               </div>
 
-              <div className="mb-6 flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold text-primary">
-                  {plan.credits === Infinity ? "Unlimited" : plan.credits.toLocaleString()} credits/mo
+              <div className="mb-5 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-primary" />
+                <span className="text-xs font-medium text-primary">
+                  {plan.credits.toLocaleString()} credits/mo
                 </span>
               </div>
 
-              <ul className="space-y-2.5 mb-6">
+              <ul className="space-y-2 mb-6">
                 {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5">
-                    <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Check className="w-2.5 h-2.5 text-primary" />
-                    </div>
-                    <span className="text-muted-foreground text-sm">{feature}</span>
+                  <li key={feature} className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-muted-foreground">{feature}</span>
                   </li>
                 ))}
               </ul>
 
               <Button
+                size="sm"
                 className={`w-full ${
                   plan.popular
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
@@ -280,19 +176,13 @@ const Pricing = () => {
           ))}
         </div>
 
-        {/* Enterprise CTA */}
-        <div className="mt-12 text-center">
-          <p className="text-muted-foreground mb-2">Need unlimited credits or custom integrations?</p>
-          <a
-            href="#pricing"
-            className="text-primary hover:underline font-medium"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/auth?demo=true");
-            }}
-          >
-            Get a demo for Enterprise pricing →
-          </a>
+        <div className="mt-10 text-center">
+          <p className="text-xs text-muted-foreground">
+            Need custom volume?{" "}
+            <button onClick={() => navigate("/auth?demo=true")} className="text-primary hover:underline">
+              Get enterprise pricing →
+            </button>
+          </p>
         </div>
       </div>
     </section>

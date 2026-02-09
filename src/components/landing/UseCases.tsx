@@ -2,49 +2,41 @@ import { Database, Search, Mail, BarChart3, Bot, Target } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const useCases = [
-  { icon: Database, label: "CRM enrichment & maintenance", color: "bg-orange-50 dark:bg-orange-950/30" },
-  { icon: Search, label: "TAM sourcing & territory planning", color: "bg-blue-50 dark:bg-blue-950/30" },
-  { icon: Mail, label: "Inbound lead enrichment & routing", color: "bg-purple-50 dark:bg-purple-950/30" },
-  { icon: Target, label: "Intent-based outreach flows", color: "bg-yellow-50 dark:bg-yellow-950/30" },
-  { icon: Bot, label: "AI-powered outbound campaigns", color: "bg-rose-50 dark:bg-rose-950/30" },
-  { icon: BarChart3, label: "Account-based marketing", color: "bg-green-50 dark:bg-green-950/30" },
+  { icon: Database, label: "CRM enrichment & maintenance" },
+  { icon: Search, label: "TAM sourcing & territory planning" },
+  { icon: Mail, label: "Inbound lead enrichment & routing" },
+  { icon: Target, label: "Intent-based outreach flows" },
+  { icon: Bot, label: "AI-powered outbound campaigns" },
+  { icon: BarChart3, label: "Account-based marketing" },
 ];
 
 const UseCases = () => {
   const { ref, isVisible } = useScrollAnimation();
 
   return (
-    <section className="py-24 relative">
-      <div className="absolute inset-0 bg-gradient-to-b from-background to-secondary/10" />
-      
-      <div ref={ref} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className={`rounded-3xl bg-secondary/30 border border-border p-12 lg:p-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left Content */}
+    <section className="py-24">
+      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`rounded-2xl border border-border bg-card p-10 lg:p-14 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
             <div>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
-                Brivano's data + AI unlock any{" "}
-                <span className="gradient-text">growth use case</span>
+              <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Use Cases</p>
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground mb-4">
+                Unlock any growth use case
               </h2>
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                Use the best data foundation alongside AI-powered workflows to turn any growth idea 
-                into reality — from CRM enrichment to intent-based outbound. 
-                Iterate quickly to scale your best experiments.
+              <p className="text-muted-foreground leading-relaxed">
+                Use the best data foundation alongside AI-powered workflows to turn any growth idea into reality.
               </p>
             </div>
 
-            {/* Right - Use Cases */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               {useCases.map((useCase, index) => (
                 <div
                   key={useCase.label}
-                  className={`flex items-center gap-4 p-4 rounded-xl bg-card border border-border hover:border-primary/30 hover:translate-x-1 transition-all duration-500 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}
-                  style={{ transitionDelay: `${300 + index * 100}ms` }}
+                  className={`flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-all duration-500 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}
+                  style={{ transitionDelay: `${300 + index * 80}ms` }}
                 >
-                  <div className={`w-10 h-10 rounded-lg ${useCase.color} flex items-center justify-center flex-shrink-0`}>
-                    <useCase.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <span className="text-foreground font-medium">{useCase.label}</span>
+                  <useCase.icon className="w-4 h-4 text-primary flex-shrink-0" />
+                  <span className="text-sm text-foreground">{useCase.label}</span>
                 </div>
               ))}
             </div>
