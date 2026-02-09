@@ -650,6 +650,7 @@ Deno.serve(async (req) => {
 
       if (isRealEstateLead(lead)) {
         // ========== REAL ESTATE ENRICHMENT ==========
+        // Phase 1: Skip trace (primary for real estate)
         console.log(`[RealEstate] Using skip trace for lead ${leadId}`);
         const addressForSkipTrace = getAddressForSkipTrace(lead);
         
@@ -679,6 +680,98 @@ Deno.serve(async (req) => {
           }
         } else if (!addressForSkipTrace) {
           console.log(`[SkipTrace] No address available for lead ${leadId}`);
+        }
+
+        // Phase 2: B2B waterfall fallback if skip trace left gaps
+        const stillNeedsNameRE = !lead.full_name && !updates.full_name;
+        const stillNeedsEmailRE = !lead.best_email && !updates.best_email;
+        const stillNeedsPhoneRE = !lead.best_phone && !updates.best_phone;
+
+        if (stillNeedsNameRE || stillNeedsEmailRE || stillNeedsPhoneRE) {
+          // Try to find a domain to use for B2B lookups
+          let reDomain = lead.domain;
+          if (!reDomain || reDomain.includes('-')) {
+            // Real estate domains are often address slugs, try source_url or website
+            const sourceUrl = lead.source_url || lead.schema_data?.website || '';
+            try {
+              const url = new URL(typeof sourceUrl === 'string' && sourceUrl.startsWith('http') ? sourceUrl : `https://${sourceUrl}`);
+              const host = url.hostname.replace('www.', '');
+              // Only use if it's a real company domain, not a listing platform
+              const platformDomains = ['zillow.com', 'hotpads.com', 'apartments.com', 'redfin.com', 'trulia.com', 'realtor.com', 'craigslist.org'];
+              if (!platformDomains.some(pd => host.includes(pd))) {
+                reDomain = host;
+              }
+            } catch { /* ignore */ }
+          }
+
+          // If we have a person name from skip trace, try B2B providers to find their email/phone
+          const personName = (updates.full_name as string) || lead.full_name;
+          
+          if (reDomain || personName) {
+            console.log(`[RealEstate-B2B] Running B2B fallback. domain=${reDomain}, name=${personName}, needsEmail=${stillNeedsEmailRE}, needsPhone=${stillNeedsPhoneRE}`);
+
+            const applyResult = (r: EnrichmentResult) => {
+              enrichments.push(r);
+              providersUsed.push(r.provider);
+              if (r.full_name && !updates.full_name && !lead.full_name) updates.full_name = r.full_name;
+              if (r.email && !updates.best_email && !lead.best_email) {
+                updates.best_email = r.email;
+                const allEmails = lead.all_emails || (updates.all_emails as string[]) || [];
+                if (!allEmails.includes(r.email)) updates.all_emails = [...allEmails, r.email];
+              }
+              if ((r.phone || r.direct_phone || r.mobile_phone) && !updates.best_phone && !lead.best_phone) {
+                updates.best_phone = r.direct_phone || r.mobile_phone || r.phone;
+                const allPhones = lead.all_phones || (updates.all_phones as string[]) || [];
+                const newPhones = [r.phone, r.direct_phone, r.mobile_phone].filter(Boolean) as string[];
+                updates.all_phones = [...new Set([...allPhones, ...newPhones])];
+              }
+              if (r.linkedin_url && !updates.linkedin_search_url) updates.linkedin_search_url = r.linkedin_url;
+              if (r.job_title && !updates.job_title) updates.job_title = r.job_title;
+            };
+
+            const hasCompleteRE = () => !!(updates.full_name || lead.full_name) && !!(updates.best_email || lead.best_email) && !!(updates.best_phone || lead.best_phone);
+            const reNeedsEmail = () => !updates.best_email && !lead.best_email;
+            const reNeedsPhone = () => !updates.best_phone && !lead.best_phone;
+            const currentNameRE = () => (updates.full_name as string) || lead.full_name;
+            const currentLinkedInRE = () => (updates.linkedin_search_url as string) || lead.linkedin_search_url;
+
+            // Run providers in priority order, stop when complete
+            if (reDomain) {
+              if (apolloApiKey && !hasCompleteRE()) {
+                const r = await enrichWithApollo(reDomain, personName, apolloApiKey);
+                if (r) applyResult(r);
+              }
+              if (hunterApiKey && reNeedsEmail()) {
+                const nameParts = currentNameRE()?.split(' ') || [];
+                const r = await findEmailWithHunter(reDomain, nameParts[0], nameParts.slice(1).join(' ') || undefined, hunterApiKey);
+                if (r) applyResult(r);
+              }
+              if (pdlApiKey && !hasCompleteRE()) {
+                const r = await enrichWithPDL((updates.best_email as string) || lead.best_email, currentNameRE(), reDomain, pdlApiKey);
+                if (r) applyResult(r);
+              }
+              if (snovioApiKey && reNeedsEmail()) {
+                const r = await enrichWithSnovio(reDomain, currentNameRE(), snovioApiKey);
+                if (r) applyResult(r);
+              }
+              if (rocketreachApiKey && !hasCompleteRE()) {
+                const r = await enrichWithRocketReach(reDomain, currentNameRE(), rocketreachApiKey);
+                if (r) applyResult(r);
+              }
+              if (lushaApiKey && (reNeedsEmail() || reNeedsPhone())) {
+                const r = await enrichWithLusha(reDomain, currentNameRE(), currentLinkedInRE(), lushaApiKey);
+                if (r) applyResult(r);
+              }
+              if (contactoutApiKey && (reNeedsEmail() || reNeedsPhone())) {
+                const r = await enrichWithContactOut(reDomain, currentNameRE(), currentLinkedInRE(), contactoutApiKey);
+                if (r) applyResult(r);
+              }
+              if (firecrawlApiKey && (reNeedsEmail() || reNeedsPhone())) {
+                const r = await enrichWithGoogleSearch(reDomain, firecrawlApiKey);
+                if (r) applyResult(r);
+              }
+            }
+          }
         }
       } else {
         // ========== B2B ENRICHMENT - FULL 9-PROVIDER WATERFALL ==========
