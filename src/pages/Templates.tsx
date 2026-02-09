@@ -31,20 +31,20 @@ const Templates = () => {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Messages</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             Save winning templates and schedule messages for optimal delivery
           </p>
         </div>
 
-        <Tabs defaultValue="templates" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="templates" className="gap-2">
-              <FileText className="w-4 h-4" />
+        <Tabs defaultValue="templates" className="space-y-4">
+          <TabsList className="h-9 p-0.5 bg-muted/60">
+            <TabsTrigger value="templates" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <FileText className="w-3.5 h-3.5" />
               Templates Library
             </TabsTrigger>
-            <TabsTrigger value="scheduled" className="gap-2">
-              <Clock className="w-4 h-4" />
+            <TabsTrigger value="scheduled" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Clock className="w-3.5 h-3.5" />
               Scheduled Messages
             </TabsTrigger>
           </TabsList>

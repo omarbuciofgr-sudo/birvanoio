@@ -122,26 +122,26 @@ const Settings = () => {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">Manage your account and integrations.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your account and integrations</p>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="profile" className="gap-2">
-              <User className="w-4 h-4" />
+        <Tabs defaultValue="profile" className="space-y-4">
+          <TabsList className="h-9 p-0.5 bg-muted/60">
+            <TabsTrigger value="profile" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <User className="w-3.5 h-3.5" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="templates" className="gap-2">
-              <MessageSquare className="w-4 h-4" />
+            <TabsTrigger value="templates" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <MessageSquare className="w-3.5 h-3.5" />
               Templates
             </TabsTrigger>
-            <TabsTrigger value="scheduled" className="gap-2">
-              <Clock className="w-4 h-4" />
+            <TabsTrigger value="scheduled" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Clock className="w-3.5 h-3.5" />
               Scheduled
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="gap-2">
-              <Zap className="w-4 h-4" />
+            <TabsTrigger value="integrations" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Zap className="w-3.5 h-3.5" />
               Integrations
             </TabsTrigger>
           </TabsList>
@@ -149,7 +149,7 @@ const Settings = () => {
           {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6 max-w-2xl">
             {/* Profile Settings */}
-            <Card className="bg-card border-border">
+            <Card className="border-border/60">
               <CardHeader>
                 <CardTitle className="text-foreground">Profile</CardTitle>
                 <CardDescription>Update your personal information.</CardDescription>
@@ -211,7 +211,7 @@ const Settings = () => {
             </Card>
 
             {/* Communication Settings */}
-            <Card className="bg-card border-border">
+            <Card className="border-border/60">
               <CardHeader>
                 <CardTitle className="text-foreground flex items-center gap-2">
                   <Phone className="w-5 h-5" />
@@ -272,7 +272,7 @@ const Settings = () => {
             </Card>
 
             {/* Subscription Info */}
-            <Card className="bg-card border-border">
+            <Card className="border-border/60">
               <CardHeader>
                 <CardTitle className="text-foreground">Subscription</CardTitle>
                 <CardDescription>Your current plan and billing information.</CardDescription>

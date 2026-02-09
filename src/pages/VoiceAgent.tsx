@@ -260,36 +260,33 @@ const VoiceAgent = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold text-foreground flex items-center gap-3">
-              <Bot className="w-8 h-8 text-primary" />
-              Voice AI Agent
-            </h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight">Voice AI Agent</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Automated AI-powered outbound calls for lead qualification
             </p>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
-            <Phone className="w-4 h-4" />
+          <Button onClick={() => setIsDialogOpen(true)} size="sm" className="gap-1.5 text-xs">
+            <Phone className="w-3.5 h-3.5" />
             New AI Call
           </Button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {[
             { label: "Total Calls", value: calls.length, icon: Phone },
             { label: "Completed", value: calls.filter(c => c.status === "completed").length, icon: CheckCircle },
             { label: "In Progress", value: calls.filter(c => c.status === "in_progress").length, icon: Mic },
             { label: "Pending", value: calls.filter(c => c.status === "pending").length, icon: Clock },
           ].map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="pt-6">
+            <Card key={stat.label} className="border-border/60">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                    <p className="text-2xl font-bold mt-1">{stat.value}</p>
                   </div>
-                  <stat.icon className="w-8 h-8 text-primary/50" />
+                  <stat.icon className="w-4 h-4 text-muted-foreground/60" />
                 </div>
               </CardContent>
             </Card>

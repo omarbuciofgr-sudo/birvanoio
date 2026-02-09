@@ -320,13 +320,13 @@ const Campaigns = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold text-foreground">Email Campaigns</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight">Email Campaigns</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Create automated email sequences for lead nurturing
             </p>
           </div>
-          <Button onClick={() => setIsCreating(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
+          <Button onClick={() => setIsCreating(true)} size="sm" className="gap-1.5 text-xs">
+            <Plus className="w-3.5 h-3.5" />
             New Campaign
           </Button>
         </div>

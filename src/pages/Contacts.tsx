@@ -305,21 +305,21 @@ const Contacts = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Contact Submissions
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-0.5">
               Manage and follow up on website contact form submissions
             </p>
           </div>
-          <Button onClick={fetchSubmissions} variant="outline" size="sm">
-            <RefreshCw className="w-4 h-4 mr-2" />
+          <Button onClick={fetchSubmissions} variant="outline" size="sm" className="gap-1.5 text-xs">
+            <RefreshCw className="w-3.5 h-3.5" />
             Refresh
           </Button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
