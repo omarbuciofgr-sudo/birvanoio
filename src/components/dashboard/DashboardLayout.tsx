@@ -31,10 +31,11 @@ interface DashboardLayoutProps {
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Leads", href: "/dashboard/leads", icon: Users },
+  { name: "Web Scraper", href: "/dashboard/scraper", icon: Globe },
+  { name: "CSV Enrichment", href: "/dashboard/csv-enrichment", icon: Sparkles },
   { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
   { name: "Templates", href: "/dashboard/templates", icon: FileText },
   { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
-  { name: "CSV Enrichment", href: "/dashboard/csv-enrichment", icon: Sparkles },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
@@ -87,7 +88,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   ];
 
   const adminScraperItems = [
-    { name: "Web Scraper", href: "/dashboard/scraper", icon: Globe },
     { name: "Scrape Jobs", href: "/admin/scrape-jobs", icon: Globe },
     { name: "Scraped Leads", href: "/admin/scraped-leads", icon: Users },
     { name: "Schema Templates", href: "/admin/schema-templates", icon: FileText },
