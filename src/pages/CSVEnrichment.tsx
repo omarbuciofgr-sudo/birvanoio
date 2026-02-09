@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useEnrichmentCredits } from "@/hooks/useEnrichmentCredits";
+import { useCredits } from "@/hooks/useCredits";
 import { CreditLimitPopup } from "@/components/subscription/CreditLimitPopup";
 
 type EnrichmentStatus = "pending" | "enriching" | "enriched" | "partial" | "not_found" | "error";
@@ -112,7 +112,7 @@ const CSVEnrichment = () => {
   const [isEnrichingAll, setIsEnrichingAll] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   const [showCreditPopup, setShowCreditPopup] = useState(false);
-  const { creditsUsed, creditLimit, remaining, isAtLimit, deductCredits, refreshCredits, tier } = useEnrichmentCredits();
+  const { creditsUsed, monthlyAllowance, remaining, isAtLimit, spendCredits, refreshCredits, tier } = useCredits();
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -220,7 +220,7 @@ const CSVEnrichment = () => {
       if (error) throw error;
       const result = data.results?.[0];
       if (result) {
-        await deductCredits(1);
+        await spendCredits("enrich", 1);
         setRows((prev) =>
           prev.map((r) =>
             r.id === rowIndex
@@ -262,7 +262,7 @@ const CSVEnrichment = () => {
     }
 
     // Cap to remaining credits
-    const rowsToEnrich = creditLimit === Infinity ? pendingRows : pendingRows.slice(0, remaining);
+    const rowsToEnrich = monthlyAllowance === Infinity ? pendingRows : pendingRows.slice(0, Math.floor(remaining / 2));
     if (rowsToEnrich.length < pendingRows.length) {
       toast.info(`Only enriching ${rowsToEnrich.length} of ${pendingRows.length} rows (credit limit)`);
     }
@@ -296,7 +296,7 @@ const CSVEnrichment = () => {
         const results = data.results || [];
         const successCount = results.filter((r: any) => r.status !== "error").length;
         totalDeducted += successCount;
-        await deductCredits(successCount);
+        await spendCredits("enrich", successCount);
 
         setRows((prev) =>
           prev.map((r) => {
@@ -390,7 +390,7 @@ const CSVEnrichment = () => {
         open={showCreditPopup}
         onOpenChange={setShowCreditPopup}
         creditsUsed={creditsUsed}
-        creditLimit={creditLimit}
+        monthlyAllowance={monthlyAllowance}
         currentTier={tier}
       />
       <div className="space-y-6">
@@ -404,7 +404,7 @@ const CSVEnrichment = () => {
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="gap-1 py-1 px-3">
               <Zap className="w-3.5 h-3.5" />
-              {creditLimit === Infinity ? "Unlimited" : `${remaining} / ${creditLimit}`} credits
+              {monthlyAllowance === Infinity ? "Unlimited" : `${remaining} / ${monthlyAllowance}`} credits
             </Badge>
             {step === "table" && (
               <>
