@@ -368,20 +368,22 @@ async function markDomainBlocked(supabase: any, domain: string, reason: string, 
     }, { onConflict: 'domain' });
 }
 
-// Scrape a single URL using Firecrawl
-async function scrapeUrl(url: string, apiKey: string): Promise<{
+// Scrape a single URL using Firecrawl with Zyte fallback
+async function scrapeUrl(url: string, firecrawlApiKey: string): Promise<{
   success: boolean;
   markdown?: string;
   html?: string;
   links?: string[];
   error?: string;
   httpStatus?: number;
+  scraper_used?: string;
 }> {
+  // Attempt 1: Firecrawl
   try {
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${firecrawlApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -394,22 +396,100 @@ async function scrapeUrl(url: string, apiKey: string): Promise<{
 
     const data = await response.json();
     
-    if (!response.ok) {
-      return { 
-        success: false, 
-        error: data.error || `HTTP ${response.status}`,
-        httpStatus: response.status,
+    if (response.ok) {
+      return {
+        success: true,
+        markdown: data.data?.markdown || data.markdown,
+        html: data.data?.html || data.html,
+        links: data.data?.links || data.links || [],
+        scraper_used: 'firecrawl',
       };
     }
 
-    return {
-      success: true,
-      markdown: data.data?.markdown || data.markdown,
-      html: data.data?.html || data.html,
-      links: data.data?.links || data.links || [],
+    // If Firecrawl fails with 4xx (blocked/forbidden), try Zyte fallback
+    if (response.status === 403 || response.status === 429 || response.status >= 500) {
+      console.log(`[ScrapeRetry] Firecrawl failed (HTTP ${response.status}), trying Zyte fallback for ${url}`);
+      return await scrapeWithZyte(url);
+    }
+
+    return { 
+      success: false, 
+      error: data.error || `HTTP ${response.status}`,
+      httpStatus: response.status,
+      scraper_used: 'firecrawl',
     };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    console.log(`[ScrapeRetry] Firecrawl exception, trying Zyte fallback for ${url}`);
+    return await scrapeWithZyte(url);
+  }
+}
+
+// Zyte fallback scraper
+async function scrapeWithZyte(url: string): Promise<{
+  success: boolean;
+  markdown?: string;
+  html?: string;
+  links?: string[];
+  error?: string;
+  httpStatus?: number;
+  scraper_used?: string;
+}> {
+  const zyteApiKey = Deno.env.get('ZYTE_API_KEY');
+  if (!zyteApiKey) {
+    return { success: false, error: 'Zyte API key not configured for fallback', scraper_used: 'zyte' };
+  }
+
+  try {
+    const response = await fetch('https://api.zyte.com/v1/extract', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${btoa(zyteApiKey + ':')}`,
+      },
+      body: JSON.stringify({
+        url,
+        browserHtml: true,
+        httpResponseBody: false,
+      }),
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Zyte HTTP ${response.status}`,
+        httpStatus: response.status,
+        scraper_used: 'zyte',
+      };
+    }
+
+    const data = await response.json();
+    const html = data.browserHtml || '';
+    
+    // Convert HTML to basic markdown (extract text content)
+    const textContent = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // Extract links from HTML
+    const linkMatches = html.matchAll(/href="(https?:\/\/[^"]+)"/gi);
+    const links = [...linkMatches].map(m => m[1]);
+
+    return {
+      success: true,
+      markdown: textContent,
+      html,
+      links: [...new Set(links)],
+      scraper_used: 'zyte',
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Zyte scrape failed',
+      scraper_used: 'zyte',
+    };
   }
 }
 
@@ -488,16 +568,81 @@ async function processTarget(
       markdown_content: markdown.substring(0, 50000),
       scraped_at: new Date().toISOString(),
       processing_time_ms: processingTime,
+      scraper_used: scrapeResult.scraper_used || 'firecrawl',
     });
 
-    // Extract all contact information
-    const allEmails = extractEmails(markdown);
-    const allPhones = extractPhones(markdown);
-    const contactFormUrl = extractContactFormUrl(links);
+    // ========== MULTI-PAGE PAGINATION ==========
+    // Auto-detect "Next" page links and follow them for listing-style pages
+    let combinedMarkdown = markdown;
+    let combinedLinks = [...links];
+    const maxPagination = 3; // Limit pagination to 3 extra pages
+    let pagesScraped = 1;
+    
+    // Detect pagination links
+    const paginationPatterns = [
+      /href="([^"]*(?:page|p)=\d+[^"]*)"/gi,
+      /href="([^"]*\/page\/\d+[^"]*)"/gi,
+      /next.*?href="([^"]+)"/gi,
+      /href="([^"]+)".*?next/gi,
+    ];
+    
+    const paginationUrls = new Set<string>();
+    for (const pattern of paginationPatterns) {
+      const matches = (scrapeResult.html || markdown).matchAll(pattern);
+      for (const match of matches) {
+        try {
+          const paginationUrl = new URL(match[1], formattedUrl).href;
+          if (paginationUrl !== formattedUrl && !paginationUrls.has(paginationUrl)) {
+            paginationUrls.add(paginationUrl);
+          }
+        } catch { /* ignore invalid URLs */ }
+      }
+    }
+    
+    // Also check links array for pagination
+    for (const link of links) {
+      if (link.includes('page=') || link.includes('/page/') || link.match(/[?&]p=\d+/)) {
+        if (link !== formattedUrl) paginationUrls.add(link);
+      }
+    }
+    
+    if (paginationUrls.size > 0) {
+      const paginatedToScrape = [...paginationUrls].slice(0, maxPagination);
+      console.log(`[Pagination] Found ${paginationUrls.size} pagination links, scraping ${paginatedToScrape.length}`);
+      
+      for (const pageUrl of paginatedToScrape) {
+        try {
+          const pageResult = await scrapeUrl(pageUrl, firecrawlApiKey);
+          if (pageResult.success && pageResult.markdown) {
+            combinedMarkdown += '\n\n' + pageResult.markdown;
+            combinedLinks = [...combinedLinks, ...(pageResult.links || [])];
+            pagesScraped++;
+            
+            await supabaseClient.from('scraped_pages').insert({
+              job_id: jobId,
+              url: pageUrl,
+              domain,
+              status: 'scraped',
+              markdown_content: pageResult.markdown.substring(0, 50000),
+              scraped_at: new Date().toISOString(),
+              processing_time_ms: Date.now() - startTime,
+              scraper_used: pageResult.scraper_used || 'firecrawl',
+            });
+          }
+        } catch (err) {
+          console.error(`[Pagination] Failed to scrape ${pageUrl}:`, err);
+        }
+      }
+    }
+
+    // Extract all contact information (from all pages combined)
+    const allEmails = extractEmails(combinedMarkdown);
+    const allPhones = extractPhones(combinedMarkdown);
+    const contactFormUrl = extractContactFormUrl(combinedLinks);
     
     const niche = schemaTemplate?.niche || undefined;
-    const teamContacts = parseTeamCards(markdown, formattedUrl, niche);
-    console.log(`Found ${teamContacts.length} team contacts for ${domain}`);
+    const teamContacts = parseTeamCards(combinedMarkdown, formattedUrl, niche);
+    console.log(`Found ${teamContacts.length} team contacts across ${pagesScraped} page(s) for ${domain}`);
     
     const bestContact = selectBestContact(teamContacts);
     const fallbackName = extractName(markdown);
@@ -514,13 +659,35 @@ async function processTarget(
     
     const linkedinSearchUrl = generateLinkedInSearchUrl(domain, fullName);
 
-    let confidenceScore = 30;
-    if (mergedEmails.length > 0) confidenceScore += 20;
-    if (mergedPhones.length > 0) confidenceScore += 15;
-    if (fullName) confidenceScore += 15;
-    if (contactTitle) confidenceScore += 10;
-    if (bestContact && bestContact.email && bestContact.phone) confidenceScore += 10;
+    // ========== CONFIDENCE SCORING V2 ==========
+    // Weighted by extraction method quality
+    let confidenceScore = 0;
+    
+    // Data completeness (0-40)
+    if (mergedEmails.length > 0) confidenceScore += 15;
+    if (mergedPhones.length > 0) confidenceScore += 10;
+    if (fullName) confidenceScore += 10;
+    if (contactTitle) confidenceScore += 5;
+    
+    // Extraction method quality (0-25)
+    if (teamContacts.length > 0) {
+      // Team card parsing = highest quality structured data
+      confidenceScore += 20;
+    } else if (mergedEmails.length > 0 || mergedPhones.length > 0) {
+      // Regex extraction = lower quality
+      confidenceScore += 10;
+    }
+    
+    // Contact completeness (0-15)
+    if (bestContact && bestContact.email && bestContact.phone) confidenceScore += 15;
+    else if (bestContact && (bestContact.email || bestContact.phone)) confidenceScore += 8;
+    
+    // Additional signals (0-20)
     if (contactFormUrl) confidenceScore += 5;
+    if (mergedEmails.length > 1) confidenceScore += 3; // Multiple emails = more reliable
+    if (mergedPhones.length > 1) confidenceScore += 3;
+    if (allContacts.length > 2) confidenceScore += 5; // Rich team data
+    if (schemaTemplate) confidenceScore += 4; // Schema-guided extraction
 
     const allContacts = teamContacts.map(c => ({
       name: c.name,
@@ -842,39 +1009,42 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ========== CROSS-JOB DEDUP before enrichment ==========
+      const newLeadIds = results.filter(r => r.success && r.leadId && !r.fromCache).map(r => r.leadId!);
+      if (newLeadIds.length > 0) {
+        console.log(`Running cross-job dedup for ${newLeadIds.length} new leads...`);
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/dedupe-leads`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseServiceKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lead_ids: newLeadIds, auto_merge: true }),
+          });
+        } catch (err) { console.error('Cross-job dedup failed:', err); }
+      }
+
       // Auto-enrich leads that need it
       if (autoEnrich && leadsToEnrich.length > 0) {
         console.log(`Auto-enriching ${leadsToEnrich.length} leads...`);
         try {
           await fetch(`${supabaseUrl}/functions/v1/enrich-lead`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Authorization': `Bearer ${supabaseServiceKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ lead_ids: leadsToEnrich }),
           });
-        } catch (err) {
-          console.error('Auto-enrichment failed:', err);
-        }
+        } catch (err) { console.error('Auto-enrichment failed:', err); }
       }
 
-      // Auto-validate all processed leads
+      // Auto-validate all processed leads (enrich-lead now auto-validates too, but this catches non-enriched leads)
       const allLeadIds = results.filter(r => r.success && r.leadId && !r.fromCache).map(r => r.leadId!);
       if (autoValidate && allLeadIds.length > 0) {
         console.log(`Auto-validating ${allLeadIds.length} leads...`);
         try {
           await fetch(`${supabaseUrl}/functions/v1/validate-lead`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Authorization': `Bearer ${supabaseServiceKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ lead_ids: allLeadIds }),
           });
-        } catch (err) {
-          console.error('Auto-validation failed:', err);
-        }
+        } catch (err) { console.error('Auto-validation failed:', err); }
       }
 
       // Check if job is now complete
