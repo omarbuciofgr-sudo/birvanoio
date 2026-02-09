@@ -1,4 +1,5 @@
 import { Database, Search, Mail, BarChart3, Bot, Target } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const useCases = [
   { icon: Database, label: "CRM enrichment & maintenance", color: "bg-orange-50 dark:bg-orange-950/30" },
@@ -10,12 +11,14 @@ const useCases = [
 ];
 
 const UseCases = () => {
+  const { ref, isVisible } = useScrollAnimation();
+
   return (
     <section className="py-24 relative">
       <div className="absolute inset-0 bg-gradient-to-b from-background to-secondary/10" />
       
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-3xl bg-secondary/30 border border-border p-12 lg:p-16">
+      <div ref={ref} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`rounded-3xl bg-secondary/30 border border-border p-12 lg:p-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
             <div>
@@ -32,10 +35,11 @@ const UseCases = () => {
 
             {/* Right - Use Cases */}
             <div className="space-y-3">
-              {useCases.map((useCase) => (
+              {useCases.map((useCase, index) => (
                 <div
                   key={useCase.label}
-                  className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors"
+                  className={`flex items-center gap-4 p-4 rounded-xl bg-card border border-border hover:border-primary/30 hover:translate-x-1 transition-all duration-500 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}
+                  style={{ transitionDelay: `${300 + index * 100}ms` }}
                 >
                   <div className={`w-10 h-10 rounded-lg ${useCase.color} flex items-center justify-center flex-shrink-0`}>
                     <useCase.icon className="w-5 h-5 text-primary" />
