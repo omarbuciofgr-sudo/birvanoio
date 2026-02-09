@@ -1614,7 +1614,10 @@ export type Database = {
           email: string
           first_name: string | null
           id: string
+          industry: string | null
           last_name: string | null
+          phone: string | null
+          role_title: string | null
           sender_email: string | null
           twilio_phone_number: string | null
           updated_at: string
@@ -1628,7 +1631,10 @@ export type Database = {
           email: string
           first_name?: string | null
           id?: string
+          industry?: string | null
           last_name?: string | null
+          phone?: string | null
+          role_title?: string | null
           sender_email?: string | null
           twilio_phone_number?: string | null
           updated_at?: string
@@ -1642,7 +1648,10 @@ export type Database = {
           email?: string
           first_name?: string | null
           id?: string
+          industry?: string | null
           last_name?: string | null
+          phone?: string | null
+          role_title?: string | null
           sender_email?: string | null
           twilio_phone_number?: string | null
           updated_at?: string
