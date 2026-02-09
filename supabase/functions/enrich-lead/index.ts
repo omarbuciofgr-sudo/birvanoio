@@ -883,6 +883,90 @@ Deno.serve(async (req) => {
         updates.linkedin_search_url = generateLinkedInSearchUrl(companyName, fullName);
       }
 
+      // ========== GOOGLE PLACES ENRICHMENT ==========
+      const googlePlacesApiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
+      if (googlePlacesApiKey && enrich_company) {
+        const companyName = (updates.company_name as string) || lead.schema_data?.company_name as string || lead.domain;
+        const city = lead.schema_data?.city as string || (updates as any).headquarters_city;
+        const state = lead.schema_data?.state as string || (updates as any).headquarters_state;
+        const searchQuery = city ? `${companyName} ${city} ${state || ''}` : companyName;
+        
+        try {
+          console.log(`[GooglePlaces] Searching: ${searchQuery}`);
+          const gpResponse = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': googlePlacesApiKey,
+              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.rating,places.userRatingCount,places.businessStatus,places.types,places.currentOpeningHours,places.reviews',
+            },
+            body: JSON.stringify({ textQuery: searchQuery, maxResultCount: 1, languageCode: 'en' }),
+          });
+          
+          if (gpResponse.ok) {
+            const gpData = await gpResponse.json();
+            const place = gpData.places?.[0];
+            if (place) {
+              const gpEnrichment: Record<string, unknown> = {};
+              if (place.rating) gpEnrichment.google_rating = place.rating;
+              if (place.userRatingCount) gpEnrichment.google_review_count = place.userRatingCount;
+              if (place.businessStatus) gpEnrichment.google_business_status = place.businessStatus;
+              if (place.types) gpEnrichment.google_categories = place.types.slice(0, 5);
+              if (place.currentOpeningHours?.weekdayDescriptions) gpEnrichment.google_hours = place.currentOpeningHours.weekdayDescriptions;
+              if (place.formattedAddress && !lead.address) updates.address = place.formattedAddress;
+              if (place.nationalPhoneNumber && !updates.best_phone && !lead.best_phone) {
+                updates.best_phone = place.nationalPhoneNumber;
+                const allPhones = lead.all_phones || (updates.all_phones as string[]) || [];
+                updates.all_phones = [...new Set([...allPhones, place.nationalPhoneNumber])];
+              }
+              if (place.websiteUri && !lead.schema_data?.website) {
+                gpEnrichment.website = place.websiteUri;
+              }
+              
+              // Extract owner mentions from reviews
+              const ownerMentions: string[] = [];
+              if (place.reviews) {
+                for (const review of place.reviews) {
+                  const text = review.text?.text || '';
+                  const ownerPatterns = [
+                    /(?:owner|manager|ceo|founder)\s+(\w+(?:\s+\w+)?)/gi,
+                    /(\w+(?:\s+\w+)?)\s+(?:the owner|runs this|manages)/gi,
+                  ];
+                  for (const pattern of ownerPatterns) {
+                    const matches = text.matchAll(pattern);
+                    for (const match of matches) {
+                      if (match[1] && match[1].length > 2 && match[1].length < 30) ownerMentions.push(match[1].trim());
+                    }
+                  }
+                }
+              }
+              if (ownerMentions.length > 0) gpEnrichment.owner_mentions = [...new Set(ownerMentions)].slice(0, 3);
+              
+              updates.schema_data = { ...(lead.schema_data || {}), ...(updates.schema_data as Record<string, unknown> || {}), google_places: gpEnrichment };
+              enrichments.push({ provider: 'google_places', fields_enriched: Object.keys(gpEnrichment) } as EnrichmentResult);
+              providersUsed.push('google_places');
+              console.log(`[GooglePlaces] Found: rating=${place.rating}, reviews=${place.userRatingCount}`);
+            }
+          }
+        } catch (error) { console.error('[GooglePlaces] Error:', error); }
+      }
+
+      // ========== LINKEDIN PROFILE MATCHING ==========
+      // Generate a direct LinkedIn profile search URL with better parameters
+      if (!lead.linkedin_search_url || lead.linkedin_search_url.includes('/search/results/')) {
+        const fullName = (updates.full_name as string) || lead.full_name;
+        const companyName = (updates.company_name as string) || lead.schema_data?.company_name as string;
+        const jobTitle = (updates as any).job_title || lead.schema_data?.contact_title as string;
+        
+        if (fullName) {
+          // Build a more targeted LinkedIn search URL
+          const searchParts: string[] = [fullName];
+          if (companyName) searchParts.push(companyName);
+          if (jobTitle) searchParts.push(jobTitle);
+          updates.linkedin_search_url = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(searchParts.join(' '))}&origin=GLOBAL_SEARCH_HEADER`;
+        }
+      }
+
       // Store enrichment data
       if (enrichments.length > 0) {
         updates.enrichment_data = {
@@ -892,10 +976,37 @@ Deno.serve(async (req) => {
         };
         updates.enrichment_providers_used = [...new Set(providersUsed)];
 
-        let newScore = lead.confidence_score || 30;
-        if (updates.best_email) newScore += 15;
-        if (updates.best_phone) newScore += 10;
-        if (updates.full_name) newScore += 10;
+        // ========== CONFIDENCE SCORING V2 ==========
+        let newScore = 0;
+        // Base data completeness (0-40)
+        if (updates.best_email || lead.best_email) newScore += 15;
+        if (updates.best_phone || lead.best_phone) newScore += 10;
+        if (updates.full_name || lead.full_name) newScore += 10;
+        if ((updates as any).job_title || lead.schema_data?.contact_title) newScore += 5;
+        
+        // Validation quality (0-20)
+        if (lead.email_validation_status === 'verified') newScore += 10;
+        else if (lead.email_validation_status === 'likely_valid') newScore += 5;
+        if (lead.phone_validation_status === 'verified') newScore += 10;
+        else if (lead.phone_validation_status === 'likely_valid') newScore += 5;
+        
+        // Source quality weight (0-20)
+        const sourceQualityWeights: Record<string, number> = {
+          'apollo': 18, 'pdl': 17, 'rocketreach': 16, 'lusha': 16, 'hunter': 14,
+          'contactout': 14, 'snovio': 12, 'clearbit': 15, 'batchdata_skip_trace': 16,
+          'google_search': 8, 'google_places': 12,
+        };
+        const bestProviderScore = Math.max(0, ...providersUsed.map(p => sourceQualityWeights[p] || 5));
+        newScore += bestProviderScore;
+        
+        // Data richness bonus (0-20)
+        const schemaData = { ...(lead.schema_data || {}), ...(updates.schema_data as Record<string, unknown> || {}) };
+        if (schemaData.google_places) newScore += 5;
+        if (updates.linkedin_search_url && !(updates.linkedin_search_url as string).includes('/search/results/')) newScore += 5;
+        if (lead.all_emails?.length > 1 || (updates.all_emails as string[])?.length > 1) newScore += 3;
+        if (lead.all_phones?.length > 1 || (updates.all_phones as string[])?.length > 1) newScore += 3;
+        if ((updates as any).company_name || lead.schema_data?.company_name) newScore += 4;
+        
         updates.confidence_score = Math.min(100, newScore);
       }
 
@@ -903,6 +1014,25 @@ Deno.serve(async (req) => {
       if (Object.keys(updates).length > 0) {
         const { error: updateError } = await supabase.from('scraped_leads').update(updates).eq('id', leadId);
         if (updateError) console.error(`Error updating lead ${leadId}:`, updateError);
+      }
+
+      // ========== AUTO-VALIDATE after enrichment ==========
+      const zerobounceApiKey = Deno.env.get('ZEROBOUNCE_API_KEY');
+      const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+      const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+      const emailToValidate = (updates.best_email as string) || lead.best_email;
+      const phoneToValidate = (updates.best_phone as string) || lead.best_phone;
+      
+      if ((zerobounceApiKey && emailToValidate && lead.email_validation_status !== 'verified') ||
+          (twilioAccountSid && twilioAuthToken && phoneToValidate && lead.phone_validation_status !== 'verified')) {
+        try {
+          console.log(`[AutoValidate] Triggering validation for lead ${leadId}`);
+          await fetch(`${supabaseUrl}/functions/v1/validate-lead`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseServiceKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lead_ids: [leadId] }),
+          });
+        } catch (err) { console.error('[AutoValidate] Failed:', err); }
       }
 
       results.push({ lead_id: leadId, enrichments });

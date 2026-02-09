@@ -98,23 +98,64 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { job_id, lead_ids, auto_merge = false } = body;
 
-    // Get leads to check
-    let query = supabase
-      .from('scraped_leads')
-      .select('id, domain, best_email, best_phone, full_name, schema_data, confidence_score, email_validation_status, phone_validation_status, created_at')
-      .order('created_at', { ascending: true });
-
-    if (job_id) {
-      query = query.eq('job_id', job_id);
-    } else if (lead_ids && lead_ids.length > 0) {
-      query = query.in('id', lead_ids);
+    // Get leads to check for duplicates
+    let leadsToCheck: LeadForDedup[] = [];
+    
+    if (lead_ids && lead_ids.length > 0) {
+      // Fetch the new leads
+      const { data: newLeads, error } = await supabase
+        .from('scraped_leads')
+        .select('id, domain, best_email, best_phone, full_name, schema_data, confidence_score, email_validation_status, phone_validation_status, created_at')
+        .in('id', lead_ids)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      leadsToCheck = (newLeads || []) as LeadForDedup[];
+      
+      // CROSS-JOB DEDUP: Also fetch existing leads that might be duplicates
+      // Look up by domain and email to find potential cross-job matches
+      const domains = [...new Set(leadsToCheck.map(l => l.domain).filter(Boolean))];
+      const emails = [...new Set(leadsToCheck.map(l => normalizeEmail(l.best_email)).filter(Boolean))] as string[];
+      const phones = [...new Set(leadsToCheck.map(l => normalizePhone(l.best_phone)).filter(Boolean))] as string[];
+      
+      // Fetch existing leads with matching domains, emails, or phones
+      let existingQuery = supabase
+        .from('scraped_leads')
+        .select('id, domain, best_email, best_phone, full_name, schema_data, confidence_score, email_validation_status, phone_validation_status, created_at')
+        .not('id', 'in', `(${lead_ids.join(',')})`)
+        .not('status', 'eq', 'rejected');
+      
+      if (domains.length > 0) {
+        existingQuery = existingQuery.in('domain', domains);
+      }
+      
+      const { data: existingLeads } = await existingQuery.limit(500);
+      
+      if (existingLeads && existingLeads.length > 0) {
+        console.log(`Cross-job dedup: checking ${leadsToCheck.length} new leads against ${existingLeads.length} existing leads`);
+        leadsToCheck = [...(existingLeads as LeadForDedup[]), ...leadsToCheck];
+      }
+    } else if (job_id) {
+      const { data, error } = await supabase
+        .from('scraped_leads')
+        .select('id, domain, best_email, best_phone, full_name, schema_data, confidence_score, email_validation_status, phone_validation_status, created_at')
+        .eq('job_id', job_id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      leadsToCheck = (data || []) as LeadForDedup[];
+    } else {
+      // Full database dedup
+      const { data, error } = await supabase
+        .from('scraped_leads')
+        .select('id, domain, best_email, best_phone, full_name, schema_data, confidence_score, email_validation_status, phone_validation_status, created_at')
+        .not('status', 'eq', 'rejected')
+        .order('created_at', { ascending: true })
+        .limit(1000);
+      if (error) throw error;
+      leadsToCheck = (data || []) as LeadForDedup[];
     }
 
-    const { data: leads, error } = await query;
-
-    if (error) {
-      throw error;
-    }
+    const leads = leadsToCheck;
 
     if (!leads || leads.length === 0) {
       return new Response(
