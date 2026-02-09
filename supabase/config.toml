@@ -41,3 +41,15 @@ verify_jwt = false
 
 [functions.csv-enrich]
 verify_jwt = false
+
+[functions.ai-dashboard-chat]
+verify_jwt = false
+
+[functions.ai-outreach-agent]
+verify_jwt = false
+
+[functions.ai-qualify-lead]
+verify_jwt = false
+
+[functions.ai-company-summary]
+verify_jwt = false

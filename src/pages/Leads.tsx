@@ -9,6 +9,8 @@ import { LeadScoreBadge } from "@/components/leads/LeadScoreBadge";
 import { LeadKanbanBoard } from "@/components/leads/LeadKanbanBoard";
 import { LeadActivityTimeline } from "@/components/leads/LeadActivityTimeline";
 import { TeamAssignment } from "@/components/leads/TeamAssignment";
+import { AIQualifyPanel } from "@/components/leads/AIQualifyPanel";
+import { AIOutreachPanel } from "@/components/leads/AIOutreachPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -453,11 +455,13 @@ const Leads = () => {
 
             {selectedLead && user && (
               <Tabs defaultValue="details" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-6">
                   <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="ai">AI Insights</TabsTrigger>
+                  <TabsTrigger value="outreach">Outreach</TabsTrigger>
                   <TabsTrigger value="activity">Activity</TabsTrigger>
                   <TabsTrigger value="team">Team</TabsTrigger>
-                  <TabsTrigger value="communication">Communication</TabsTrigger>
+                  <TabsTrigger value="communication">Comms</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="activity" className="mt-4">
@@ -618,6 +622,14 @@ const Leads = () => {
                   </div>
                 </TabsContent>
                 
+                <TabsContent value="ai" className="mt-4">
+                  <AIQualifyPanel lead={selectedLead} />
+                </TabsContent>
+
+                <TabsContent value="outreach" className="mt-4">
+                  <AIOutreachPanel lead={selectedLead} />
+                </TabsContent>
+
                 <TabsContent value="team" className="mt-4">
                   <TeamAssignment
                     leadId={selectedLead.id}
