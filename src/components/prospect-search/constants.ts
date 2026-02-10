@@ -276,6 +276,40 @@ export const US_STATES = [
   'Wisconsin', 'Wyoming',
 ];
 
+// Major cities
+export const MAJOR_CITIES = [
+  { value: 'New York', label: 'New York, NY' },
+  { value: 'Los Angeles', label: 'Los Angeles, CA' },
+  { value: 'Chicago', label: 'Chicago, IL' },
+  { value: 'Houston', label: 'Houston, TX' },
+  { value: 'Phoenix', label: 'Phoenix, AZ' },
+  { value: 'Philadelphia', label: 'Philadelphia, PA' },
+  { value: 'San Antonio', label: 'San Antonio, TX' },
+  { value: 'San Diego', label: 'San Diego, CA' },
+  { value: 'Dallas', label: 'Dallas, TX' },
+  { value: 'San Jose', label: 'San Jose, CA' },
+  { value: 'Austin', label: 'Austin, TX' },
+  { value: 'Jacksonville', label: 'Jacksonville, FL' },
+  { value: 'San Francisco', label: 'San Francisco, CA' },
+  { value: 'Columbus', label: 'Columbus, OH' },
+  { value: 'Indianapolis', label: 'Indianapolis, IN' },
+  { value: 'Charlotte', label: 'Charlotte, NC' },
+  { value: 'Seattle', label: 'Seattle, WA' },
+  { value: 'Denver', label: 'Denver, CO' },
+  { value: 'Nashville', label: 'Nashville, TN' },
+  { value: 'Washington DC', label: 'Washington, DC' },
+  { value: 'Boston', label: 'Boston, MA' },
+  { value: 'Atlanta', label: 'Atlanta, GA' },
+  { value: 'Miami', label: 'Miami, FL' },
+  { value: 'Portland', label: 'Portland, OR' },
+  { value: 'Las Vegas', label: 'Las Vegas, NV' },
+  { value: 'Detroit', label: 'Detroit, MI' },
+  { value: 'Minneapolis', label: 'Minneapolis, MN' },
+  { value: 'Tampa', label: 'Tampa, FL' },
+  { value: 'Salt Lake City', label: 'Salt Lake City, UT' },
+  { value: 'Raleigh', label: 'Raleigh, NC' },
+];
+
 // Company sizes
 export const COMPANY_SIZES = [
   { value: '1-10', label: '1-10 employees' },
@@ -290,6 +324,18 @@ export const COMPANY_SIZES = [
 
 // Annual revenue ranges
 export const REVENUE_RANGES = [
+  { value: '0-1M', label: '$0 - $1M' },
+  { value: '1M-5M', label: '$1M - $5M' },
+  { value: '5M-10M', label: '$5M - $10M' },
+  { value: '10M-50M', label: '$10M - $50M' },
+  { value: '50M-100M', label: '$50M - $100M' },
+  { value: '100M-500M', label: '$100M - $500M' },
+  { value: '500M-1B', label: '$500M - $1B' },
+  { value: '1B+', label: '$1B+' },
+];
+
+// Funding raised ranges
+export const FUNDING_RANGES = [
   { value: '0-1M', label: '$0 - $1M' },
   { value: '1M-5M', label: '$1M - $5M' },
   { value: '5M-10M', label: '$5M - $10M' },
@@ -324,12 +370,54 @@ export const BUSINESS_TYPES = [
   { value: 'ecommerce', label: 'E-Commerce' },
 ];
 
+// Market segments
+export const MARKET_SEGMENTS = [
+  { value: 'enterprise', label: 'Enterprise' },
+  { value: 'mid_market', label: 'Mid-Market' },
+  { value: 'smb', label: 'Small Business (SMB)' },
+  { value: 'startup', label: 'Startup' },
+  { value: 'consumer', label: 'Consumer' },
+  { value: 'government', label: 'Government' },
+  { value: 'education', label: 'Education' },
+  { value: 'healthcare', label: 'Healthcare' },
+];
+
+// Follower count ranges
+export const FOLLOWER_RANGES = [
+  { value: '0-100', label: '0 - 100' },
+  { value: '100-500', label: '100 - 500' },
+  { value: '500-1000', label: '500 - 1,000' },
+  { value: '1000-5000', label: '1,000 - 5,000' },
+  { value: '5000-10000', label: '5,000 - 10,000' },
+  { value: '10000-50000', label: '10,000 - 50,000' },
+  { value: '50000-100000', label: '50,000 - 100,000' },
+  { value: '100000+', label: '100,000+' },
+];
+
+// Buying intent signals
+export const BUYING_INTENT = [
+  { value: 'high', label: 'High Intent' },
+  { value: 'medium', label: 'Medium Intent' },
+  { value: 'low', label: 'Low Intent' },
+];
+
+// Website visitor ranges
+export const WEBSITE_VISITORS = [
+  { value: '0-1000', label: '0 - 1K visitors/mo' },
+  { value: '1000-10000', label: '1K - 10K visitors/mo' },
+  { value: '10000-50000', label: '10K - 50K visitors/mo' },
+  { value: '50000-100000', label: '50K - 100K visitors/mo' },
+  { value: '100000-500000', label: '100K - 500K visitors/mo' },
+  { value: '500000+', label: '500K+ visitors/mo' },
+];
+
 export interface ProspectSearchFilters {
   // Company attributes
   industries: string[];
   industriesToExclude: string[];
   companySizes: string[];
   annualRevenue: string;
+  fundingRaised: string;
   companyTypes: string[];
   keywordsInclude: string[];
   keywordsExclude: string[];
@@ -337,17 +425,27 @@ export interface ProspectSearchFilters {
   // Location
   countries: string[];
   countriesToExclude: string[];
-  citiesOrStates: string[];
-  citiesOrStatesToExclude: string[];
+  states: string[];
+  statesToExclude: string[];
+  cities: string[];
+  citiesToExclude: string[];
   
   // Products & services
   productsDescription: string;
   
-  // AI filters
+  // AI / advanced filters
   businessTypes: string[];
+  marketSegments: string[];
+  followerRange: string;
+  buyingIntent: string;
+  websiteVisitors: string;
   
   // Limit
   limit: number;
+
+  // Legacy compat
+  citiesOrStates: string[];
+  citiesOrStatesToExclude: string[];
 }
 
 export const defaultFilters: ProspectSearchFilters = {
@@ -355,14 +453,23 @@ export const defaultFilters: ProspectSearchFilters = {
   industriesToExclude: [],
   companySizes: [],
   annualRevenue: '',
+  fundingRaised: '',
   companyTypes: [],
   keywordsInclude: [],
   keywordsExclude: [],
   countries: [],
   countriesToExclude: [],
-  citiesOrStates: [],
-  citiesOrStatesToExclude: [],
+  states: [],
+  statesToExclude: [],
+  cities: [],
+  citiesToExclude: [],
   productsDescription: '',
   businessTypes: [],
+  marketSegments: [],
+  followerRange: '',
+  buyingIntent: '',
+  websiteVisitors: '',
   limit: 50,
+  citiesOrStates: [],
+  citiesOrStatesToExclude: [],
 };

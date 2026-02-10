@@ -341,11 +341,7 @@ export default function WebScraper() {
 
           {/* ── Prospect Search Tab ── */}
           <TabsContent value="prospect-search" className="mt-0">
-            <Card className="border-border/60">
-              <CardContent className="p-5">
-                <BrivanoLens />
-              </CardContent>
-            </Card>
+            <BrivanoLens />
           </TabsContent>
 
           {/* ── AI Chat Tab ── */}

@@ -16,15 +16,26 @@ import {
   Package,
   Sparkles,
   Search,
+  DollarSign,
+  Users,
+  TrendingUp,
+  Eye,
+  BarChart3,
 } from 'lucide-react';
 import {
   INDUSTRIES,
   COUNTRIES,
   US_STATES,
+  MAJOR_CITIES,
   COMPANY_SIZES,
   REVENUE_RANGES,
+  FUNDING_RANGES,
   COMPANY_TYPES,
   BUSINESS_TYPES,
+  MARKET_SEGMENTS,
+  FOLLOWER_RANGES,
+  BUYING_INTENT,
+  WEBSITE_VISITORS,
   ProspectSearchFilters,
 } from './constants';
 
@@ -249,30 +260,6 @@ function TagInput({
   );
 }
 
-function MinMaxInput({
-  label,
-  min,
-  max,
-  onMinChange,
-  onMaxChange,
-}: {
-  label: string;
-  min: string;
-  max: string;
-  onMinChange: (v: string) => void;
-  onMaxChange: (v: string) => void;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs font-semibold text-foreground">{label}</Label>
-      <div className="flex gap-2">
-        <Input placeholder="Min" value={min} onChange={(e) => onMinChange(e.target.value)} className="h-[34px] text-xs" />
-        <Input placeholder="Max" value={max} onChange={(e) => onMaxChange(e.target.value)} className="h-[34px] text-xs" />
-      </div>
-    </div>
-  );
-}
-
 /* ── Main Component ─────────────────────────────────────────── */
 
 const stateOptions = US_STATES.map((s) => ({ value: s, label: s }));
@@ -286,8 +273,9 @@ export function SearchFilters({
 }: SearchFiltersProps) {
   const [companyOpen, setCompanyOpen] = useState(true);
   const [locationOpen, setLocationOpen] = useState(false);
+  const [financialsOpen, setFinancialsOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
-  const [aiFiltersOpen, setAiFiltersOpen] = useState(false);
+  const [signalsOpen, setSignalsOpen] = useState(false);
 
   const update = (partial: Partial<ProspectSearchFilters>) => {
     onFiltersChange({ ...filters, ...partial });
@@ -304,7 +292,7 @@ export function SearchFilters({
       {/* Scrollable Filters */}
       <ScrollArea className="flex-1 px-5">
         <div className="space-y-1 pb-4">
-          {/* Company Attributes */}
+          {/* ── Company Attributes ── */}
           <Collapsible open={companyOpen} onOpenChange={setCompanyOpen}>
             <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
               <span className="flex items-center gap-2">
@@ -335,26 +323,12 @@ export function SearchFilters({
                 selected={filters.companySizes}
                 onChange={(v) => update({ companySizes: v })}
               />
-              <SingleDropdown
-                label="Annual revenue"
-                placeholder="e.g. $1M - $5M"
-                options={REVENUE_RANGES}
-                value={filters.annualRevenue}
-                onChange={(v) => update({ annualRevenue: v })}
-              />
               <FilterDropdown
                 label="Company types"
                 placeholder="e.g. Privately held"
                 options={COMPANY_TYPES}
                 selected={filters.companyTypes}
                 onChange={(v) => update({ companyTypes: v })}
-              />
-              <MinMaxInput
-                label="Associated member count"
-                min=""
-                max=""
-                onMinChange={() => {}}
-                onMaxChange={() => {}}
               />
               <TagInput
                 label="Description keywords to include"
@@ -371,48 +345,89 @@ export function SearchFilters({
             </CollapsibleContent>
           </Collapsible>
 
-          {/* Location */}
+          {/* ── Location ── */}
           <Collapsible open={locationOpen} onOpenChange={setLocationOpen}>
             <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
               <span className="flex items-center gap-2">
                 <Globe className="h-4 w-4 text-muted-foreground" />
-                Location
+                Account location
               </span>
               <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${locationOpen ? '' : 'rotate-180'}`} />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-4 pt-3 pb-4">
               <FilterDropdown
-                label="Countries to include"
+                label="Countries"
                 placeholder="e.g. United States, Canada"
                 options={COUNTRIES}
                 selected={filters.countries}
                 onChange={(v) => update({ countries: v })}
               />
               <FilterDropdown
-                label="Countries to exclude"
+                label="Exclude countries"
                 placeholder="e.g. France, Spain"
                 options={COUNTRIES}
                 selected={filters.countriesToExclude}
                 onChange={(v) => update({ countriesToExclude: v })}
               />
               <FilterDropdown
-                label="Cities or states to include"
-                placeholder="e.g. New York"
+                label="States"
+                placeholder="e.g. California, Texas"
                 options={stateOptions}
-                selected={filters.citiesOrStates}
-                onChange={(v) => update({ citiesOrStates: v })}
+                selected={filters.states}
+                onChange={(v) => update({ states: v })}
               />
               <FilterDropdown
-                label="Cities or states to exclude"
-                placeholder="e.g. San Francisco"
+                label="Exclude states"
+                placeholder="e.g. Alaska"
                 options={stateOptions}
-                selected={filters.citiesOrStatesToExclude}
-                onChange={(v) => update({ citiesOrStatesToExclude: v })}
+                selected={filters.statesToExclude}
+                onChange={(v) => update({ statesToExclude: v })}
+              />
+              <FilterDropdown
+                label="Cities"
+                placeholder="e.g. San Francisco"
+                options={MAJOR_CITIES}
+                selected={filters.cities}
+                onChange={(v) => update({ cities: v })}
+              />
+              <FilterDropdown
+                label="Exclude cities"
+                placeholder="e.g. New York"
+                options={MAJOR_CITIES}
+                selected={filters.citiesToExclude}
+                onChange={(v) => update({ citiesToExclude: v })}
               />
             </CollapsibleContent>
           </Collapsible>
 
-          {/* Products & Services */}
+          {/* ── Financials ── */}
+          <Collapsible open={financialsOpen} onOpenChange={setFinancialsOpen}>
+            <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
+              <span className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                Financials
+              </span>
+              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${financialsOpen ? '' : 'rotate-180'}`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-3 pb-4">
+              <SingleDropdown
+                label="Annual revenue"
+                placeholder="e.g. $1M - $5M"
+                options={REVENUE_RANGES}
+                value={filters.annualRevenue}
+                onChange={(v) => update({ annualRevenue: v })}
+              />
+              <SingleDropdown
+                label="Funding raised"
+                placeholder="e.g. $5M - $10M"
+                options={FUNDING_RANGES}
+                value={filters.fundingRaised}
+                onChange={(v) => update({ fundingRaised: v })}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ── Products & Services ── */}
           <Collapsible open={productsOpen} onOpenChange={setProductsOpen}>
             <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
               <span className="flex items-center gap-2">
@@ -434,22 +449,50 @@ export function SearchFilters({
             </CollapsibleContent>
           </Collapsible>
 
-          {/* AI Filters */}
-          <Collapsible open={aiFiltersOpen} onOpenChange={setAiFiltersOpen}>
+          {/* ── Signals & Segments ── */}
+          <Collapsible open={signalsOpen} onOpenChange={setSignalsOpen}>
             <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
               <span className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-muted-foreground" />
-                AI filters
+                Signals & segments
               </span>
-              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${aiFiltersOpen ? '' : 'rotate-180'}`} />
+              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${signalsOpen ? '' : 'rotate-180'}`} />
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-4 pt-3 pb-4">
               <FilterDropdown
-                label="Business types"
-                placeholder="e.g. B2B"
+                label="Business model"
+                placeholder="e.g. B2B, SaaS"
                 options={BUSINESS_TYPES}
                 selected={filters.businessTypes}
                 onChange={(v) => update({ businessTypes: v })}
+              />
+              <FilterDropdown
+                label="Market segments"
+                placeholder="e.g. Enterprise, SMB"
+                options={MARKET_SEGMENTS}
+                selected={filters.marketSegments}
+                onChange={(v) => update({ marketSegments: v })}
+              />
+              <SingleDropdown
+                label="Follower count"
+                placeholder="Any"
+                options={FOLLOWER_RANGES}
+                value={filters.followerRange}
+                onChange={(v) => update({ followerRange: v })}
+              />
+              <SingleDropdown
+                label="Buying intent"
+                placeholder="Any"
+                options={BUYING_INTENT}
+                value={filters.buyingIntent}
+                onChange={(v) => update({ buyingIntent: v })}
+              />
+              <SingleDropdown
+                label="Website visitors"
+                placeholder="Any"
+                options={WEBSITE_VISITORS}
+                value={filters.websiteVisitors}
+                onChange={(v) => update({ websiteVisitors: v })}
               />
             </CollapsibleContent>
           </Collapsible>
