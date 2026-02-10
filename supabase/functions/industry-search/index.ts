@@ -9,6 +9,7 @@ const corsHeaders = {
 interface CompanySearchInput {
   industry?: string;
   industries_exclude?: string[];
+  employee_ranges?: string[];
   employee_count_min?: number;
   employee_count_max?: number;
   location?: string;
@@ -43,7 +44,7 @@ interface CompanyResult {
 
 // ── Provider 1: Apollo ──────────────────────────────────────────────
 async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
-  const { industry, employee_count_min, employee_count_max, location, keywords, limit = 25 } = input;
+  const { industry, employee_ranges, employee_count_min, employee_count_max, location, keywords, limit = 25 } = input;
 
   const searchParams: Record<string, unknown> = {
     page: 1,
@@ -51,11 +52,19 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   };
 
   if (industry) {
-    // Use keyword-based matching — industry_tag_ids expects Apollo-specific numeric IDs
+    // Use keyword-based matching for industry filtering
     searchParams.q_organization_keyword_tags = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
   }
 
-  if (employee_count_min || employee_count_max) {
+  // Use employee_ranges directly if provided (e.g. ["1-10", "11-50", "51-200"])
+  if (employee_ranges && employee_ranges.length > 0) {
+    // Map to Apollo format: "1,10" style ranges
+    const apolloRanges = employee_ranges.map(r => {
+      if (r === '5001+' || r === '10001+') return '10001+';
+      return r;
+    });
+    searchParams.organization_num_employees_ranges = apolloRanges;
+  } else if (employee_count_min || employee_count_max) {
     const ranges: string[] = [];
     const min = employee_count_min || 0;
     const max = employee_count_max || 999999;
@@ -85,7 +94,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   }
 
   if (keywords) {
-    // Use keyword tags to narrow by industry keywords (like Apollo's "Industry & Keywords")
+    // Merge keywords into keyword tags for narrowing
     const keywordTags = keywords.split(',').map((s: string) => s.trim()).filter(Boolean);
     if (keywordTags.length > 0) {
       searchParams.q_organization_keyword_tags = [
