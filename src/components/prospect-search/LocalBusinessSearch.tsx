@@ -228,7 +228,7 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Select a type" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[9999] bg-popover border border-border shadow-xl" position="popper" sideOffset={4}>
                 {SEARCH_TYPES.map((t) => (
                   <SelectItem key={t.value} value={t.value} className="text-sm">
                     {t.label}
