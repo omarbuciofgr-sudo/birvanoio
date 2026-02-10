@@ -11,12 +11,19 @@ import {
 import {
   Building2,
   Globe,
-  ChevronUp,
+  ChevronDown,
   X,
   Briefcase,
   Search,
   Clock,
   FileText,
+  Ban,
+  Sparkles,
+  CircleDot,
+  GraduationCap,
+  Eye,
+  CalendarDays,
+  Layers,
 } from 'lucide-react';
 import {
   INDUSTRIES,
@@ -27,6 +34,7 @@ import {
 
 export interface JobSearchFilters {
   jobTitles: string[];
+  excludeJobTitles: string[];
   jobDescriptionKeywords: string[];
   industries: string[];
   companies: string[];
@@ -35,12 +43,14 @@ export interface JobSearchFilters {
   cities: string[];
   employmentType: string[];
   seniority: string[];
+  recruiterKeywords: string[];
   postedWithin: string;
   limit: number;
 }
 
 export const defaultJobFilters: JobSearchFilters = {
   jobTitles: [],
+  excludeJobTitles: [],
   jobDescriptionKeywords: [],
   industries: [],
   companies: [],
@@ -49,6 +59,7 @@ export const defaultJobFilters: JobSearchFilters = {
   cities: [],
   employmentType: [],
   seniority: [],
+  recruiterKeywords: [],
   postedWithin: '',
   limit: 50,
 };
@@ -78,6 +89,15 @@ const POSTED_WITHIN_OPTIONS = [
   { value: '90d', label: 'Past 3 months' },
 ];
 
+const LIMIT_OPTIONS = [
+  { value: '25', label: '25' },
+  { value: '50', label: '50' },
+  { value: '100', label: '100' },
+  { value: '250', label: '250' },
+];
+
+/* ── Reusable sub-components ─────────────────────────────────── */
+
 function FilterDropdown({
   label, placeholder, options, selected, onChange,
 }: {
@@ -106,7 +126,7 @@ function FilterDropdown({
               </Badge>
             );
           })}
-          <ChevronUp className={`h-3.5 w-3.5 text-muted-foreground ml-auto transition-transform ${isOpen ? '' : 'rotate-180'}`} />
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
         {isOpen && (
           <div className="absolute z-50 w-full mt-1 bg-popover border border-border/60 rounded-md shadow-xl">
@@ -144,7 +164,7 @@ function SingleDropdown({ label, placeholder, options, value, onChange }: {
       <div className="relative">
         <button className="w-full h-[34px] rounded-md border border-border/60 bg-background px-3 text-sm text-left flex items-center justify-between hover:border-border transition-colors" onClick={() => setIsOpen(!isOpen)}>
           <span className={value ? 'text-xs' : 'text-muted-foreground text-xs'}>{value ? options.find((o) => o.value === value)?.label : placeholder}</span>
-          <ChevronUp className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? '' : 'rotate-180'}`} />
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
         {isOpen && (
           <div className="absolute z-50 w-full mt-1 bg-popover border border-border/60 rounded-md shadow-xl">
@@ -185,6 +205,35 @@ function TagInput({ label, placeholder, tags, onChange }: { label: string; place
   );
 }
 
+/* ── Section wrapper matching screenshot style ───────────────── */
+
+function FilterSection({
+  icon: Icon, label, badge, open, onOpenChange, children,
+}: {
+  icon: React.ElementType; label: string; badge?: React.ReactNode;
+  open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode;
+}) {
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <CollapsibleTrigger className="flex items-center justify-between w-full py-3 px-1 text-sm font-semibold border-b border-border/40 hover:bg-muted/30 rounded-sm transition-colors">
+        <span className="flex items-center gap-2.5">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          {label}
+        </span>
+        <span className="flex items-center gap-2">
+          {badge}
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-4 pt-3 pb-4 px-1">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/* ── Main component ──────────────────────────────────────────── */
+
 const stateOptions = US_STATES.map((s) => ({ value: s, label: s }));
 
 interface JobFiltersProps {
@@ -195,12 +244,21 @@ interface JobFiltersProps {
   resultCount: number;
 }
 
-export function JobFilters({ filters, onFiltersChange, onSearch, isSearching, resultCount }: JobFiltersProps) {
-  const [companyOpen, setCompanyOpen] = useState(true);
-  const [jobOpen, setJobOpen] = useState(true);
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
+  const [sections, setSections] = useState<Record<string, boolean>>({
+    exclude: false,
+    title: false,
+    description: false,
+    location: false,
+    employment: false,
+    seniority: false,
+    recruiter: false,
+    posting: false,
+    companies: false,
+    limit: true,
+  });
 
+  const toggle = (key: string) => setSections((s) => ({ ...s, [key]: !s[key] }));
   const update = (partial: Partial<JobSearchFilters>) => onFiltersChange({ ...filters, ...partial });
 
   return (
@@ -209,57 +267,63 @@ export function JobFilters({ filters, onFiltersChange, onSearch, isSearching, re
         <h2 className="text-base font-semibold tracking-tight">Add search criteria</h2>
         <p className="text-xs text-muted-foreground mt-0.5">Search for jobs matching your criteria.</p>
       </div>
-      <ScrollArea className="flex-1 px-5">
-        <div className="space-y-1 pb-4">
-          {/* Company */}
-          <Collapsible open={companyOpen} onOpenChange={setCompanyOpen}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
-              <span className="flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" />Companies</span>
-              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${companyOpen ? '' : 'rotate-180'}`} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-3 pb-4">
-              <FilterDropdown label="Industries" placeholder="e.g. Software Development" options={INDUSTRIES} selected={filters.industries} onChange={(v) => update({ industries: v })} />
-              <TagInput label="Companies" placeholder="e.g. Google, Amazon" tags={filters.companies} onChange={(v) => update({ companies: v })} />
-            </CollapsibleContent>
-          </Collapsible>
 
-          {/* Job Title */}
-          <Collapsible open={jobOpen} onOpenChange={setJobOpen}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
-              <span className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-muted-foreground" />Job title</span>
-              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${jobOpen ? '' : 'rotate-180'}`} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-3 pb-4">
-              <TagInput label="Job titles" placeholder="e.g. Account Executive, SDR" tags={filters.jobTitles} onChange={(v) => update({ jobTitles: v })} />
-              <TagInput label="Job description keywords" placeholder="e.g. SaaS, enterprise" tags={filters.jobDescriptionKeywords} onChange={(v) => update({ jobDescriptionKeywords: v })} />
-            </CollapsibleContent>
-          </Collapsible>
+      <ScrollArea className="flex-1 px-5">
+        <div className="space-y-0 pb-4">
+
+          {/* Exclude jobs */}
+          <FilterSection icon={Ban} label="Exclude jobs" badge={<Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-accent text-accent-foreground border-border gap-1"><Sparkles className="h-3 w-3" />Upgrade</Badge>} open={sections.exclude} onOpenChange={() => toggle('exclude')}>
+            <TagInput label="Exclude job titles" placeholder="e.g. Intern, Junior" tags={filters.excludeJobTitles} onChange={(v) => update({ excludeJobTitles: v })} />
+          </FilterSection>
+
+          {/* Job title */}
+          <FilterSection icon={Briefcase} label="Job title" open={sections.title} onOpenChange={() => toggle('title')}>
+            <TagInput label="Job titles" placeholder="e.g. Account Executive, SDR" tags={filters.jobTitles} onChange={(v) => update({ jobTitles: v })} />
+          </FilterSection>
+
+          {/* Job description */}
+          <FilterSection icon={FileText} label="Job description" open={sections.description} onOpenChange={() => toggle('description')}>
+            <TagInput label="Keywords" placeholder="e.g. SaaS, enterprise, remote" tags={filters.jobDescriptionKeywords} onChange={(v) => update({ jobDescriptionKeywords: v })} />
+          </FilterSection>
 
           {/* Location */}
-          <Collapsible open={locationOpen} onOpenChange={setLocationOpen}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
-              <span className="flex items-center gap-2"><Globe className="h-4 w-4 text-muted-foreground" />Location</span>
-              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${locationOpen ? '' : 'rotate-180'}`} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-3 pb-4">
-              <FilterDropdown label="Countries" placeholder="e.g. United States" options={COUNTRIES} selected={filters.countries} onChange={(v) => update({ countries: v })} />
-              <FilterDropdown label="States" placeholder="e.g. California" options={stateOptions} selected={filters.states} onChange={(v) => update({ states: v })} />
-              <FilterDropdown label="Cities" placeholder="e.g. San Francisco" options={MAJOR_CITIES} selected={filters.cities} onChange={(v) => update({ cities: v })} />
-            </CollapsibleContent>
-          </Collapsible>
+          <FilterSection icon={Globe} label="Location" open={sections.location} onOpenChange={() => toggle('location')}>
+            <FilterDropdown label="Countries" placeholder="e.g. United States" options={COUNTRIES} selected={filters.countries} onChange={(v) => update({ countries: v })} />
+            <FilterDropdown label="States" placeholder="e.g. California" options={stateOptions} selected={filters.states} onChange={(v) => update({ states: v })} />
+            <FilterDropdown label="Cities" placeholder="e.g. San Francisco" options={MAJOR_CITIES} selected={filters.cities} onChange={(v) => update({ cities: v })} />
+          </FilterSection>
 
-          {/* Details */}
-          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full py-2.5 text-sm font-semibold border-b border-border/40">
-              <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />Details</span>
-              <ChevronUp className={`h-4 w-4 text-muted-foreground transition-transform ${detailsOpen ? '' : 'rotate-180'}`} />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-3 pb-4">
-              <FilterDropdown label="Employment type" placeholder="e.g. Full-time" options={EMPLOYMENT_TYPE_OPTIONS} selected={filters.employmentType} onChange={(v) => update({ employmentType: v })} />
-              <FilterDropdown label="Seniority" placeholder="e.g. Mid-Senior" options={SENIORITY_OPTIONS} selected={filters.seniority} onChange={(v) => update({ seniority: v })} />
-              <SingleDropdown label="Posted within" placeholder="Any time" options={POSTED_WITHIN_OPTIONS} value={filters.postedWithin} onChange={(v) => update({ postedWithin: v })} />
-            </CollapsibleContent>
-          </Collapsible>
+          {/* Employment type */}
+          <FilterSection icon={CircleDot} label="Employment type" open={sections.employment} onOpenChange={() => toggle('employment')}>
+            <FilterDropdown label="Type" placeholder="e.g. Full-time" options={EMPLOYMENT_TYPE_OPTIONS} selected={filters.employmentType} onChange={(v) => update({ employmentType: v })} />
+          </FilterSection>
+
+          {/* Seniority */}
+          <FilterSection icon={GraduationCap} label="Seniority" open={sections.seniority} onOpenChange={() => toggle('seniority')}>
+            <FilterDropdown label="Level" placeholder="e.g. Mid-Senior" options={SENIORITY_OPTIONS} selected={filters.seniority} onChange={(v) => update({ seniority: v })} />
+          </FilterSection>
+
+          {/* Recruiter */}
+          <FilterSection icon={Eye} label="Recruiter" open={sections.recruiter} onOpenChange={() => toggle('recruiter')}>
+            <TagInput label="Recruiter names or companies" placeholder="e.g. Robert Half" tags={filters.recruiterKeywords} onChange={(v) => update({ recruiterKeywords: v })} />
+          </FilterSection>
+
+          {/* Posting date */}
+          <FilterSection icon={CalendarDays} label="Posting date" open={sections.posting} onOpenChange={() => toggle('posting')}>
+            <SingleDropdown label="Posted within" placeholder="Any time" options={POSTED_WITHIN_OPTIONS} value={filters.postedWithin} onChange={(v) => update({ postedWithin: v })} />
+          </FilterSection>
+
+          {/* Companies */}
+          <FilterSection icon={Building2} label="Companies" open={sections.companies} onOpenChange={() => toggle('companies')}>
+            <FilterDropdown label="Industries" placeholder="e.g. Software Development" options={INDUSTRIES} selected={filters.industries} onChange={(v) => update({ industries: v })} />
+            <TagInput label="Company names" placeholder="e.g. Google, Amazon" tags={filters.companies} onChange={(v) => update({ companies: v })} />
+          </FilterSection>
+
+          {/* Limit results */}
+          <FilterSection icon={Layers} label="Limit results" open={sections.limit} onOpenChange={() => toggle('limit')}>
+            <SingleDropdown label="Limit" placeholder="50" options={LIMIT_OPTIONS} value={String(filters.limit)} onChange={(v) => update({ limit: Number(v) || 50 })} />
+          </FilterSection>
+
         </div>
       </ScrollArea>
     </div>
