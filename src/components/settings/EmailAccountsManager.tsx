@@ -74,26 +74,37 @@ export const EmailAccountsManager = ({ userId }: { userId: string }) => {
     }
     setIsSaving(true);
 
-    const isFirst = accounts.length === 0;
-    const { error } = await supabase.from("user_email_accounts").insert({
-      user_id: userId,
-      label: form.label,
-      email_address: form.email_address,
-      smtp_host: form.smtp_host,
-      smtp_port: form.smtp_port,
-      smtp_username: form.smtp_username,
-      smtp_password_encrypted: form.smtp_password, // In production, encrypt before storing
-      use_tls: form.use_tls,
-      is_default: isFirst,
-    });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Authentication required");
+        setIsSaving(false);
+        return;
+      }
 
-    if (error) {
+      const response = await supabase.functions.invoke("manage-email-account", {
+        body: {
+          action: "create",
+          label: form.label,
+          email_address: form.email_address,
+          smtp_host: form.smtp_host,
+          smtp_port: form.smtp_port,
+          smtp_username: form.smtp_username,
+          smtp_password: form.smtp_password,
+          use_tls: form.use_tls,
+        },
+      });
+
+      if (response.error || !response.data?.success) {
+        toast.error(response.data?.error || "Failed to add email account");
+      } else {
+        toast.success("Email account added!");
+        setIsDialogOpen(false);
+        setForm({ label: "Primary", email_address: "", smtp_host: "smtp.gmail.com", smtp_port: 587, smtp_username: "", smtp_password: "", use_tls: true });
+        fetchAccounts();
+      }
+    } catch (err) {
       toast.error("Failed to add email account");
-    } else {
-      toast.success("Email account added!");
-      setIsDialogOpen(false);
-      setForm({ label: "Primary", email_address: "", smtp_host: "smtp.gmail.com", smtp_port: 587, smtp_username: "", smtp_password: "", use_tls: true });
-      fetchAccounts();
     }
     setIsSaving(false);
   };
