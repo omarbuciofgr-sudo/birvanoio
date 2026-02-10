@@ -159,40 +159,93 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
 
   const searchMutation = useMutation({
     mutationFn: async () => {
-      // Build query params based on search type
+      // ── People Search ─────────────────────────────────
       if (searchType === 'people') {
-        const keywords = [...peopleFilters.jobTitles, ...peopleFilters.skills].filter(Boolean).join(', ') || undefined;
-        const industry = peopleFilters.industries
-          .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
-          .join(', ');
         const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
-        const location = locationParts.join(', ') || undefined;
 
-        return industrySearchApi.searchCompanies({
-          industry: industry || undefined,
-          keywords,
-          location,
+        const response = await industrySearchApi.searchPeople({
+          person_titles: peopleFilters.jobTitles.length > 0 ? peopleFilters.jobTitles : undefined,
+          person_seniorities: peopleFilters.seniority.length > 0 ? peopleFilters.seniority : undefined,
+          person_departments: peopleFilters.departments.length > 0 ? peopleFilters.departments : undefined,
+          person_locations: locationParts.length > 0 ? locationParts : undefined,
+          organization_industry_tag_ids: peopleFilters.industries.length > 0
+            ? peopleFilters.industries.map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
+            : undefined,
+          organization_num_employees_ranges: peopleFilters.companySizes.length > 0 ? peopleFilters.companySizes : undefined,
+          q_organization_name: peopleFilters.companies.length > 0 ? peopleFilters.companies.join(' ') : undefined,
+          profile_keywords: [...peopleFilters.skills, ...peopleFilters.profileKeywords].filter(Boolean).length > 0
+            ? [...peopleFilters.skills, ...peopleFilters.profileKeywords].filter(Boolean)
+            : undefined,
           limit: peopleFilters.limit,
         });
+
+        if (response.success && response.people) {
+          // Map people results to CompanyResult for display compatibility
+          const mapped: CompanyResult[] = response.people.map((p) => ({
+            name: p.name,
+            domain: p.organization_domain || '',
+            website: p.organization_domain ? `https://${p.organization_domain}` : null,
+            linkedin_url: p.linkedin_url,
+            industry: p.organization_industry,
+            employee_count: p.organization_employee_count,
+            employee_range: null,
+            annual_revenue: null,
+            founded_year: null,
+            description: [p.title, p.organization_name].filter(Boolean).join(' at '),
+            headquarters_city: p.city,
+            headquarters_state: p.state,
+            headquarters_country: p.country,
+            technologies: [],
+            keywords: p.departments || [],
+          }));
+          return { success: true, companies: mapped };
+        }
+        return { success: false, error: response.error || 'No results' };
       }
 
+      // ── Job Search ─────────────────────────────────
       if (searchType === 'jobs') {
-        const keywords = [...jobFilters.jobTitles, ...jobFilters.jobDescriptionKeywords].filter(Boolean).join(', ') || undefined;
-        const industry = jobFilters.industries
-          .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
-          .join(', ');
         const locationParts = [...jobFilters.cities, ...jobFilters.states, ...jobFilters.countries];
-        const location = locationParts.join(', ') || undefined;
 
-        return industrySearchApi.searchCompanies({
-          industry: industry || undefined,
-          keywords,
-          location,
+        const response = await industrySearchApi.searchJobs({
+          job_titles: jobFilters.jobTitles.length > 0 ? jobFilters.jobTitles : undefined,
+          exclude_job_titles: jobFilters.excludeJobTitles.length > 0 ? jobFilters.excludeJobTitles : undefined,
+          job_description_keywords: jobFilters.jobDescriptionKeywords.length > 0 ? jobFilters.jobDescriptionKeywords : undefined,
+          industries: jobFilters.industries.length > 0
+            ? jobFilters.industries.map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
+            : undefined,
+          companies: jobFilters.companies.length > 0 ? jobFilters.companies : undefined,
+          locations: locationParts.length > 0 ? locationParts : undefined,
+          employment_types: jobFilters.employmentType.length > 0 ? jobFilters.employmentType : undefined,
+          seniority: jobFilters.seniority.length > 0 ? jobFilters.seniority : undefined,
+          posted_within: jobFilters.postedWithin || undefined,
           limit: jobFilters.limit,
         });
+
+        if (response.success && response.jobs) {
+          const mapped: CompanyResult[] = response.jobs.map((j) => ({
+            name: j.title,
+            domain: j.company_domain || '',
+            website: j.apply_url,
+            linkedin_url: j.linkedin_url,
+            industry: j.company_industry,
+            employee_count: null,
+            employee_range: null,
+            annual_revenue: null,
+            founded_year: null,
+            description: [j.company_name, j.location].filter(Boolean).join(' — '),
+            headquarters_city: null,
+            headquarters_state: null,
+            headquarters_country: null,
+            technologies: [],
+            keywords: [],
+          }));
+          return { success: true, companies: mapped };
+        }
+        return { success: false, error: response.error || 'No results' };
       }
 
-      // Default: companies
+      // ── Company Search ─────────────────────────────────
       const industry = filters.industries
         .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
         .join(', ');
@@ -201,6 +254,11 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
         ...filters.cities, ...filters.states, ...filters.citiesOrStates, ...filters.countries,
       ];
       const location = locationParts.join(', ') || undefined;
+
+      const locationsExclude = [
+        ...filters.citiesToExclude, ...filters.statesToExclude, ...filters.countriesToExclude,
+        ...filters.citiesOrStatesToExclude,
+      ].filter(Boolean);
 
       const keywords = [
         ...filters.keywordsInclude, filters.productsDescription,
@@ -215,10 +273,16 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
 
       return industrySearchApi.searchCompanies({
         industry,
+        industries_exclude: filters.industriesToExclude.length > 0 ? filters.industriesToExclude : undefined,
         employee_count_min,
         employee_count_max,
         location,
+        locations_exclude: locationsExclude.length > 0 ? locationsExclude : undefined,
         keywords,
+        keywords_exclude: filters.keywordsExclude.length > 0 ? filters.keywordsExclude : undefined,
+        revenue_range: filters.annualRevenue || undefined,
+        funding_range: filters.fundingRaised || undefined,
+        company_types: filters.companyTypes.length > 0 ? filters.companyTypes : undefined,
         limit: filters.limit,
       });
     },
@@ -227,7 +291,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
         setResults(response.companies);
         setSelectedRows(new Set());
         setHasSearched(true);
-        toast.success(`Found ${response.companies.length} companies`);
+        toast.success(`Found ${response.companies.length} results`);
       } else {
         toast.error(response.error || 'Search failed');
       }

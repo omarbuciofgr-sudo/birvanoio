@@ -8,10 +8,17 @@ const corsHeaders = {
 
 interface CompanySearchInput {
   industry?: string;
+  industries_exclude?: string[];
   employee_count_min?: number;
   employee_count_max?: number;
   location?: string;
+  locations_exclude?: string[];
   keywords?: string;
+  keywords_exclude?: string[];
+  revenue_range?: string;
+  funding_range?: string;
+  company_types?: string[];
+  technologies?: string[];
   limit?: number;
 }
 
@@ -72,8 +79,60 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
     }
   }
 
+  // Exclude locations
+  if (input.locations_exclude?.length) {
+    searchParams.organization_not_locations = input.locations_exclude;
+  }
+
   if (keywords) {
     searchParams.q_organization_name = keywords;
+  }
+
+  // Exclude keywords
+  if (input.keywords_exclude?.length) {
+    searchParams.q_organization_not_keyword_tags = input.keywords_exclude;
+  }
+
+  // Revenue range mapping
+  if (input.revenue_range) {
+    const revenueMap: Record<string, string[]> = {
+      '0-1M': ['0-1M'],
+      '1M-5M': ['1M-10M'],
+      '5M-10M': ['1M-10M'],
+      '10M-50M': ['10M-50M'],
+      '50M-100M': ['50M-100M'],
+      '100M-500M': ['100M-500M'],
+      '500M-1B': ['500M-1B'],
+      '1B+': ['1B+'],
+    };
+    const mapped = revenueMap[input.revenue_range];
+    if (mapped) searchParams.organization_revenue_ranges = mapped;
+  }
+
+  // Funding range
+  if (input.funding_range) {
+    const fundingMap: Record<string, string[]> = {
+      '0-1M': ['0-1M'],
+      '1M-5M': ['1M-10M'],
+      '5M-10M': ['1M-10M'],
+      '10M-50M': ['10M-50M'],
+      '50M-100M': ['50M-100M'],
+      '100M-500M': ['100M-500M'],
+      '500M-1B': ['500M-1B'],
+      '1B+': ['1B+'],
+    };
+    const mapped = fundingMap[input.funding_range];
+    if (mapped) searchParams.organization_latest_funding_stage_cd = mapped;
+  }
+
+  // Company types
+  if (input.company_types?.length) {
+    searchParams.organization_types = input.company_types;
+  }
+
+  // Technologies
+  if (input.technologies?.length) {
+    searchParams.currently_using_any_of_technology_uids = input.technologies;
   }
 
   console.log('[Apollo] Searching with params:', JSON.stringify(searchParams));

@@ -2,10 +2,17 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface CompanySearchInput {
   industry?: string;
+  industries_exclude?: string[];
   employee_count_min?: number;
   employee_count_max?: number;
   location?: string;
+  locations_exclude?: string[];
   keywords?: string;
+  keywords_exclude?: string[];
+  revenue_range?: string;
+  funding_range?: string;
+  company_types?: string[];
+  technologies?: string[];
   limit?: number;
 }
 
@@ -27,6 +34,42 @@ export interface CompanyResult {
   keywords: string[];
 }
 
+export interface PersonResult {
+  id: string;
+  name: string;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  headline: string | null;
+  seniority: string | null;
+  departments: string[];
+  organization_name: string | null;
+  organization_domain: string | null;
+  organization_industry: string | null;
+  organization_employee_count: number | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  linkedin_url: string | null;
+  email_status: string | null;
+  photo_url: string | null;
+}
+
+export interface JobResult {
+  id: string;
+  title: string;
+  company_name: string;
+  company_domain: string | null;
+  company_industry: string | null;
+  location: string | null;
+  employment_type: string | null;
+  seniority: string | null;
+  description_snippet: string | null;
+  posted_at: string | null;
+  linkedin_url: string | null;
+  apply_url: string | null;
+}
+
 export interface IndustrySearchResponse {
   success: boolean;
   companies?: CompanyResult[];
@@ -37,6 +80,20 @@ export interface IndustrySearchResponse {
     total_entries: number;
     total_pages: number;
   };
+  error?: string;
+}
+
+export interface PeopleSearchResponse {
+  success: boolean;
+  people?: PersonResult[];
+  total?: number;
+  error?: string;
+}
+
+export interface JobSearchResponse {
+  success: boolean;
+  jobs?: JobResult[];
+  total?: number;
   error?: string;
 }
 
@@ -93,9 +150,63 @@ export const industrySearchApi = {
   },
 
   /**
+   * Search for people by title, seniority, company, location, etc.
+   */
+  async searchPeople(input: {
+    person_titles?: string[];
+    person_seniorities?: string[];
+    person_departments?: string[];
+    person_locations?: string[];
+    organization_industry_tag_ids?: string[];
+    organization_num_employees_ranges?: string[];
+    q_organization_name?: string;
+    profile_keywords?: string[];
+    limit?: number;
+  }): Promise<PeopleSearchResponse> {
+    const { data, error } = await supabase.functions.invoke('people-search', {
+      body: input,
+    });
+
+    if (error) {
+      console.error('People search error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return data as PeopleSearchResponse;
+  },
+
+  /**
+   * Search for jobs/positions
+   */
+  async searchJobs(input: {
+    job_titles?: string[];
+    exclude_job_titles?: string[];
+    job_description_keywords?: string[];
+    industries?: string[];
+    companies?: string[];
+    locations?: string[];
+    employment_types?: string[];
+    seniority?: string[];
+    posted_within?: string;
+    limit?: number;
+  }): Promise<JobSearchResponse> {
+    const { data, error } = await supabase.functions.invoke('job-search', {
+      body: input,
+    });
+
+    if (error) {
+      console.error('Job search error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return data as JobSearchResponse;
+  },
+
+  /**
    * Save search results as scraped leads
    */
   async saveAsLeads(companies: CompanyResult[], jobId?: string): Promise<{ saved: number; errors: number }> {
+    // ... keep existing code
     let saved = 0;
     let errors = 0;
 
