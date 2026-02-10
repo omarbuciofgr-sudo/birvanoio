@@ -559,7 +559,7 @@ export function ProspectSearchDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
-              Prospect Search
+              Brivano Lens
             </DialogTitle>
             <DialogDescription>
               Find decision-makers by industry, location, and title
