@@ -24,6 +24,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
+import OnboardingTour from "@/components/dashboard/OnboardingTour";
 
 interface LeadStats {
   total: number;
@@ -206,6 +207,7 @@ const Dashboard = () => {
 
   return (
     <DashboardLayout>
+      <OnboardingTour />
       <div className="space-y-6">
         {/* Executive Header */}
         <div className="flex items-start justify-between">
