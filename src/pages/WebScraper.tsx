@@ -45,6 +45,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { lazy, Suspense } from 'react';
+const ListingsMap = lazy(() => import('@/components/scraper/ListingsMap'));
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
@@ -84,6 +86,7 @@ export default function WebScraper() {
   const [selectedListings, setSelectedListings] = useState<Set<number>>(new Set());
   const [bulkSkipTracing, setBulkSkipTracing] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [showMap, setShowMap] = useState(true);
 
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
@@ -527,6 +530,37 @@ export default function WebScraper() {
             )}
 
             {reListings.length > 0 && (
+              <>
+                {/* Map / List Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={showMap ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs gap-1.5"
+                      onClick={() => setShowMap(true)}
+                    >
+                      <MapPin className="h-3 w-3" /> Map View
+                    </Button>
+                    <Button
+                      variant={!showMap ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs gap-1.5"
+                      onClick={() => setShowMap(false)}
+                    >
+                      <Building className="h-3 w-3" /> List View
+                    </Button>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{reListings.length} listings found</span>
+                </div>
+
+                {/* Map */}
+                {showMap && (
+                  <Suspense fallback={<div className="h-[400px] rounded-lg bg-muted/30 border border-border/60 flex items-center justify-center text-xs text-muted-foreground">Loading map...</div>}>
+                    <ListingsMap listings={reListings} onSelectListing={(i) => { setShowMap(false); }} />
+                  </Suspense>
+                )}
+
               <Card className="border-border/60">
                 <div className="flex items-center justify-between px-5 py-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
@@ -641,6 +675,7 @@ export default function WebScraper() {
                   </ScrollArea>
                 </CardContent>
               </Card>
+              </>
             )}
           </TabsContent>
 
