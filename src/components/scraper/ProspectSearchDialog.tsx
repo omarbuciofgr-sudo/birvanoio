@@ -105,40 +105,51 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
 
   const localSearchMutation = useMutation({
     mutationFn: async (params: { lat: number; lng: number; radiusMiles: number; searchType: string; keyword: string }) => {
-      const query = [params.searchType, params.keyword].filter(Boolean).join(' ');
+      const query = [params.keyword, params.searchType.replace(/_/g, ' ')].filter(Boolean).join(' ');
       const { data, error } = await supabase.functions.invoke('google-places-search', {
         body: {
+          action: 'search',
           query,
-          location: `${params.lat},${params.lng}`,
+          location: { lat: params.lat, lng: params.lng },
           radius: Math.round(params.radiusMiles * 1609.34),
+          type: params.searchType,
+          limit: 20,
         },
       });
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
-      if (data?.results) {
-        const mapped: CompanyResult[] = data.results.map((r: any) => ({
-          name: r.name || r.business_name || '',
+      const places = data?.data || [];
+      if (places.length > 0) {
+        const mapped: CompanyResult[] = places.map((r: any) => ({
+          name: r.name || '',
           domain: r.website || '',
-          industry: r.type || r.category || '',
+          industry: (r.types || []).slice(0, 2).join(', '),
           employee_count: undefined,
           employee_range: '',
           annual_revenue: undefined,
           founded_year: undefined,
-          headquarters_city: r.city || '',
-          headquarters_state: r.state || '',
-          headquarters_country: r.country || 'US',
+          headquarters_city: '',
+          headquarters_state: '',
+          headquarters_country: 'US',
           linkedin_url: '',
           technologies: [],
-          description: r.address || r.formatted_address || '',
+          description: r.address || '',
           website_url: r.website || '',
           phone: r.phone || '',
+          rating: r.rating,
+          review_count: r.review_count,
+          place_id: r.place_id,
         }));
         setResults(mapped);
         setHasSearched(true);
         setSelectedRows(new Set());
         toast.success(`Found ${mapped.length} local businesses`);
+      } else {
+        setResults([]);
+        setHasSearched(true);
+        toast.info('No businesses found in this area');
       }
     },
     onError: (error) => {
