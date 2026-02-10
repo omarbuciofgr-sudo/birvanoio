@@ -65,39 +65,39 @@
   }
 
   .dark {
-    /* Dark palette */
-    --background: 220 16% 5%;
+    /* Dark palette - softer dark, not pure black */
+    --background: 222 14% 12%;
     --foreground: 210 20% 96%;
 
-    --card: 220 16% 8%;
+    --card: 222 14% 15%;
     --card-foreground: 210 20% 96%;
 
-    --popover: 220 16% 8%;
+    --popover: 222 14% 15%;
     --popover-foreground: 210 20% 96%;
 
     --primary: 210 100% 55%;
-    --primary-foreground: 220 16% 5%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 16% 13%;
+    --secondary: 222 14% 19%;
     --secondary-foreground: 210 20% 96%;
 
-    --muted: 220 14% 16%;
-    --muted-foreground: 215 12% 55%;
+    --muted: 222 12% 22%;
+    --muted-foreground: 215 12% 58%;
 
     --accent: 210 100% 55%;
-    --accent-foreground: 220 16% 5%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 20% 96%;
 
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
+    --border: 222 12% 24%;
+    --input: 222 12% 24%;
     --ring: 210 100% 55%;
 
     /* Brivano custom tokens */
     --gradient-primary: linear-gradient(135deg, hsl(210 100% 55%) 0%, hsl(195 100% 50%) 100%);
-    --gradient-dark: linear-gradient(180deg, hsl(220 16% 5%) 0%, hsl(220 18% 9%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(220 16% 10%) 0%, hsl(220 16% 7%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(222 14% 12%) 0%, hsl(222 14% 16%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(222 14% 17%) 0%, hsl(222 14% 14%) 100%);
     --glow-primary: 0 0 30px hsl(210 100% 55% / 0.2);
     --glow-subtle: 0 0 60px hsl(210 100% 55% / 0.1);
 
@@ -108,13 +108,13 @@
     --status-converted: 145 70% 50%;
     --status-lost: 0 72% 51%;
 
-    --sidebar-background: 220 16% 7%;
+    --sidebar-background: 222 14% 14%;
     --sidebar-foreground: 210 20% 90%;
     --sidebar-primary: 210 100% 55%;
-    --sidebar-primary-foreground: 220 16% 5%;
-    --sidebar-accent: 220 14% 13%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 12% 19%;
     --sidebar-accent-foreground: 210 20% 96%;
-    --sidebar-border: 220 14% 16%;
+    --sidebar-border: 222 12% 22%;
     --sidebar-ring: 210 100% 55%;
   }
 }
