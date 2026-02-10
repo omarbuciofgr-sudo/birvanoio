@@ -328,7 +328,7 @@ export default function WebScraper() {
               <Sparkles className="h-3.5 w-3.5" /> AI Assistant
             </TabsTrigger>
             <TabsTrigger value="prospect-search" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <Target className="h-3.5 w-3.5" /> Prospect Search
+              <Target className="h-3.5 w-3.5" /> Brivano Lens
             </TabsTrigger>
             <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Home className="h-3.5 w-3.5" /> Real Estate
@@ -349,13 +349,13 @@ export default function WebScraper() {
                   <Target className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold mb-1">Prospect Search</h3>
+                  <h3 className="text-sm font-semibold mb-1">Brivano Lens</h3>
                   <p className="text-xs text-muted-foreground max-w-sm">
                     Find decision-makers by industry, location, and title. Search by company, places, or use quick AI-powered search.
                   </p>
                 </div>
                 <Button onClick={() => setProspectSearchOpen(true)} size="sm" className="gap-2">
-                  <Target className="h-3.5 w-3.5" /> Open Prospect Search
+                  <Target className="h-3.5 w-3.5" /> Open Brivano Lens
                 </Button>
               </CardContent>
             </Card>
@@ -427,7 +427,7 @@ export default function WebScraper() {
                       </Button>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2">
-                      Use the tabs above to access Real Estate scraping, Search, or Prospect Search tools directly.
+                      Use the tabs above to access Real Estate scraping, Search, or Brivano Lens tools directly.
                     </p>
                   </div>
                 </div>
