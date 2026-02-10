@@ -27,7 +27,8 @@ const Navbar = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <Link to="/" className="flex items-center">
-            <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto mix-blend-multiply dark:mix-blend-normal dark:brightness-0 dark:invert" />
+            <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto mix-blend-multiply dark:hidden" />
+            <span className="hidden dark:inline text-xl font-semibold tracking-tight font-display text-foreground">brivano</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
