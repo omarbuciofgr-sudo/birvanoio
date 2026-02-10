@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { Loader2, Sparkles, User, Mail, Globe, BarChart3, DollarSign, Cpu, TrendingUp, Briefcase, Search, ChevronDown } from 'lucide-react';
+import { Loader2, Sparkles, User, Mail, Globe, BarChart3, DollarSign, Cpu, TrendingUp, Briefcase, Search, ChevronDown, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { CompanyResult } from '@/lib/api/industrySearch';
+import { EnrichmentIntentDialog, EnrichmentIntent } from './EnrichmentIntentDialog';
 
 interface EnrichmentAction {
   id: string;
@@ -16,18 +17,19 @@ interface EnrichmentAction {
   icon: React.ReactNode;
   creditCost: string;
   category: 'suggested' | 'company' | 'contact';
+  sources: string[];
 }
 
 const ENRICHMENT_ACTIONS: EnrichmentAction[] = [
-  { id: 'ai_summary', label: 'Use AI', description: 'Artificial Intelligence', icon: <Sparkles className="h-4 w-4 text-purple-500" />, creditCost: '0.1 / row', category: 'suggested' },
-  { id: 'enrich_person', label: 'Enrich person', description: 'Companies, People, Jobs', icon: <User className="h-4 w-4 text-blue-500" />, creditCost: '1 / row', category: 'suggested' },
-  { id: 'work_email', label: 'Work Email', description: "Find a person's work email.", icon: <Mail className="h-4 w-4 text-amber-500" />, creditCost: '~3 / row', category: 'suggested' },
-  { id: 'company_domain', label: 'Company Domain', description: 'Need to find a domain address from a company...', icon: <Globe className="h-4 w-4 text-green-500" />, creditCost: '~1 / row', category: 'suggested' },
-  { id: 'website_traffic', label: 'Website Traffic (Monthly)', description: 'Get the monthly website traffic for a domain.', icon: <BarChart3 className="h-4 w-4 text-cyan-500" />, creditCost: '~3 / row', category: 'company' },
-  { id: 'company_funding', label: 'Company Latest Funding', description: "Need to know a company's latest funding details...", icon: <DollarSign className="h-4 w-4 text-emerald-500" />, creditCost: '~4 / row', category: 'company' },
-  { id: 'website_techstack', label: 'Website Techstack', description: 'Need to know what technologies a website uses...', icon: <Cpu className="h-4 w-4 text-indigo-500" />, creditCost: '~6 / row', category: 'company' },
-  { id: 'company_revenue', label: 'Company Revenue', description: "Find a company's revenue.", icon: <TrendingUp className="h-4 w-4 text-pink-500" />, creditCost: '~9 / row', category: 'company' },
-  { id: 'company_jobs', label: 'Company Job Openings', description: "Looking for a company's job openings? This syst...", icon: <Briefcase className="h-4 w-4 text-orange-500" />, creditCost: '~3 / row', category: 'company' },
+  { id: 'ai_summary', label: 'Use AI', description: 'Artificial Intelligence', icon: <Sparkles className="h-4 w-4 text-purple-500" />, creditCost: '0.1 / row', category: 'suggested', sources: ['Gemini AI'] },
+  { id: 'enrich_person', label: 'Enrich person', description: 'Companies, People, Jobs', icon: <User className="h-4 w-4 text-blue-500" />, creditCost: '1 / row', category: 'suggested', sources: ['Apollo', 'PDL', 'Hunter.io', 'RocketReach'] },
+  { id: 'work_email', label: 'Work Email', description: "Find a person's work email.", icon: <Mail className="h-4 w-4 text-amber-500" />, creditCost: '~3 / row', category: 'suggested', sources: ['Hunter.io', 'Apollo', 'Snov.io', 'ContactOut'] },
+  { id: 'company_domain', label: 'Company Domain', description: 'Find a domain from a company name.', icon: <Globe className="h-4 w-4 text-green-500" />, creditCost: '~1 / row', category: 'suggested', sources: ['Clearbit', 'PDL', 'Google'] },
+  { id: 'website_traffic', label: 'Website Traffic (Monthly)', description: 'Get the monthly website traffic for a domain.', icon: <BarChart3 className="h-4 w-4 text-cyan-500" />, creditCost: '~3 / row', category: 'company', sources: ['SimilarWeb API'] },
+  { id: 'company_funding', label: 'Company Latest Funding', description: "Find a company's latest funding details.", icon: <DollarSign className="h-4 w-4 text-emerald-500" />, creditCost: '~4 / row', category: 'company', sources: ['Crunchbase', 'PDL'] },
+  { id: 'website_techstack', label: 'Website Techstack', description: 'Technologies a website uses.', icon: <Cpu className="h-4 w-4 text-indigo-500" />, creditCost: '~6 / row', category: 'company', sources: ['BuiltWith', 'Wappalyzer'] },
+  { id: 'company_revenue', label: 'Company Revenue', description: "Find a company's revenue.", icon: <TrendingUp className="h-4 w-4 text-pink-500" />, creditCost: '~9 / row', category: 'company', sources: ['PDL', 'ZoomInfo'] },
+  { id: 'company_jobs', label: 'Company Job Openings', description: "Find a company's job openings.", icon: <Briefcase className="h-4 w-4 text-orange-500" />, creditCost: '~3 / row', category: 'company', sources: ['LinkedIn', 'Indeed API'] },
 ];
 
 interface EnrichmentActionsPanelProps {
@@ -42,6 +44,7 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<'suggested' | 'all'>('suggested');
   const { canAfford, spendCredits } = useCredits();
+  const [intentDialog, setIntentDialog] = useState<{ open: boolean; action: EnrichmentAction | null }>({ open: false, action: null });
 
   const filteredActions = ENRICHMENT_ACTIONS.filter(a => {
     if (searchQuery) return a.label.toLowerCase().includes(searchQuery.toLowerCase());
@@ -51,11 +54,16 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
 
   const targetCount = selectedRows.size > 0 ? selectedRows.size : (selectedCompany ? 1 : 0);
 
-  const handleRunAction = async (action: EnrichmentAction) => {
+  const handleActionClick = (action: EnrichmentAction) => {
     if (targetCount === 0) {
       toast.error('Select a company or rows first');
       return;
     }
+    // Open intent dialog before running
+    setIntentDialog({ open: true, action });
+  };
+
+  const handleRunAction = async (action: EnrichmentAction, intent: EnrichmentIntent) => {
     if (!canAfford('enrich', targetCount)) {
       toast.error('Not enough credits');
       return;
@@ -73,16 +81,18 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
 
         await spendCredits('enrich', 1, `${action.id}_${domain}`);
 
+        const enrichBody: any = { domain, intent_goals: intent.goals, custom_goal: intent.customGoal };
+
         if (action.id === 'ai_summary') {
-          await supabase.functions.invoke('ai-company-summary', { body: { domain, company_name: company.name } });
+          await supabase.functions.invoke('ai-company-summary', { body: { ...enrichBody, company_name: company.name } });
         } else if (action.id === 'enrich_person') {
-          await supabase.functions.invoke('data-waterfall-enrich', { body: { domain, target_titles: ['owner', 'ceo', 'founder'] } });
+          await supabase.functions.invoke('data-waterfall-enrich', { body: { ...enrichBody, target_titles: ['owner', 'ceo', 'founder'] } });
         } else if (action.id === 'work_email') {
-          await supabase.functions.invoke('data-waterfall-enrich', { body: { domain, enrich_fields: ['email'] } });
+          await supabase.functions.invoke('data-waterfall-enrich', { body: { ...enrichBody, enrich_fields: ['email'] } });
         } else if (action.id === 'website_techstack') {
-          await supabase.functions.invoke('technographics-enrichment', { body: { domain } });
+          await supabase.functions.invoke('technographics-enrichment', { body: enrichBody });
         } else {
-          await supabase.functions.invoke('data-waterfall-enrich', { body: { domain, enrich_fields: [action.id] } });
+          await supabase.functions.invoke('data-waterfall-enrich', { body: { ...enrichBody, enrich_fields: [action.id] } });
         }
       }
       toast.success(`${action.label} completed for ${targets.length} ${targets.length === 1 ? 'company' : 'companies'}`);
@@ -129,7 +139,6 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
       <ScrollArea className="flex-1">
         {activeTab === 'enrichments' && (
           <div className="p-3 space-y-1">
-            {/* Category filter */}
             <button
               onClick={() => setCategoryFilter(f => f === 'suggested' ? 'all' : 'suggested')}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-2 px-1"
@@ -141,7 +150,7 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
             {filteredActions.map(action => (
               <button
                 key={action.id}
-                onClick={() => handleRunAction(action)}
+                onClick={() => handleActionClick(action)}
                 disabled={runningAction === action.id || targetCount === 0}
                 className="w-full flex items-start gap-3 p-2.5 rounded-lg hover:bg-muted/60 transition-colors text-left group disabled:opacity-50"
               >
@@ -156,11 +165,15 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
                     </Badge>
                   </div>
                   <p className="text-[10px] text-muted-foreground truncate mt-0.5">{action.description}</p>
+                  {/* Source info */}
+                  <div className="flex items-center gap-1 mt-1">
+                    <ExternalLink className="h-2.5 w-2.5 text-muted-foreground/60" />
+                    <span className="text-[9px] text-muted-foreground/70">{action.sources.join(' · ')}</span>
+                  </div>
                 </div>
               </button>
             ))}
 
-            {/* Load More */}
             {categoryFilter === 'suggested' && (
               <button
                 onClick={() => setCategoryFilter('all')}
@@ -192,6 +205,16 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
           </p>
         </div>
       )}
+
+      {/* Intent Dialog */}
+      <EnrichmentIntentDialog
+        open={intentDialog.open}
+        onOpenChange={(open) => setIntentDialog(prev => ({ ...prev, open }))}
+        actionLabel={intentDialog.action?.label || ''}
+        onConfirm={(intent) => {
+          if (intentDialog.action) handleRunAction(intentDialog.action, intent);
+        }}
+      />
     </div>
   );
 }
