@@ -15,7 +15,7 @@ const CheckoutSuccess = () => {
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <Link to="/" className="inline-block mb-8">
-          <span className="text-2xl font-semibold tracking-tight font-display text-foreground">brivano</span>
+          <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto mx-auto mix-blend-multiply dark:mix-blend-screen" />
         </Link>
 
         {/* Success Icon */}

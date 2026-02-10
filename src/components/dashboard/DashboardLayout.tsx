@@ -137,7 +137,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <span className="text-sm font-bold text-primary">B</span>
                 </div>
               ) : (
-                <span className="text-xl font-semibold tracking-tight font-display text-foreground">brivano</span>
+                <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto mix-blend-multiply dark:mix-blend-screen" />
               )}
             </Link>
             <div className="flex items-center gap-1">
