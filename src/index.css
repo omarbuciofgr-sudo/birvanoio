@@ -155,4 +155,9 @@
   .glow-subtle {
     box-shadow: var(--glow-subtle);
   }
+
+  .brivano-logo-font {
+    font-family: 'Nunito', sans-serif !important;
+    letter-spacing: -0.02em;
+  }
 }

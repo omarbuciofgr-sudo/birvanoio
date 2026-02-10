@@ -14,8 +14,7 @@ export function BrivanoLogo({ className = "h-20" }: BrivanoLogoProps) {
 
   return (
     <span
-      className={`${textSize} font-bold tracking-tight text-foreground`}
-      style={{ fontFamily: "'Nunito', sans-serif", letterSpacing: "-0.02em" }}
+      className={`${textSize} font-bold text-foreground brivano-logo-font`}
       role="img"
       aria-label="Brivano"
     >
