@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,40 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
+
+function CompanyLogo({ domain, name }: { domain: string | null | undefined; name: string }) {
+  const [errored, setErrored] = useState(false);
+
+  // Extract clean domain for favicon lookup
+  const cleanDomain = (() => {
+    if (!domain) return null;
+    try {
+      const d = domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      return d || null;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!cleanDomain || errored) {
+    return (
+      <div className="h-6 w-6 rounded bg-muted flex items-center justify-center flex-shrink-0">
+        <span className="text-[10px] font-bold text-muted-foreground">
+          {name.charAt(0).toUpperCase()}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=64`}
+      alt=""
+      className="h-6 w-6 rounded bg-muted flex-shrink-0 object-contain"
+      onError={() => setErrored(true)}
+    />
+  );
+}
 
 interface SearchResultsProps {
   results: CompanyResult[];
@@ -172,7 +207,10 @@ export function SearchResults({
                       {index + 1}
                     </td>
                     <td className="px-4 py-3 font-medium max-w-[180px]">
-                      <span className="truncate block">{company.name}</span>
+                      <div className="flex items-center gap-2">
+                        <CompanyLogo domain={company.domain || company.website} name={company.name} />
+                        <span className="truncate">{company.name}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground max-w-[260px]">
                       <span className="truncate block text-xs">
