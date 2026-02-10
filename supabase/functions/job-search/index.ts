@@ -16,7 +16,7 @@ interface JobSearchInput {
   employment_types?: string[];
   seniority?: string[];
   recruiter_keywords?: string[];
-  posted_within?: string; // e.g. '7d', '30d', '90d'
+  posted_within?: string;
   limit?: number;
   page?: number;
 }
@@ -71,6 +71,10 @@ async function searchApolloJobs(input: JobSearchInput, apiKey: string): Promise<
   }
   if (input.job_description_keywords?.length) {
     params.q_keywords = input.job_description_keywords.join(' ');
+  }
+  // Recruiter keywords → add to keyword search
+  if (input.recruiter_keywords?.length) {
+    params.q_keywords = [params.q_keywords || '', ...input.recruiter_keywords].filter(Boolean).join(' ');
   }
   // Employment type filter — map to Apollo department/seniority proxies
   if (input.employment_types?.length) {

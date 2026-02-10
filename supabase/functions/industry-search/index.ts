@@ -18,6 +18,7 @@ interface CompanySearchInput {
   keywords_exclude?: string[];
   revenue_range?: string;
   funding_range?: string;
+  funding_stage?: string;
   company_types?: string[];
   technologies?: string[];
   sic_codes?: string[];
@@ -131,20 +132,65 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
     if (mapped) searchParams.organization_revenue_ranges = mapped;
   }
 
-  // Funding range
-  if (input.funding_range) {
-    const fundingMap: Record<string, string[]> = {
-      '0-1M': ['0-1M'],
-      '1M-5M': ['1M-10M'],
-      '5M-10M': ['1M-10M'],
-      '10M-50M': ['10M-50M'],
-      '50M-100M': ['50M-100M'],
-      '100M-500M': ['100M-500M'],
-      '500M-1B': ['500M-1B'],
-      '1B+': ['1B+'],
+  // Funding stage (Seed, Series A, etc.)
+  if (input.funding_stage) {
+    const stageMap: Record<string, string> = {
+      'seed': 'seed',
+      'series_a': 'series_a',
+      'series_b': 'series_b',
+      'series_c': 'series_c',
+      'series_d': 'series_d',
+      'ipo': 'ipo',
+      'private_equity': 'private_equity',
+      'debt_financing': 'debt_financing',
+      'grant': 'grant',
     };
-    const mapped = fundingMap[input.funding_range];
-    if (mapped) searchParams.organization_latest_funding_stage_cd = mapped;
+    const mapped = stageMap[input.funding_stage];
+    if (mapped) searchParams.organization_latest_funding_stage_cd = [mapped];
+  }
+
+  // Exclude industries
+  if (input.industries_exclude?.length) {
+    searchParams.q_organization_not_keyword_tags = [
+      ...(searchParams.q_organization_not_keyword_tags as string[] || []),
+      ...input.industries_exclude,
+    ];
+  }
+
+  // Market segments → keyword proxy
+  if (input.market_segments?.length) {
+    const segmentKeywords = input.market_segments.map(s => {
+      const map: Record<string, string> = {
+        'enterprise': 'enterprise',
+        'mid_market': 'mid-market',
+        'smb': 'small business',
+        'startup': 'startup',
+        'consumer': 'consumer',
+        'government': 'government',
+        'education': 'education',
+        'healthcare': 'healthcare',
+      };
+      return map[s] || s;
+    });
+    searchParams.q_organization_keyword_tags = [
+      ...(searchParams.q_organization_keyword_tags as string[] || []),
+      ...segmentKeywords,
+    ];
+  }
+
+  // Buying intent → Apollo intent filters
+  if (input.buying_intent) {
+    if (input.buying_intent === 'high') {
+      searchParams.organization_job_locations = searchParams.organization_job_locations || ['United States'];
+    }
+    // Add intent as keyword signal
+    const intentKeywords: Record<string, string> = {
+      'high': 'actively buying',
+      'medium': 'evaluating solutions',
+    };
+    if (intentKeywords[input.buying_intent]) {
+      searchParams.q_keywords = [searchParams.q_keywords || '', intentKeywords[input.buying_intent]].filter(Boolean).join(' ');
+    }
   }
 
   // Company types
