@@ -9,7 +9,7 @@ const CheckoutCancel = () => {
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <Link to="/" className="inline-block mb-8">
-          <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto mx-auto" />
+          <span className="text-2xl font-semibold tracking-tight font-display text-foreground">brivano</span>
         </Link>
 
         {/* Cancel Icon */}
