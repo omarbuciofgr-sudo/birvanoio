@@ -225,7 +225,7 @@ export function SearchFilters({
             <FilterDropdown label="Industries" placeholder="e.g. Software Development" options={INDUSTRIES} selected={filters.industries} onChange={(v) => update({ industries: v })} />
             <FilterDropdown label="Company sizes" placeholder="e.g. 11-50 employees" options={COMPANY_SIZES} selected={filters.companySizes} onChange={(v) => update({ companySizes: v })} />
             <FilterDropdown label="Company types" placeholder="e.g. Privately held" options={COMPANY_TYPES} selected={filters.companyTypes} onChange={(v) => update({ companyTypes: v })} />
-            <TagInput label="Description keywords" placeholder="e.g. sales, data, outbound" tags={filters.keywordsInclude} onChange={(v) => update({ keywordsInclude: v })} />
+            <TagInput label="Industry & Keywords" placeholder="e.g. property management, tenant services" tags={filters.keywordsInclude} onChange={(v) => update({ keywordsInclude: v })} />
             <SingleDropdown label="Annual revenue" placeholder="e.g. $1M - $5M" options={REVENUE_RANGES} value={filters.annualRevenue} onChange={(v) => update({ annualRevenue: v })} />
             <SingleDropdown label="Funding raised" placeholder="e.g. $5M - $10M" options={FUNDING_RANGES} value={filters.fundingRaised} onChange={(v) => update({ fundingRaised: v })} />
           </FilterSection>
