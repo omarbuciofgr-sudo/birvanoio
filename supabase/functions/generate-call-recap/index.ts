@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Deno.serve used below
 import { z } from "https://esm.sh/zod@3.22.4";
 
 const corsHeaders = {
@@ -34,7 +34,7 @@ const sanitizeError = (error: any, operation: string): { message: string; status
   return { message: `Failed to ${operation}. Please try again or contact support.`, status: 500 };
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
