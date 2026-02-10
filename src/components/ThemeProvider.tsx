@@ -6,6 +6,7 @@ interface ThemeProviderProps {
   attribute?: "class" | "data-theme";
   defaultTheme?: string;
   enableSystem?: boolean;
+  forcedTheme?: string;
   disableTransitionOnChange?: boolean;
 }
 
