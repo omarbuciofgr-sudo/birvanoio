@@ -12,6 +12,7 @@ export interface CompanySearchInput {
   keywords_exclude?: string[];
   revenue_range?: string;
   funding_range?: string;
+  funding_stage?: string;
   company_types?: string[];
   technologies?: string[];
   sic_codes?: string[];
@@ -179,6 +180,11 @@ export const industrySearchApi = {
     naics_codes?: string[];
     job_posting_filter?: string;
     job_categories?: string[];
+    exclude_person_names?: string[];
+    person_past_titles?: string[];
+    past_companies?: string[];
+    years_experience_min?: number;
+    years_experience_max?: number;
     limit?: number;
   }): Promise<PeopleSearchResponse> {
     const { data, error } = await supabase.functions.invoke('people-search', {
@@ -205,6 +211,7 @@ export const industrySearchApi = {
     locations?: string[];
     employment_types?: string[];
     seniority?: string[];
+    recruiter_keywords?: string[];
     posted_within?: string;
     limit?: number;
   }): Promise<JobSearchResponse> {

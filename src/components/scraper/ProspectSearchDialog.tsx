@@ -163,6 +163,16 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
       if (searchType === 'people') {
         const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
 
+        // Build profile keywords including certifications, languages, education, schools
+        const allKeywords = [
+          ...peopleFilters.skills,
+          ...peopleFilters.profileKeywords,
+          ...peopleFilters.certifications,
+          ...peopleFilters.languages,
+          ...peopleFilters.educationLevel,
+          ...peopleFilters.schools,
+        ].filter(Boolean);
+
         const response = await industrySearchApi.searchPeople({
           person_titles: peopleFilters.jobTitles.length > 0 ? peopleFilters.jobTitles : undefined,
           person_seniorities: peopleFilters.seniority.length > 0 ? peopleFilters.seniority : undefined,
@@ -173,9 +183,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
             : undefined,
           organization_num_employees_ranges: peopleFilters.companySizes.length > 0 ? peopleFilters.companySizes : undefined,
           q_organization_name: peopleFilters.companies.length > 0 ? peopleFilters.companies.join(' ') : undefined,
-          profile_keywords: [...peopleFilters.skills, ...peopleFilters.profileKeywords].filter(Boolean).length > 0
-            ? [...peopleFilters.skills, ...peopleFilters.profileKeywords].filter(Boolean)
-            : undefined,
+          profile_keywords: allKeywords.length > 0 ? allKeywords : undefined,
           email_status: peopleFilters.emailStatus || undefined,
           technologies: peopleFilters.technologies.length > 0 ? peopleFilters.technologies : undefined,
           revenue_range: peopleFilters.annualRevenue || undefined,
@@ -187,6 +195,11 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
           naics_codes: peopleFilters.naicsCodes.length > 0 ? peopleFilters.naicsCodes : undefined,
           job_posting_filter: peopleFilters.jobPostingFilter || undefined,
           job_categories: peopleFilters.jobCategories.length > 0 ? peopleFilters.jobCategories : undefined,
+          exclude_person_names: peopleFilters.excludePeople.length > 0 ? peopleFilters.excludePeople : undefined,
+          person_past_titles: peopleFilters.pastJobTitles.length > 0 ? peopleFilters.pastJobTitles : undefined,
+          past_companies: peopleFilters.pastCompanies.length > 0 ? peopleFilters.pastCompanies : undefined,
+          years_experience_min: peopleFilters.yearsExperienceMin ? parseInt(peopleFilters.yearsExperienceMin) : undefined,
+          years_experience_max: peopleFilters.yearsExperienceMax ? parseInt(peopleFilters.yearsExperienceMax) : undefined,
           limit: peopleFilters.limit,
         });
 
@@ -229,6 +242,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
           locations: locationParts.length > 0 ? locationParts : undefined,
           employment_types: jobFilters.employmentType.length > 0 ? jobFilters.employmentType : undefined,
           seniority: jobFilters.seniority.length > 0 ? jobFilters.seniority : undefined,
+          recruiter_keywords: jobFilters.recruiterKeywords.length > 0 ? jobFilters.recruiterKeywords : undefined,
           posted_within: jobFilters.postedWithin || undefined,
           limit: jobFilters.limit,
         });
@@ -284,6 +298,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
         keywords,
         revenue_range: filters.annualRevenue || undefined,
         funding_range: filters.fundingRaised || undefined,
+        funding_stage: filters.fundingStage || undefined,
         company_types: filters.companyTypes.length > 0 ? filters.companyTypes : undefined,
         technologies: filters.technologies.length > 0 ? filters.technologies : undefined,
         sic_codes: filters.sicCodes.length > 0 ? filters.sicCodes : undefined,

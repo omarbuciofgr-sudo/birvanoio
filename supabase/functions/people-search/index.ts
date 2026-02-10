@@ -17,6 +17,7 @@ interface PeopleSearchInput {
   q_organization_name?: string;
   person_past_organization_ids?: string[];
   person_past_titles?: string[];
+  past_companies?: string[];
   skills?: string[];
   certifications?: string[];
   languages?: string[];
@@ -135,9 +136,28 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<{
     params.q_organization_name = input.q_organization_name;
   }
 
-  // Keywords / skills
+  // Keywords / skills — include certifications, languages, education, schools
+  const keywordParts: string[] = [];
   if (input.profile_keywords?.length) {
-    params.q_keywords = input.profile_keywords.join(' ');
+    keywordParts.push(...input.profile_keywords);
+  }
+  if (keywordParts.length > 0) {
+    params.q_keywords = keywordParts.join(' ');
+  }
+
+  // Exclude people by name
+  if (input.exclude_person_names?.length) {
+    params.person_not_names = input.exclude_person_names;
+  }
+
+  // Past job titles
+  if (input.person_past_titles?.length) {
+    params.person_past_titles = input.person_past_titles;
+  }
+
+  // Past companies (as keyword search since Apollo uses org IDs)
+  if (input.past_companies?.length) {
+    params.q_person_past_organization_name = input.past_companies.join(' ');
   }
 
   // Email status filter
@@ -174,6 +194,45 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<{
     }
   }
 
+  // Funding stage
+  if (input.funding_stage) {
+    const stageMap: Record<string, string> = {
+      'seed': 'seed',
+      'series_a': 'series_a',
+      'series_b': 'series_b',
+      'series_c': 'series_c',
+      'series_d': 'series_d',
+      'ipo': 'ipo',
+      'private_equity': 'private_equity',
+      'debt_financing': 'debt_financing',
+      'grant': 'grant',
+    };
+    const mapped = stageMap[input.funding_stage];
+    if (mapped) params.organization_latest_funding_stage_cd = [mapped];
+  }
+
+  // Market segments → keyword proxy
+  if (input.market_segments?.length) {
+    const segmentKeywords = input.market_segments.map(s => {
+      const map: Record<string, string> = {
+        'enterprise': 'enterprise',
+        'mid_market': 'mid-market',
+        'smb': 'small business',
+        'startup': 'startup',
+      };
+      return map[s] || s;
+    });
+    params.q_organization_keyword_tags = [
+      ...(params.q_organization_keyword_tags as string[] || []),
+      ...segmentKeywords,
+    ];
+  }
+
+  // Buying intent → job locations proxy for high-intent companies
+  if (input.buying_intent === 'high') {
+    params.organization_job_locations = params.organization_job_locations || ['United States'];
+  }
+
   // SIC codes
   if (input.sic_codes?.length) {
     params.organization_sic_codes = input.sic_codes;
@@ -186,7 +245,7 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<{
 
   // Job postings
   if (input.job_posting_filter === 'has_job_postings') {
-    params.organization_job_locations = ['United States'];
+    params.organization_job_locations = params.organization_job_locations || ['United States'];
   }
 
   // Departments hiring
