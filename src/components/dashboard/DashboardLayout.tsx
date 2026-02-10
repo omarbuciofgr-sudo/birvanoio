@@ -336,8 +336,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <main className="p-4 lg:p-6 max-w-[1600px] mx-auto">{children}</main>
       </div>
 
-      {/* AI Chat Assistant */}
-      <AIDashboardChat />
+      {/* AI Chat Assistant - hide on client portal pages */}
+      {!location.pathname.startsWith('/client') && <AIDashboardChat />}
     </div>
   );
 };

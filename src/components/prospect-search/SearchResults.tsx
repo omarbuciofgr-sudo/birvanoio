@@ -58,6 +58,10 @@ interface SearchResultsProps {
   onSave: () => void;
   onExport: () => void;
   isSaving: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
+  hasMoreResults?: boolean;
+  totalResults?: number;
 }
 
 function getTypeBadge(types: string[], industry: string | null): string {
@@ -99,6 +103,10 @@ export function SearchResults({
   onSave,
   onExport,
   isSaving,
+  onLoadMore,
+  isLoadingMore,
+  hasMoreResults,
+  totalResults,
 }: SearchResultsProps) {
   const { canAfford, spendCredits } = useCredits();
   const [enrichmentStatus, setEnrichmentStatus] = useState<Record<number, EnrichmentStatus>>({});
@@ -428,6 +436,25 @@ export function SearchResults({
                   </tr>
                 );
               })}
+              {/* Load More button */}
+              {hasMoreResults && onLoadMore && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-4 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onLoadMore}
+                      disabled={isLoadingMore}
+                      className="text-xs h-8 gap-1.5"
+                    >
+                      {isLoadingMore ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : null}
+                      {isLoadingMore ? 'Loading more…' : `Load more results${totalResults ? ` (${totalResults.toLocaleString()} total)` : ''}`}
+                    </Button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -438,7 +465,7 @@ export function SearchResults({
         <p className="text-xs text-muted-foreground">
           {selectedRows.size > 0
             ? `${selectedRows.size} of ${results.length} selected`
-            : `${results.length} results`}
+            : `${results.length} results${totalResults && totalResults > results.length ? ` of ${totalResults.toLocaleString()}` : ''}`}
         </p>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onExport} className="text-xs h-8 gap-1.5 border-border/60">

@@ -22,6 +22,7 @@ export interface CompanySearchInput {
   job_posting_filter?: string;
   job_categories?: string[];
   limit?: number;
+  page?: number;
 }
 
 export interface CompanyResult {
