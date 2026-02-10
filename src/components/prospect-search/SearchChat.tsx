@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Send, Bot, User, Wand2 } from 'lucide-react';
 import { ProspectSearchFilters } from './constants';
+import { FilterConfirmDialog } from './FilterConfirmDialog';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -26,6 +27,8 @@ export function SearchChat({ onApplyFilters }: SearchChatProps) {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingFilters, setPendingFilters] = useState<Partial<ProspectSearchFilters> | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,9 +89,10 @@ export function SearchChat({ onApplyFilters }: SearchChatProps) {
         appliedFilters: data.filters || undefined,
       };
 
-      // Auto-apply filters if returned
-      if (data.filters && onApplyFilters) {
-        onApplyFilters(data.filters);
+      // Show confirmation dialog instead of auto-applying
+      if (data.filters) {
+        setPendingFilters(data.filters);
+        setShowConfirm(true);
       }
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -231,6 +235,17 @@ export function SearchChat({ onApplyFilters }: SearchChatProps) {
           </Button>
         </div>
       </div>
+      {pendingFilters && (
+        <FilterConfirmDialog
+          open={showConfirm}
+          onOpenChange={setShowConfirm}
+          filters={pendingFilters}
+          onConfirm={(confirmed) => {
+            if (onApplyFilters) onApplyFilters(confirmed);
+            setPendingFilters(null);
+          }}
+        />
+      )}
     </div>
   );
 }
