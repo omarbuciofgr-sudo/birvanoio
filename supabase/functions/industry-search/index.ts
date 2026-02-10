@@ -6,11 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
-/**
- * Industry/Company Search - Find companies by industry, size, location
- * Uses Apollo.io organization search API
- */
-
 interface CompanySearchInput {
   industry?: string;
   employee_count_min?: number;
@@ -36,123 +31,60 @@ interface CompanyResult {
   headquarters_country: string | null;
   technologies: string[];
   keywords: string[];
+  source_provider?: string;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    const requestedHeaders = req.headers.get('access-control-request-headers');
-    return new Response(null, { 
-      headers: {
-        ...corsHeaders,
-        ...(requestedHeaders ? { 'Access-Control-Allow-Headers': requestedHeaders } : {}),
-      }
-    });
+// ── Provider 1: Apollo ──────────────────────────────────────────────
+async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
+  const { industry, employee_count_min, employee_count_max, location, keywords, limit = 25 } = input;
+
+  const searchParams: Record<string, unknown> = {
+    page: 1,
+    per_page: Math.min(limit, 100),
+  };
+
+  if (industry) {
+    searchParams.organization_industry_tag_ids = [industry];
+    searchParams.q_organization_keyword_tags = [industry];
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
-
-  if (!apolloApiKey) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Apollo API key not configured. Add APOLLO_API_KEY to secrets.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  if (employee_count_min || employee_count_max) {
+    const ranges: string[] = [];
+    const min = employee_count_min || 0;
+    const max = employee_count_max || 999999;
+    if (min < 10) ranges.push('1-10');
+    if (min <= 50 && max >= 11) ranges.push('11-50');
+    if (min <= 200 && max >= 51) ranges.push('51-200');
+    if (min <= 500 && max >= 201) ranges.push('201-500');
+    if (min <= 1000 && max >= 501) ranges.push('501-1000');
+    if (min <= 5000 && max >= 1001) ranges.push('1001-5000');
+    if (min <= 10000 && max >= 5001) ranges.push('5001-10000');
+    if (max >= 10001) ranges.push('10001+');
+    if (ranges.length > 0) searchParams.organization_num_employees_ranges = ranges;
   }
 
-  // Authentication check
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Authentication required' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  if (location) {
+    const parts = location.split(',').map(p => p.trim());
+    if (parts.length >= 2) {
+      searchParams.organization_locations = [location];
+    } else {
+      searchParams.q_organization_locations = location;
+    }
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } }
-  });
-
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Invalid authentication' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  if (keywords) {
+    searchParams.q_organization_name = keywords;
   }
+
+  console.log('[Apollo] Searching with params:', JSON.stringify(searchParams));
 
   try {
-    const body: CompanySearchInput = await req.json();
-    
-    const {
-      industry,
-      employee_count_min,
-      employee_count_max,
-      location,
-      keywords,
-      limit = 25,
-    } = body;
-
-    console.log(`Industry search: industry=${industry}, location=${location}, employees=${employee_count_min}-${employee_count_max}`);
-
-    // Build Apollo organization search params - api_key goes in header, not body
-    const searchParams: Record<string, unknown> = {
-      page: 1,
-      per_page: Math.min(limit, 100),
-    };
-
-    // Add industry filter
-    if (industry) {
-      searchParams.organization_industry_tag_ids = [industry];
-      // Also try keyword search for industry
-      searchParams.q_organization_keyword_tags = [industry];
-    }
-
-    // Add employee count filter
-    if (employee_count_min || employee_count_max) {
-      const employeeRanges: string[] = [];
-      
-      if (employee_count_min && employee_count_min < 10) employeeRanges.push('1-10');
-      if ((employee_count_min || 0) <= 50 && (employee_count_max || 999999) >= 11) employeeRanges.push('11-50');
-      if ((employee_count_min || 0) <= 200 && (employee_count_max || 999999) >= 51) employeeRanges.push('51-200');
-      if ((employee_count_min || 0) <= 500 && (employee_count_max || 999999) >= 201) employeeRanges.push('201-500');
-      if ((employee_count_min || 0) <= 1000 && (employee_count_max || 999999) >= 501) employeeRanges.push('501-1000');
-      if ((employee_count_min || 0) <= 5000 && (employee_count_max || 999999) >= 1001) employeeRanges.push('1001-5000');
-      if ((employee_count_min || 0) <= 10000 && (employee_count_max || 999999) >= 5001) employeeRanges.push('5001-10000');
-      if ((employee_count_max || 999999) >= 10001) employeeRanges.push('10001+');
-
-      if (employeeRanges.length > 0) {
-        searchParams.organization_num_employees_ranges = employeeRanges;
-      }
-    }
-
-    // Add location filter
-    if (location) {
-      // Parse location into city/state/country
-      const locationParts = location.split(',').map(p => p.trim());
-      
-      if (locationParts.length >= 2) {
-        searchParams.organization_locations = [location];
-      } else {
-        // Try as state or city
-        searchParams.q_organization_locations = location;
-      }
-    }
-
-    // Add keyword search
-    if (keywords) {
-      searchParams.q_organization_name = keywords;
-    }
-
-    console.log('Apollo search params:', JSON.stringify(searchParams, null, 2));
-
-    // Call Apollo organization search - use X-Api-Key header
     const response = await fetch('https://api.apollo.io/v1/mixed_companies/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
-        'X-Api-Key': apolloApiKey,
+        'X-Api-Key': apiKey,
       },
       body: JSON.stringify(searchParams),
     });
@@ -160,20 +92,19 @@ Deno.serve(async (req) => {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Apollo API error:', data);
-      return new Response(
-        JSON.stringify({ success: false, error: data.error || 'Apollo API error' }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error(`[Apollo] API error ${response.status}:`, data?.error || data);
+      return null; // Signal to try next provider
     }
 
-    const organizations = data.organizations || data.accounts || [];
-    console.log(`Found ${organizations.length} companies`);
+    const orgs = data.organizations || data.accounts || [];
+    console.log(`[Apollo] Found ${orgs.length} companies`);
 
-    const companies: CompanyResult[] = organizations.map((org: any) => ({
+    if (orgs.length === 0) return null;
+
+    return orgs.map((org: any) => ({
       name: org.name || '',
       domain: org.primary_domain || org.domain || '',
-      website: org.website_url || org.primary_domain ? `https://${org.primary_domain}` : null,
+      website: org.website_url || (org.primary_domain ? `https://${org.primary_domain}` : null),
       linkedin_url: org.linkedin_url || null,
       industry: org.industry || null,
       employee_count: org.estimated_num_employees || null,
@@ -186,18 +117,273 @@ Deno.serve(async (req) => {
       headquarters_country: org.country || null,
       technologies: org.technologies?.slice(0, 20) || [],
       keywords: org.keywords?.slice(0, 10) || [],
+      source_provider: 'apollo',
     }));
+  } catch (e) {
+    console.error('[Apollo] Exception:', e);
+    return null;
+  }
+}
+
+// ── Provider 2: People Data Labs (Company Search) ───────────────────
+async function searchPDL(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
+  const { industry, employee_count_min, employee_count_max, location, keywords, limit = 25 } = input;
+
+  // Build PDL SQL-like query
+  const clauses: string[] = [];
+
+  if (industry) {
+    clauses.push(`industry='${industry}'`);
+  }
+  if (employee_count_min) {
+    clauses.push(`employee_count>=${employee_count_min}`);
+  }
+  if (employee_count_max && employee_count_max < 999999) {
+    clauses.push(`employee_count<=${employee_count_max}`);
+  }
+  if (location) {
+    // PDL uses location.locality or location.region
+    clauses.push(`location.region='${location}' OR location.locality='${location}'`);
+  }
+  if (keywords) {
+    clauses.push(`name='${keywords}'`);
+  }
+
+  if (clauses.length === 0) {
+    console.log('[PDL] No filters to search with');
+    return null;
+  }
+
+  const sqlQuery = clauses.join(' AND ');
+  console.log(`[PDL] Searching: ${sqlQuery}`);
+
+  try {
+    const params = new URLSearchParams({
+      sql: `SELECT * FROM company WHERE ${sqlQuery}`,
+      size: String(Math.min(limit, 100)),
+      dataset: 'all',
+    });
+
+    const response = await fetch(`https://api.peopledatalabs.com/v5/company/search?${params}`, {
+      method: 'GET',
+      headers: {
+        'X-Api-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(`[PDL] API error ${response.status}:`, data?.error?.message || data);
+      return null;
+    }
+
+    const companies = data.data || [];
+    console.log(`[PDL] Found ${companies.length} companies`);
+
+    if (companies.length === 0) return null;
+
+    return companies.map((c: any) => ({
+      name: c.name || c.display_name || '',
+      domain: c.website?.replace(/^https?:\/\//, '').replace(/\/$/, '') || '',
+      website: c.website || null,
+      linkedin_url: c.linkedin_url || null,
+      industry: c.industry || null,
+      employee_count: c.employee_count || null,
+      employee_range: c.size || null,
+      annual_revenue: c.estimated_annual_revenue ? parseFloat(c.estimated_annual_revenue) : null,
+      founded_year: c.founded || null,
+      description: c.summary || null,
+      headquarters_city: c.location?.locality || null,
+      headquarters_state: c.location?.region || null,
+      headquarters_country: c.location?.country || null,
+      technologies: c.tags?.slice(0, 20) || [],
+      keywords: c.keywords?.slice(0, 10) || [],
+      source_provider: 'pdl',
+    }));
+  } catch (e) {
+    console.error('[PDL] Exception:', e);
+    return null;
+  }
+}
+
+// ── Provider 3: Hunter.io (Domain Search) ───────────────────────────
+async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
+  const { industry, location, keywords, limit = 25 } = input;
+
+  // Hunter's company search is more limited — use domain-search if we have keywords
+  // or use email-finder with company name
+  if (!keywords && !industry) {
+    console.log('[Hunter] No keywords or industry to search');
+    return null;
+  }
+
+  const query = keywords || industry || '';
+  console.log(`[Hunter] Searching for companies matching: ${query}`);
+
+  try {
+    // Use Hunter's company-search (undocumented but works) or domain-search
+    const params = new URLSearchParams({
+      query,
+      api_key: apiKey,
+      limit: String(Math.min(limit, 100)),
+    });
+
+    if (location) {
+      params.set('location', location);
+    }
+
+    const response = await fetch(`https://api.hunter.io/v2/domain-search?${params}`, {
+      method: 'GET',
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(`[Hunter] API error ${response.status}:`, data?.errors || data);
+      return null;
+    }
+
+    const result = data.data;
+    if (!result || !result.domain) {
+      console.log('[Hunter] No results found');
+      return null;
+    }
+
+    // Hunter returns a single company domain result
+    const companies: CompanyResult[] = [{
+      name: result.organization || result.domain || '',
+      domain: result.domain || '',
+      website: result.domain ? `https://${result.domain}` : null,
+      linkedin_url: result.linkedin || null,
+      industry: result.industry || industry || null,
+      employee_count: null,
+      employee_range: null,
+      annual_revenue: null,
+      founded_year: null,
+      description: result.description || null,
+      headquarters_city: result.city || null,
+      headquarters_state: result.state || null,
+      headquarters_country: result.country || null,
+      technologies: result.technologies?.slice(0, 20) || [],
+      keywords: [],
+      source_provider: 'hunter',
+    }];
+
+    console.log(`[Hunter] Found ${companies.length} companies`);
+    return companies.length > 0 ? companies : null;
+  } catch (e) {
+    console.error('[Hunter] Exception:', e);
+    return null;
+  }
+}
+
+// ── Main Handler ────────────────────────────────────────────────────
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    const requestedHeaders = req.headers.get('access-control-request-headers');
+    return new Response(null, {
+      headers: {
+        ...corsHeaders,
+        ...(requestedHeaders ? { 'Access-Control-Allow-Headers': requestedHeaders } : {}),
+      },
+    });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+  // Auth check
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Authentication required' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Invalid authentication' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  try {
+    const body: CompanySearchInput = await req.json();
+    const limit = body.limit || 25;
+
+    console.log(`Industry search waterfall: industry=${body.industry}, location=${body.location}, employees=${body.employee_count_min}-${body.employee_count_max}`);
+
+    // Waterfall: try each provider in order until one succeeds
+    const providers: { name: string; fn: () => Promise<CompanyResult[] | null> }[] = [];
+
+    const apolloKey = Deno.env.get('APOLLO_API_KEY');
+    if (apolloKey) {
+      providers.push({ name: 'Apollo', fn: () => searchApollo(body, apolloKey) });
+    }
+
+    const pdlKey = Deno.env.get('PDL_API_KEY');
+    if (pdlKey) {
+      providers.push({ name: 'PDL', fn: () => searchPDL(body, pdlKey) });
+    }
+
+    const hunterKey = Deno.env.get('HUNTER_API_KEY');
+    if (hunterKey) {
+      providers.push({ name: 'Hunter', fn: () => searchHunter(body, hunterKey) });
+    }
+
+    if (providers.length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'No search provider API keys configured. Add APOLLO_API_KEY, PDL_API_KEY, or HUNTER_API_KEY.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let companies: CompanyResult[] | null = null;
+    let usedProvider = '';
+
+    for (const provider of providers) {
+      console.log(`[Waterfall] Trying ${provider.name}...`);
+      companies = await provider.fn();
+      if (companies && companies.length > 0) {
+        usedProvider = provider.name;
+        console.log(`[Waterfall] ✓ ${provider.name} returned ${companies.length} results`);
+        break;
+      }
+      console.log(`[Waterfall] ✗ ${provider.name} returned no results, trying next...`);
+    }
+
+    if (!companies || companies.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          companies: [],
+          total: 0,
+          provider: 'none',
+          pagination: { page: 1, per_page: limit, total_entries: 0, total_pages: 0 },
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         companies,
         total: companies.length,
+        provider: usedProvider.toLowerCase(),
         pagination: {
-          page: data.pagination?.page || 1,
-          per_page: data.pagination?.per_page || limit,
-          total_entries: data.pagination?.total_entries || companies.length,
-          total_pages: data.pagination?.total_pages || 1,
+          page: 1,
+          per_page: limit,
+          total_entries: companies.length,
+          total_pages: 1,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
