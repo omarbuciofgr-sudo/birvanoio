@@ -10,11 +10,14 @@ import {
   Play,
   CheckCircle2,
   XCircle,
+  PanelRightOpen,
+  PanelRightClose,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
+import { EnrichmentActionsPanel } from './EnrichmentActionsPanel';
 
 function CompanyLogo({ domain, name }: { domain: string | null | undefined; name: string }) {
   const [errored, setErrored] = useState(false);
@@ -131,6 +134,7 @@ export function SearchResults({
   };
 
   const [bulkEnriching, setBulkEnriching] = useState(false);
+  const [showActionsPanel, setShowActionsPanel] = useState(true);
 
   const handleEnrich = useCallback(async (index: number, company: CompanyResult) => {
     if (enrichmentStatus[index] === 'loading' || enrichmentStatus[index] === 'done') return;
@@ -258,8 +262,12 @@ export function SearchResults({
 
   const importCount = selectedRows.size > 0 ? selectedRows.size : results.length;
 
+  const selectedCompany = selectedRows.size === 1 ? results[Array.from(selectedRows)[0]] : null;
+
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="h-full flex bg-background">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
       {/* Header */}
       <div className="flex-shrink-0 px-5 py-3 border-b border-border/60 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -288,6 +296,13 @@ export function SearchResults({
           <span className="text-xs text-primary font-medium">
             Previewing {results.length} results. {importCount.toLocaleString()} will be imported.
           </span>
+          <button
+            onClick={() => setShowActionsPanel(!showActionsPanel)}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            title={showActionsPanel ? 'Hide actions panel' : 'Show actions panel'}
+          >
+            {showActionsPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
@@ -487,6 +502,16 @@ export function SearchResults({
           </Button>
         </div>
       </div>
+      </div>
+
+      {/* Enrichment Actions Panel */}
+      {showActionsPanel && (
+        <EnrichmentActionsPanel
+          selectedCompany={selectedCompany}
+          selectedRows={selectedRows}
+          results={results}
+        />
+      )}
     </div>
   );
 }

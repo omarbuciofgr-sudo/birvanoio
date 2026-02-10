@@ -30,6 +30,8 @@ import ClientLeads from "./pages/client/ClientLeads";
 import CSVEnrichment from "./pages/CSVEnrichment";
 import ProspectSearch from "./pages/ProspectSearch";
 import Reports from "./pages/Reports";
+import AIAgents from "./pages/AIAgents";
+import Signals from "./pages/Signals";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +69,8 @@ const App = () => (
               <Route path="/dashboard/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
               <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
+              <Route path="/dashboard/ai-agents" element={<ProtectedRoute><AIAgents /></ProtectedRoute>} />
+              <Route path="/dashboard/signals" element={<ProtectedRoute><Signals /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>
           </BrowserRouter>
