@@ -26,9 +26,11 @@ import {
   Check,
   Home,
   Building,
+  Building2,
   Target,
   Phone as PhoneIcon,
   Mail as MailIcon,
+  MailCheck,
   Save,
   RotateCw,
   MapPin,
@@ -36,6 +38,10 @@ import {
   Bot,
   Sparkles,
   FileSpreadsheet,
+  FileUp,
+  TrendingUp,
+  Users,
+  UserSearch,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -156,6 +162,22 @@ export default function WebScraper() {
       setChatLoading(false);
     }
   };
+
+  const useCaseChips = [
+    { label: 'List building', icon: 'Users' },
+    { label: 'Account research & scoring', icon: 'TrendingUp' },
+    { label: 'Inbound lead enrichment & routing', icon: 'MailCheck' },
+    { label: 'Personalized outbound', icon: 'Send' },
+  ];
+
+  const sourceCards = [
+    { label: 'Find people', icon: 'UserSearch', tab: 'prospect-search' },
+    { label: 'Find companies', icon: 'Building2', tab: 'prospect-search' },
+    { label: 'Local businesses', icon: 'MapPin', tab: 'search' },
+    { label: 'Real estate', icon: 'Home', tab: 'real-estate' },
+    { label: 'Import CSV', icon: 'FileUp', tab: 'csv-enrichment' },
+    { label: 'AI search', icon: 'Sparkles', tab: 'ai-chat' },
+  ];
 
   const chatSuggestions = [
     "Find property management companies in California",
@@ -386,24 +408,74 @@ export default function WebScraper() {
                 <div className="flex flex-col h-[600px]">
                   <ScrollArea className="flex-1 p-5">
                     {chatMessages.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full py-16">
+                      <div className="flex flex-col items-center justify-center h-full py-10">
                         <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                           <Bot className="h-6 w-6 text-primary" />
                         </div>
-                        <h3 className="text-sm font-semibold mb-1">AI Search Assistant</h3>
-                        <p className="text-xs text-muted-foreground text-center max-w-sm mb-6">
-                          Tell me what kind of companies you're looking for and I'll automatically search for them
+                        <h3 className="text-base font-semibold mb-1">What can we help you build today?</h3>
+                        <p className="text-xs text-muted-foreground text-center max-w-md mb-5">
+                          Tell us how you'd like to get started or pick a suggested use case below
                         </p>
-                        <div className="grid grid-cols-2 gap-2 w-full max-w-md">
-                          {chatSuggestions.map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              onClick={() => { setChatInput(suggestion); }}
-                              className="text-left px-3 py-2.5 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-muted/30 transition-all text-xs text-muted-foreground hover:text-foreground"
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
+
+                        {/* Use-case chips */}
+                        <div className="flex flex-wrap gap-2 justify-center mb-6">
+                          {useCaseChips.map((chip) => {
+                            const IconComp = chip.icon === 'Users' ? Users : chip.icon === 'TrendingUp' ? TrendingUp : chip.icon === 'MailCheck' ? MailCheck : Send;
+                            return (
+                              <button
+                                key={chip.label}
+                                onClick={() => setChatInput(chip.label)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/60 hover:border-primary/40 hover:bg-muted/30 transition-all text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <IconComp className="h-3.5 w-3.5" />
+                                {chip.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Start from a source */}
+                        <div className="w-full max-w-lg">
+                          <p className="text-[11px] text-muted-foreground mb-2.5 font-medium">Start from a source</p>
+                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                            {sourceCards.map((card) => {
+                              const IconComp = card.icon === 'UserSearch' ? UserSearch : card.icon === 'Building2' ? Building2 : card.icon === 'MapPin' ? MapPin : card.icon === 'Home' ? Home : card.icon === 'FileUp' ? FileUp : Sparkles;
+                              return (
+                                <button
+                                  key={card.label}
+                                  onClick={() => {
+                                    if (card.tab === 'ai-chat') {
+                                      setChatInput(card.label);
+                                    } else {
+                                      setActiveTab(card.tab);
+                                    }
+                                  }}
+                                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border/40 hover:border-primary/40 hover:bg-muted/20 transition-all group"
+                                >
+                                  <div className="h-8 w-8 rounded-lg bg-muted/60 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                                    <IconComp className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                  </div>
+                                  <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground transition-colors text-center leading-tight">{card.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Quick suggestions */}
+                        <div className="w-full max-w-md mt-6">
+                          <p className="text-[11px] text-muted-foreground mb-2 font-medium">Try asking</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {chatSuggestions.map((suggestion) => (
+                              <button
+                                key={suggestion}
+                                onClick={() => { setChatInput(suggestion); }}
+                                className="text-left px-3 py-2 rounded-lg border border-border/40 hover:border-primary/40 hover:bg-muted/20 transition-all text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ) : (

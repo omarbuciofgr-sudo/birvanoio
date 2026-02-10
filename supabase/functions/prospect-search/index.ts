@@ -732,10 +732,17 @@ Deno.serve(async (req) => {
       );
     }
     
+    const rawParams = await req.json();
+    
+    // Accept 'query' as alias for keywords (for simpler API calls)
+    if (rawParams.query && !rawParams.industry && !rawParams.keywords?.length) {
+      rawParams.keywords = [rawParams.query];
+    }
+    
     const params: ProspectSearchParams & { 
       validate_contacts?: boolean;
       use_waterfall?: boolean;
-    } = await req.json();
+    } = rawParams;
     console.log('Prospect search params:', JSON.stringify(params, null, 2));
     
     // Validate required params
