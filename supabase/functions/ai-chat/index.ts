@@ -5,33 +5,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const OPENAI_MODELS = new Set(["chatgpt-4o-latest", "gpt-4o", "gpt-4o-mini"]);
+
+function getAIConfig(model: string) {
+  const useOpenAI = OPENAI_MODELS.has(model);
+  if (useOpenAI) {
+    const key = Deno.env.get("OPENAI_API_KEY");
+    if (!key) throw new Error("OpenAI API key not configured");
+    return { url: "https://api.openai.com/v1/chat/completions", key, model };
+  }
+  const key = Deno.env.get("LOVABLE_API_KEY");
+  if (!key) throw new Error("LOVABLE_API_KEY is not configured");
+  return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key, model };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-    if (!LOVABLE_API_KEY) {
-      console.error("AI service configuration error: API key not set");
-      return new Response(
-        JSON.stringify({ error: "Service temporarily unavailable" }),
-        { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
     const body = await req.json();
+    const selectedModel = body.model || "google/gemini-3-flash-preview";
 
-    // Detect which format is being used:
-    // Format A (Web Scraper AI Assistant): { messages: [{role, content}], context: 'web_scraper' }
-    // Format B (Landing page chatbot): { message: string, sessionId: string, conversationHistory: [] }
     const isWebScraperFormat = Array.isArray(body.messages) && body.context;
 
     if (isWebScraperFormat) {
-      return await handleWebScraperChat(body, LOVABLE_API_KEY);
+      return await handleWebScraperChat(body, selectedModel);
     } else {
-      return await handleLandingChatbot(body, req, LOVABLE_API_KEY);
+      return await handleLandingChatbot(body, req, selectedModel);
     }
   } catch (error: any) {
     console.error("AI chat error:", error);
@@ -42,8 +44,40 @@ Deno.serve(async (req) => {
   }
 });
 
+async function callAI(messages: any[], model: string) {
+  const config = getAIConfig(model);
+  const response = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model: config.model, messages }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    if (response.status === 402) {
+      return new Response(
+        JSON.stringify({ error: "Usage limit reached. Please add credits." }),
+        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    const errText = await response.text();
+    console.error("AI error:", response.status, errText);
+    throw new Error("AI gateway error");
+  }
+
+  return response;
+}
+
 // ── Web Scraper AI Assistant ──────────────────────────────────
-async function handleWebScraperChat(body: any, apiKey: string) {
+async function handleWebScraperChat(body: any, model: string) {
   const { messages } = body;
 
   if (!messages || messages.length === 0) {
@@ -68,37 +102,10 @@ Be concise, actionable, and helpful. If a user asks to find specific types of co
     ...messages,
   ];
 
-  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: aiMessages,
-    }),
-  });
+  const aiResponse = await callAI(aiMessages, model);
+  if (aiResponse instanceof Response && aiResponse.status !== 200) return aiResponse;
 
-  if (!aiResponse.ok) {
-    if (aiResponse.status === 429) {
-      return new Response(
-        JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-    if (aiResponse.status === 402) {
-      return new Response(
-        JSON.stringify({ error: "Usage limit reached. Please add credits." }),
-        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-    const errText = await aiResponse.text();
-    console.error("AI gateway error:", aiResponse.status, errText);
-    throw new Error("AI gateway error");
-  }
-
-  const aiData = await aiResponse.json();
+  const aiData = await (aiResponse as Response).json();
   const responseContent = aiData.choices?.[0]?.message?.content || "I'm here to help! What are you looking for?";
 
   return new Response(
@@ -108,7 +115,7 @@ Be concise, actionable, and helpful. If a user asks to find specific types of co
 }
 
 // ── Landing Page Chatbot ──────────────────────────────────────
-async function handleLandingChatbot(body: any, req: Request, apiKey: string) {
+async function handleLandingChatbot(body: any, req: Request, model: string) {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -161,7 +168,7 @@ async function handleLandingChatbot(body: any, req: Request, apiKey: string) {
     );
   }
 
-  const messages = [
+  const aiMessages = [
     {
       role: "system",
       content: `You are Brivano's friendly AI assistant on their website. Your goals are:
@@ -199,35 +206,10 @@ When you successfully capture their name, email, or phone, include it in your re
     { role: "user", content: message }
   ];
 
-  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages,
-    }),
-  });
+  const aiResponse = await callAI(aiMessages, model);
+  if (aiResponse instanceof Response && aiResponse.status !== 200) return aiResponse;
 
-  if (!aiResponse.ok) {
-    if (aiResponse.status === 429) {
-      return new Response(
-        JSON.stringify({ error: "Too many requests. Please try again in a moment." }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-    if (aiResponse.status === 402) {
-      return new Response(
-        JSON.stringify({ error: "Service temporarily unavailable." }),
-        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-    throw new Error("Failed to get AI response");
-  }
-
-  const aiData = await aiResponse.json();
+  const aiData = await (aiResponse as Response).json();
   let responseContent = aiData.choices?.[0]?.message?.content || "I'm here to help! What can I tell you about Brivano?";
 
   let captured: any = null;
