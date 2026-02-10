@@ -398,7 +398,7 @@ export default function WebScraper() {
 
           {/* ── Prospect Search Tab ── */}
           <TabsContent value="prospect-search" className="mt-0">
-            <BrivanoLens externalFilters={externalFilters} />
+            <BrivanoLens externalFilters={externalFilters} onSwitchTab={setActiveTab} />
           </TabsContent>
 
           {/* ── AI Chat Tab ── */}

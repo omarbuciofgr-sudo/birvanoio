@@ -13,7 +13,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
+import { PeopleFilters, defaultPeopleFilters, PeopleSearchFilters } from '@/components/prospect-search/PeopleFilters';
+import { JobFilters, defaultJobFilters, JobSearchFilters } from '@/components/prospect-search/JobFilters';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
+import { SearchTypeSelector, SearchTypeHeader, SearchType } from '@/components/prospect-search/SearchTypeSelector';
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
@@ -22,11 +25,15 @@ import { supabase } from '@/integrations/supabase/client';
 interface BrivanoLensProps {
   onSaveProspects?: (prospects: any[]) => void;
   externalFilters?: Partial<ProspectSearchFilters> | null;
+  onSwitchTab?: (tab: string) => void;
 }
 
-export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensProps) {
+export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: BrivanoLensProps) {
   const { user } = useAuth();
+  const [searchType, setSearchType] = useState<SearchType | null>(null);
   const [filters, setFilters] = useState<ProspectSearchFilters>(defaultFilters);
+  const [peopleFilters, setPeopleFilters] = useState<PeopleSearchFilters>(defaultPeopleFilters);
+  const [jobFilters, setJobFilters] = useState<JobSearchFilters>(defaultJobFilters);
   const lastAppliedRef = useRef<string | null>(null);
   const [results, setResults] = useState<CompanyResult[]>([]);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
@@ -36,9 +43,9 @@ export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensPro
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
 
-  // Apply external filters from AI chat and auto-trigger search
   const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
 
+  // When external filters arrive, auto-select companies mode
   useEffect(() => {
     if (!externalFilters) return;
     const key = JSON.stringify(externalFilters);
@@ -56,18 +63,28 @@ export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensPro
     if (externalFilters.keywordsInclude) merged.keywordsInclude = externalFilters.keywordsInclude;
     if (externalFilters.limit) merged.limit = externalFilters.limit;
     setFilters(merged);
+    setSearchType('companies');
     setShouldAutoSearch(true);
   }, [externalFilters]);
 
-  // Auto-trigger search after filters are applied from AI
   useEffect(() => {
     if (shouldAutoSearch && !searchMutation.isPending) {
       setShouldAutoSearch(false);
-      // Small delay to ensure state is settled
       const timer = setTimeout(() => searchMutation.mutate(), 100);
       return () => clearTimeout(timer);
     }
   }, [shouldAutoSearch, filters]);
+
+  const handleSelectSearchType = (type: SearchType) => {
+    if (type === 'local') {
+      onSwitchTab?.('search');
+      return;
+    }
+    setSearchType(type);
+    setResults([]);
+    setHasSearched(false);
+    setSelectedRows(new Set());
+  };
 
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;
@@ -87,31 +104,58 @@ export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensPro
 
   const searchMutation = useMutation({
     mutationFn: async () => {
+      // Build query params based on search type
+      if (searchType === 'people') {
+        const keywords = [...peopleFilters.jobTitles, ...peopleFilters.skills].filter(Boolean).join(', ') || undefined;
+        const industry = peopleFilters.industries
+          .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
+          .join(', ');
+        const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
+        const location = locationParts.join(', ') || undefined;
+
+        return industrySearchApi.searchCompanies({
+          industry: industry || undefined,
+          keywords,
+          location,
+          limit: peopleFilters.limit,
+        });
+      }
+
+      if (searchType === 'jobs') {
+        const keywords = [...jobFilters.jobTitles, ...jobFilters.jobDescriptionKeywords].filter(Boolean).join(', ') || undefined;
+        const industry = jobFilters.industries
+          .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
+          .join(', ');
+        const locationParts = [...jobFilters.cities, ...jobFilters.states, ...jobFilters.countries];
+        const location = locationParts.join(', ') || undefined;
+
+        return industrySearchApi.searchCompanies({
+          industry: industry || undefined,
+          keywords,
+          location,
+          limit: jobFilters.limit,
+        });
+      }
+
+      // Default: companies
       const industry = filters.industries
         .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
         .join(', ');
 
       const locationParts = [
-        ...filters.cities,
-        ...filters.states,
-        ...filters.citiesOrStates,
-        ...filters.countries,
+        ...filters.cities, ...filters.states, ...filters.citiesOrStates, ...filters.countries,
       ];
       const location = locationParts.join(', ') || undefined;
 
       const keywords = [
-        ...filters.keywordsInclude,
-        filters.productsDescription,
+        ...filters.keywordsInclude, filters.productsDescription,
       ].filter(Boolean).join(', ') || undefined;
 
       let employee_count_min: number | undefined;
       let employee_count_max: number | undefined;
       if (filters.companySizes.length > 0) {
         const range = EMPLOYEE_RANGES.find((r) => r.value === filters.companySizes[0]);
-        if (range) {
-          employee_count_min = range.min;
-          employee_count_max = range.max;
-        }
+        if (range) { employee_count_min = range.min; employee_count_max = range.max; }
       }
 
       return industrySearchApi.searchCompanies({
@@ -190,17 +234,32 @@ export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensPro
 
   const handleLoadSearch = (search: { filters: ProspectSearchFilters }) => {
     setFilters(search.filters);
+    setSearchType('companies');
     setLoadDialogOpen(false);
     toast.success('Filters loaded');
   };
+
+  const canSearch = () => {
+    if (searchType === 'people') return peopleFilters.jobTitles.length > 0 || peopleFilters.industries.length > 0 || peopleFilters.companies.length > 0;
+    if (searchType === 'jobs') return jobFilters.jobTitles.length > 0 || jobFilters.industries.length > 0 || jobFilters.companies.length > 0;
+    return filters.industries.length > 0;
+  };
+
+  // Show search type selector if no type chosen
+  if (!searchType) {
+    return (
+      <div className="h-[calc(100vh-180px)] min-h-[500px] flex flex-col border border-border/60 rounded-lg overflow-hidden bg-background">
+        <SearchTypeSelector onSelect={handleSelectSearchType} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-180px)] min-h-[500px] flex flex-col border border-border/60 rounded-lg overflow-hidden bg-background">
       {/* Top bar */}
       <div className="flex-shrink-0 h-11 border-b border-border/60 flex items-center justify-between px-4 bg-muted/30">
-        <h2 className="text-xs font-semibold tracking-tight">Find companies</h2>
+        <SearchTypeHeader type={searchType} onBack={() => setSearchType(null)} />
         <div className="flex items-center gap-2">
-          {/* Load saved searches */}
           <Dialog open={loadDialogOpen} onOpenChange={(open) => {
             setLoadDialogOpen(open);
             if (open) loadSavedSearches();
@@ -238,13 +297,33 @@ export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensPro
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Filters */}
         <div className="w-[360px] flex-shrink-0 overflow-hidden border-r border-border/60">
-          <SearchFilters
-            filters={filters}
-            onFiltersChange={setFilters}
-            onSearch={() => searchMutation.mutate()}
-            isSearching={searchMutation.isPending}
-            resultCount={results.length}
-          />
+          {searchType === 'people' && (
+            <PeopleFilters
+              filters={peopleFilters}
+              onFiltersChange={setPeopleFilters}
+              onSearch={() => searchMutation.mutate()}
+              isSearching={searchMutation.isPending}
+              resultCount={results.length}
+            />
+          )}
+          {searchType === 'jobs' && (
+            <JobFilters
+              filters={jobFilters}
+              onFiltersChange={setJobFilters}
+              onSearch={() => searchMutation.mutate()}
+              isSearching={searchMutation.isPending}
+              resultCount={results.length}
+            />
+          )}
+          {searchType === 'companies' && (
+            <SearchFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              onSearch={() => searchMutation.mutate()}
+              isSearching={searchMutation.isPending}
+              resultCount={results.length}
+            />
+          )}
           {/* Bottom bar */}
           <div className="h-12 border-t border-border/60 px-4 flex items-center justify-between bg-muted/30">
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
@@ -273,7 +352,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensPro
             </Dialog>
             <Button
               onClick={() => searchMutation.mutate()}
-              disabled={searchMutation.isPending || filters.industries.length === 0}
+              disabled={searchMutation.isPending || !canSearch()}
               size="sm"
               className="h-7 px-5 text-xs font-semibold"
             >
