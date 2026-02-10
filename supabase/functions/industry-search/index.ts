@@ -238,6 +238,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   console.log('[Apollo] Searching with params:', JSON.stringify(searchParams));
 
   try {
+    // Use organizations/search for richer company data (description, employee count, location)
     const response = await fetch('https://api.apollo.io/api/v1/mixed_companies/search', {
       method: 'POST',
       headers: {
@@ -257,7 +258,13 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
 
     const orgs = data.organizations || data.accounts || [];
     console.log(`[Apollo] Found ${orgs.length} companies`);
-
+    
+    // Log first result's raw fields for debugging data gaps
+    if (orgs.length > 0) {
+      const sample = orgs[0];
+      console.log(`[Apollo] Sample org fields: name=${sample.name}, estimated_num_employees=${sample.estimated_num_employees}, city=${sample.city}, state=${sample.state}, short_description=${(sample.short_description || '').slice(0, 50)}, seo_description=${(sample.seo_description || '').slice(0, 50)}`);
+      console.log(`[Apollo] Sample org keys:`, Object.keys(sample).join(', '));
+    }
     if (orgs.length === 0) return null;
 
     const totalEntries = data.pagination?.total_entries || orgs.length;
@@ -266,23 +273,23 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
     return {
       results: orgs.map((org: any) => ({
         name: org.name || '',
-        domain: org.primary_domain || org.domain || '',
+        domain: org.primary_domain || org.domain || org.website_url?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || '',
         website: org.website_url || (org.primary_domain ? `https://${org.primary_domain}` : null),
         linkedin_url: org.linkedin_url || null,
-        industry: org.industry || input.industry || null,
-        employee_count: org.estimated_num_employees || null,
-        employee_range: org.employee_count_range || null,
-        annual_revenue: org.organization_revenue || org.annual_revenue || null,
+        industry: org.industry || org.organization_industry || input.industry || null,
+        employee_count: org.estimated_num_employees || org.employee_count || org.num_employees || null,
+        employee_range: org.employee_count_range || org.employees_range || null,
+        annual_revenue: org.organization_revenue || org.annual_revenue || org.estimated_annual_revenue || null,
         founded_year: org.founded_year || null,
-        description: org.short_description || org.seo_description || null,
-        headquarters_city: org.city || null,
-        headquarters_state: org.state || null,
-        headquarters_country: org.country || null,
+        description: org.short_description || org.seo_description || org.snippets_loaded?.description || org.raw_address || null,
+        headquarters_city: org.city || org.hq_city || org.organization_city || null,
+        headquarters_state: org.state || org.hq_state || org.organization_state || null,
+        headquarters_country: org.country || org.hq_country || org.organization_country || null,
         technologies: org.technologies?.slice(0, 20) || [],
         keywords: org.keywords?.slice(0, 10) || [],
         source_provider: 'apollo',
         logo_url: org.logo_url || null,
-        phone: org.phone || org.primary_phone?.number || null,
+        phone: org.phone || org.primary_phone?.number || org.sanitized_phone || null,
         market_cap: org.market_cap || null,
         sic_codes: org.sic_codes || [],
         naics_codes: org.naics_codes || [],
