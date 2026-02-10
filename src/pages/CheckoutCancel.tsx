@@ -9,7 +9,7 @@ const CheckoutCancel = () => {
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <Link to="/" className="inline-block mb-8">
-          <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto mx-auto dark:brightness-0 dark:invert" style={{ mixBlendMode: 'multiply' }} />
+          <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto mx-auto mix-blend-multiply dark:mix-blend-normal dark:brightness-0 dark:invert" />
         </Link>
 
         {/* Cancel Icon */}
