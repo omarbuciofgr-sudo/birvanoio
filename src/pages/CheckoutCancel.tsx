@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { XCircle, ArrowLeft, MessageSquare } from "lucide-react";
-import brivanoLogo from "@/assets/logo-min-4.png";
+import { BrivanoLogo } from "@/components/BrivanoLogo";
 
 const CheckoutCancel = () => {
   return (
@@ -9,8 +9,7 @@ const CheckoutCancel = () => {
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <Link to="/" className="inline-block mb-8">
-          <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto mx-auto mix-blend-multiply dark:hidden" />
-          <span className="hidden dark:inline text-2xl font-semibold tracking-tight font-display text-foreground">brivano</span>
+          <BrivanoLogo className="h-16 mx-auto" />
         </Link>
 
         {/* Cancel Icon */}

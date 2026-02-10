@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Instagram, Linkedin, Twitter, Mail, Phone } from "lucide-react";
-import brivanoLogo from "@/assets/logo-min-4.png";
+import { BrivanoLogo } from "@/components/BrivanoLogo";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -11,8 +11,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center mb-3">
-              <img src={brivanoLogo} alt="Brivano" className="h-8 w-auto mix-blend-multiply dark:hidden" />
-              <span className="hidden dark:inline text-lg font-semibold tracking-tight font-display text-foreground">brivano</span>
+              <BrivanoLogo className="h-8" />
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs">
               AI-powered lead generation. Fresh, verified data for any niche, any market.
