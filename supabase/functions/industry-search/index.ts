@@ -62,30 +62,33 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
 
   if (industry) {
     const industryTags = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
-    // Use keyword tags for text-based industry matching (Apollo requires numeric IDs for organization_industry_tag_ids)
+    // Use q_organization_keyword_tags for industry matching (Apollo requires numeric IDs for organization_industry_tag_ids)
     searchParams.q_organization_keyword_tags = industryTags;
+    // Also set as a strict keyword filter to narrow results
+    searchParams.q_keywords = industryTags.join(' ');
   }
 
   // Use employee_ranges directly if provided (e.g. ["1-10", "11-50", "51-200"])
+  // IMPORTANT: Apollo expects comma-separated format like "1,10" not "1-10"
   if (employee_ranges && employee_ranges.length > 0) {
-    // Map to Apollo format: "1,10" style ranges
     const apolloRanges = employee_ranges.map(r => {
-      if (r === '5001+' || r === '10001+') return '10001+';
-      return r;
+      if (r === '5001+' || r === '10001+') return '10001,';
+      // Convert "1-10" → "1,10"
+      return r.replace('-', ',');
     });
     searchParams.organization_num_employees_ranges = apolloRanges;
   } else if (employee_count_min || employee_count_max) {
     const ranges: string[] = [];
     const min = employee_count_min || 0;
     const max = employee_count_max || 999999;
-    if (min < 10) ranges.push('1-10');
-    if (min <= 50 && max >= 11) ranges.push('11-50');
-    if (min <= 200 && max >= 51) ranges.push('51-200');
-    if (min <= 500 && max >= 201) ranges.push('201-500');
-    if (min <= 1000 && max >= 501) ranges.push('501-1000');
-    if (min <= 5000 && max >= 1001) ranges.push('1001-5000');
-    if (min <= 10000 && max >= 5001) ranges.push('5001-10000');
-    if (max >= 10001) ranges.push('10001+');
+    if (min < 10) ranges.push('1,10');
+    if (min <= 50 && max >= 11) ranges.push('11,50');
+    if (min <= 200 && max >= 51) ranges.push('51,200');
+    if (min <= 500 && max >= 201) ranges.push('201,500');
+    if (min <= 1000 && max >= 501) ranges.push('501,1000');
+    if (min <= 5000 && max >= 1001) ranges.push('1001,5000');
+    if (min <= 10000 && max >= 5001) ranges.push('5001,10000');
+    if (max >= 10001) ranges.push('10001,');
     if (ranges.length > 0) searchParams.organization_num_employees_ranges = ranges;
   }
 
