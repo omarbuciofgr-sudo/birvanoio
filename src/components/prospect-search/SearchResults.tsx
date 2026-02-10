@@ -114,6 +114,16 @@ export function SearchResults({
     onSelectionChange(newSelected);
   };
 
+  const toggleAll = () => {
+    if (selectedRows.size === results.length) {
+      onSelectionChange(new Set());
+    } else {
+      onSelectionChange(new Set(results.map((_, i) => i)));
+    }
+  };
+
+  const [bulkEnriching, setBulkEnriching] = useState(false);
+
   const handleEnrich = useCallback(async (index: number, company: CompanyResult) => {
     if (enrichmentStatus[index] === 'loading' || enrichmentStatus[index] === 'done') return;
 
@@ -172,6 +182,27 @@ export function SearchResults({
     }
   }, [enrichmentStatus, canAfford, spendCredits]);
 
+  const handleEnrichSelected = useCallback(async () => {
+    if (bulkEnriching) return;
+    const toEnrich = Array.from(selectedRows).filter(
+      (i) => (enrichmentStatus[i] || 'idle') === 'idle'
+    );
+    if (toEnrich.length === 0) {
+      toast.info('No un-enriched rows selected.');
+      return;
+    }
+    if (!canAfford('enrich', toEnrich.length)) {
+      toast.error(`Not enough credits. Need ${toEnrich.length * CREDIT_COSTS.enrich} credits.`);
+      return;
+    }
+    setBulkEnriching(true);
+    for (const idx of toEnrich) {
+      await handleEnrich(idx, results[idx]);
+    }
+    setBulkEnriching(false);
+    toast.success(`Enriched ${toEnrich.length} companies.`);
+  }, [bulkEnriching, selectedRows, enrichmentStatus, canAfford, handleEnrich, results]);
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-background">
@@ -223,12 +254,32 @@ export function SearchResults({
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
       <div className="flex-shrink-0 px-5 py-3 border-b border-border/60 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Preview</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold">Preview</h3>
+          {selectedRows.size > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleEnrichSelected}
+              disabled={bulkEnriching}
+              className="text-xs h-7 gap-1.5 border-border/60"
+            >
+              {bulkEnriching ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+              Enrich {selectedRows.size} selected
+              <Badge variant="outline" className="text-[9px] py-0 px-1 ml-0.5 font-normal border-border/60">
+                {selectedRows.size * CREDIT_COSTS.enrich} cr
+              </Badge>
+            </Button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-primary font-medium">
             Previewing {results.length} results. {importCount.toLocaleString()} will be imported.
           </span>
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
         </div>
       </div>
 
@@ -238,7 +289,14 @@ export function SearchResults({
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
               <tr className="border-b border-border/60">
-                <th className="w-12 px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"></th>
+                <th className="w-12 px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.size === results.length && results.length > 0}
+                    onChange={toggleAll}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                  />
+                </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <span className="text-primary font-semibold">T</span> Name
@@ -287,8 +345,13 @@ export function SearchResults({
                     }`}
                     onClick={() => toggleRow(index)}
                   >
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums text-xs">
-                      {index + 1}
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRow(index)}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                      />
                     </td>
                     <td className="px-4 py-3 font-medium max-w-[180px]">
                       <div className="flex items-center gap-2">
