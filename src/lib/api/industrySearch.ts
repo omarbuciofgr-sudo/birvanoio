@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface CompanySearchInput {
   industry?: string;
   industries_exclude?: string[];
+  employee_ranges?: string[];
   employee_count_min?: number;
   employee_count_max?: number;
   location?: string;

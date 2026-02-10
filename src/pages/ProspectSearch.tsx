@@ -66,20 +66,12 @@ export default function ProspectSearch() {
         filters.productsDescription,
       ].filter(Boolean).join(', ') || undefined;
 
-      let employee_count_min: number | undefined;
-      let employee_count_max: number | undefined;
-      if (filters.companySizes.length > 0) {
-        const range = EMPLOYEE_RANGES.find((r) => r.value === filters.companySizes[0]);
-        if (range) {
-          employee_count_min = range.min;
-          employee_count_max = range.max;
-        }
-      }
+      // Pass all selected employee size ranges directly
+      const employee_ranges = filters.companySizes.length > 0 ? filters.companySizes : undefined;
 
       return industrySearchApi.searchCompanies({
         industry,
-        employee_count_min,
-        employee_count_max,
+        employee_ranges,
         location,
         keywords,
         limit: filters.limit,
