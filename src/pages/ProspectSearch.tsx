@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ArrowLeft, Building2, Bookmark, BookmarkCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/dialog';
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
-import { SearchChat } from '@/components/prospect-search/SearchChat';
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
@@ -33,7 +32,6 @@ export default function ProspectSearch() {
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
 
-  // Load saved searches
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -134,11 +132,6 @@ export default function ProspectSearch() {
     toast.success(`Exported ${selected.length} companies`);
   };
 
-  const handleApplyFilters = useCallback((partial: Partial<ProspectSearchFilters>) => {
-    setFilters((prev) => ({ ...prev, ...partial }));
-    toast.success('Filters updated by AI assistant');
-  }, []);
-
   const handleSaveSearch = async () => {
     if (!user || !searchName.trim()) return;
     const { error } = await supabase.from('saved_searches').insert([{
@@ -169,66 +162,43 @@ export default function ProspectSearch() {
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Top bar */}
-      <div className="flex-shrink-0 h-12 border-b border-border flex items-center justify-between px-4">
+      <div className="flex-shrink-0 h-12 border-b border-border/60 flex items-center justify-between px-4 bg-background">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/dashboard/scraper')}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => navigate('/dashboard/scraper')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="font-display text-sm font-semibold">Find companies</h1>
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            <h1 className="text-sm font-semibold tracking-tight">Find companies</h1>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Save search */}
-          <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5">
-                <Bookmark className="h-3.5 w-3.5" />
-                Save search
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Save current filters</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <Input
-                  placeholder="e.g. SaaS companies in California"
-                  value={searchName}
-                  onChange={(e) => setSearchName(e.target.value)}
-                  className="text-sm"
-                />
-                <Button onClick={handleSaveSearch} disabled={!searchName.trim()} className="w-full">
-                  Save
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Load search */}
+          {/* Load saved searches */}
           <Dialog open={loadDialogOpen} onOpenChange={(open) => {
             setLoadDialogOpen(open);
             if (open) loadSavedSearches();
           }}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5">
+              <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5 border-border/60">
                 <BookmarkCheck className="h-3.5 w-3.5" />
-                Load
+                Browse past searches
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-sm">
               <DialogHeader>
-                <DialogTitle>Saved searches</DialogTitle>
+                <DialogTitle className="text-sm">Saved searches</DialogTitle>
               </DialogHeader>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
                 {savedSearches.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">No saved searches yet.</p>
+                  <p className="text-xs text-muted-foreground text-center py-6">No saved searches yet.</p>
                 )}
                 {savedSearches.map((s) => (
                   <button
                     key={s.id}
-                    className="w-full text-left px-3 py-2.5 rounded-md border border-border hover:bg-accent transition-colors"
+                    className="w-full text-left px-3 py-2.5 rounded-md border border-border/50 hover:bg-accent/50 transition-colors"
                     onClick={() => handleLoadSearch(s)}
                   >
-                    <span className="text-sm font-medium">{s.name}</span>
+                    <span className="text-xs font-medium">{s.name}</span>
                   </button>
                 ))}
               </div>
@@ -237,10 +207,10 @@ export default function ProspectSearch() {
         </div>
       </div>
 
-      {/* 3-panel layout */}
+      {/* 2-panel layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Filters */}
-        <div className="w-[300px] flex-shrink-0 overflow-hidden">
+        <div className="w-[420px] flex-shrink-0 overflow-hidden border-r border-border/60">
           <SearchFilters
             filters={filters}
             onFiltersChange={setFilters}
@@ -248,9 +218,44 @@ export default function ProspectSearch() {
             isSearching={searchMutation.isPending}
             resultCount={results.length}
           />
+          {/* Bottom bar for Save/Next */}
+          <div className="h-14 border-t border-border/60 px-4 flex items-center justify-between bg-muted/30">
+            <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-xs h-8 gap-1.5 text-muted-foreground hover:text-foreground">
+                  <Bookmark className="h-3.5 w-3.5" />
+                  Save search
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="text-sm">Save current filters</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <Input
+                    placeholder="e.g. SaaS companies in California"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    className="text-sm h-9"
+                  />
+                  <Button onClick={handleSaveSearch} disabled={!searchName.trim()} className="w-full h-9 text-sm">
+                    Save
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Button
+              onClick={() => searchMutation.mutate()}
+              disabled={searchMutation.isPending || filters.industries.length === 0}
+              size="sm"
+              className="h-8 px-6 text-xs font-semibold"
+            >
+              {searchMutation.isPending ? 'Searching…' : 'Next'}
+            </Button>
+          </div>
         </div>
 
-        {/* Center: Results */}
+        {/* Right: Results */}
         <div className="flex-1 overflow-hidden">
           <SearchResults
             results={results}
@@ -262,11 +267,6 @@ export default function ProspectSearch() {
             onExport={handleExport}
             isSaving={saveMutation.isPending}
           />
-        </div>
-
-        {/* Right: Chat */}
-        <div className="w-[320px] flex-shrink-0 overflow-hidden">
-          <SearchChat onApplyFilters={handleApplyFilters} />
         </div>
       </div>
     </div>
