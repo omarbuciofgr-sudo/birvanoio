@@ -373,12 +373,202 @@ async function searchPDL(input: CompanySearchInput, apiKey: string): Promise<Com
   }
 }
 
-// ── Provider 3: Hunter.io (Domain Search) ───────────────────────────
+// ── Provider 3: RocketReach (Company Search) ───────────────────────
+async function searchRocketReach(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
+  const { industry, location, keywords, limit = 25 } = input;
+
+  const query: Record<string, unknown> = {
+    page_size: Math.min(limit, 100),
+    page: input.page || 1,
+  };
+
+  if (industry) {
+    query.keyword = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  if (location) {
+    query.location = location.split(',').map((s: string) => s.trim());
+  }
+
+  if (input.employee_ranges?.length) {
+    // RocketReach uses employee_count_min/max
+    const ranges = input.employee_ranges;
+    const mins = ranges.map(r => {
+      const parts = r.split('-');
+      return parseInt(parts[0]) || 0;
+    });
+    const maxes = ranges.map(r => {
+      if (r.includes('+')) return 999999;
+      const parts = r.split('-');
+      return parseInt(parts[1]) || 999999;
+    });
+    query.employee_count_min = Math.min(...mins);
+    query.employee_count_max = Math.max(...maxes);
+  }
+
+  if (keywords) {
+    query.name = keywords;
+  }
+
+  if (input.revenue_range) {
+    const revenueMap: Record<string, [number, number]> = {
+      '0-1M': [0, 1000000],
+      '1M-5M': [1000000, 5000000],
+      '5M-10M': [5000000, 10000000],
+      '10M-50M': [10000000, 50000000],
+      '50M-100M': [50000000, 100000000],
+      '100M-500M': [100000000, 500000000],
+      '500M-1B': [500000000, 1000000000],
+      '1B+': [1000000000, 999999999999],
+    };
+    const mapped = revenueMap[input.revenue_range];
+    if (mapped) {
+      query.revenue_min = mapped[0];
+      query.revenue_max = mapped[1];
+    }
+  }
+
+  console.log('[RocketReach] Searching with params:', JSON.stringify(query));
+
+  try {
+    const response = await fetch('https://api.rocketreach.co/api/v2/searchCompany', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Api-Key': apiKey,
+      },
+      body: JSON.stringify(query),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(`[RocketReach] API error ${response.status}:`, data?.detail || data);
+      return null;
+    }
+
+    const companies = data.companies || data.results || [];
+    console.log(`[RocketReach] Found ${companies.length} companies`);
+
+    if (companies.length === 0) return null;
+
+    return companies.map((c: any) => ({
+      name: c.name || '',
+      domain: c.domain || c.website_domain || '',
+      website: c.website_url || (c.domain ? `https://${c.domain}` : null),
+      linkedin_url: c.linkedin_url || null,
+      industry: c.industry || input.industry || null,
+      employee_count: c.employee_count || c.num_employees || null,
+      employee_range: null,
+      annual_revenue: c.revenue || null,
+      founded_year: c.year_founded || null,
+      description: c.description || null,
+      headquarters_city: c.city || c.location?.city || null,
+      headquarters_state: c.state || c.location?.state || null,
+      headquarters_country: c.country || c.location?.country || null,
+      technologies: [],
+      keywords: [],
+      source_provider: 'rocketreach',
+    }));
+  } catch (e) {
+    console.error('[RocketReach] Exception:', e);
+    return null;
+  }
+}
+
+// ── Provider 4: Lusha (Company Prospecting) ─────────────────────────
+async function searchLusha(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
+  const { industry, location, limit = 25 } = input;
+
+  const filters: Record<string, unknown> = {
+    limit: Math.min(limit, 100),
+  };
+
+  if (industry) {
+    // Lusha uses industry labels
+    filters.industries = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  if (location) {
+    filters.locations = location.split(',').map((s: string) => s.trim());
+  }
+
+  if (input.employee_ranges?.length) {
+    // Lusha uses size labels like "1-10", "11-50", etc.
+    filters.sizes = input.employee_ranges;
+  }
+
+  if (input.revenue_range) {
+    filters.revenues = [input.revenue_range];
+  }
+
+  if (input.technologies?.length) {
+    filters.technologies = input.technologies;
+  }
+
+  if (input.sic_codes?.length) {
+    filters.sic_codes = input.sic_codes;
+  }
+
+  if (input.naics_codes?.length) {
+    filters.naics_codes = input.naics_codes;
+  }
+
+  console.log('[Lusha] Searching with filters:', JSON.stringify(filters));
+
+  try {
+    const response = await fetch('https://api.lusha.com/prospecting/api', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_key': apiKey,
+      },
+      body: JSON.stringify({
+        searchType: 'company',
+        filters,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(`[Lusha] API error ${response.status}:`, data?.message || data);
+      return null;
+    }
+
+    const companies = data.data || data.companies || data.results || [];
+    console.log(`[Lusha] Found ${companies.length} companies`);
+
+    if (companies.length === 0) return null;
+
+    return companies.map((c: any) => ({
+      name: c.company_name || c.name || '',
+      domain: c.website_domain || c.domain || '',
+      website: c.website || (c.website_domain ? `https://${c.website_domain}` : null),
+      linkedin_url: c.linkedin_url || null,
+      industry: c.industry || input.industry || null,
+      employee_count: c.employee_count || c.company_size || null,
+      employee_range: c.size_range || null,
+      annual_revenue: c.revenue || null,
+      founded_year: c.year_founded || null,
+      description: c.description || null,
+      headquarters_city: c.city || c.location?.city || null,
+      headquarters_state: c.state || c.location?.state || null,
+      headquarters_country: c.country_code || c.country || null,
+      technologies: c.technologies || [],
+      keywords: [],
+      source_provider: 'lusha',
+    }));
+  } catch (e) {
+    console.error('[Lusha] Exception:', e);
+    return null;
+  }
+}
+
+// ── Provider 5: Hunter.io (Domain Search) ───────────────────────────
 async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
   const { industry, location, keywords, limit = 25 } = input;
 
-  // Hunter's company search is more limited — use domain-search if we have keywords
-  // or use email-finder with company name
   if (!keywords && !industry) {
     console.log('[Hunter] No keywords or industry to search');
     return null;
@@ -388,7 +578,6 @@ async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<
   console.log(`[Hunter] Searching for companies matching: ${query}`);
 
   try {
-    // Use Hunter's company-search (undocumented but works) or domain-search
     const params = new URLSearchParams({
       query,
       api_key: apiKey,
@@ -416,7 +605,6 @@ async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<
       return null;
     }
 
-    // Hunter returns a single company domain result
     const companies: CompanyResult[] = [{
       name: result.organization || result.domain || '',
       domain: result.domain || '',
@@ -497,6 +685,16 @@ Deno.serve(async (req) => {
     const pdlKey = Deno.env.get('PDL_API_KEY');
     if (pdlKey) {
       providers.push({ name: 'PDL', fn: () => searchPDL(body, pdlKey) });
+    }
+
+    const rocketReachKey = Deno.env.get('ROCKETREACH_API_KEY');
+    if (rocketReachKey) {
+      providers.push({ name: 'RocketReach', fn: () => searchRocketReach(body, rocketReachKey) });
+    }
+
+    const lushaKey = Deno.env.get('LUSHA_API_KEY');
+    if (lushaKey) {
+      providers.push({ name: 'Lusha', fn: () => searchLusha(body, lushaKey) });
     }
 
     const hunterKey = Deno.env.get('HUNTER_API_KEY');
