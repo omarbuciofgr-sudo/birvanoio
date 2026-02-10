@@ -41,6 +41,9 @@ export interface CompanyResult {
   headquarters_country: string | null;
   technologies: string[];
   keywords: string[];
+  social_profiles?: Record<string, string>;
+  phone?: string | null;
+  logo_url?: string | null;
 }
 
 export interface PersonResult {
