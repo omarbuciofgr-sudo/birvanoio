@@ -55,6 +55,8 @@ export default function ProspectSearch() {
         .join(', ');
 
       const location = [
+        ...filters.cities,
+        ...filters.states,
         ...filters.citiesOrStates,
         ...filters.countries,
       ].join(', ') || undefined;
