@@ -15,6 +15,11 @@ import {
   Globe,
   Linkedin,
   ExternalLink,
+  Twitter,
+  Facebook,
+  Instagram,
+  Youtube,
+  Github,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
 import { supabase } from '@/integrations/supabase/client';
@@ -416,30 +421,50 @@ export function SearchResults({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         {(company.website || company.domain) && (
-                          <a
-                            href={company.website || `https://${company.domain}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                            title="Website"
-                          >
+                          <a href={company.website || `https://${company.domain}`} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="Website">
                             <Globe className="h-3.5 w-3.5" />
                           </a>
                         )}
                         {company.linkedin_url && (
-                          <a
-                            href={company.linkedin_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-blue-600 transition-colors"
-                            title="LinkedIn"
-                          >
+                          <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-primary transition-colors" title="LinkedIn">
                             <Linkedin className="h-3.5 w-3.5" />
                           </a>
                         )}
-                        {!company.website && !company.domain && !company.linkedin_url && (
+                        {company.social_profiles?.twitter && (
+                          <a href={company.social_profiles.twitter} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="Twitter/X">
+                            <Twitter className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {company.social_profiles?.facebook && (
+                          <a href={company.social_profiles.facebook} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="Facebook">
+                            <Facebook className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {company.social_profiles?.instagram && (
+                          <a href={company.social_profiles.instagram} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="Instagram">
+                            <Instagram className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {company.social_profiles?.youtube && (
+                          <a href={company.social_profiles.youtube} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="YouTube">
+                            <Youtube className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {company.social_profiles?.github && (
+                          <a href={company.social_profiles.github} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="GitHub">
+                            <Github className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {!company.website && !company.domain && !company.linkedin_url && !company.social_profiles && (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </div>

@@ -48,6 +48,9 @@ interface CompanyResult {
   technologies: string[];
   keywords: string[];
   source_provider?: string;
+  social_profiles?: Record<string, string>;
+  phone?: string | null;
+  logo_url?: string | null;
 }
 
 // ── Provider 1: Apollo ──────────────────────────────────────────────
@@ -635,6 +638,72 @@ async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<
   }
 }
 
+// ── Social Profile Scraper (free, from website) ─────────────────────
+async function scrapeSocialProfiles(domain: string): Promise<Record<string, string>> {
+  const profiles: Record<string, string> = {};
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const resp = await fetch(`https://${domain}`, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BrivanoBot/1.0)' },
+    });
+    clearTimeout(timeout);
+    if (!resp.ok) return profiles;
+    const html = await resp.text();
+
+    // Extract social links from HTML
+    const patterns: [string, RegExp][] = [
+      ['twitter', /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]{1,50})/g],
+      ['facebook', /https?:\/\/(?:www\.)?facebook\.com\/([a-zA-Z0-9.]+)/g],
+      ['instagram', /https?:\/\/(?:www\.)?instagram\.com\/([a-zA-Z0-9_.]+)/g],
+      ['youtube', /https?:\/\/(?:www\.)?youtube\.com\/(?:@|channel\/|c\/|user\/)([a-zA-Z0-9_-]+)/g],
+      ['tiktok', /https?:\/\/(?:www\.)?tiktok\.com\/@([a-zA-Z0-9_.]+)/g],
+      ['github', /https?:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_-]+)/g],
+    ];
+
+    for (const [platform, regex] of patterns) {
+      const match = regex.exec(html);
+      if (match) {
+        profiles[platform] = match[0];
+      }
+    }
+  } catch {
+    // Timeout or fetch error — skip silently
+  }
+  return profiles;
+}
+
+// ── Merge helper: fill blanks from secondary into primary ───────────
+function mergeCompany(primary: CompanyResult, secondary: CompanyResult): CompanyResult {
+  return {
+    name: primary.name || secondary.name,
+    domain: primary.domain || secondary.domain,
+    website: primary.website || secondary.website,
+    linkedin_url: primary.linkedin_url || secondary.linkedin_url,
+    industry: primary.industry || secondary.industry,
+    employee_count: primary.employee_count ?? secondary.employee_count,
+    employee_range: primary.employee_range || secondary.employee_range,
+    annual_revenue: primary.annual_revenue ?? secondary.annual_revenue,
+    founded_year: primary.founded_year ?? secondary.founded_year,
+    description: primary.description || secondary.description,
+    headquarters_city: primary.headquarters_city || secondary.headquarters_city,
+    headquarters_state: primary.headquarters_state || secondary.headquarters_state,
+    headquarters_country: primary.headquarters_country || secondary.headquarters_country,
+    technologies: primary.technologies.length > 0 ? primary.technologies : secondary.technologies,
+    keywords: primary.keywords.length > 0 ? primary.keywords : secondary.keywords,
+    source_provider: primary.source_provider,
+    social_profiles: { ...(secondary.social_profiles || {}), ...(primary.social_profiles || {}) },
+    phone: primary.phone || secondary.phone,
+    logo_url: primary.logo_url || secondary.logo_url,
+  };
+}
+
+function normalizedDomain(d: string | null | undefined): string {
+  if (!d) return '';
+  return d.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase();
+}
+
 // ── Main Handler ────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -674,98 +743,123 @@ Deno.serve(async (req) => {
   try {
     const body: CompanySearchInput = await req.json();
     const limit = body.limit || 25;
+    const page = body.page || 1;
 
-    console.log(`Industry search waterfall: industry=${body.industry}, location=${body.location}, employees=${body.employee_count_min}-${body.employee_count_max}`);
+    console.log(`Industry search (merge mode): industry=${body.industry}, location=${body.location}`);
 
-    // Waterfall: try each provider in order until one succeeds
-    const providers: { name: string; fn: () => Promise<CompanyResult[] | null> }[] = [];
+    // Build provider list
+    const providers: { name: string; fn: () => Promise<any> }[] = [];
 
     const apolloKey = Deno.env.get('APOLLO_API_KEY');
-    if (apolloKey) {
-      providers.push({ name: 'Apollo', fn: () => searchApollo(body, apolloKey) });
-    }
+    if (apolloKey) providers.push({ name: 'Apollo', fn: () => searchApollo(body, apolloKey) });
 
     const pdlKey = Deno.env.get('PDL_API_KEY');
-    if (pdlKey) {
-      providers.push({ name: 'PDL', fn: () => searchPDL(body, pdlKey) });
-    }
+    if (pdlKey) providers.push({ name: 'PDL', fn: () => searchPDL(body, pdlKey) });
 
     const rocketReachKey = Deno.env.get('ROCKETREACH_API_KEY');
-    if (rocketReachKey) {
-      providers.push({ name: 'RocketReach', fn: () => searchRocketReach(body, rocketReachKey) });
-    }
+    if (rocketReachKey) providers.push({ name: 'RocketReach', fn: () => searchRocketReach(body, rocketReachKey) });
 
     const lushaKey = Deno.env.get('LUSHA_API_KEY');
-    if (lushaKey) {
-      providers.push({ name: 'Lusha', fn: () => searchLusha(body, lushaKey) });
-    }
+    if (lushaKey) providers.push({ name: 'Lusha', fn: () => searchLusha(body, lushaKey) });
 
     const hunterKey = Deno.env.get('HUNTER_API_KEY');
-    if (hunterKey) {
-      providers.push({ name: 'Hunter', fn: () => searchHunter(body, hunterKey) });
-    }
+    if (hunterKey) providers.push({ name: 'Hunter', fn: () => searchHunter(body, hunterKey) });
 
     if (providers.length === 0) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No search provider API keys configured. Add APOLLO_API_KEY, PDL_API_KEY, or HUNTER_API_KEY.' }),
+        JSON.stringify({ success: false, error: 'No search provider API keys configured.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    let companies: CompanyResult[] | null = null;
-    let usedProvider = '';
+    // Run ALL providers in parallel
+    console.log(`[Merge] Running ${providers.length} providers in parallel...`);
+    const allResults = await Promise.allSettled(providers.map(async (p) => {
+      console.log(`[Merge] Starting ${p.name}...`);
+      const result = await p.fn();
+      if (result && typeof result === 'object' && 'results' in result) {
+        console.log(`[Merge] ✓ ${p.name} returned ${result.results.length} results`);
+        return { name: p.name, companies: result.results as CompanyResult[], totalEntries: result.totalEntries, totalPages: result.totalPages };
+      } else if (Array.isArray(result) && result.length > 0) {
+        console.log(`[Merge] ✓ ${p.name} returned ${result.length} results`);
+        return { name: p.name, companies: result as CompanyResult[], totalEntries: result.length, totalPages: 1 };
+      }
+      console.log(`[Merge] ✗ ${p.name} returned no results`);
+      return { name: p.name, companies: [] as CompanyResult[], totalEntries: 0, totalPages: 0 };
+    }));
+
+    // Build merged map keyed by normalized domain
+    const mergedMap = new Map<string, CompanyResult>();
     let totalEntries = 0;
     let totalPages = 1;
-    const page = body.page || 1;
+    const usedProviders: string[] = [];
 
-    for (const provider of providers) {
-      console.log(`[Waterfall] Trying ${provider.name}...`);
-      const result = await provider.fn();
-      if (result && typeof result === 'object' && 'results' in result) {
-        // Apollo returns { results, totalEntries, totalPages }
-        companies = result.results;
-        totalEntries = result.totalEntries;
-        totalPages = result.totalPages;
-      } else if (Array.isArray(result) && result.length > 0) {
-        companies = result;
-        totalEntries = result.length;
-        totalPages = 1;
-      } else {
-        companies = null;
+    for (const settled of allResults) {
+      if (settled.status !== 'fulfilled') continue;
+      const { name, companies, totalEntries: te, totalPages: tp } = settled.value;
+      if (companies.length === 0) continue;
+      usedProviders.push(name);
+
+      // Use the first successful provider's pagination as the primary
+      if (totalEntries === 0) {
+        totalEntries = te;
+        totalPages = tp;
       }
-      if (companies && companies.length > 0) {
-        usedProvider = provider.name;
-        console.log(`[Waterfall] ✓ ${provider.name} returned ${companies.length} results`);
-        break;
+
+      for (const company of companies) {
+        const key = normalizedDomain(company.domain) || company.name.toLowerCase();
+        if (!key) continue;
+        const existing = mergedMap.get(key);
+        if (existing) {
+          mergedMap.set(key, mergeCompany(existing, company));
+        } else {
+          mergedMap.set(key, company);
+        }
       }
-      console.log(`[Waterfall] ✗ ${provider.name} returned no results, trying next...`);
     }
 
-    if (!companies || companies.length === 0) {
+    let companies = Array.from(mergedMap.values()).slice(0, limit);
+
+    if (companies.length === 0) {
       return new Response(
         JSON.stringify({
-          success: true,
-          companies: [],
-          total: 0,
-          provider: 'none',
+          success: true, companies: [], total: 0, provider: 'none',
           pagination: { page, per_page: limit, total_entries: 0, total_pages: 0 },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    // Scrape social profiles from websites (parallel, with timeout)
+    console.log(`[Social] Scraping social profiles for ${Math.min(companies.length, 15)} companies...`);
+    const socialBatch = companies.slice(0, 15); // limit to first 15 to keep response fast
+    const socialResults = await Promise.allSettled(
+      socialBatch.map(async (c) => {
+        const domain = normalizedDomain(c.domain);
+        if (!domain) return {};
+        return scrapeSocialProfiles(domain);
+      })
+    );
+
+    for (let i = 0; i < socialBatch.length; i++) {
+      const r = socialResults[i];
+      if (r.status === 'fulfilled' && Object.keys(r.value).length > 0) {
+        companies[i] = {
+          ...companies[i],
+          social_profiles: { ...(companies[i].social_profiles || {}), ...r.value },
+        };
+      }
+    }
+
+    console.log(`[Merge] Final: ${companies.length} merged companies from [${usedProviders.join(', ')}]`);
+
     return new Response(
       JSON.stringify({
         success: true,
         companies,
         total: totalEntries,
-        provider: usedProvider.toLowerCase(),
-        pagination: {
-          page,
-          per_page: limit,
-          total_entries: totalEntries,
-          total_pages: totalPages,
-        },
+        provider: usedProviders.join('+').toLowerCase(),
+        pagination: { page, per_page: limit, total_entries: totalEntries, total_pages: totalPages },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
