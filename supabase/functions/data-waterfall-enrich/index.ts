@@ -83,7 +83,7 @@ interface WaterfallStep {
 
 function getMissingFields(result: Partial<EnrichmentResult>): string[] {
   const requiredFields = ['full_name', 'email', 'phone'];
-  const niceToHave = ['job_title', 'linkedin_url', 'company_name'];
+  const niceToHave = ['job_title', 'linkedin_url', 'company_name', 'mobile_phone', 'direct_phone'];
   const missing: string[] = [];
   for (const field of [...requiredFields, ...niceToHave]) {
     if (!result[field as keyof EnrichmentResult]) missing.push(field);
@@ -92,6 +92,12 @@ function getMissingFields(result: Partial<EnrichmentResult>): string[] {
 }
 
 function hasCompleteData(result: Partial<EnrichmentResult>): boolean {
+  // "Complete" now requires name + email + phone + job_title + linkedin
+  // This is intentionally strict so that more providers get a chance to run
+  return !!(result.full_name && result.email && result.phone && result.job_title && result.linkedin_url);
+}
+
+function hasCoreContactData(result: Partial<EnrichmentResult>): boolean {
   return !!(result.full_name && result.email && result.phone);
 }
 
@@ -840,44 +846,48 @@ Deno.serve(async (req) => {
       console.log(`${providerName}: ${stepResult.fields.length} fields found`);
     }
     
+    // ── AGGRESSIVE WATERFALL: Try ALL providers, don't stop early ──
+    // Every provider runs unless ALL core+supplementary fields are complete.
+    // This maximizes the chance of finding name, email, phone, title, LinkedIn.
+
     // Step 0: Clay (orchestrates 75+ providers internally)
-    await runStep('clay', clayApiKey, !hasCompleteData(result),
+    await runStep('clay', clayApiKey, true,
       () => enrichWithClay(input, clayApiKey!));
     
-    // Step 1: Apollo
-    await runStep('apollo', apolloApiKey, !hasCompleteData(result),
+    // Step 1: Apollo (always run — great for names, titles, phones)
+    await runStep('apollo', apolloApiKey, true,
       () => enrichWithApollo(input, apolloApiKey!));
     
-    // Step 2: Hunter (if still missing email)
-    await runStep('hunter', hunterApiKey, !result.email,
+    // Step 2: Hunter (run if missing email OR name)
+    await runStep('hunter', hunterApiKey, !result.email || !result.full_name,
       () => enrichWithHunter(input, result, hunterApiKey!));
     
-    // Step 3: PDL (if still missing data)
+    // Step 3: PDL (always run — strong for phones and LinkedIn)
     await runStep('pdl', pdlApiKey, !hasCompleteData(result),
       () => enrichWithPDL(input, result, pdlApiKey!));
     
-    // Step 4: Snov.io (if still missing email)
-    await runStep('snovio', snovioApiKey, !result.email,
+    // Step 4: Snov.io (run if missing email OR missing name)
+    await runStep('snovio', snovioApiKey, !result.email || !result.full_name,
       () => enrichWithSnovio(input, result, snovioApiKey!));
     
-    // Step 5: RocketReach (if still missing data)
+    // Step 5: RocketReach (always run — great for phones and LinkedIn)
     await runStep('rocketreach', rocketreachApiKey, !hasCompleteData(result),
       () => enrichWithRocketReach(input, result, rocketreachApiKey!));
     
-    // Step 6: Lusha (if still missing phone or email)
-    await runStep('lusha', lushaApiKey, !result.phone || !result.email,
+    // Step 6: Lusha (run if missing any core field — strong for direct dials)
+    await runStep('lusha', lushaApiKey, !hasCoreContactData(result),
       () => enrichWithLusha(input, result, lushaApiKey!));
     
-    // Step 7: ContactOut (if still missing data, works best with LinkedIn)
-    await runStep('contactout', contactoutApiKey, (!result.email || !result.phone) && !!result.linkedin_url,
+    // Step 7: ContactOut (run with or without LinkedIn — has name+company fallback)
+    await runStep('contactout', contactoutApiKey, !result.email || !result.phone,
       () => enrichWithContactOut(input, result, contactoutApiKey!));
     
-    // Step 8: Clearbit (for company data if still missing)
-    await runStep('clearbit', clearbitApiKey, !result.company_name || !result.industry || !result.employee_count,
+    // Step 8: Clearbit (always run for company data enrichment)
+    await runStep('clearbit', clearbitApiKey, !result.company_name || !result.industry || !result.employee_count || !result.annual_revenue,
       () => enrichWithClearbit(input, result, clearbitApiKey!));
     
-    // Step 9: Google Search fallback (last resort for missing contact info)
-    await runStep('google_search', firecrawlApiKey, !result.email || !result.phone,
+    // Step 9: Google Search fallback (last resort — scrape contact pages)
+    await runStep('google_search', firecrawlApiKey, !result.email || !result.phone || !result.linkedin_url,
       () => enrichWithGoogleSearch(input, result, firecrawlApiKey!));
     
     // Step 10: ZeroBounce email validation
@@ -923,7 +933,7 @@ Deno.serve(async (req) => {
     
     result.waterfall_log = waterfallLog;
     const finalResult = result as EnrichmentResult;
-    const isComplete = hasCompleteData(result);
+    const isComplete = hasCoreContactData(result);
     
     console.log(`Waterfall complete. Providers used: ${finalResult.providers_used.join(', ')}. Complete: ${isComplete}`);
     
