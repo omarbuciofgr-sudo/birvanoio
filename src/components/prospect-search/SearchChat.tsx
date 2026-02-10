@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, Send, Bot, User, Wand2 } from 'lucide-react';
 import { ProspectSearchFilters } from './constants';
 import { FilterConfirmDialog } from './FilterConfirmDialog';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -46,43 +47,33 @@ export function SearchChat({ onApplyFilters }: SearchChatProps) {
     setIsLoading(true);
 
     try {
-      const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prospect-search-chat`;
-
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMsg].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      if (resp.status === 429) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: 'Rate limit exceeded. Please wait a moment and try again.' },
+          { role: 'assistant', content: 'Please sign in to use the search assistant.' },
         ]);
         return;
       }
 
-      if (resp.status === 402) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: 'Usage limit reached. Please add credits to continue.' },
-        ]);
-        return;
+      const { data: respData, error: invokeError } = await supabase.functions.invoke(
+        'prospect-search-chat',
+        {
+          body: {
+            messages: [...messages, userMsg].map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+          },
+        }
+      );
+
+      if (invokeError) {
+        throw invokeError;
       }
 
-      if (!resp.ok) {
-        throw new Error('Failed to get response');
-      }
-
-      const data = await resp.json();
+      const data = respData;
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: data.content || 'I\'ve updated your filters based on your request.',
