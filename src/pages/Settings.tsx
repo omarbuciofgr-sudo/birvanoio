@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send } from "lucide-react";
+import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send, RotateCcw } from "lucide-react";
 import { WebhookIntegrations } from "@/components/integrations/WebhookIntegrations";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
@@ -212,6 +212,27 @@ const Settings = () => {
 
                 <Button onClick={handleSave} disabled={isSaving}>
                   {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Restart Onboarding Tour */}
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="text-foreground">Onboarding Tour</CardTitle>
+                <CardDescription>Revisit the guided tour to learn about all platform features.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="outline"
+                  className="gap-2 text-xs"
+                  onClick={() => {
+                    localStorage.removeItem("brivano_onboarding_complete");
+                    toast.success("Tour reset! Navigate to the Dashboard to start the tour.");
+                    navigate("/dashboard");
+                  }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Restart Tour
                 </Button>
               </CardContent>
             </Card>
