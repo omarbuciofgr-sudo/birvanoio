@@ -3,20 +3,19 @@ interface BrivanoLogoProps {
 }
 
 export function BrivanoLogo({ className = "h-20" }: BrivanoLogoProps) {
-  // Map height classes to appropriate text sizes
   const sizeMap: Record<string, string> = {
-    "h-8": "text-lg",
-    "h-16": "text-2xl",
-    "h-16 mx-auto": "text-2xl",
-    "h-20": "text-2xl",
+    "h-8": "text-xl",
+    "h-16": "text-3xl",
+    "h-16 mx-auto": "text-3xl",
+    "h-20": "text-3xl",
   };
 
-  const textSize = sizeMap[className] || "text-xl";
+  const textSize = sizeMap[className] || "text-2xl";
 
   return (
     <span
-      className={`${textSize} font-semibold tracking-tight text-foreground`}
-      style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      className={`${textSize} font-bold tracking-tight text-foreground`}
+      style={{ fontFamily: "'Nunito', sans-serif", letterSpacing: "-0.02em" }}
       role="img"
       aria-label="Brivano"
     >
