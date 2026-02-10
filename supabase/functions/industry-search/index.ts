@@ -51,8 +51,8 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   };
 
   if (industry) {
-    searchParams.organization_industry_tag_ids = [industry];
-    searchParams.q_organization_keyword_tags = [industry];
+    // Use keyword-based matching — industry_tag_ids expects Apollo-specific numeric IDs
+    searchParams.q_organization_keyword_tags = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
   }
 
   if (employee_count_min || employee_count_max) {
