@@ -22,6 +22,14 @@ import {
   Ban,
   Sparkles,
   Clock,
+  Mail,
+  Cpu,
+  DollarSign,
+  Landmark,
+  BarChart3,
+  Hash,
+  Target,
+  ClipboardList,
 } from 'lucide-react';
 import {
   INDUSTRIES,
@@ -29,6 +37,14 @@ import {
   US_STATES,
   MAJOR_CITIES,
   COMPANY_SIZES,
+  TECHNOLOGIES,
+  REVENUE_RANGES,
+  FUNDING_RANGES,
+  FUNDING_STAGES,
+  MARKET_SEGMENTS,
+  BUYING_INTENT,
+  JOB_POSTING_FILTERS,
+  JOB_CATEGORIES,
 } from './constants';
 
 export interface PeopleSearchFilters {
@@ -52,6 +68,17 @@ export interface PeopleSearchFilters {
   pastCompanies: string[];
   pastJobTitles: string[];
   profileKeywords: string[];
+  emailStatus: string;
+  technologies: string[];
+  annualRevenue: string;
+  fundingRaised: string;
+  fundingStage: string;
+  marketSegments: string[];
+  buyingIntent: string;
+  sicCodes: string[];
+  naicsCodes: string[];
+  jobPostingFilter: string;
+  jobCategories: string[];
   limit: number;
 }
 
@@ -76,6 +103,17 @@ export const defaultPeopleFilters: PeopleSearchFilters = {
   pastCompanies: [],
   pastJobTitles: [],
   profileKeywords: [],
+  emailStatus: '',
+  technologies: [],
+  annualRevenue: '',
+  fundingRaised: '',
+  fundingStage: '',
+  marketSegments: [],
+  buyingIntent: '',
+  sicCodes: [],
+  naicsCodes: [],
+  jobPostingFilter: '',
+  jobCategories: [],
   limit: 50,
 };
 
@@ -265,6 +303,14 @@ export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) 
     companies: false,
     exclude: false,
     pastExperiences: false,
+    emailStatus: false,
+    technologies: false,
+    revenue: false,
+    funding: false,
+    marketSegments: false,
+    buyingIntent: false,
+    sicNaics: false,
+    jobPostings: false,
   });
 
   const toggle = (key: string) => setSections((s) => ({ ...s, [key]: !s[key] }));
@@ -339,6 +385,55 @@ export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) 
           {/* Companies */}
           <FilterSection icon={Building2} label="Companies" open={sections.companies} onOpenChange={() => toggle('companies')}>
             <TagInput label="Current companies" placeholder="e.g. Google, Salesforce" tags={filters.companies} onChange={(v) => update({ companies: v })} />
+          </FilterSection>
+
+          {/* Email Status */}
+          <FilterSection icon={Mail} label="Email Status" open={sections.emailStatus} onOpenChange={() => toggle('emailStatus')}>
+            <FilterDropdown label="Email status" placeholder="e.g. Verified" options={[
+              { value: 'verified', label: 'Verified' },
+              { value: 'likely_valid', label: 'Likely Valid' },
+              { value: 'unverified', label: 'Unverified' },
+              { value: 'has_email', label: 'Has Email' },
+              { value: 'no_email', label: 'No Email' },
+            ]} selected={filters.emailStatus ? [filters.emailStatus] : []} onChange={(v) => update({ emailStatus: v[v.length - 1] || '' })} />
+          </FilterSection>
+
+          {/* Market Segments */}
+          <FilterSection icon={Target} label="Market Segments" open={sections.marketSegments} onOpenChange={() => toggle('marketSegments')}>
+            <FilterDropdown label="Market segments" placeholder="e.g. Enterprise, SMB" options={MARKET_SEGMENTS} selected={filters.marketSegments} onChange={(v) => update({ marketSegments: v })} />
+          </FilterSection>
+
+          {/* SIC & NAICS */}
+          <FilterSection icon={Hash} label="SIC and NAICS" open={sections.sicNaics} onOpenChange={() => toggle('sicNaics')}>
+            <TagInput label="SIC codes" placeholder="e.g. 7372, 5045" tags={filters.sicCodes} onChange={(v) => update({ sicCodes: v })} />
+            <TagInput label="NAICS codes" placeholder="e.g. 541511, 423430" tags={filters.naicsCodes} onChange={(v) => update({ naicsCodes: v })} />
+          </FilterSection>
+
+          {/* Buying Intent */}
+          <FilterSection icon={BarChart3} label="Buying Intent" open={sections.buyingIntent} onOpenChange={() => toggle('buyingIntent')}>
+            <FilterDropdown label="Intent level" placeholder="e.g. High Intent" options={BUYING_INTENT} selected={filters.buyingIntent ? [filters.buyingIntent] : []} onChange={(v) => update({ buyingIntent: v[v.length - 1] || '' })} />
+          </FilterSection>
+
+          {/* Technologies */}
+          <FilterSection icon={Cpu} label="Technologies" open={sections.technologies} onOpenChange={() => toggle('technologies')}>
+            <FilterDropdown label="Technologies used" placeholder="e.g. Salesforce, HubSpot" options={TECHNOLOGIES} selected={filters.technologies} onChange={(v) => update({ technologies: v })} />
+          </FilterSection>
+
+          {/* Revenue */}
+          <FilterSection icon={DollarSign} label="Revenue" open={sections.revenue} onOpenChange={() => toggle('revenue')}>
+            <FilterDropdown label="Annual revenue" placeholder="e.g. $1M - $5M" options={REVENUE_RANGES} selected={filters.annualRevenue ? [filters.annualRevenue] : []} onChange={(v) => update({ annualRevenue: v[v.length - 1] || '' })} />
+          </FilterSection>
+
+          {/* Funding */}
+          <FilterSection icon={Landmark} label="Funding" open={sections.funding} onOpenChange={() => toggle('funding')}>
+            <FilterDropdown label="Funding raised" placeholder="e.g. $10M - $50M" options={FUNDING_RANGES} selected={filters.fundingRaised ? [filters.fundingRaised] : []} onChange={(v) => update({ fundingRaised: v[v.length - 1] || '' })} />
+            <FilterDropdown label="Funding stage" placeholder="e.g. Series A" options={FUNDING_STAGES} selected={filters.fundingStage ? [filters.fundingStage] : []} onChange={(v) => update({ fundingStage: v[v.length - 1] || '' })} />
+          </FilterSection>
+
+          {/* Job Postings */}
+          <FilterSection icon={ClipboardList} label="Job Postings" open={sections.jobPostings} onOpenChange={() => toggle('jobPostings')}>
+            <FilterDropdown label="Hiring status" placeholder="e.g. Currently hiring" options={JOB_POSTING_FILTERS} selected={filters.jobPostingFilter ? [filters.jobPostingFilter] : []} onChange={(v) => update({ jobPostingFilter: v[v.length - 1] || '' })} />
+            <FilterDropdown label="Departments hiring" placeholder="e.g. Engineering, Sales" options={JOB_CATEGORIES} selected={filters.jobCategories} onChange={(v) => update({ jobCategories: v })} />
           </FilterSection>
 
           {/* Exclude people */}
