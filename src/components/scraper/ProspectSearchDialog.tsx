@@ -562,7 +562,7 @@ export function ProspectSearchDialog({
               Prospect Search
             </DialogTitle>
             <DialogDescription>
-              Find decision-makers by industry, location, and title — like ZoomInfo
+              Find decision-makers by industry, location, and title
             </DialogDescription>
           </DialogHeader>
         </div>
