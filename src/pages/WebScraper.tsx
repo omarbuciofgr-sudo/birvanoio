@@ -119,29 +119,21 @@ export default function WebScraper() {
     setChatInput('');
     setChatLoading(true);
     try {
-      const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prospect-search-chat`;
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Please sign in to use the AI assistant.' }]);
+        return;
+      }
+
+      const { data, error: invokeError } = await supabase.functions.invoke('prospect-search-chat', {
+        body: {
           messages: [...chatMessages, userMsg].map((m) => ({ role: m.role, content: m.content })),
-        }),
+        },
       });
 
-      if (resp.status === 429) {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Rate limit exceeded. Please wait a moment and try again.' }]);
-        return;
-      }
-      if (resp.status === 402) {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Usage limit reached. Please add credits to continue.' }]);
-        return;
-      }
-      if (!resp.ok) throw new Error('Failed to get response');
+      if (invokeError) throw invokeError;
 
-      const data = await resp.json();
+      
       const assistantMsg: ChatMsg = {
         role: 'assistant',
         content: data.content || "I've configured your search filters. Switching to Brivano Lens now...",

@@ -121,9 +121,9 @@ async function handleLandingChatbot(body: any, req: Request, apiKey: string) {
     );
   }
 
-  if (message.length > 5000) {
+  if (message.length > 2000) {
     return new Response(
-      JSON.stringify({ error: "Message must be less than 5000 characters" }),
+      JSON.stringify({ error: "Message must be less than 2000 characters" }),
       { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
