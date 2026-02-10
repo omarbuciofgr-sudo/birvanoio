@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
 import { supabase } from '@/integrations/supabase/client';
-import { ProspectSearchDialog } from '@/components/scraper/ProspectSearchDialog';
+import { BrivanoLens } from '@/components/scraper/ProspectSearchDialog';
 import { 
   Search, 
   Loader2, 
@@ -318,11 +318,9 @@ export default function WebScraper() {
           <p className="text-sm text-muted-foreground mt-1">Extract data from websites, find prospects, and scrape listings</p>
         </div>
 
-        <ProspectSearchDialog open={prospectSearchOpen} onOpenChange={setProspectSearchOpen} />
+        
 
-        <Tabs defaultValue="ai-chat" className="space-y-4" onValueChange={(v) => {
-          if (v === 'prospect-search') setProspectSearchOpen(true);
-        }}>
+        <Tabs defaultValue="ai-chat" className="space-y-4">
           <TabsList className="h-9 p-0.5 bg-muted/60">
             <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Sparkles className="h-3.5 w-3.5" /> AI Assistant
@@ -344,19 +342,8 @@ export default function WebScraper() {
           {/* ── Prospect Search Tab ── */}
           <TabsContent value="prospect-search" className="mt-0">
             <Card className="border-border/60">
-              <CardContent className="p-8 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-                  <Target className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold mb-1">Brivano Lens</h3>
-                  <p className="text-xs text-muted-foreground max-w-sm">
-                    Find decision-makers by industry, location, and title. Search by company, places, or use quick AI-powered search.
-                  </p>
-                </div>
-                <Button onClick={() => setProspectSearchOpen(true)} size="sm" className="gap-2">
-                  <Target className="h-3.5 w-3.5" /> Open Brivano Lens
-                </Button>
+              <CardContent className="p-5">
+                <BrivanoLens />
               </CardContent>
             </Card>
           </TabsContent>
