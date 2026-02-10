@@ -133,7 +133,7 @@ Keep the tone professional but encouraging. Be specific with numbers and names w
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: "You are a helpful sales analytics AI that provides actionable insights." },
           { role: "user", content: analysisPrompt }

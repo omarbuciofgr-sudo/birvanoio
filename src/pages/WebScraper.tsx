@@ -360,11 +360,11 @@ export default function WebScraper() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
+    <DashboardLayout fullWidth>
+      <div className="space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Web Scraper</h1>
-          <p className="text-sm text-muted-foreground mt-1">Extract data from websites, find prospects, and scrape listings</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Brivano Scout</h1>
+          <p className="text-sm text-muted-foreground mt-1">Find prospects, scrape listings, and enrich your pipeline</p>
         </div>
 
         

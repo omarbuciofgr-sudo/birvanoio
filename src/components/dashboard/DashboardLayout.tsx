@@ -36,6 +36,7 @@ import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+  fullWidth?: boolean;
 }
 
 const navSections = [
@@ -66,7 +67,7 @@ const navSections = [
   },
 ];
 
-const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -339,7 +340,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </header>
 
         {/* Page content */}
-        <main className="p-4 lg:p-6 max-w-[1600px] mx-auto">{children}</main>
+        <main className={`p-4 lg:p-6 ${fullWidth ? '' : 'max-w-[1600px]'} mx-auto`}>{children}</main>
       </div>
 
       {/* AI Chat Assistant - hide on client portal pages */}
