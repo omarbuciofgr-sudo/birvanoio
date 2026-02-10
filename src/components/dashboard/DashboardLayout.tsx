@@ -137,7 +137,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <span className="text-sm font-bold text-primary">B</span>
                 </div>
               ) : (
-                <img src={brivanoLogo} alt="Brivano" className="h-16 w-auto dark:invert" />
+                <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto dark:invert" />
               )}
             </Link>
             <div className="flex items-center gap-1">
