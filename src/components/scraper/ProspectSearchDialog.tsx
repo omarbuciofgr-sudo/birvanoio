@@ -43,6 +43,10 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
   const [searchName, setSearchName] = useState('');
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
 
@@ -71,7 +75,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
   useEffect(() => {
     if (shouldAutoSearch && !searchMutation.isPending) {
       setShouldAutoSearch(false);
-      const timer = setTimeout(() => searchMutation.mutate(), 100);
+      const timer = setTimeout(() => searchMutation.mutate({}), 100);
       return () => clearTimeout(timer);
     }
   }, [shouldAutoSearch, filters]);
@@ -158,7 +162,8 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
   });
 
   const searchMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts?: { page?: number; append?: boolean }) => {
+      const page = opts?.page || 1;
       // ── People Search ─────────────────────────────────
       if (searchType === 'people') {
         const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
@@ -313,19 +318,31 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
         locations_exclude: locationsExclude.length > 0 ? locationsExclude : undefined,
         keywords_exclude: filters.keywordsExclude.length > 0 ? filters.keywordsExclude : undefined,
         limit: filters.limit,
+        page,
       });
     },
-    onSuccess: (response) => {
+    onSuccess: (response, variables) => {
       if (response.success && response.companies) {
-        setResults(response.companies);
-        setSelectedRows(new Set());
+        const append = variables?.append;
+        if (append) {
+          setResults(prev => [...prev, ...response.companies!]);
+        } else {
+          setResults(response.companies);
+          setSelectedRows(new Set());
+        }
         setHasSearched(true);
+        setTotalResults(response.pagination?.total_entries || response.companies.length);
+        setTotalPages(response.pagination?.total_pages || 1);
+        setCurrentPage(variables?.page || 1);
+        setIsLoadingMore(false);
         toast.success(`Found ${response.companies.length} results`);
       } else {
+        setIsLoadingMore(false);
         toast.error(response.error || 'Search failed');
       }
     },
     onError: (error) => {
+      setIsLoadingMore(false);
       toast.error(error instanceof Error ? error.message : 'Search failed');
     },
   });
@@ -457,7 +474,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
               <PeopleFilters
                 filters={peopleFilters}
                 onFiltersChange={setPeopleFilters}
-                onSearch={() => searchMutation.mutate()}
+                onSearch={() => searchMutation.mutate({})}
                 isSearching={searchMutation.isPending}
                 resultCount={results.length}
               />
@@ -468,7 +485,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
               <JobFilters
                 filters={jobFilters}
                 onFiltersChange={setJobFilters}
-                onSearch={() => searchMutation.mutate()}
+                onSearch={() => searchMutation.mutate({})}
                 isSearching={searchMutation.isPending}
                 resultCount={results.length}
               />
@@ -479,7 +496,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
               <SearchFilters
                 filters={filters}
                 onFiltersChange={setFilters}
-                onSearch={() => searchMutation.mutate()}
+                onSearch={() => searchMutation.mutate({})}
                 isSearching={searchMutation.isPending}
                 resultCount={results.length}
               />
@@ -513,7 +530,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
                 </DialogContent>
               </Dialog>
               <Button
-                onClick={() => searchMutation.mutate()}
+                onClick={() => searchMutation.mutate({})}
                 disabled={searchMutation.isPending || !canSearch()}
                 size="sm"
                 className="h-7 px-5 text-xs font-semibold"
@@ -530,11 +547,19 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
             results={results}
             selectedRows={selectedRows}
             onSelectionChange={setSelectedRows}
-            isLoading={searchMutation.isPending}
+            isLoading={searchMutation.isPending && !isLoadingMore}
             hasSearched={hasSearched}
             onSave={() => saveMutation.mutate()}
             onExport={handleExport}
             isSaving={saveMutation.isPending}
+            onLoadMore={() => {
+              const nextPage = currentPage + 1;
+              setIsLoadingMore(true);
+              searchMutation.mutate({ page: nextPage, append: true });
+            }}
+            isLoadingMore={isLoadingMore}
+            hasMoreResults={currentPage < totalPages}
+            totalResults={totalResults}
           />
         </div>
       </div>

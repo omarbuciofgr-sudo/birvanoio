@@ -28,6 +28,7 @@ interface CompanySearchInput {
   job_posting_filter?: string;
   job_categories?: string[];
   limit?: number;
+  page?: number;
 }
 
 interface CompanyResult {
@@ -53,14 +54,20 @@ interface CompanyResult {
 async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
   const { industry, employee_ranges, employee_count_min, employee_count_max, location, keywords, limit = 25 } = input;
 
+  const page = input.page || 1;
   const searchParams: Record<string, unknown> = {
-    page: 1,
+    page,
     per_page: Math.min(limit, 100),
   };
 
   if (industry) {
-    // Use keyword-based matching for industry filtering
-    searchParams.q_organization_keyword_tags = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+    const industryTags = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+    // Use both keyword tags AND industry tag IDs for tighter matching
+    searchParams.q_organization_keyword_tags = industryTags;
+    // Also set industry as a search term for relevance
+    searchParams.q_organization_name = '';
+    // Use organization_industry_tag_ids for exact industry matching
+    searchParams.organization_industry_tag_ids = industryTags;
   }
 
   // Use employee_ranges directly if provided (e.g. ["1-10", "11-50", "51-200"])
@@ -251,24 +258,31 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
 
     if (orgs.length === 0) return null;
 
-    return orgs.map((org: any) => ({
-      name: org.name || '',
-      domain: org.primary_domain || org.domain || '',
-      website: org.website_url || (org.primary_domain ? `https://${org.primary_domain}` : null),
-      linkedin_url: org.linkedin_url || null,
-      industry: org.industry || null,
-      employee_count: org.estimated_num_employees || null,
-      employee_range: org.employee_count_range || null,
-      annual_revenue: org.annual_revenue || null,
-      founded_year: org.founded_year || null,
-      description: org.short_description || null,
-      headquarters_city: org.city || null,
-      headquarters_state: org.state || null,
-      headquarters_country: org.country || null,
-      technologies: org.technologies?.slice(0, 20) || [],
-      keywords: org.keywords?.slice(0, 10) || [],
-      source_provider: 'apollo',
-    }));
+    const totalEntries = data.pagination?.total_entries || orgs.length;
+    const totalPages = data.pagination?.total_pages || 1;
+
+    return {
+      results: orgs.map((org: any) => ({
+        name: org.name || '',
+        domain: org.primary_domain || org.domain || '',
+        website: org.website_url || (org.primary_domain ? `https://${org.primary_domain}` : null),
+        linkedin_url: org.linkedin_url || null,
+        industry: org.industry || org.keywords?.[0] || null,
+        employee_count: org.estimated_num_employees || null,
+        employee_range: org.employee_count_range || null,
+        annual_revenue: org.annual_revenue || null,
+        founded_year: org.founded_year || null,
+        description: org.short_description || org.seo_description || org.snippets_loaded ? org.snippet : null,
+        headquarters_city: org.city || null,
+        headquarters_state: org.state || null,
+        headquarters_country: org.country || null,
+        technologies: org.technologies?.slice(0, 20) || [],
+        keywords: org.keywords?.slice(0, 10) || [],
+        source_provider: 'apollo',
+      })),
+      totalEntries,
+      totalPages,
+    };
   } catch (e) {
     console.error('[Apollo] Exception:', e);
     return null;
@@ -498,10 +512,25 @@ Deno.serve(async (req) => {
 
     let companies: CompanyResult[] | null = null;
     let usedProvider = '';
+    let totalEntries = 0;
+    let totalPages = 1;
+    const page = body.page || 1;
 
     for (const provider of providers) {
       console.log(`[Waterfall] Trying ${provider.name}...`);
-      companies = await provider.fn();
+      const result = await provider.fn();
+      if (result && typeof result === 'object' && 'results' in result) {
+        // Apollo returns { results, totalEntries, totalPages }
+        companies = result.results;
+        totalEntries = result.totalEntries;
+        totalPages = result.totalPages;
+      } else if (Array.isArray(result) && result.length > 0) {
+        companies = result;
+        totalEntries = result.length;
+        totalPages = 1;
+      } else {
+        companies = null;
+      }
       if (companies && companies.length > 0) {
         usedProvider = provider.name;
         console.log(`[Waterfall] ✓ ${provider.name} returned ${companies.length} results`);
@@ -517,7 +546,7 @@ Deno.serve(async (req) => {
           companies: [],
           total: 0,
           provider: 'none',
-          pagination: { page: 1, per_page: limit, total_entries: 0, total_pages: 0 },
+          pagination: { page, per_page: limit, total_entries: 0, total_pages: 0 },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -527,13 +556,13 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         companies,
-        total: companies.length,
+        total: totalEntries,
         provider: usedProvider.toLowerCase(),
         pagination: {
-          page: 1,
+          page,
           per_page: limit,
-          total_entries: companies.length,
-          total_pages: 1,
+          total_entries: totalEntries,
+          total_pages: totalPages,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
