@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -13,8 +13,6 @@ serve(async (req) => {
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!LOVABLE_API_KEY) {
       console.error("AI service configuration error: API key not set");
@@ -24,71 +22,150 @@ serve(async (req) => {
       );
     }
 
-    const { message, sessionId, conversationHistory } = await req.json();
+    const body = await req.json();
 
-    // Input validation - validate message type and length before AI processing
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Message is required" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+    // Detect which format is being used:
+    // Format A (Web Scraper AI Assistant): { messages: [{role, content}], context: 'web_scraper' }
+    // Format B (Landing page chatbot): { message: string, sessionId: string, conversationHistory: [] }
+    const isWebScraperFormat = Array.isArray(body.messages) && body.context;
+
+    if (isWebScraperFormat) {
+      return await handleWebScraperChat(body, LOVABLE_API_KEY);
+    } else {
+      return await handleLandingChatbot(body, req, LOVABLE_API_KEY);
     }
+  } catch (error: any) {
+    console.error("AI chat error:", error);
+    return new Response(
+      JSON.stringify({ error: "Failed to process message. Please try again." }),
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+});
 
-    if (message.length > 5000) {
+// ── Web Scraper AI Assistant ──────────────────────────────────
+async function handleWebScraperChat(body: any, apiKey: string) {
+  const { messages } = body;
+
+  if (!messages || messages.length === 0) {
+    return new Response(
+      JSON.stringify({ error: "Messages are required" }),
+      { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  const aiMessages = [
+    {
+      role: "system",
+      content: `You are an AI assistant for a B2B sales prospecting and lead generation platform. You help users:
+
+1. Find companies and leads based on industry, location, and other criteria
+2. Suggest search strategies for different types of prospects
+3. Explain how to use the platform's tools (prospect search, real estate scraper, CSV enrichment, web search)
+4. Provide tips on lead qualification and outreach
+
+Be concise, actionable, and helpful. If a user asks to find specific types of companies, suggest which tool tab to use and what filters to apply. Keep responses to 2-3 sentences unless more detail is needed.`
+    },
+    ...messages,
+  ];
+
+  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: aiMessages,
+    }),
+  });
+
+  if (!aiResponse.ok) {
+    if (aiResponse.status === 429) {
       return new Response(
-        JSON.stringify({ error: "Message must be less than 5000 characters" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    if (!sessionId || typeof sessionId !== 'string') {
-      return new Response(
-        JSON.stringify({ error: "sessionId is required" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-
-    // Session-based rate limiting (existing)
-    const { data: rateLimitOk } = await supabase.rpc('check_chat_rate_limit', { 
-      session_uuid: sessionId 
-    });
-    
-    if (rateLimitOk === false) {
-      return new Response(
-        JSON.stringify({ error: "Too many messages. Please wait a moment before sending more." }),
+        JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
         { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
-
-    // IP-based rate limiting to prevent session cycling attacks
-    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-                     req.headers.get('cf-connecting-ip') || 
-                     req.headers.get('x-real-ip') || 
-                     'unknown';
-    
-    // Check IP-based rate limit (100 messages per hour per IP)
-    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-    const { count: ipMessageCount } = await supabase
-      .from('chat_messages')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', oneHourAgo);
-
-    // If more than 100 messages in the last hour from this session pattern, rate limit
-    if (ipMessageCount && ipMessageCount > 100) {
-      console.log(`Rate limit exceeded for IP pattern, count: ${ipMessageCount}`);
+    if (aiResponse.status === 402) {
       return new Response(
-        JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ error: "Usage limit reached. Please add credits." }),
+        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+    const errText = await aiResponse.text();
+    console.error("AI gateway error:", aiResponse.status, errText);
+    throw new Error("AI gateway error");
+  }
 
-    // Build conversation context
-    const messages = [
-      {
-        role: "system",
-        content: `You are Brivano's friendly AI assistant on their website. Your goals are:
+  const aiData = await aiResponse.json();
+  const responseContent = aiData.choices?.[0]?.message?.content || "I'm here to help! What are you looking for?";
+
+  return new Response(
+    JSON.stringify({ response: responseContent }),
+    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+  );
+}
+
+// ── Landing Page Chatbot ──────────────────────────────────────
+async function handleLandingChatbot(body: any, req: Request, apiKey: string) {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  const { message, sessionId, conversationHistory } = body;
+
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    return new Response(
+      JSON.stringify({ error: "Message is required" }),
+      { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  if (message.length > 5000) {
+    return new Response(
+      JSON.stringify({ error: "Message must be less than 5000 characters" }),
+      { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  if (!sessionId || typeof sessionId !== 'string') {
+    return new Response(
+      JSON.stringify({ error: "sessionId is required" }),
+      { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+
+  const { data: rateLimitOk } = await supabase.rpc('check_chat_rate_limit', { 
+    session_uuid: sessionId 
+  });
+  
+  if (rateLimitOk === false) {
+    return new Response(
+      JSON.stringify({ error: "Too many messages. Please wait a moment before sending more." }),
+      { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+  const { count: ipMessageCount } = await supabase
+    .from('chat_messages')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', oneHourAgo);
+
+  if (ipMessageCount && ipMessageCount > 100) {
+    return new Response(
+      JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+      { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  const messages = [
+    {
+      role: "system",
+      content: `You are Brivano's friendly AI assistant on their website. Your goals are:
 
 1. QUALIFY visitors by understanding their needs:
    - What industry are they in?
@@ -115,97 +192,86 @@ serve(async (req) => {
 
 When you successfully capture their name, email, or phone, include it in your response as JSON at the end:
 {"captured": {"name": "...", "email": "...", "phone": "..."}}`
-      },
-      ...(conversationHistory || []).map((msg: any) => ({
-        role: msg.sender_type === "visitor" ? "user" : "assistant",
-        content: msg.message
-      })),
-      { role: "user", content: message }
-    ];
+    },
+    ...(conversationHistory || []).map((msg: any) => ({
+      role: msg.sender_type === "visitor" ? "user" : "assistant",
+      content: msg.message
+    })),
+    { role: "user", content: message }
+  ];
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-      }),
-    });
+  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages,
+    }),
+  });
 
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Too many requests. Please try again in a moment." }),
-          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Service temporarily unavailable." }),
-          { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-      throw new Error("Failed to get AI response");
+  if (!aiResponse.ok) {
+    if (aiResponse.status === 429) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again in a moment." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
-
-    const aiData = await aiResponse.json();
-    let responseContent = aiData.choices?.[0]?.message?.content || "I'm here to help! What can I tell you about Brivano?";
-
-    // Check if AI captured any lead info
-    let captured: any = null;
-    const capturedMatch = responseContent.match(/\{"captured":\s*\{[^}]+\}\}/);
-    if (capturedMatch) {
-      try {
-        const capturedData = JSON.parse(capturedMatch[0]);
-        captured = capturedData.captured;
-        // Remove the JSON from the response
-        responseContent = responseContent.replace(capturedMatch[0], "").trim();
-      } catch (e) {
-        console.log("Could not parse captured data");
-      }
+    if (aiResponse.status === 402) {
+      return new Response(
+        JSON.stringify({ error: "Service temporarily unavailable." }),
+        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
-
-    // Save the AI response to the database
-    await supabase.from("chat_messages").insert({
-      session_id: sessionId,
-      sender_type: "support",
-      message: responseContent,
-      ai_qualified: !!captured,
-      visitor_name: captured?.name || null,
-      visitor_email: captured?.email || null,
-      visitor_phone: captured?.phone || null,
-    });
-
-    // If we captured lead info, update previous messages with this session
-    if (captured) {
-      const updates: any = {};
-      if (captured.name) updates.visitor_name = captured.name;
-      if (captured.email) updates.visitor_email = captured.email;
-      if (captured.phone) updates.visitor_phone = captured.phone;
-      updates.ai_qualified = true;
-
-      await supabase
-        .from("chat_messages")
-        .update(updates)
-        .eq("session_id", sessionId);
-    }
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: responseContent,
-        captured
-      }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  } catch (error: any) {
-    console.error("AI chat error:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to process message. Please try again." }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    throw new Error("Failed to get AI response");
   }
-});
+
+  const aiData = await aiResponse.json();
+  let responseContent = aiData.choices?.[0]?.message?.content || "I'm here to help! What can I tell you about Brivano?";
+
+  let captured: any = null;
+  const capturedMatch = responseContent.match(/\{"captured":\s*\{[^}]+\}\}/);
+  if (capturedMatch) {
+    try {
+      const capturedData = JSON.parse(capturedMatch[0]);
+      captured = capturedData.captured;
+      responseContent = responseContent.replace(capturedMatch[0], "").trim();
+    } catch (e) {
+      console.log("Could not parse captured data");
+    }
+  }
+
+  await supabase.from("chat_messages").insert({
+    session_id: sessionId,
+    sender_type: "support",
+    message: responseContent,
+    ai_qualified: !!captured,
+    visitor_name: captured?.name || null,
+    visitor_email: captured?.email || null,
+    visitor_phone: captured?.phone || null,
+  });
+
+  if (captured) {
+    const updates: any = {};
+    if (captured.name) updates.visitor_name = captured.name;
+    if (captured.email) updates.visitor_email = captured.email;
+    if (captured.phone) updates.visitor_phone = captured.phone;
+    updates.ai_qualified = true;
+
+    await supabase
+      .from("chat_messages")
+      .update(updates)
+      .eq("session_id", sessionId);
+  }
+
+  return new Response(
+    JSON.stringify({ 
+      success: true,
+      message: responseContent,
+      captured
+    }),
+    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+  );
+}
