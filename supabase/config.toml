@@ -113,3 +113,9 @@ verify_jwt = false
 
 [functions.ai-meeting-notes]
 verify_jwt = false
+
+[functions.people-search]
+verify_jwt = false
+
+[functions.job-search]
+verify_jwt = false
