@@ -28,6 +28,7 @@ import {
   Command,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
+import { BrivanoLogo } from "@/components/BrivanoLogo";
 import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
 
 interface DashboardLayoutProps {
@@ -137,10 +138,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   <span className="text-sm font-bold text-primary">B</span>
                 </div>
               ) : (
-                <>
-                  <img src={brivanoLogo} alt="Brivano" className="h-20 w-auto mix-blend-multiply dark:hidden" />
-                  <span className="hidden dark:inline text-xl font-semibold tracking-tight font-display text-foreground">brivano</span>
-                </>
+                <BrivanoLogo className="h-20" />
               )}
             </Link>
             <div className="flex items-center gap-1">
