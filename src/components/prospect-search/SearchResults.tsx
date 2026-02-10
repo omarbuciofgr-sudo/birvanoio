@@ -12,6 +12,9 @@ import {
   XCircle,
   PanelRightOpen,
   PanelRightClose,
+  Globe,
+  Linkedin,
+  ExternalLink,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
 import { supabase } from '@/integrations/supabase/client';
@@ -308,7 +311,7 @@ export function SearchResults({
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
-        <div className="min-w-[1260px]">
+        <div className="min-w-[1360px]">
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
               <tr className="border-b border-border/60">
@@ -343,6 +346,11 @@ export function SearchResults({
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <span className="text-primary font-semibold">📍</span> Location
+                  </span>
+                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="text-primary font-semibold">🔗</span> Links
                   </span>
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
@@ -406,6 +414,35 @@ export function SearchResults({
                       <span className="truncate block">
                         {[company.headquarters_city, company.headquarters_state, company.headquarters_country].filter(Boolean).join(', ') || '—'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5">
+                        {(company.website || company.domain) && (
+                          <a
+                            href={company.website || `https://${company.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                            title="Website"
+                          >
+                            <Globe className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {company.linkedin_url && (
+                          <a
+                            href={company.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-blue-600 transition-colors"
+                            title="LinkedIn"
+                          >
+                            <Linkedin className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {!company.website && !company.domain && !company.linkedin_url && (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       {getTypeBadge([], company.industry)}
