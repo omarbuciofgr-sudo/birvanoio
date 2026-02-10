@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.verify-caller-id]
 verify_jwt = false
+
+[functions.manage-email-account]
+verify_jwt = false

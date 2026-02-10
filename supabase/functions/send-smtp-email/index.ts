@@ -112,13 +112,36 @@ serve(async (req) => {
       });
     }
 
+    // Decrypt the SMTP password server-side
+    const encryptionKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    let smtpPassword = emailAccount.smtp_password_encrypted;
+    
+    if (smtpPassword.startsWith("enc:")) {
+      // Import decryption from manage-email-account
+      const base64Data = smtpPassword.slice(4);
+      const binaryStr = atob(base64Data);
+      const combined = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        combined[i] = binaryStr.charCodeAt(i);
+      }
+      const iv = combined.slice(0, 12);
+      const ciphertext = combined.slice(12);
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(encryptionKey), { name: "PBKDF2" }, false, ["deriveKey"]);
+      const salt = encoder.encode("smtp-password-encryption-salt-v1");
+      const derivedKey = await crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+      const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, derivedKey, ciphertext);
+      smtpPassword = decoder.decode(decrypted);
+    }
+
     // Send via SMTP
     const client = new SmtpClient();
     const connectConfig: any = {
       hostname: emailAccount.smtp_host,
       port: emailAccount.smtp_port,
       username: emailAccount.smtp_username,
-      password: emailAccount.smtp_password_encrypted,
+      password: smtpPassword,
     };
 
     if (emailAccount.use_tls) {
