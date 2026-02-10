@@ -14,6 +14,12 @@ export interface CompanySearchInput {
   funding_range?: string;
   company_types?: string[];
   technologies?: string[];
+  sic_codes?: string[];
+  naics_codes?: string[];
+  buying_intent?: string;
+  market_segments?: string[];
+  job_posting_filter?: string;
+  job_categories?: string[];
   limit?: number;
 }
 

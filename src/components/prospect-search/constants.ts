@@ -411,6 +411,76 @@ export const WEBSITE_VISITORS = [
   { value: '500000+', label: '500K+ visitors/mo' },
 ];
 
+// Common technologies for filtering
+export const TECHNOLOGIES = [
+  { value: 'salesforce', label: 'Salesforce' },
+  { value: 'hubspot', label: 'HubSpot' },
+  { value: 'wordpress', label: 'WordPress' },
+  { value: 'shopify', label: 'Shopify' },
+  { value: 'google_analytics', label: 'Google Analytics' },
+  { value: 'google_ads', label: 'Google Ads' },
+  { value: 'facebook_pixel', label: 'Facebook Pixel' },
+  { value: 'marketo', label: 'Marketo' },
+  { value: 'mailchimp', label: 'Mailchimp' },
+  { value: 'zendesk', label: 'Zendesk' },
+  { value: 'intercom', label: 'Intercom' },
+  { value: 'slack', label: 'Slack' },
+  { value: 'jira', label: 'Jira' },
+  { value: 'aws', label: 'Amazon Web Services' },
+  { value: 'azure', label: 'Microsoft Azure' },
+  { value: 'gcp', label: 'Google Cloud Platform' },
+  { value: 'stripe', label: 'Stripe' },
+  { value: 'react', label: 'React' },
+  { value: 'angular', label: 'Angular' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'ruby_on_rails', label: 'Ruby on Rails' },
+  { value: 'nodejs', label: 'Node.js' },
+  { value: 'zapier', label: 'Zapier' },
+  { value: 'segment', label: 'Segment' },
+  { value: 'mixpanel', label: 'Mixpanel' },
+  { value: 'amplitude', label: 'Amplitude' },
+  { value: 'tableau', label: 'Tableau' },
+  { value: 'power_bi', label: 'Power BI' },
+  { value: 'zoom', label: 'Zoom' },
+];
+
+// Job posting filters
+export const JOB_POSTING_FILTERS = [
+  { value: 'has_job_postings', label: 'Currently hiring' },
+  { value: 'no_job_postings', label: 'Not currently hiring' },
+];
+
+// Job posting categories for filtering
+export const JOB_CATEGORIES = [
+  { value: 'engineering', label: 'Engineering' },
+  { value: 'sales', label: 'Sales' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'operations', label: 'Operations' },
+  { value: 'hr', label: 'Human Resources' },
+  { value: 'design', label: 'Design' },
+  { value: 'product', label: 'Product' },
+  { value: 'customer_success', label: 'Customer Success' },
+  { value: 'data', label: 'Data & Analytics' },
+  { value: 'legal', label: 'Legal' },
+  { value: 'it', label: 'IT' },
+];
+
+// Funding stages
+export const FUNDING_STAGES = [
+  { value: 'seed', label: 'Seed' },
+  { value: 'series_a', label: 'Series A' },
+  { value: 'series_b', label: 'Series B' },
+  { value: 'series_c', label: 'Series C' },
+  { value: 'series_d', label: 'Series D+' },
+  { value: 'ipo', label: 'IPO' },
+  { value: 'private_equity', label: 'Private Equity' },
+  { value: 'debt_financing', label: 'Debt Financing' },
+  { value: 'grant', label: 'Grant' },
+  { value: 'undisclosed', label: 'Undisclosed' },
+];
+
 export interface ProspectSearchFilters {
   // Company attributes
   industries: string[];
@@ -418,6 +488,7 @@ export interface ProspectSearchFilters {
   companySizes: string[];
   annualRevenue: string;
   fundingRaised: string;
+  fundingStage: string;
   companyTypes: string[];
   keywordsInclude: string[];
   keywordsExclude: string[];
@@ -433,11 +504,24 @@ export interface ProspectSearchFilters {
   // Products & services
   productsDescription: string;
   
+  // Technologies
+  technologies: string[];
+  
+  // SIC / NAICS
+  sicCodes: string[];
+  naicsCodes: string[];
+  
+  // Buying Intent & Signals
+  buyingIntent: string;
+  marketSegments: string[];
+  
+  // Job Postings
+  jobPostingFilter: string;
+  jobCategories: string[];
+  
   // AI / advanced filters
   businessTypes: string[];
-  marketSegments: string[];
   followerRange: string;
-  buyingIntent: string;
   websiteVisitors: string;
   
   // Limit
@@ -454,6 +538,7 @@ export const defaultFilters: ProspectSearchFilters = {
   companySizes: [],
   annualRevenue: '',
   fundingRaised: '',
+  fundingStage: '',
   companyTypes: [],
   keywordsInclude: [],
   keywordsExclude: [],
@@ -464,10 +549,15 @@ export const defaultFilters: ProspectSearchFilters = {
   cities: [],
   citiesToExclude: [],
   productsDescription: '',
-  businessTypes: [],
-  marketSegments: [],
-  followerRange: '',
+  technologies: [],
+  sicCodes: [],
+  naicsCodes: [],
   buyingIntent: '',
+  marketSegments: [],
+  jobPostingFilter: '',
+  jobCategories: [],
+  businessTypes: [],
+  followerRange: '',
   websiteVisitors: '',
   limit: 50,
   citiesOrStates: [],
