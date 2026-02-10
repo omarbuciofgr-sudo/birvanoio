@@ -30,6 +30,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
+import brivanoIcon from "@/assets/brivano-b-icon.png";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
 import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
@@ -140,9 +141,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
           <div className="flex items-center justify-between h-14 px-4 border-b border-border/60">
             <Link to="/" className="flex items-center">
               {sidebarCollapsed ? (
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary">B</span>
-                </div>
+                <img src={brivanoIcon} alt="Brivano" className="w-8 h-8 object-contain dark:invert" />
               ) : (
                 <BrivanoLogo className="h-20" />
               )}
