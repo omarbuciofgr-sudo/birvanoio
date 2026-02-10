@@ -26,10 +26,13 @@ import {
   Bell,
   Search,
   Command,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
 import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -48,6 +51,8 @@ const navSections = [
     label: "Tools",
     items: [
       { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
+      { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
+      { name: "Signals", href: "/dashboard/signals", icon: Zap },
       { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
       { name: "Templates", href: "/dashboard/templates", icon: FileText },
     ],
@@ -327,6 +332,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <NotificationBell />
               <ThemeToggle />
             </div>
           </div>

@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_agents: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          model: string
+          name: string
+          prompt: string
+          runs_count: number
+          tools: string[] | null
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          model?: string
+          name: string
+          prompt: string
+          runs_count?: number
+          tools?: string[] | null
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          model?: string
+          name?: string
+          prompt?: string
+          runs_count?: number
+          tools?: string[] | null
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -2446,6 +2491,54 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_subscriptions: {
+        Row: {
+          config: Json | null
+          created_at: string
+          folder: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          monthly_matches: number
+          name: string
+          notify_email: boolean
+          notify_in_app: boolean
+          signal_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string
+          folder?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          monthly_matches?: number
+          name: string
+          notify_email?: boolean
+          notify_in_app?: boolean
+          signal_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string
+          folder?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          monthly_matches?: number
+          name?: string
+          notify_email?: boolean
+          notify_in_app?: boolean
+          signal_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       source_analytics: {
         Row: {
           avg_confidence_score: number | null
@@ -2685,6 +2778,45 @@ export type Database = {
           revenue_generated?: number | null
           sms_sent?: number
           snapshot_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_notifications: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          reference_id: string | null
+          reference_type: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          reference_id?: string | null
+          reference_type?: string | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          title?: string
+          type?: string
           user_id?: string
         }
         Relationships: []
