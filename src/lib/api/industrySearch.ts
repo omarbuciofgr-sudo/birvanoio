@@ -168,6 +168,17 @@ export const industrySearchApi = {
     organization_num_employees_ranges?: string[];
     q_organization_name?: string;
     profile_keywords?: string[];
+    email_status?: string;
+    technologies?: string[];
+    revenue_range?: string;
+    funding_range?: string;
+    funding_stage?: string;
+    market_segments?: string[];
+    buying_intent?: string;
+    sic_codes?: string[];
+    naics_codes?: string[];
+    job_posting_filter?: string;
+    job_categories?: string[];
     limit?: number;
   }): Promise<PeopleSearchResponse> {
     const { data, error } = await supabase.functions.invoke('people-search', {

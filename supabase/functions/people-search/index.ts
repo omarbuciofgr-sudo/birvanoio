@@ -13,8 +13,8 @@ interface PeopleSearchInput {
   person_locations?: string[];
   organization_industry_tag_ids?: string[];
   organization_num_employees_ranges?: string[];
-  organization_ids?: string[];           // current companies
-  q_organization_name?: string;          // company name search
+  organization_ids?: string[];
+  q_organization_name?: string;
   person_past_organization_ids?: string[];
   person_past_titles?: string[];
   skills?: string[];
@@ -26,6 +26,18 @@ interface PeopleSearchInput {
   profile_keywords?: string[];
   years_experience_min?: number;
   years_experience_max?: number;
+  // New filters
+  email_status?: string;
+  technologies?: string[];
+  revenue_range?: string;
+  funding_range?: string;
+  funding_stage?: string;
+  market_segments?: string[];
+  buying_intent?: string;
+  sic_codes?: string[];
+  naics_codes?: string[];
+  job_posting_filter?: string;
+  job_categories?: string[];
   limit?: number;
   page?: number;
 }
@@ -120,6 +132,63 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<{
   // Keywords / skills
   if (input.profile_keywords?.length) {
     params.q_keywords = input.profile_keywords.join(' ');
+  }
+
+  // Email status filter
+  if (input.email_status) {
+    if (input.email_status === 'verified') {
+      params.contact_email_status = ['verified'];
+    } else if (input.email_status === 'likely_valid') {
+      params.contact_email_status = ['verified', 'guessed'];
+    } else if (input.email_status === 'has_email') {
+      params.contact_email_status = ['verified', 'guessed', 'unavailable'];
+    }
+  }
+
+  // Technologies
+  if (input.technologies?.length) {
+    params.currently_using_any_of_technology_uids = input.technologies;
+  }
+
+  // Revenue range → organization_revenue_ranges
+  if (input.revenue_range) {
+    const revenueMap: Record<string, string[]> = {
+      '0-1M': ['0', '1000000'],
+      '1M-5M': ['1000000', '5000000'],
+      '5M-10M': ['5000000', '10000000'],
+      '10M-50M': ['10000000', '50000000'],
+      '50M-100M': ['50000000', '100000000'],
+      '100M-500M': ['100000000', '500000000'],
+      '500M-1B': ['500000000', '1000000000'],
+      '1B+': ['1000000000'],
+    };
+    const range = revenueMap[input.revenue_range];
+    if (range) {
+      params.organization_revenue_ranges = [range.join('-')];
+    }
+  }
+
+  // SIC codes
+  if (input.sic_codes?.length) {
+    params.organization_sic_codes = input.sic_codes;
+  }
+
+  // NAICS codes
+  if (input.naics_codes?.length) {
+    params.organization_naics_codes = input.naics_codes;
+  }
+
+  // Job postings
+  if (input.job_posting_filter === 'has_job_postings') {
+    params.organization_job_locations = ['United States'];
+  }
+
+  // Departments hiring
+  if (input.job_categories?.length) {
+    params.organization_department_or_subdepartment_counts = input.job_categories.map(cat => ({
+      department_or_subdepartment: cat,
+      min: 1,
+    }));
   }
 
   console.log('[People Search Apollo] Params:', JSON.stringify(params));

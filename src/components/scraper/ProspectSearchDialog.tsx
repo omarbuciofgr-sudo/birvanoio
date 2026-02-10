@@ -176,6 +176,17 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
           profile_keywords: [...peopleFilters.skills, ...peopleFilters.profileKeywords].filter(Boolean).length > 0
             ? [...peopleFilters.skills, ...peopleFilters.profileKeywords].filter(Boolean)
             : undefined,
+          email_status: peopleFilters.emailStatus || undefined,
+          technologies: peopleFilters.technologies.length > 0 ? peopleFilters.technologies : undefined,
+          revenue_range: peopleFilters.annualRevenue || undefined,
+          funding_range: peopleFilters.fundingRaised || undefined,
+          funding_stage: peopleFilters.fundingStage || undefined,
+          market_segments: peopleFilters.marketSegments.length > 0 ? peopleFilters.marketSegments : undefined,
+          buying_intent: peopleFilters.buyingIntent || undefined,
+          sic_codes: peopleFilters.sicCodes.length > 0 ? peopleFilters.sicCodes : undefined,
+          naics_codes: peopleFilters.naicsCodes.length > 0 ? peopleFilters.naicsCodes : undefined,
+          job_posting_filter: peopleFilters.jobPostingFilter || undefined,
+          job_categories: peopleFilters.jobCategories.length > 0 ? peopleFilters.jobCategories : undefined,
           limit: peopleFilters.limit,
         });
 
