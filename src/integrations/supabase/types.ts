@@ -2782,6 +2782,57 @@ export type Database = {
         }
         Relationships: []
       }
+      user_email_accounts: {
+        Row: {
+          created_at: string
+          email_address: string
+          id: string
+          is_default: boolean
+          is_verified: boolean
+          label: string
+          last_used_at: string | null
+          smtp_host: string
+          smtp_password_encrypted: string
+          smtp_port: number
+          smtp_username: string
+          updated_at: string
+          use_tls: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_address: string
+          id?: string
+          is_default?: boolean
+          is_verified?: boolean
+          label?: string
+          last_used_at?: string | null
+          smtp_host: string
+          smtp_password_encrypted: string
+          smtp_port?: number
+          smtp_username: string
+          updated_at?: string
+          use_tls?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_address?: string
+          id?: string
+          is_default?: boolean
+          is_verified?: boolean
+          label?: string
+          last_used_at?: string | null
+          smtp_host?: string
+          smtp_password_encrypted?: string
+          smtp_port?: number
+          smtp_username?: string
+          updated_at?: string
+          use_tls?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_notifications: {
         Row: {
           category: string | null
@@ -2818,6 +2869,45 @@ export type Database = {
           title?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_phone_numbers: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          label: string
+          phone_number: string
+          twilio_validation_code: string | null
+          updated_at: string
+          user_id: string
+          verification_status: string
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          phone_number: string
+          twilio_validation_code?: string | null
+          updated_at?: string
+          user_id: string
+          verification_status?: string
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          phone_number?: string
+          twilio_validation_code?: string | null
+          updated_at?: string
+          user_id?: string
+          verification_status?: string
+          verified_at?: string | null
         }
         Relationships: []
       }
