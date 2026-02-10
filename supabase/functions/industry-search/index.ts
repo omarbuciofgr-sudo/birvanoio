@@ -390,9 +390,17 @@ async function searchPDL(input: CompanySearchInput, apiKey: string): Promise<Com
 async function searchRocketReach(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
   const { industry, location, keywords, limit = 25 } = input;
 
+  // RocketReach requires a 'query' field
+  const queryText = keywords || industry || '';
+  if (!queryText) {
+    console.log('[RocketReach] No query text available');
+    return null;
+  }
+
   const query: Record<string, unknown> = {
+    query: queryText,
     page_size: Math.min(limit, 100),
-    page: input.page || 1,
+    start: ((input.page || 1) - 1) * Math.min(limit, 100) + 1,
   };
 
   if (industry) {
@@ -404,7 +412,6 @@ async function searchRocketReach(input: CompanySearchInput, apiKey: string): Pro
   }
 
   if (input.employee_ranges?.length) {
-    // RocketReach uses employee_count_min/max
     const ranges = input.employee_ranges;
     const mins = ranges.map(r => {
       const parts = r.split('-');
@@ -417,10 +424,6 @@ async function searchRocketReach(input: CompanySearchInput, apiKey: string): Pro
     });
     query.employee_count_min = Math.min(...mins);
     query.employee_count_max = Math.max(...maxes);
-  }
-
-  if (keywords) {
-    query.name = keywords;
   }
 
   if (input.revenue_range) {
@@ -460,14 +463,14 @@ async function searchRocketReach(input: CompanySearchInput, apiKey: string): Pro
       return null;
     }
 
-    const companies = data.companies || data.results || [];
+    const companies = data.companies || data.profiles || data.results || [];
     console.log(`[RocketReach] Found ${companies.length} companies`);
 
     if (companies.length === 0) return null;
 
     return companies.map((c: any) => ({
-      name: c.name || '',
-      domain: c.domain || c.website_domain || '',
+      name: c.name || c.company_name || '',
+      domain: c.domain || c.website_domain || c.website_url?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || '',
       website: c.website_url || (c.domain ? `https://${c.domain}` : null),
       linkedin_url: c.linkedin_url || null,
       industry: c.industry || input.industry || null,
@@ -475,7 +478,7 @@ async function searchRocketReach(input: CompanySearchInput, apiKey: string): Pro
       employee_range: null,
       annual_revenue: c.revenue || null,
       founded_year: c.year_founded || null,
-      description: c.description || null,
+      description: c.description || c.tagline || null,
       headquarters_city: c.city || c.location?.city || null,
       headquarters_state: c.state || c.location?.state || null,
       headquarters_country: c.country || c.location?.country || null,
@@ -489,63 +492,65 @@ async function searchRocketReach(input: CompanySearchInput, apiKey: string): Pro
   }
 }
 
-// ── Provider 4: Lusha (Company Prospecting) ─────────────────────────
+// ── Provider 4: Lusha (Company Search) ─────────────────────────
 async function searchLusha(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
-  const { industry, location, limit = 25 } = input;
+  const { industry, location, keywords, limit = 25 } = input;
 
-  const filters: Record<string, unknown> = {
+  // Lusha Company Search API v2
+  const requestBody: Record<string, unknown> = {
     limit: Math.min(limit, 100),
   };
 
+  // Build filters array for Lusha
+  const filters: Record<string, unknown>[] = [];
+
   if (industry) {
-    // Lusha uses industry labels
-    filters.industries = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+    const industries = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+    filters.push({ type: 'industry', values: industries });
   }
 
   if (location) {
-    filters.locations = location.split(',').map((s: string) => s.trim());
+    const locations = location.split(',').map((s: string) => s.trim()).filter(Boolean);
+    filters.push({ type: 'company_location', values: locations });
   }
 
   if (input.employee_ranges?.length) {
-    // Lusha uses size labels like "1-10", "11-50", etc.
-    filters.sizes = input.employee_ranges;
+    filters.push({ type: 'company_size', values: input.employee_ranges });
   }
 
   if (input.revenue_range) {
-    filters.revenues = [input.revenue_range];
+    filters.push({ type: 'revenue', values: [input.revenue_range] });
   }
 
   if (input.technologies?.length) {
-    filters.technologies = input.technologies;
+    filters.push({ type: 'technology', values: input.technologies });
   }
 
-  if (input.sic_codes?.length) {
-    filters.sic_codes = input.sic_codes;
+  if (keywords) {
+    requestBody.keyword = keywords;
   }
 
-  if (input.naics_codes?.length) {
-    filters.naics_codes = input.naics_codes;
+  if (filters.length > 0) {
+    requestBody.filters = filters;
   }
 
-  console.log('[Lusha] Searching with filters:', JSON.stringify(filters));
+  console.log('[Lusha] Searching with body:', JSON.stringify(requestBody));
 
   try {
-    const response = await fetch('https://api.lusha.com/prospecting/api', {
+    // Use Lusha Company Search v2 endpoint
+    const response = await fetch('https://api.lusha.com/v2/company/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'api_key': apiKey,
       },
-      body: JSON.stringify({
-        searchType: 'company',
-        filters,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error(`[Lusha] API error ${response.status}:`, data?.message || data);
+      console.error(`[Lusha] API error ${response.status}:`, JSON.stringify(data).slice(0, 200));
       return null;
     }
 
@@ -556,18 +561,18 @@ async function searchLusha(input: CompanySearchInput, apiKey: string): Promise<C
 
     return companies.map((c: any) => ({
       name: c.company_name || c.name || '',
-      domain: c.website_domain || c.domain || '',
+      domain: c.website_domain || c.domain || c.website?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || '',
       website: c.website || (c.website_domain ? `https://${c.website_domain}` : null),
-      linkedin_url: c.linkedin_url || null,
+      linkedin_url: c.linkedin_url || c.company_linkedin_url || null,
       industry: c.industry || input.industry || null,
-      employee_count: c.employee_count || c.company_size || null,
-      employee_range: c.size_range || null,
-      annual_revenue: c.revenue || null,
-      founded_year: c.year_founded || null,
-      description: c.description || null,
-      headquarters_city: c.city || c.location?.city || null,
-      headquarters_state: c.state || c.location?.state || null,
-      headquarters_country: c.country_code || c.country || null,
+      employee_count: c.employee_count || c.company_size || c.employees_count || null,
+      employee_range: c.size_range || c.company_size_range || null,
+      annual_revenue: c.revenue || c.annual_revenue || null,
+      founded_year: c.year_founded || c.founded_year || null,
+      description: c.description || c.company_description || null,
+      headquarters_city: c.city || c.hq_city || c.location?.city || null,
+      headquarters_state: c.state || c.hq_state || c.location?.state || null,
+      headquarters_country: c.country_code || c.country || c.hq_country || null,
       technologies: c.technologies || [],
       keywords: [],
       source_provider: 'lusha',
@@ -578,7 +583,7 @@ async function searchLusha(input: CompanySearchInput, apiKey: string): Promise<C
   }
 }
 
-// ── Provider 5: Hunter.io (Domain Search) ───────────────────────────
+// ── Provider 5: Hunter.io (Company Search) ──────────────────────────
 async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
   const { industry, location, keywords, limit = 25 } = input;
 
@@ -587,18 +592,18 @@ async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<
     return null;
   }
 
-  const query = keywords || industry || '';
-  console.log(`[Hunter] Searching for companies matching: ${query}`);
+  const companyQuery = keywords || industry || '';
+  console.log(`[Hunter] Searching for companies matching: ${companyQuery}`);
 
   try {
+    // Hunter domain-search requires a 'domain' or 'company' parameter
     const params = new URLSearchParams({
-      query,
+      company: companyQuery,
       api_key: apiKey,
-      limit: String(Math.min(limit, 100)),
     });
 
     if (location) {
-      params.set('location', location);
+      // Hunter doesn't support location in domain-search, but let's try
     }
 
     const response = await fetch(`https://api.hunter.io/v2/domain-search?${params}`, {
