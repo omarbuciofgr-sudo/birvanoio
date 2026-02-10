@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -21,11 +21,13 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface BrivanoLensProps {
   onSaveProspects?: (prospects: any[]) => void;
+  externalFilters?: Partial<ProspectSearchFilters> | null;
 }
 
-export function BrivanoLens({ onSaveProspects }: BrivanoLensProps) {
+export function BrivanoLens({ onSaveProspects, externalFilters }: BrivanoLensProps) {
   const { user } = useAuth();
   const [filters, setFilters] = useState<ProspectSearchFilters>(defaultFilters);
+  const lastAppliedRef = useRef<string | null>(null);
   const [results, setResults] = useState<CompanyResult[]>([]);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
@@ -33,6 +35,39 @@ export function BrivanoLens({ onSaveProspects }: BrivanoLensProps) {
   const [searchName, setSearchName] = useState('');
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+
+  // Apply external filters from AI chat and auto-trigger search
+  const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
+
+  useEffect(() => {
+    if (!externalFilters) return;
+    const key = JSON.stringify(externalFilters);
+    if (key === lastAppliedRef.current) return;
+    lastAppliedRef.current = key;
+
+    const merged = { ...defaultFilters };
+    if (externalFilters.industries) merged.industries = externalFilters.industries;
+    if (externalFilters.companySizes) merged.companySizes = externalFilters.companySizes;
+    if (externalFilters.annualRevenue) merged.annualRevenue = externalFilters.annualRevenue;
+    if (externalFilters.countries) merged.countries = externalFilters.countries;
+    if (externalFilters.citiesOrStates) merged.citiesOrStates = externalFilters.citiesOrStates;
+    if (externalFilters.cities) merged.cities = externalFilters.cities;
+    if (externalFilters.states) merged.states = externalFilters.states;
+    if (externalFilters.keywordsInclude) merged.keywordsInclude = externalFilters.keywordsInclude;
+    if (externalFilters.limit) merged.limit = externalFilters.limit;
+    setFilters(merged);
+    setShouldAutoSearch(true);
+  }, [externalFilters]);
+
+  // Auto-trigger search after filters are applied from AI
+  useEffect(() => {
+    if (shouldAutoSearch && !searchMutation.isPending) {
+      setShouldAutoSearch(false);
+      // Small delay to ensure state is settled
+      const timer = setTimeout(() => searchMutation.mutate(), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAutoSearch, filters]);
 
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;

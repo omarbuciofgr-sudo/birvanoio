@@ -48,7 +48,7 @@ import {
 import { lazy, Suspense } from 'react';
 const ListingsMap = lazy(() => import('@/components/scraper/ListingsMap'));
 
-type ChatMsg = { role: 'user' | 'assistant'; content: string };
+type ChatMsg = { role: 'user' | 'assistant'; content: string; appliedFilters?: Record<string, any> };
 
 type SearchResult = {
   url: string;
@@ -90,6 +90,10 @@ export default function WebScraper() {
 
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
+  const [externalFilters, setExternalFilters] = useState<Record<string, any> | null>(null);
+
+  // Tab state (controlled)
+  const [activeTab, setActiveTab] = useState('ai-chat');
 
   // AI Chat state
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -101,7 +105,7 @@ export default function WebScraper() {
     return null;
   }
 
-  // ── AI Chat Handler ──
+  // ── AI Chat Handler (uses prospect-search-chat with tool calling) ──
   const handleChatSend = async () => {
     if (!chatInput.trim() || chatLoading) return;
     const userMsg: ChatMsg = { role: 'user', content: chatInput.trim() };
@@ -109,11 +113,42 @@ export default function WebScraper() {
     setChatInput('');
     setChatLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { messages: [...chatMessages, userMsg], context: 'web_scraper' },
+      const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/prospect-search-chat`;
+      const resp = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: [...chatMessages, userMsg].map((m) => ({ role: m.role, content: m.content })),
+        }),
       });
-      if (error) throw error;
-      setChatMessages(prev => [...prev, { role: 'assistant', content: data?.response || 'Sorry, I could not generate a response.' }]);
+
+      if (resp.status === 429) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Rate limit exceeded. Please wait a moment and try again.' }]);
+        return;
+      }
+      if (resp.status === 402) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Usage limit reached. Please add credits to continue.' }]);
+        return;
+      }
+      if (!resp.ok) throw new Error('Failed to get response');
+
+      const data = await resp.json();
+      const assistantMsg: ChatMsg = {
+        role: 'assistant',
+        content: data.content || "I've configured your search filters. Switching to Brivano Lens now...",
+        appliedFilters: data.filters || undefined,
+      };
+      setChatMessages(prev => [...prev, assistantMsg]);
+
+      // If filters were returned, apply them and switch to Brivano Lens
+      if (data.filters) {
+        setExternalFilters(data.filters);
+        setActiveTab('prospect-search');
+        toast.success('Filters applied — switched to Brivano Lens');
+      }
     } catch {
       toast.error('Failed to get AI response');
       setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
@@ -123,10 +158,10 @@ export default function WebScraper() {
   };
 
   const chatSuggestions = [
-    "Find FSBO listings in Miami, FL",
-    "Search for roofing companies in Dallas",
-    "Scrape contact info from example.com",
-    "Find plumbers near Austin, TX",
+    "Find property management companies in California",
+    "SaaS companies with 50-200 employees",
+    "Restaurants in New York",
+    "Help me find roofing contractors in Texas",
   ];
 
   const handleSearch = async () => {
@@ -320,7 +355,7 @@ export default function WebScraper() {
 
         
 
-        <Tabs defaultValue="ai-chat" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="h-9 p-0.5 bg-muted/60">
             <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Sparkles className="h-3.5 w-3.5" /> AI Assistant
@@ -341,7 +376,7 @@ export default function WebScraper() {
 
           {/* ── Prospect Search Tab ── */}
           <TabsContent value="prospect-search" className="mt-0">
-            <BrivanoLens />
+            <BrivanoLens externalFilters={externalFilters} />
           </TabsContent>
 
           {/* ── AI Chat Tab ── */}
@@ -355,9 +390,9 @@ export default function WebScraper() {
                         <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                           <Bot className="h-6 w-6 text-primary" />
                         </div>
-                        <h3 className="text-sm font-semibold mb-1">AI Scraper Assistant</h3>
+                        <h3 className="text-sm font-semibold mb-1">AI Search Assistant</h3>
                         <p className="text-xs text-muted-foreground text-center max-w-sm mb-6">
-                          Tell me what you're looking for and I'll help you find leads, scrape websites, or search for prospects
+                          Tell me what kind of companies you're looking for and I'll automatically search for them
                         </p>
                         <div className="grid grid-cols-2 gap-2 w-full max-w-md">
                           {chatSuggestions.map((suggestion) => (
@@ -375,12 +410,28 @@ export default function WebScraper() {
                       <div className="space-y-4">
                         {chatMessages.map((msg, i) => (
                           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
-                              msg.role === 'user'
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted/60'
-                            }`}>
-                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                            <div className="max-w-[80%] space-y-1.5">
+                              <div className={`rounded-xl px-4 py-2.5 text-sm ${
+                                msg.role === 'user'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted/60'
+                              }`}>
+                                <p className="whitespace-pre-wrap">{msg.content}</p>
+                              </div>
+                              {msg.appliedFilters && (
+                                <div className="flex items-center gap-1.5 flex-wrap px-1">
+                                  <Target className="h-3 w-3 text-primary flex-shrink-0" />
+                                  <span className="text-[10px] text-primary font-medium">Filters applied →</span>
+                                  {Object.entries(msg.appliedFilters)
+                                    .filter(([_, v]) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== ''))
+                                    .map(([k]) => (
+                                      <Badge key={k} variant="secondary" className="text-[9px] px-1.5 py-0">
+                                        {k.replace(/([A-Z])/g, ' $1').trim()}
+                                      </Badge>
+                                    ))}
+                                  <span className="text-[10px] text-muted-foreground">• Switching to Brivano Lens...</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -398,7 +449,7 @@ export default function WebScraper() {
                   <div className="border-t border-border/60 p-4">
                     <div className="flex gap-2">
                       <Textarea
-                        placeholder="Ask me to find leads, scrape a website, or search for prospects..."
+                        placeholder="Describe what companies you're looking for... e.g. 'property management in California'"
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
@@ -410,7 +461,7 @@ export default function WebScraper() {
                       </Button>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2">
-                      Use the tabs above to access Real Estate scraping, Search, or Brivano Lens tools directly.
+                      I'll automatically configure filters and search in Brivano Lens for you.
                     </p>
                   </div>
                 </div>
