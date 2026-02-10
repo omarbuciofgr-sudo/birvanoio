@@ -239,7 +239,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
 
   try {
     // Use organizations/search for richer company data (description, employee count, location)
-    const response = await fetch('https://api.apollo.io/api/v1/mixed_companies/search', {
+    const response = await fetch('https://api.apollo.io/api/v1/organizations/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -262,7 +262,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
     // Log first result's raw fields for debugging data gaps
     if (orgs.length > 0) {
       const sample = orgs[0];
-      console.log(`[Apollo] Sample org fields: name=${sample.name}, estimated_num_employees=${sample.estimated_num_employees}, city=${sample.city}, state=${sample.state}, short_description=${(sample.short_description || '').slice(0, 50)}, seo_description=${(sample.seo_description || '').slice(0, 50)}`);
+      console.log(`[Apollo] Sample org fields: name=${sample.name}, estimated_num_employees=${sample.estimated_num_employees}, city=${sample.city}, state=${sample.state}, short_description=${(sample.short_description || '').slice(0, 50)}, seo_description=${(sample.seo_description || '').slice(0, 50)}, industry=${sample.industry}, country=${sample.country}`);
       console.log(`[Apollo] Sample org keys:`, Object.keys(sample).join(', '));
     }
     if (orgs.length === 0) return null;
@@ -281,7 +281,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
         employee_range: org.employee_count_range || org.employees_range || null,
         annual_revenue: org.organization_revenue || org.annual_revenue || org.estimated_annual_revenue || null,
         founded_year: org.founded_year || null,
-        description: org.short_description || org.seo_description || org.snippets_loaded?.description || org.raw_address || null,
+        description: org.short_description || org.seo_description || org.snippets_loaded?.description || null,
         headquarters_city: org.city || org.hq_city || org.organization_city || null,
         headquarters_state: org.state || org.hq_state || org.organization_state || null,
         headquarters_country: org.country || org.hq_country || org.organization_country || null,
@@ -842,9 +842,70 @@ Deno.serve(async (req) => {
       );
     }
 
+    // AI-generate descriptions for companies missing them, and fill location/employee gaps
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const companiesNeedingDesc = companies.filter(c => !c.description).slice(0, 10);
+    if (LOVABLE_API_KEY && companiesNeedingDesc.length > 0) {
+      console.log(`[AI] Generating descriptions for ${companiesNeedingDesc.length} companies...`);
+      try {
+        const prompt = companiesNeedingDesc.map((c, i) => 
+          `${i+1}. "${c.name}" (domain: ${c.domain || 'unknown'}, industry: ${c.industry || 'unknown'})`
+        ).join('\n');
+
+        const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'google/gemini-3-flash-preview',
+            messages: [
+              { role: 'system', content: 'For each numbered company, provide a 1-sentence business description. Also estimate employee count (number) and headquarters location (city, state/country). Return JSON array: [{"description":"...","employee_count":number|null,"city":"...","state":"...","country":"..."}]. Match the order exactly. Be concise and factual.' },
+              { role: 'user', content: prompt },
+            ],
+          }),
+        });
+
+        if (aiResp.ok) {
+          const aiData = await aiResp.json();
+          const content = aiData.choices?.[0]?.message?.content?.trim() || '';
+          // Parse JSON from response (handle markdown code blocks)
+          const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          try {
+            const descriptions = JSON.parse(jsonStr);
+            if (Array.isArray(descriptions)) {
+              for (let i = 0; i < Math.min(descriptions.length, companiesNeedingDesc.length); i++) {
+                const companyIdx = companies.indexOf(companiesNeedingDesc[i]);
+                if (companyIdx >= 0 && descriptions[i]) {
+                  if (!companies[companyIdx].description && descriptions[i].description) {
+                    companies[companyIdx].description = descriptions[i].description;
+                  }
+                  if (!companies[companyIdx].employee_count && descriptions[i].employee_count) {
+                    companies[companyIdx].employee_count = descriptions[i].employee_count;
+                  }
+                  if (!companies[companyIdx].headquarters_city && descriptions[i].city) {
+                    companies[companyIdx].headquarters_city = descriptions[i].city;
+                  }
+                  if (!companies[companyIdx].headquarters_state && descriptions[i].state) {
+                    companies[companyIdx].headquarters_state = descriptions[i].state;
+                  }
+                  if (!companies[companyIdx].headquarters_country && descriptions[i].country) {
+                    companies[companyIdx].headquarters_country = descriptions[i].country;
+                  }
+                }
+              }
+              console.log(`[AI] Filled descriptions for ${descriptions.length} companies`);
+            }
+          } catch (parseErr) {
+            console.error('[AI] Failed to parse descriptions JSON:', parseErr);
+          }
+        }
+      } catch (aiErr) {
+        console.error('[AI] Description generation failed:', aiErr);
+      }
+    }
+
     // Scrape social profiles from websites (parallel, with timeout)
     console.log(`[Social] Scraping social profiles for ${Math.min(companies.length, 15)} companies...`);
-    const socialBatch = companies.slice(0, 15); // limit to first 15 to keep response fast
+    const socialBatch = companies.slice(0, 15);
     const socialResults = await Promise.allSettled(
       socialBatch.map(async (c) => {
         const domain = normalizedDomain(c.domain);

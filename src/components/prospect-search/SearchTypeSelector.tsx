@@ -35,27 +35,27 @@ const searchTypes = [
 
 export function SearchTypeSelector({ onSelect }: SearchTypeSelectorProps) {
   return (
-    <div className="h-full flex items-center justify-center">
-      <div className="max-w-lg w-full px-6">
+    <div className="h-full flex items-center justify-center p-4">
+      <div className="w-full max-w-3xl">
         <div className="text-center mb-8">
-          <h2 className="text-lg font-semibold tracking-tight">What are you looking for?</h2>
-          <p className="text-xs text-muted-foreground mt-1">
+          <h2 className="text-xl font-semibold tracking-tight">What are you looking for?</h2>
+          <p className="text-sm text-muted-foreground mt-1.5">
             Choose a search type to get started with the right filters.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {searchTypes.map((item) => (
             <button
               key={item.type}
               onClick={() => onSelect(item.type)}
-              className="flex flex-col items-start gap-3 p-5 rounded-xl border border-border/50 hover:border-primary/40 hover:bg-muted/20 transition-all group text-left"
+              className="flex flex-col items-center gap-4 p-6 rounded-xl border border-border/50 hover:border-primary/40 hover:bg-muted/20 transition-all group text-center"
             >
-              <div className="h-10 w-10 rounded-lg bg-muted/60 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                <item.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="h-14 w-14 rounded-xl bg-muted/60 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                <item.icon className="h-7 w-7 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
               <div>
                 <p className="text-sm font-semibold group-hover:text-foreground transition-colors">{item.label}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{item.description}</p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{item.description}</p>
               </div>
             </button>
           ))}
