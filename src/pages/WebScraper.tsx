@@ -490,7 +490,6 @@ export default function WebScraper() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Switch checked={reEnableSkipTrace} onCheckedChange={setReEnableSkipTrace} className="scale-90" />
                     <span className="text-xs font-medium">Auto Skip Trace</span>
-                    <span className="text-[10px] text-muted-foreground">~$0.009/address</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Switch checked={reSaveToDb} onCheckedChange={setReSaveToDb} className="scale-90" />
