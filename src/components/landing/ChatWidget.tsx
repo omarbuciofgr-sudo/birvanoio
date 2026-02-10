@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, X, Send, Loader2, Bot, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Bot, Sparkles, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ interface Message {
 
 const ChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId] = useState(() => crypto.randomUUID());
@@ -120,6 +121,8 @@ const ChatWidget = () => {
     }
   };
 
+  if (isDismissed) return null;
+
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {/* Chat Panel */}
@@ -224,9 +227,18 @@ const ChatWidget = () => {
         )}
       </Button>
 
-      {/* Notification Dot */}
+      {/* Dismiss button */}
       {!isOpen && (
-        <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsDismissed(true);
+          }}
+          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-muted border border-border flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          aria-label="Dismiss chat"
+        >
+          <X className="w-3 h-3" />
+        </button>
       )}
     </div>
   );

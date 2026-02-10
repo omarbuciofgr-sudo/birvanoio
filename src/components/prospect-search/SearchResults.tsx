@@ -159,7 +159,7 @@ export function SearchResults({
       </div>
 
       {/* Table */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-auto">
         <div className="min-w-[900px]">
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
@@ -236,7 +236,7 @@ export function SearchResults({
             </tbody>
           </table>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Bottom bar */}
       <div className="flex-shrink-0 px-5 py-3 border-t border-border/60 bg-muted/30 flex items-center justify-between">
