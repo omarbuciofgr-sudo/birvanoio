@@ -6,7 +6,7 @@ import { useSubscription, SubscriptionTier } from "@/contexts/SubscriptionContex
 export const CREDIT_COSTS = {
   scrape: 1,
   enrich: 2,
-  search: 2, // prospect/industry search
+  search: 0, // finding companies is free — enrichment costs credits
   lead_score: 1,
   sentiment: 1,
   skip_trace: 5,

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,13 +7,18 @@ import {
   Save,
   Loader2,
   AlertTriangle,
+  Play,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 
 function CompanyLogo({ domain, name }: { domain: string | null | undefined; name: string }) {
   const [errored, setErrored] = useState(false);
 
-  // Extract clean domain for favicon lookup
   const cleanDomain = (() => {
     if (!domain) return null;
     try {
@@ -77,6 +81,15 @@ function formatSize(count: number | null, range: string | null): string {
   return '1-10 employees';
 }
 
+type EnrichmentStatus = 'idle' | 'loading' | 'done' | 'error';
+
+interface EnrichmentResult {
+  email?: string | null;
+  phone?: string | null;
+  contact_name?: string | null;
+  linkedin_url?: string | null;
+}
+
 export function SearchResults({
   results,
   selectedRows,
@@ -87,6 +100,10 @@ export function SearchResults({
   onExport,
   isSaving,
 }: SearchResultsProps) {
+  const { canAfford, spendCredits } = useCredits();
+  const [enrichmentStatus, setEnrichmentStatus] = useState<Record<number, EnrichmentStatus>>({});
+  const [enrichmentData, setEnrichmentData] = useState<Record<number, EnrichmentResult>>({});
+
   const toggleRow = (index: number) => {
     const newSelected = new Set(selectedRows);
     if (newSelected.has(index)) {
@@ -96,6 +113,64 @@ export function SearchResults({
     }
     onSelectionChange(newSelected);
   };
+
+  const handleEnrich = useCallback(async (index: number, company: CompanyResult) => {
+    if (enrichmentStatus[index] === 'loading' || enrichmentStatus[index] === 'done') return;
+
+    if (!canAfford('enrich')) {
+      toast.error('Not enough credits for enrichment. Please upgrade your plan.');
+      return;
+    }
+
+    setEnrichmentStatus(prev => ({ ...prev, [index]: 'loading' }));
+
+    try {
+      const domain = company.domain?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null;
+      if (!domain) {
+        toast.error(`No domain found for ${company.name}`);
+        setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
+        return;
+      }
+
+      // Spend credits
+      const spent = await spendCredits('enrich', 1, `enrich_${domain}`);
+      if (!spent) {
+        toast.error('Failed to charge credits');
+        setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
+        return;
+      }
+
+      // Call waterfall enrichment
+      const { data, error } = await supabase.functions.invoke('data-waterfall-enrich', {
+        body: {
+          domain,
+          target_titles: ['owner', 'ceo', 'founder', 'president'],
+        },
+      });
+
+      if (error || !data?.success) {
+        setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
+        toast.error(`Enrichment failed for ${company.name}`);
+        return;
+      }
+
+      const enriched = data.data || {};
+      setEnrichmentData(prev => ({
+        ...prev,
+        [index]: {
+          email: enriched.email || null,
+          phone: enriched.phone || enriched.mobile_phone || null,
+          contact_name: enriched.full_name || null,
+          linkedin_url: enriched.linkedin_url || null,
+        },
+      }));
+      setEnrichmentStatus(prev => ({ ...prev, [index]: 'done' }));
+      toast.success(`Enriched ${company.name}`);
+    } catch {
+      setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
+      toast.error(`Enrichment failed for ${company.name}`);
+    }
+  }, [enrichmentStatus, canAfford, spendCredits]);
 
   if (isLoading) {
     return (
@@ -111,7 +186,6 @@ export function SearchResults({
   if (!hasSearched) {
     return (
       <div className="h-full flex flex-col">
-        {/* Header */}
         <div className="flex-shrink-0 px-5 py-3 border-b border-border/60 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Preview</h3>
         </div>
@@ -160,7 +234,7 @@ export function SearchResults({
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
-        <div className="min-w-[900px]">
+        <div className="min-w-[1100px]">
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
               <tr className="border-b border-border/60">
@@ -182,7 +256,7 @@ export function SearchResults({
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">T</span> Size
+                    <span className="text-primary font-semibold">#</span> Employees
                   </span>
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
@@ -190,11 +264,21 @@ export function SearchResults({
                     <span className="text-primary font-semibold">T</span> Type
                   </span>
                 </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">
+                  <span className="flex items-center gap-1">
+                    Enrich
+                    <Badge variant="outline" className="text-[9px] py-0 px-1 ml-1 font-normal border-border/60">
+                      {CREDIT_COSTS.enrich} cr
+                    </Badge>
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {results.map((company, index) => {
                 const isSelected = selectedRows.has(index);
+                const status = enrichmentStatus[index] || 'idle';
+                const enriched = enrichmentData[index];
                 return (
                   <tr
                     key={index}
@@ -229,6 +313,54 @@ export function SearchResults({
                     </td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       {getTypeBadge([], company.industry)}
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {status === 'idle' && (
+                        <button
+                          onClick={() => handleEnrich(index, company)}
+                          className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors group"
+                        >
+                          <Play className="h-3 w-3 group-hover:text-primary" />
+                          <span className="group-hover:text-primary">Click to run</span>
+                        </button>
+                      )}
+                      {status === 'loading' && (
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Enriching…
+                        </span>
+                      )}
+                      {status === 'done' && enriched && (
+                        <div className="space-y-0.5">
+                          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            {enriched.contact_name || 'Contact found'}
+                          </span>
+                          {enriched.email && (
+                            <span className="text-[11px] text-muted-foreground truncate block max-w-[160px]">{enriched.email}</span>
+                          )}
+                          {enriched.phone && (
+                            <span className="text-[11px] text-muted-foreground">{enriched.phone}</span>
+                          )}
+                        </div>
+                      )}
+                      {status === 'done' && !enriched && (
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <CheckCircle2 className="h-3 w-3" /> Done
+                        </span>
+                      )}
+                      {status === 'error' && (
+                        <button
+                          onClick={() => {
+                            setEnrichmentStatus(prev => ({ ...prev, [index]: 'idle' }));
+                            handleEnrich(index, company);
+                          }}
+                          className="flex items-center gap-1.5 text-destructive hover:text-destructive/80 transition-colors"
+                        >
+                          <XCircle className="h-3 w-3" />
+                          Retry
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

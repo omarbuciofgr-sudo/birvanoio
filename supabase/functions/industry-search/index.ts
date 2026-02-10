@@ -85,7 +85,14 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   }
 
   if (keywords) {
-    searchParams.q_organization_name = keywords;
+    // Use keyword tags to narrow by industry keywords (like Apollo's "Industry & Keywords")
+    const keywordTags = keywords.split(',').map((s: string) => s.trim()).filter(Boolean);
+    if (keywordTags.length > 0) {
+      searchParams.q_organization_keyword_tags = [
+        ...(searchParams.q_organization_keyword_tags as string[] || []),
+        ...keywordTags,
+      ];
+    }
   }
 
   // Exclude keywords
