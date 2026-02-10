@@ -68,12 +68,16 @@ const SENIORITY_MAP: Record<string, string> = {
   'owner': 'owner',
   'founder': 'founder',
   'c_suite': 'c_suite',
+  'c_level': 'c_suite',
   'partner': 'partner',
   'vp': 'vp',
   'head': 'head',
   'director': 'director',
+  'lead': 'senior',
   'manager': 'manager',
   'senior': 'senior',
+  'mid': 'senior',
+  'associate': 'entry',
   'entry': 'entry',
   'intern': 'intern',
 };
@@ -90,7 +94,9 @@ const DEPARTMENT_MAP: Record<string, string> = {
   'design': 'design',
   'support': 'support',
   'legal': 'legal',
+  'customer_success': 'support',
   'it': 'information_technology',
+  'executive': 'master_executive',
   'data': 'data_science',
   'education': 'education',
   'consulting': 'consulting',
@@ -117,9 +123,9 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<{
     params.person_locations = input.person_locations;
   }
 
-  // Organization filters
+  // Organization filters — use q_organization_keyword_tags for text-based industry search
+  // (organization_industry_tag_ids expects numeric Apollo IDs, not text labels)
   if (input.organization_industry_tag_ids?.length) {
-    params.organization_industry_tag_ids = input.organization_industry_tag_ids;
     params.q_organization_keyword_tags = input.organization_industry_tag_ids;
   }
   if (input.organization_num_employees_ranges?.length) {
@@ -150,21 +156,21 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<{
     params.currently_using_any_of_technology_uids = input.technologies;
   }
 
-  // Revenue range → organization_revenue_ranges
+  // Revenue range → Apollo format strings
   if (input.revenue_range) {
     const revenueMap: Record<string, string[]> = {
-      '0-1M': ['0', '1000000'],
-      '1M-5M': ['1000000', '5000000'],
-      '5M-10M': ['5000000', '10000000'],
-      '10M-50M': ['10000000', '50000000'],
-      '50M-100M': ['50000000', '100000000'],
-      '100M-500M': ['100000000', '500000000'],
-      '500M-1B': ['500000000', '1000000000'],
-      '1B+': ['1000000000'],
+      '0-1M': ['0-1M'],
+      '1M-5M': ['1M-10M'],
+      '5M-10M': ['1M-10M'],
+      '10M-50M': ['10M-50M'],
+      '50M-100M': ['50M-100M'],
+      '100M-500M': ['100M-500M'],
+      '500M-1B': ['500M-1B'],
+      '1B+': ['1B+'],
     };
-    const range = revenueMap[input.revenue_range];
-    if (range) {
-      params.organization_revenue_ranges = [range.join('-')];
+    const mapped = revenueMap[input.revenue_range];
+    if (mapped) {
+      params.organization_revenue_ranges = mapped;
     }
   }
 
