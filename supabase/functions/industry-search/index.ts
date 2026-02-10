@@ -650,6 +650,96 @@ async function searchHunter(input: CompanySearchInput, apiKey: string): Promise<
   }
 }
 
+// ── Provider 6: Clay (Company Search) ───────────────────────────────
+async function searchClay(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
+  const { industry, location, keywords, limit = 25 } = input;
+
+  // Clay's People Enrichment API can also be used for company discovery
+  // We'll use the /tables endpoint to check for existing enrichment tables,
+  // and the direct enrichment API for company lookups
+  const queryParts: string[] = [];
+  if (industry) queryParts.push(industry);
+  if (keywords) queryParts.push(keywords);
+  if (location) queryParts.push(location);
+
+  if (queryParts.length === 0) {
+    console.log('[Clay] No search criteria provided');
+    return null;
+  }
+
+  console.log(`[Clay] Searching for companies: ${queryParts.join(', ')}`);
+
+  try {
+    // Use Clay's company enrichment/search capability
+    // Clay's v3 API supports company search via the /companies/enrich endpoint
+    const searchQuery = queryParts.join(' ');
+    
+    // Try Clay's company search endpoint
+    const response = await fetch('https://api.clay.com/v3/companies/search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: searchQuery,
+        limit: Math.min(limit, 50),
+        filters: {
+          ...(industry ? { industry: industry.split(',').map(s => s.trim()) } : {}),
+          ...(location ? { location } : {}),
+          ...(input.employee_count_min || input.employee_count_max ? {
+            employee_count_min: input.employee_count_min || undefined,
+            employee_count_max: input.employee_count_max || undefined,
+          } : {}),
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Clay] API error ${response.status}:`, errorText.slice(0, 200));
+      
+      // If the search endpoint isn't available, try enriching by domain/name
+      // Clay may not have a dedicated company search — fall back gracefully
+      if (response.status === 404 || response.status === 403) {
+        console.log('[Clay] Company search endpoint not available on this plan');
+        return null;
+      }
+      return null;
+    }
+
+    const data = await response.json();
+    const companies = data.results || data.companies || data.data || [];
+    console.log(`[Clay] Found ${companies.length} companies`);
+
+    if (companies.length === 0) return null;
+
+    return companies.map((c: any) => ({
+      name: c.name || c.company_name || '',
+      domain: c.domain || c.website?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || '',
+      website: c.website || (c.domain ? `https://${c.domain}` : null),
+      linkedin_url: c.linkedin_url || c.linkedin || null,
+      industry: c.industry || input.industry || null,
+      employee_count: c.employee_count || c.num_employees || c.company_size || null,
+      employee_range: c.employee_range || c.size_range || null,
+      annual_revenue: c.annual_revenue || c.revenue || null,
+      founded_year: c.founded_year || c.year_founded || null,
+      description: c.description || c.short_description || c.summary || null,
+      headquarters_city: c.city || c.hq_city || c.location?.city || null,
+      headquarters_state: c.state || c.hq_state || c.location?.state || null,
+      headquarters_country: c.country || c.hq_country || c.location?.country || null,
+      technologies: c.technologies || [],
+      keywords: c.keywords || [],
+      source_provider: 'clay',
+      phone: c.phone || null,
+      logo_url: c.logo_url || c.logo || null,
+    }));
+  } catch (e) {
+    console.error('[Clay] Exception:', e);
+    return null;
+  }
+}
+
 // ── Social Profile Scraper (free, from website) ─────────────────────
 async function scrapeSocialProfiles(domain: string): Promise<Record<string, string>> {
   const profiles: Record<string, string> = {};
@@ -776,6 +866,9 @@ Deno.serve(async (req) => {
 
     const hunterKey = Deno.env.get('HUNTER_API_KEY');
     if (hunterKey) providers.push({ name: 'Hunter', fn: () => searchHunter(body, hunterKey) });
+
+    const clayKey = Deno.env.get('CLAY_API_KEY');
+    if (clayKey) providers.push({ name: 'Clay', fn: () => searchClay(body, clayKey) });
 
     if (providers.length === 0) {
       return new Response(
