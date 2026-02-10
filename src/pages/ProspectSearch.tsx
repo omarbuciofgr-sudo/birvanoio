@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
-import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
+import { defaultFilters, ProspectSearchFilters, INDUSTRIES, COUNTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,11 +54,21 @@ export default function ProspectSearch() {
         .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
         .join(', ');
 
+      // Map country codes to full names for API providers
+      const countryLabels = filters.countries.map((code) => {
+        const found = COUNTRIES.find((c) => c.value === code);
+        return found ? found.label : code;
+      });
+      const excludeCountryLabels = filters.countriesToExclude.map((code) => {
+        const found = COUNTRIES.find((c) => c.value === code);
+        return found ? found.label : code;
+      });
+
       const location = [
         ...filters.cities,
         ...filters.states,
         ...filters.citiesOrStates,
-        ...filters.countries,
+        ...countryLabels,
       ].join(', ') || undefined;
 
       const keywords = [
@@ -87,10 +97,10 @@ export default function ProspectSearch() {
           ? filters.industriesToExclude.map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
           : undefined,
         locations_exclude: [
-          ...filters.countriesToExclude,
+          ...excludeCountryLabels,
           ...filters.statesToExclude,
           ...filters.citiesToExclude,
-        ].length > 0 ? [...filters.countriesToExclude, ...filters.statesToExclude, ...filters.citiesToExclude] : undefined,
+        ].length > 0 ? [...excludeCountryLabels, ...filters.statesToExclude, ...filters.citiesToExclude] : undefined,
         keywords_exclude: filters.keywordsExclude.length > 0 ? filters.keywordsExclude : undefined,
         limit: filters.limit,
       });

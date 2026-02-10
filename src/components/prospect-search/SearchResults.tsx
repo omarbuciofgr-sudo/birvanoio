@@ -308,7 +308,7 @@ export function SearchResults({
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
-        <div className="min-w-[1100px]">
+        <div className="min-w-[1260px]">
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
               <tr className="border-b border-border/60">
@@ -338,6 +338,11 @@ export function SearchResults({
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <span className="text-primary font-semibold">#</span> Employees
+                  </span>
+                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="text-primary font-semibold">📍</span> Location
                   </span>
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
@@ -396,6 +401,11 @@ export function SearchResults({
                     </td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       {formatSize(company.employee_count, company.employee_range)}
+                    </td>
+                    <td className="px-4 py-3 text-xs max-w-[160px]">
+                      <span className="truncate block">
+                        {[company.headquarters_city, company.headquarters_state, company.headquarters_country].filter(Boolean).join(', ') || '—'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       {getTypeBadge([], company.industry)}
