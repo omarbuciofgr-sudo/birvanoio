@@ -97,16 +97,30 @@ serve(async (req) => {
     const clientId = user.id;
     let twilioPhone = defaultTwilioPhone;
     
-    // Fetch client's custom Twilio phone number if configured
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("twilio_phone_number")
+    // First check for a verified caller ID number
+    const { data: verifiedNumber } = await supabase
+      .from("user_phone_numbers")
+      .select("phone_number")
       .eq("user_id", user.id)
+      .eq("verification_status", "verified")
+      .eq("is_default", true)
       .single();
-    
-    if (profile?.twilio_phone_number && e164Regex.test(profile.twilio_phone_number)) {
-      twilioPhone = profile.twilio_phone_number;
-      console.log(`Using client's custom Twilio number: ${twilioPhone}`);
+
+    if (verifiedNumber?.phone_number && e164Regex.test(verifiedNumber.phone_number)) {
+      twilioPhone = verifiedNumber.phone_number;
+      console.log(`Using verified caller ID number: ${twilioPhone}`);
+    } else {
+      // Fallback to profile's custom Twilio phone number
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("twilio_phone_number")
+        .eq("user_id", user.id)
+        .single();
+      
+      if (profile?.twilio_phone_number && e164Regex.test(profile.twilio_phone_number)) {
+        twilioPhone = profile.twilio_phone_number;
+        console.log(`Using client's custom Twilio number: ${twilioPhone}`);
+      }
     }
 
     if (!e164Regex.test(twilioPhone)) {

@@ -10,10 +10,12 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Phone, Mail, Info, User, Zap, MessageSquare, Clock } from "lucide-react";
+import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send } from "lucide-react";
 import { WebhookIntegrations } from "@/components/integrations/WebhookIntegrations";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
+import { EmailAccountsManager } from "@/components/settings/EmailAccountsManager";
+import { PhoneNumbersManager } from "@/components/settings/PhoneNumbersManager";
 
 // E.164 phone number validation (optional field)
 const e164Regex = /^\+[1-9]\d{1,14}$/;
@@ -139,6 +141,10 @@ const Settings = () => {
             <TabsTrigger value="scheduled" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Clock className="w-3.5 h-3.5" />
               Scheduled
+            </TabsTrigger>
+            <TabsTrigger value="communication" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Send className="w-3.5 h-3.5" />
+              Communication
             </TabsTrigger>
             <TabsTrigger value="integrations" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Zap className="w-3.5 h-3.5" />
@@ -301,6 +307,12 @@ const Settings = () => {
           {/* Scheduled Tab */}
           <TabsContent value="scheduled">
             <ScheduledMessages userId={user.id} />
+          </TabsContent>
+
+          {/* Communication Tab */}
+          <TabsContent value="communication" className="space-y-6 max-w-2xl">
+            <EmailAccountsManager userId={user.id} />
+            <PhoneNumbersManager userId={user.id} />
           </TabsContent>
 
           {/* Integrations Tab */}

@@ -119,3 +119,9 @@ verify_jwt = false
 
 [functions.job-search]
 verify_jwt = false
+
+[functions.send-smtp-email]
+verify_jwt = false
+
+[functions.verify-caller-id]
+verify_jwt = false
