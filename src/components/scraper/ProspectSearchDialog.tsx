@@ -15,6 +15,7 @@ import {
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
 import { PeopleFilters, defaultPeopleFilters, PeopleSearchFilters } from '@/components/prospect-search/PeopleFilters';
 import { JobFilters, defaultJobFilters, JobSearchFilters } from '@/components/prospect-search/JobFilters';
+import { LocalBusinessSearch } from '@/components/prospect-search/LocalBusinessSearch';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
 import { SearchTypeSelector, SearchTypeHeader, SearchType } from '@/components/prospect-search/SearchTypeSelector';
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
@@ -76,10 +77,6 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
   }, [shouldAutoSearch, filters]);
 
   const handleSelectSearchType = (type: SearchType) => {
-    if (type === 'local') {
-      onSwitchTab?.('search');
-      return;
-    }
     setSearchType(type);
     setResults([]);
     setHasSearched(false);
@@ -101,6 +98,53 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
       })));
     }
   }, [user]);
+
+  const handleLocalSearch = useCallback(async (params: { lat: number; lng: number; radiusMiles: number; searchType: string; keyword: string }) => {
+    localSearchMutation.mutate(params);
+  }, []);
+
+  const localSearchMutation = useMutation({
+    mutationFn: async (params: { lat: number; lng: number; radiusMiles: number; searchType: string; keyword: string }) => {
+      const query = [params.searchType, params.keyword].filter(Boolean).join(' ');
+      const { data, error } = await supabase.functions.invoke('google-places-search', {
+        body: {
+          query,
+          location: `${params.lat},${params.lng}`,
+          radius: Math.round(params.radiusMiles * 1609.34),
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data?.results) {
+        const mapped: CompanyResult[] = data.results.map((r: any) => ({
+          name: r.name || r.business_name || '',
+          domain: r.website || '',
+          industry: r.type || r.category || '',
+          employee_count: undefined,
+          employee_range: '',
+          annual_revenue: undefined,
+          founded_year: undefined,
+          headquarters_city: r.city || '',
+          headquarters_state: r.state || '',
+          headquarters_country: r.country || 'US',
+          linkedin_url: '',
+          technologies: [],
+          description: r.address || r.formatted_address || '',
+          website_url: r.website || '',
+          phone: r.phone || '',
+        }));
+        setResults(mapped);
+        setHasSearched(true);
+        setSelectedRows(new Set());
+        toast.success(`Found ${mapped.length} local businesses`);
+      }
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Search failed');
+    },
+  });
 
   const searchMutation = useMutation({
     mutationFn: async () => {
@@ -240,6 +284,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
   };
 
   const canSearch = () => {
+    if (searchType === 'local') return true;
     if (searchType === 'people') return peopleFilters.jobTitles.length > 0 || peopleFilters.industries.length > 0 || peopleFilters.companies.length > 0;
     if (searchType === 'jobs') return jobFilters.jobTitles.length > 0 || jobFilters.industries.length > 0 || jobFilters.companies.length > 0;
     return filters.industries.length > 0;
@@ -296,69 +341,83 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
       {/* 2-panel layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Filters */}
-        <div className="w-[360px] flex-shrink-0 overflow-hidden border-r border-border/60">
-          {searchType === 'people' && (
-            <PeopleFilters
-              filters={peopleFilters}
-              onFiltersChange={setPeopleFilters}
-              onSearch={() => searchMutation.mutate()}
-              isSearching={searchMutation.isPending}
-              resultCount={results.length}
+        <div className="w-[360px] flex-shrink-0 overflow-hidden border-r border-border/60 flex flex-col">
+          {searchType === 'local' && (
+            <LocalBusinessSearch
+              onSearch={handleLocalSearch}
+              isSearching={localSearchMutation.isPending}
             />
+          )}
+          {searchType === 'people' && (
+            <>
+              <PeopleFilters
+                filters={peopleFilters}
+                onFiltersChange={setPeopleFilters}
+                onSearch={() => searchMutation.mutate()}
+                isSearching={searchMutation.isPending}
+                resultCount={results.length}
+              />
+            </>
           )}
           {searchType === 'jobs' && (
-            <JobFilters
-              filters={jobFilters}
-              onFiltersChange={setJobFilters}
-              onSearch={() => searchMutation.mutate()}
-              isSearching={searchMutation.isPending}
-              resultCount={results.length}
-            />
+            <>
+              <JobFilters
+                filters={jobFilters}
+                onFiltersChange={setJobFilters}
+                onSearch={() => searchMutation.mutate()}
+                isSearching={searchMutation.isPending}
+                resultCount={results.length}
+              />
+            </>
           )}
           {searchType === 'companies' && (
-            <SearchFilters
-              filters={filters}
-              onFiltersChange={setFilters}
-              onSearch={() => searchMutation.mutate()}
-              isSearching={searchMutation.isPending}
-              resultCount={results.length}
-            />
+            <>
+              <SearchFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                onSearch={() => searchMutation.mutate()}
+                isSearching={searchMutation.isPending}
+                resultCount={results.length}
+              />
+            </>
           )}
-          {/* Bottom bar */}
-          <div className="h-12 border-t border-border/60 px-4 flex items-center justify-between bg-muted/30">
-            <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-[11px] h-7 gap-1.5 text-muted-foreground hover:text-foreground">
-                  <Bookmark className="h-3 w-3" />
-                  Save search
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-sm">
-                <DialogHeader>
-                  <DialogTitle className="text-sm">Save current filters</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <Input
-                    placeholder="e.g. SaaS companies in California"
-                    value={searchName}
-                    onChange={(e) => setSearchName(e.target.value)}
-                    className="text-sm h-9"
-                  />
-                  <Button onClick={handleSaveSearch} disabled={!searchName.trim()} className="w-full h-9 text-sm">
-                    Save
+          {/* Bottom bar - hidden for local (has its own) */}
+          {searchType !== 'local' && (
+            <div className="h-12 border-t border-border/60 px-4 flex items-center justify-between bg-muted/30">
+              <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-[11px] h-7 gap-1.5 text-muted-foreground hover:text-foreground">
+                    <Bookmark className="h-3 w-3" />
+                    Save search
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Button
-              onClick={() => searchMutation.mutate()}
-              disabled={searchMutation.isPending || !canSearch()}
-              size="sm"
-              className="h-7 px-5 text-xs font-semibold"
-            >
-              {searchMutation.isPending ? 'Searching…' : 'Next'}
-            </Button>
-          </div>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm">Save current filters</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <Input
+                      placeholder="e.g. SaaS companies in California"
+                      value={searchName}
+                      onChange={(e) => setSearchName(e.target.value)}
+                      className="text-sm h-9"
+                    />
+                    <Button onClick={handleSaveSearch} disabled={!searchName.trim()} className="w-full h-9 text-sm">
+                      Save
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button
+                onClick={() => searchMutation.mutate()}
+                disabled={searchMutation.isPending || !canSearch()}
+                size="sm"
+                className="h-7 px-5 text-xs font-semibold"
+              >
+                {searchMutation.isPending ? 'Searching…' : 'Next'}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Right: Results */}
