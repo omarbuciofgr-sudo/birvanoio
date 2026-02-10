@@ -52,11 +52,15 @@ async function searchApolloJobs(input: JobSearchInput, apiKey: string): Promise<
   if (input.job_titles?.length) {
     params.person_titles = input.job_titles;
   }
+  // Exclude specific job titles
+  if (input.exclude_job_titles?.length) {
+    params.person_not_titles = input.exclude_job_titles;
+  }
   if (input.seniority?.length) {
     params.person_seniorities = input.seniority;
   }
   if (input.industries?.length) {
-    params.organization_industry_tag_ids = input.industries;
+    // Use keyword tags for text-based industry matching (not numeric IDs)
     params.q_organization_keyword_tags = input.industries;
   }
   if (input.locations?.length) {
@@ -67,6 +71,25 @@ async function searchApolloJobs(input: JobSearchInput, apiKey: string): Promise<
   }
   if (input.job_description_keywords?.length) {
     params.q_keywords = input.job_description_keywords.join(' ');
+  }
+  // Employment type filter — map to Apollo department/seniority proxies
+  if (input.employment_types?.length) {
+    // Apollo doesn't have a direct employment_type filter, but we can use
+    // person_titles to narrow down (e.g., "Part-time", "Contract", "Intern")
+    const typeKeywords = input.employment_types.map(t => {
+      const map: Record<string, string> = {
+        'full_time': '',
+        'part_time': 'Part-Time',
+        'contract': 'Contract',
+        'internship': 'Intern',
+        'freelance': 'Freelance',
+        'temporary': 'Temporary',
+      };
+      return map[t] || '';
+    }).filter(Boolean);
+    if (typeKeywords.length > 0) {
+      params.q_keywords = [params.q_keywords || '', ...typeKeywords].filter(Boolean).join(' ');
+    }
   }
 
   // Filter by recently changed (proxy for "recently posted")

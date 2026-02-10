@@ -275,25 +275,28 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
         ...filters.keywordsInclude, filters.productsDescription,
       ].filter(Boolean).join(', ') || undefined;
 
-      let employee_count_min: number | undefined;
-      let employee_count_max: number | undefined;
-      if (filters.companySizes.length > 0) {
-        const range = EMPLOYEE_RANGES.find((r) => r.value === filters.companySizes[0]);
-        if (range) { employee_count_min = range.min; employee_count_max = range.max; }
-      }
+      const employee_ranges = filters.companySizes.length > 0 ? filters.companySizes : undefined;
 
       return industrySearchApi.searchCompanies({
         industry,
-        industries_exclude: filters.industriesToExclude.length > 0 ? filters.industriesToExclude : undefined,
-        employee_count_min,
-        employee_count_max,
+        employee_ranges,
         location,
-        locations_exclude: locationsExclude.length > 0 ? locationsExclude : undefined,
         keywords,
-        keywords_exclude: filters.keywordsExclude.length > 0 ? filters.keywordsExclude : undefined,
         revenue_range: filters.annualRevenue || undefined,
         funding_range: filters.fundingRaised || undefined,
         company_types: filters.companyTypes.length > 0 ? filters.companyTypes : undefined,
+        technologies: filters.technologies.length > 0 ? filters.technologies : undefined,
+        sic_codes: filters.sicCodes.length > 0 ? filters.sicCodes : undefined,
+        naics_codes: filters.naicsCodes.length > 0 ? filters.naicsCodes : undefined,
+        buying_intent: filters.buyingIntent || undefined,
+        market_segments: filters.marketSegments.length > 0 ? filters.marketSegments : undefined,
+        job_posting_filter: filters.jobPostingFilter || undefined,
+        job_categories: filters.jobCategories.length > 0 ? filters.jobCategories : undefined,
+        industries_exclude: filters.industriesToExclude.length > 0
+          ? filters.industriesToExclude.map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
+          : undefined,
+        locations_exclude: locationsExclude.length > 0 ? locationsExclude : undefined,
+        keywords_exclude: filters.keywordsExclude.length > 0 ? filters.keywordsExclude : undefined,
         limit: filters.limit,
       });
     },
