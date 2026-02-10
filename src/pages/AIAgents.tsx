@@ -41,6 +41,9 @@ export default function AIAgents() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [editAgent, setEditAgent] = useState<any>(null);
+  const [createName, setCreateName] = useState('');
+  const [createPrompt, setCreatePrompt] = useState('');
+  const [createModel, setCreateModel] = useState('google/gemini-3-flash-preview');
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['ai-agents'],
@@ -214,6 +217,53 @@ export default function AIAgents() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Create Agent Dialog */}
+      <Dialog open={isCreating} onOpenChange={setIsCreating}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Agent</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Name</label>
+              <Input placeholder="My Agent" value={createName} onChange={e => setCreateName(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Prompt</label>
+              <Textarea placeholder="Describe what this agent should do..." value={createPrompt} onChange={e => setCreatePrompt(e.target.value)} className="min-h-[100px]" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Model</label>
+              <Select value={createModel} onValueChange={setCreateModel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              className="w-full"
+              disabled={createMutation.isPending || !createName.trim() || !createPrompt.trim()}
+              onClick={() => {
+                createMutation.mutate({ name: createName, prompt: createPrompt, model: createModel }, {
+                  onSuccess: () => {
+                    setIsCreating(false);
+                    setCreateName('');
+                    setCreatePrompt('');
+                    setCreateModel('google/gemini-3-flash-preview');
+                  },
+                });
+              }}
+            >
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Create Agent
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
