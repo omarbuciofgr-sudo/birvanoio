@@ -20,6 +20,11 @@ import {
   Copy,
   SearchCheck,
   Layers,
+  Cpu,
+  Hash,
+  TrendingUp,
+  Briefcase,
+  BarChart3,
 } from 'lucide-react';
 import {
   INDUSTRIES,
@@ -30,6 +35,12 @@ import {
   REVENUE_RANGES,
   FUNDING_RANGES,
   COMPANY_TYPES,
+  TECHNOLOGIES,
+  MARKET_SEGMENTS,
+  BUYING_INTENT,
+  JOB_CATEGORIES,
+  JOB_POSTING_FILTERS,
+  FUNDING_STAGES,
   ProspectSearchFilters,
 } from './constants';
 
@@ -185,14 +196,6 @@ function FilterSection({
 
 const stateOptions = US_STATES.map((s) => ({ value: s, label: s }));
 
-const LIMIT_OPTIONS = [
-  { value: '10', label: '10' },
-  { value: '25', label: '25' },
-  { value: '50', label: '50' },
-  { value: '100', label: '100' },
-  { value: '250', label: '250' },
-];
-
 export function SearchFilters({
   filters,
   onFiltersChange,
@@ -200,6 +203,11 @@ export function SearchFilters({
   const [sections, setSections] = useState<Record<string, boolean>>({
     companyAttributes: false,
     location: false,
+    technologies: false,
+    sicNaics: false,
+    buyingIntent: false,
+    marketSegments: false,
+    jobPostings: false,
     exclude: false,
     lookalike: false,
     products: false,
@@ -228,6 +236,7 @@ export function SearchFilters({
             <TagInput label="Industry & Keywords" placeholder="e.g. property management, tenant services" tags={filters.keywordsInclude} onChange={(v) => update({ keywordsInclude: v })} />
             <SingleDropdown label="Annual revenue" placeholder="e.g. $1M - $5M" options={REVENUE_RANGES} value={filters.annualRevenue} onChange={(v) => update({ annualRevenue: v })} />
             <SingleDropdown label="Funding raised" placeholder="e.g. $5M - $10M" options={FUNDING_RANGES} value={filters.fundingRaised} onChange={(v) => update({ fundingRaised: v })} />
+            <SingleDropdown label="Funding stage" placeholder="e.g. Series A" options={FUNDING_STAGES} value={filters.fundingStage} onChange={(v) => update({ fundingStage: v })} />
           </FilterSection>
 
           {/* Location */}
@@ -235,6 +244,37 @@ export function SearchFilters({
             <FilterDropdown label="Countries" placeholder="e.g. United States" options={COUNTRIES} selected={filters.countries} onChange={(v) => update({ countries: v })} />
             <FilterDropdown label="States" placeholder="e.g. California" options={stateOptions} selected={filters.states} onChange={(v) => update({ states: v })} />
             <FilterDropdown label="Cities" placeholder="e.g. San Francisco" options={MAJOR_CITIES} selected={filters.cities} onChange={(v) => update({ cities: v })} />
+          </FilterSection>
+
+          {/* Technologies */}
+          <FilterSection icon={Cpu} label="Technologies" open={sections.technologies} onOpenChange={() => toggle('technologies')}>
+            <FilterDropdown label="Technologies used" placeholder="e.g. Salesforce, HubSpot" options={TECHNOLOGIES} selected={filters.technologies} onChange={(v) => update({ technologies: v })} />
+            <p className="text-[11px] text-muted-foreground">Filter companies by the tools and platforms they use.</p>
+          </FilterSection>
+
+          {/* SIC and NAICS */}
+          <FilterSection icon={Hash} label="SIC and NAICS" open={sections.sicNaics} onOpenChange={() => toggle('sicNaics')}>
+            <TagInput label="SIC codes" placeholder="e.g. 6531, 6512" tags={filters.sicCodes} onChange={(v) => update({ sicCodes: v })} />
+            <TagInput label="NAICS codes" placeholder="e.g. 531110, 531210" tags={filters.naicsCodes} onChange={(v) => update({ naicsCodes: v })} />
+            <p className="text-[11px] text-muted-foreground">Enter industry classification codes to target specific business categories.</p>
+          </FilterSection>
+
+          {/* Buying Intent */}
+          <FilterSection icon={TrendingUp} label="Buying Intent" open={sections.buyingIntent} onOpenChange={() => toggle('buyingIntent')}>
+            <SingleDropdown label="Intent level" placeholder="e.g. High Intent" options={BUYING_INTENT} value={filters.buyingIntent} onChange={(v) => update({ buyingIntent: v })} />
+            <p className="text-[11px] text-muted-foreground">Filter companies showing buying signals based on web activity and content engagement.</p>
+          </FilterSection>
+
+          {/* Market Segments */}
+          <FilterSection icon={BarChart3} label="Market Segments" open={sections.marketSegments} onOpenChange={() => toggle('marketSegments')}>
+            <FilterDropdown label="Segments" placeholder="e.g. Enterprise, SMB" options={MARKET_SEGMENTS} selected={filters.marketSegments} onChange={(v) => update({ marketSegments: v })} />
+          </FilterSection>
+
+          {/* Job Postings */}
+          <FilterSection icon={Briefcase} label="Job Postings" open={sections.jobPostings} onOpenChange={() => toggle('jobPostings')}>
+            <SingleDropdown label="Hiring status" placeholder="e.g. Currently hiring" options={JOB_POSTING_FILTERS} value={filters.jobPostingFilter} onChange={(v) => update({ jobPostingFilter: v })} />
+            <FilterDropdown label="Hiring departments" placeholder="e.g. Engineering, Sales" options={JOB_CATEGORIES} selected={filters.jobCategories} onChange={(v) => update({ jobCategories: v })} />
+            <p className="text-[11px] text-muted-foreground">Find companies based on their current hiring activity and open positions.</p>
           </FilterSection>
 
           {/* Exclude companies */}

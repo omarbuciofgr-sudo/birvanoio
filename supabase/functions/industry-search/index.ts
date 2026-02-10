@@ -20,6 +20,12 @@ interface CompanySearchInput {
   funding_range?: string;
   company_types?: string[];
   technologies?: string[];
+  sic_codes?: string[];
+  naics_codes?: string[];
+  buying_intent?: string;
+  market_segments?: string[];
+  job_posting_filter?: string;
+  job_categories?: string[];
   limit?: number;
 }
 
@@ -149,6 +155,29 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   // Technologies
   if (input.technologies?.length) {
     searchParams.currently_using_any_of_technology_uids = input.technologies;
+  }
+
+  // SIC codes
+  if (input.sic_codes?.length) {
+    searchParams.organization_sic_codes = input.sic_codes;
+  }
+
+  // NAICS codes
+  if (input.naics_codes?.length) {
+    searchParams.organization_naics_codes = input.naics_codes;
+  }
+
+  // Job postings filter
+  if (input.job_posting_filter === 'has_job_postings') {
+    searchParams.organization_job_locations = ['United States'];
+  }
+
+  // Job categories / departments hiring
+  if (input.job_categories?.length) {
+    searchParams.organization_department_or_subdepartment_counts = input.job_categories.map(cat => ({
+      department_or_subdepartment: cat,
+      min: 1,
+    }));
   }
 
   console.log('[Apollo] Searching with params:', JSON.stringify(searchParams));
