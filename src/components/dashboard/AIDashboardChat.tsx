@@ -3,30 +3,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Bot, Send, X, MessageSquare, Loader2 } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-dashboard-chat`;
 
+const MODEL_OPTIONS = [
+  { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
+  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "chatgpt-4o-latest", label: "ChatGPT-4o Latest" },
+  { value: "gpt-4o", label: "GPT-4o" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+];
+
 const AIDashboardChat = () => {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [model, setModel] = useState("google/gemini-3-flash-preview");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
-    if (open && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
 
   const send = async () => {
@@ -41,9 +50,7 @@ const AIDashboardChat = () => {
     try {
       const { data: { session } } = await (await import("@/integrations/supabase/client")).supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) {
-        throw new Error("Please log in to use the AI assistant");
-      }
+      if (!token) throw new Error("Please log in to use the AI assistant");
 
       const resp = await fetch(CHAT_URL, {
         method: "POST",
@@ -51,7 +58,7 @@ const AIDashboardChat = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({ messages: allMessages, model }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -124,11 +131,23 @@ const AIDashboardChat = () => {
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
-          <CardTitle className="text-sm font-semibold">Brivano AI Assistant</CardTitle>
+          <CardTitle className="text-sm font-semibold">Brivano AI</CardTitle>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(false)}>
-          <X className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Select value={model} onValueChange={setModel}>
+            <SelectTrigger className="h-7 w-[130px] text-[10px] border-border/50">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODEL_OPTIONS.map(m => (
+                <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(false)}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
         <ScrollArea className="flex-1 px-4 py-3" ref={scrollRef}>
@@ -141,17 +160,10 @@ const AIDashboardChat = () => {
           )}
           <div className="space-y-3">
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                    m.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-foreground"
-                  }`}
-                >
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                  m.role === "user" ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+                }`}>
                   {m.content}
                 </div>
               </div>
