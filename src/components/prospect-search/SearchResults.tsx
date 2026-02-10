@@ -39,7 +39,7 @@ function CompanyLogo({ domain, name }: { domain: string | null | undefined; name
     <img
       src={`https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=64`}
       alt=""
-      className="h-6 w-6 rounded bg-muted flex-shrink-0 object-contain"
+      className="h-6 w-6 rounded flex-shrink-0 object-contain"
       onError={() => setErrored(true)}
     />
   );
