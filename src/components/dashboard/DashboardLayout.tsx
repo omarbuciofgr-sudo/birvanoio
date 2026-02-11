@@ -29,6 +29,7 @@ import {
   Zap,
   Sparkles,
   Calculator,
+  CreditCard,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -64,6 +65,7 @@ const navSections = [
     label: "Insights",
     items: [
       { name: "Reports", href: "/dashboard/reports", icon: ClipboardList },
+      { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
       { name: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
   },

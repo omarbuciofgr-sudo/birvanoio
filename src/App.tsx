@@ -33,6 +33,7 @@ import ProspectSearch from "./pages/ProspectSearch";
 import Reports from "./pages/Reports";
 import AIAgents from "./pages/AIAgents";
 import Signals from "./pages/Signals";
+import Billing from "./pages/Billing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -73,6 +74,7 @@ const App = () => (
               <Route path="/checkout/cancel" element={<ProtectedRoute><CheckoutCancel /></ProtectedRoute>} />
               <Route path="/dashboard/ai-agents" element={<ProtectedRoute><AIAgents /></ProtectedRoute>} />
               <Route path="/dashboard/signals" element={<ProtectedRoute><Signals /></ProtectedRoute>} />
+              <Route path="/dashboard/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>
           </BrowserRouter>
