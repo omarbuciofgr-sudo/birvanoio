@@ -6,8 +6,9 @@ import {
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ExternalLink, Mail, Phone, Globe, User, Building, MapPin, Linkedin, Check, X, AlertCircle, Cpu, Star, MessageSquareText, Radar, TrendingUp } from 'lucide-react';
+import { ExternalLink, Mail, Phone, Globe, User, Building, MapPin, Linkedin, Check, X, AlertCircle, Cpu, Star, MessageSquareText, Radar, TrendingUp, Fingerprint } from 'lucide-react';
 import { ScrapedLead } from '@/types/scraper';
+import { FieldEvidencePanel } from './FieldEvidencePanel';
 
 interface LeadDetailSheetProps {
   lead: ScrapedLead | null;
@@ -303,6 +304,11 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
                 </div>
               </Section>
             )}
+
+            {/* Evidence */}
+            <Section title="Field Evidence" icon={Fingerprint}>
+              <FieldEvidencePanel leadId={lead.id} />
+            </Section>
 
             {/* Enrichment Sources */}
             {lead.enrichment_providers_used.length > 0 && (
