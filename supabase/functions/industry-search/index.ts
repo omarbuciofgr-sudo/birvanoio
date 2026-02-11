@@ -937,62 +937,101 @@ Deno.serve(async (req) => {
 
     // AI-generate descriptions for companies missing them, and fill location/employee gaps
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const companiesNeedingDesc = companies.filter(c => !c.description).slice(0, 10);
+    // Filter out companies that don't match the requested industries
+    if (body.industry) {
+      const requestedIndustries = body.industry.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      if (requestedIndustries.length > 0) {
+        const beforeCount = companies.length;
+        companies = companies.filter(c => {
+          if (!c.industry) return true; // keep companies with no industry (will be filled by AI)
+          const companyIndustry = c.industry.toLowerCase();
+          // Check if the company's industry matches any of the requested industries
+          return requestedIndustries.some(ri => 
+            companyIndustry.includes(ri) || ri.includes(companyIndustry) ||
+            // Also check partial word matches for related industries
+            ri.split(/\s+/).some(word => word.length > 3 && companyIndustry.includes(word)) ||
+            companyIndustry.split(/\s+/).some(word => word.length > 3 && ri.includes(word))
+          );
+        });
+        console.log(`[Filter] Industry filter: ${beforeCount} → ${companies.length} (removed ${beforeCount - companies.length} non-matching)`);
+      }
+    }
+
+    // Also filter excluded industries
+    if (body.industries_exclude?.length) {
+      const excludeIndustries = body.industries_exclude.map((s: string) => s.toLowerCase());
+      const beforeCount = companies.length;
+      companies = companies.filter(c => {
+        if (!c.industry) return true;
+        const companyIndustry = c.industry.toLowerCase();
+        return !excludeIndustries.some(ei => 
+          companyIndustry.includes(ei) || ei.includes(companyIndustry)
+        );
+      });
+      console.log(`[Filter] Exclude filter: ${beforeCount} → ${companies.length}`);
+    }
+
+    const companiesNeedingDesc = companies.filter(c => !c.description);
     if (LOVABLE_API_KEY && companiesNeedingDesc.length > 0) {
       console.log(`[AI] Generating descriptions for ${companiesNeedingDesc.length} companies...`);
-      try {
-        const prompt = companiesNeedingDesc.map((c, i) => 
-          `${i+1}. "${c.name}" (domain: ${c.domain || 'unknown'}, industry: ${c.industry || 'unknown'})`
-        ).join('\n');
+      
+      // Process in batches of 15 to avoid token limits
+      const batchSize = 15;
+      for (let batchStart = 0; batchStart < companiesNeedingDesc.length; batchStart += batchSize) {
+        const batch = companiesNeedingDesc.slice(batchStart, batchStart + batchSize);
+        try {
+          const prompt = batch.map((c, i) => 
+            `${i+1}. "${c.name}" (domain: ${c.domain || 'unknown'}, industry: ${c.industry || 'unknown'})`
+          ).join('\n');
 
-        const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'google/gemini-3-flash-preview',
-            messages: [
-              { role: 'system', content: 'For each numbered company, provide a 1-sentence business description. Also estimate employee count (number) and headquarters location (city, state/country). Return JSON array: [{"description":"...","employee_count":number|null,"city":"...","state":"...","country":"..."}]. Match the order exactly. Be concise and factual.' },
-              { role: 'user', content: prompt },
-            ],
-          }),
-        });
+          const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'google/gemini-3-flash-preview',
+              messages: [
+                { role: 'system', content: 'For each numbered company, provide a 1-sentence business description. Also estimate employee count (number) and headquarters location (city, state/country). Return JSON array: [{"description":"...","employee_count":number|null,"city":"...","state":"...","country":"..."}]. Match the order exactly. Be concise and factual.' },
+                { role: 'user', content: prompt },
+              ],
+            }),
+          });
 
-        if (aiResp.ok) {
-          const aiData = await aiResp.json();
-          const content = aiData.choices?.[0]?.message?.content?.trim() || '';
-          // Parse JSON from response (handle markdown code blocks)
-          const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          try {
-            const descriptions = JSON.parse(jsonStr);
-            if (Array.isArray(descriptions)) {
-              for (let i = 0; i < Math.min(descriptions.length, companiesNeedingDesc.length); i++) {
-                const companyIdx = companies.indexOf(companiesNeedingDesc[i]);
-                if (companyIdx >= 0 && descriptions[i]) {
-                  if (!companies[companyIdx].description && descriptions[i].description) {
-                    companies[companyIdx].description = descriptions[i].description;
-                  }
-                  if (!companies[companyIdx].employee_count && descriptions[i].employee_count) {
-                    companies[companyIdx].employee_count = descriptions[i].employee_count;
-                  }
-                  if (!companies[companyIdx].headquarters_city && descriptions[i].city) {
-                    companies[companyIdx].headquarters_city = descriptions[i].city;
-                  }
-                  if (!companies[companyIdx].headquarters_state && descriptions[i].state) {
-                    companies[companyIdx].headquarters_state = descriptions[i].state;
-                  }
-                  if (!companies[companyIdx].headquarters_country && descriptions[i].country) {
-                    companies[companyIdx].headquarters_country = descriptions[i].country;
+          if (aiResp.ok) {
+            const aiData = await aiResp.json();
+            const content = aiData.choices?.[0]?.message?.content?.trim() || '';
+            const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            try {
+              const descriptions = JSON.parse(jsonStr);
+              if (Array.isArray(descriptions)) {
+                for (let i = 0; i < Math.min(descriptions.length, batch.length); i++) {
+                  const companyIdx = companies.indexOf(batch[i]);
+                  if (companyIdx >= 0 && descriptions[i]) {
+                    if (!companies[companyIdx].description && descriptions[i].description) {
+                      companies[companyIdx].description = descriptions[i].description;
+                    }
+                    if (!companies[companyIdx].employee_count && descriptions[i].employee_count) {
+                      companies[companyIdx].employee_count = descriptions[i].employee_count;
+                    }
+                    if (!companies[companyIdx].headquarters_city && descriptions[i].city) {
+                      companies[companyIdx].headquarters_city = descriptions[i].city;
+                    }
+                    if (!companies[companyIdx].headquarters_state && descriptions[i].state) {
+                      companies[companyIdx].headquarters_state = descriptions[i].state;
+                    }
+                    if (!companies[companyIdx].headquarters_country && descriptions[i].country) {
+                      companies[companyIdx].headquarters_country = descriptions[i].country;
+                    }
                   }
                 }
+                console.log(`[AI] Filled descriptions for batch ${batchStart / batchSize + 1}: ${descriptions.length} companies`);
               }
-              console.log(`[AI] Filled descriptions for ${descriptions.length} companies`);
+            } catch (parseErr) {
+              console.error('[AI] Failed to parse descriptions JSON:', parseErr);
             }
-          } catch (parseErr) {
-            console.error('[AI] Failed to parse descriptions JSON:', parseErr);
           }
+        } catch (aiErr) {
+          console.error('[AI] Description generation failed for batch:', aiErr);
         }
-      } catch (aiErr) {
-        console.error('[AI] Description generation failed:', aiErr);
       }
     }
 
