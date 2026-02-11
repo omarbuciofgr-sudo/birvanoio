@@ -2965,6 +2965,53 @@ export type Database = {
         }
         Relationships: []
       }
+      user_monthly_credits: {
+        Row: {
+          created_at: string
+          credits_used: number
+          id: string
+          monthly_allowance: number
+          period_end: string
+          period_start: string
+          topup_credits: number
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          id?: string
+          monthly_allowance?: number
+          period_end: string
+          period_start: string
+          topup_credits?: number
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          id?: string
+          monthly_allowance?: number
+          period_end?: string
+          period_start?: string
+          topup_credits?: number
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_monthly_credits_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_notifications: {
         Row: {
           category: string | null
@@ -3281,6 +3328,171 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_credit_pool: {
+        Row: {
+          created_at: string
+          id: string
+          period_end: string
+          period_start: string
+          pool_credits: number
+          pool_used: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          period_end: string
+          period_start: string
+          pool_credits?: number
+          pool_used?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          pool_credits?: number
+          pool_used?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_credit_pool_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["workspace_role"]
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_memberships_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_settings: {
+        Row: {
+          cache_ttl_days: number
+          created_at: string
+          daily_credit_cap_per_user: number | null
+          enable_team_credit_pool: boolean
+          id: string
+          max_pages_per_domain: number | null
+          max_provider_calls_per_lead: number | null
+          max_targets_per_job: number | null
+          updated_at: string
+          viewer_consumes_seat: boolean
+          workspace_id: string
+        }
+        Insert: {
+          cache_ttl_days?: number
+          created_at?: string
+          daily_credit_cap_per_user?: number | null
+          enable_team_credit_pool?: boolean
+          id?: string
+          max_pages_per_domain?: number | null
+          max_provider_calls_per_lead?: number | null
+          max_targets_per_job?: number | null
+          updated_at?: string
+          viewer_consumes_seat?: boolean
+          workspace_id: string
+        }
+        Update: {
+          cache_ttl_days?: number
+          created_at?: string
+          daily_credit_cap_per_user?: number | null
+          enable_team_credit_pool?: boolean
+          id?: string
+          max_pages_per_domain?: number | null
+          max_provider_calls_per_lead?: number | null
+          max_targets_per_job?: number | null
+          updated_at?: string
+          viewer_consumes_seat?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          billing_email: string | null
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          plan_tier: Database["public"]["Enums"]["plan_tier"]
+          seats_purchased: number
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_email?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          plan_tier?: Database["public"]["Enums"]["plan_tier"]
+          seats_purchased?: number
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_email?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          plan_tier?: Database["public"]["Enums"]["plan_tier"]
+          seats_purchased?: number
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       client_api_keys_safe: {
@@ -3418,6 +3630,15 @@ export type Database = {
         }[]
       }
       get_user_organization: { Args: { p_user_id: string }; Returns: string }
+      get_user_workspace_id: { Args: { _user_id: string }; Returns: string }
+      get_user_workspace_role: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: Database["public"]["Enums"]["workspace_role"]
+      }
+      get_workspace_seats_used: {
+        Args: { _workspace_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -3442,6 +3663,7 @@ export type Database = {
         | "contactout"
         | "google_search"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
+      plan_tier: "free" | "starter" | "growth" | "scale" | "enterprise"
       scrape_job_status:
         | "draft"
         | "queued"
@@ -3467,6 +3689,7 @@ export type Database = {
         | "blocked"
         | "skipped"
       validation_status: "unverified" | "likely_valid" | "verified" | "invalid"
+      workspace_role: "owner" | "admin" | "member" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3608,6 +3831,7 @@ export const Constants = {
         "google_search",
       ],
       lead_status: ["new", "contacted", "qualified", "converted", "lost"],
+      plan_tier: ["free", "starter", "growth", "scale", "enterprise"],
       scrape_job_status: [
         "draft",
         "queued",
@@ -3636,6 +3860,7 @@ export const Constants = {
         "skipped",
       ],
       validation_status: ["unverified", "likely_valid", "verified", "invalid"],
+      workspace_role: ["owner", "admin", "member", "viewer"],
     },
   },
 } as const
