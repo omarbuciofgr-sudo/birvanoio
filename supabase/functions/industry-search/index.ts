@@ -390,21 +390,23 @@ async function searchPDL(input: CompanySearchInput, apiKey: string): Promise<Com
 async function searchRocketReach(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
   const { industry, location, keywords, limit = 25 } = input;
 
-  // RocketReach requires a 'query' field
-  const queryText = keywords || industry || '';
-  if (!queryText) {
-    console.log('[RocketReach] No query text available');
-    return null;
-  }
-
   const query: Record<string, unknown> = {
-    query: queryText,
     page_size: Math.min(limit, 100),
     start: ((input.page || 1) - 1) * Math.min(limit, 100) + 1,
   };
 
+  // RocketReach expects query as an object with specific fields, not a plain string
   if (industry) {
     query.keyword = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  if (keywords) {
+    query.name = keywords;
+  }
+
+  if (!industry && !keywords) {
+    console.log('[RocketReach] No industry or keywords to search');
+    return null;
   }
 
   if (location) {
@@ -496,49 +498,50 @@ async function searchRocketReach(input: CompanySearchInput, apiKey: string): Pro
 async function searchLusha(input: CompanySearchInput, apiKey: string): Promise<CompanyResult[] | null> {
   const { industry, location, keywords, limit = 25 } = input;
 
-  // Lusha Company Search API v2
-  const requestBody: Record<string, unknown> = {
-    limit: Math.min(limit, 100),
-  };
-
-  // Build filters array for Lusha
-  const filters: Record<string, unknown>[] = [];
+  // Lusha Prospecting API expects { companies: [...filters] } format
+  const companyFilters: Record<string, unknown>[] = [];
 
   if (industry) {
     const industries = industry.split(',').map((s: string) => s.trim()).filter(Boolean);
-    filters.push({ type: 'industry', values: industries });
+    companyFilters.push({ type: 'industry', values: industries });
   }
 
   if (location) {
     const locations = location.split(',').map((s: string) => s.trim()).filter(Boolean);
-    filters.push({ type: 'company_location', values: locations });
+    companyFilters.push({ type: 'company_location', values: locations });
   }
 
   if (input.employee_ranges?.length) {
-    filters.push({ type: 'company_size', values: input.employee_ranges });
+    companyFilters.push({ type: 'company_size', values: input.employee_ranges });
   }
 
   if (input.revenue_range) {
-    filters.push({ type: 'revenue', values: [input.revenue_range] });
+    companyFilters.push({ type: 'revenue', values: [input.revenue_range] });
   }
 
   if (input.technologies?.length) {
-    filters.push({ type: 'technology', values: input.technologies });
+    companyFilters.push({ type: 'technology', values: input.technologies });
   }
 
   if (keywords) {
-    requestBody.keyword = keywords;
+    companyFilters.push({ type: 'keyword', values: [keywords] });
   }
 
-  if (filters.length > 0) {
-    requestBody.filters = filters;
+  if (companyFilters.length === 0) {
+    console.log('[Lusha] No filters to search with');
+    return null;
   }
+
+  // Lusha expects { companies: [...], limit: N } format
+  const requestBody = {
+    companies: companyFilters,
+    limit: Math.min(limit, 100),
+  };
 
   console.log('[Lusha] Searching with body:', JSON.stringify(requestBody));
 
   try {
-    // Use Lusha Company Search v2 endpoint
-    const response = await fetch('https://api.lusha.com/v2/company/search', {
+    const response = await fetch('https://api.lusha.com/prospecting/api/v2/company/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
