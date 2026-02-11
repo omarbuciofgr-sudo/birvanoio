@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/select';
 import { lazy, Suspense } from 'react';
 const ListingsMap = lazy(() => import('@/components/scraper/ListingsMap'));
+import { getPlatformLogo, PLATFORM_CONFIG } from '@/lib/platformLogos';
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string; appliedFilters?: Record<string, any> };
 
@@ -572,14 +573,22 @@ export default function WebScraper() {
                     <Select value={rePlatform} onValueChange={setRePlatform}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Platform" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Platforms</SelectItem>
-                        <SelectItem value="zillow">Zillow</SelectItem>
-                        <SelectItem value="fsbo">FSBO.com</SelectItem>
-                        <SelectItem value="trulia">Trulia</SelectItem>
-                        <SelectItem value="redfin">Redfin</SelectItem>
-                        <SelectItem value="apartments">Apartments.com</SelectItem>
-                        <SelectItem value="hotpads">Hotpads</SelectItem>
-                        <SelectItem value="realtor">Realtor.com</SelectItem>
+                        <SelectItem value="all">
+                          <span className="flex items-center gap-2">All Platforms</span>
+                        </SelectItem>
+                        {Object.entries(PLATFORM_CONFIG).map(([key, config]) => (
+                          <SelectItem key={key} value={key}>
+                            <span className="flex items-center gap-2">
+                              <img
+                                src={`https://www.google.com/s2/favicons?domain=${config.domain}&sz=16`}
+                                alt=""
+                                className="h-4 w-4 rounded-sm"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                              {config.label}
+                            </span>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -668,7 +677,7 @@ export default function WebScraper() {
                 {/* Map */}
                 {showMap && (
                   <Suspense fallback={<div className="h-[400px] rounded-lg bg-muted/30 border border-border/60 flex items-center justify-center text-xs text-muted-foreground">Loading map...</div>}>
-                    <ListingsMap listings={reListings} onSelectListing={(i) => { setShowMap(false); }} />
+                    <ListingsMap listings={reListings} onSelectListing={(i) => { setShowMap(false); }} searchLocation={reLocation} />
                   </Suspense>
                 )}
 
@@ -737,7 +746,19 @@ export default function WebScraper() {
                             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                               {listing.favorites_count !== undefined && <span>♡ {listing.favorites_count}</span>}
                               {listing.views_count !== undefined && <span>👁 {listing.views_count}</span>}
-                              {listing.source_platform && <Badge variant="outline" className="text-[10px] h-4 font-normal">{listing.source_platform}</Badge>}
+                              {listing.source_platform && (
+                                <span className="flex items-center gap-1">
+                                  {listing.source_url && (
+                                    <img
+                                      src={`https://www.google.com/s2/favicons?domain=${(() => { try { return new URL(listing.source_url).hostname; } catch { return ''; } })()}&sz=16`}
+                                      alt=""
+                                      className="h-3.5 w-3.5 rounded-sm"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  )}
+                                  <Badge variant="outline" className="text-[10px] h-4 font-normal">{listing.source_platform}</Badge>
+                                </span>
+                              )}
                               {listing.listing_type && <Badge variant="secondary" className="text-[10px] h-4 font-normal uppercase">{listing.listing_type}</Badge>}
                             </div>
 

@@ -3,8 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Phone, Mail, ExternalLink, MapPin } from 'lucide-react';
+import { getPlatformLogoFromUrl } from '@/lib/platformLogos';
 
 // Fix default marker icons for leaflet + bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -35,6 +35,7 @@ const defaultIcon = new L.Icon({
 interface ListingsMapProps {
   listings: any[];
   onSelectListing?: (index: number) => void;
+  searchLocation?: string;
 }
 
 // Simple geocoding using Nominatim (free, no API key needed)
@@ -54,21 +55,49 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   }
 }
 
-function FitBounds({ positions }: { positions: [number, number][] }) {
+function FitBounds({ positions, searchCenter }: { positions: [number, number][]; searchCenter?: [number, number] }) {
   const map = useMap();
   useEffect(() => {
     if (positions.length > 0) {
-      const bounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
+      const allPoints = searchCenter ? [...positions, searchCenter] : positions;
+      const bounds = L.latLngBounds(allPoints.map(p => L.latLng(p[0], p[1])));
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    } else if (searchCenter) {
+      map.setView(L.latLng(searchCenter[0], searchCenter[1]), 12);
     }
-  }, [positions, map]);
+  }, [positions, searchCenter, map]);
   return null;
 }
 
-export default function ListingsMap({ listings, onSelectListing }: ListingsMapProps) {
+function PlatformLogo({ sourceUrl }: { sourceUrl?: string }) {
+  if (!sourceUrl) return null;
+  const logoUrl = getPlatformLogoFromUrl(sourceUrl);
+  if (!logoUrl) return null;
+  return (
+    <img
+      src={logoUrl}
+      alt=""
+      className="h-4 w-4 rounded-sm"
+      style={{ imageRendering: 'auto' }}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+    />
+  );
+}
+
+export default function ListingsMap({ listings, onSelectListing, searchLocation }: ListingsMapProps) {
   const [geocoded, setGeocoded] = useState<Map<number, { lat: number; lng: number }>>(new Map());
   const [geocoding, setGeocoding] = useState(false);
+  const [searchCenter, setSearchCenter] = useState<[number, number] | undefined>();
   const geocodedRef = useRef(new Set<number>());
+
+  // Geocode the search location to center the map
+  useEffect(() => {
+    if (!searchLocation) return;
+    (async () => {
+      const result = await geocodeAddress(searchLocation);
+      if (result) setSearchCenter([result.lat, result.lng]);
+    })();
+  }, [searchLocation]);
 
   useEffect(() => {
     if (listings.length === 0) return;
@@ -109,9 +138,11 @@ export default function ListingsMap({ listings, onSelectListing }: ListingsMapPr
 
   if (listings.length === 0) return null;
 
-  const defaultCenter: [number, number] = positions.length > 0
-    ? positions[0].position
-    : [39.8283, -98.5795]; // Center of US
+  const defaultCenter: [number, number] = searchCenter
+    ? searchCenter
+    : positions.length > 0
+      ? positions[0].position
+      : [39.8283, -98.5795];
 
   return (
     <div className="relative rounded-lg overflow-hidden border border-border/60">
@@ -125,17 +156,15 @@ export default function ListingsMap({ listings, onSelectListing }: ListingsMapPr
       )}
       <MapContainer
         center={defaultCenter}
-        zoom={10}
-        style={{ height: '400px', width: '100%' }}
+        zoom={12}
+        style={{ height: '450px', width: '100%' }}
         className="z-0"
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {positions.length > 0 && (
-          <FitBounds positions={positions.map(p => p.position)} />
-        )}
+        <FitBounds positions={positions.map(p => p.position)} searchCenter={searchCenter} />
         {positions.map(({ index, position, listing }) => (
           <Marker
             key={index}
@@ -145,10 +174,18 @@ export default function ListingsMap({ listings, onSelectListing }: ListingsMapPr
               click: () => onSelectListing?.(index),
             }}
           >
-            <Popup maxWidth={280} className="listing-popup">
+            <Popup maxWidth={300} className="listing-popup">
               <div className="space-y-1.5 text-xs">
                 <p className="font-semibold text-sm leading-tight">{listing.address}</p>
                 <div className="flex items-center gap-2 flex-wrap">
+                  {listing.source_url && (
+                    <span className="inline-flex items-center gap-1">
+                      <PlatformLogo sourceUrl={listing.source_url} />
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {listing.source_platform || (() => { try { return new URL(listing.source_url).hostname.replace('www.', ''); } catch { return ''; } })()}
+                      </span>
+                    </span>
+                  )}
                   {listing.price && <Badge variant="secondary" className="text-[10px] h-4">{listing.price}</Badge>}
                   {listing.property_type && <Badge variant="outline" className="text-[10px] h-4">{listing.property_type}</Badge>}
                   {listing.skip_trace_status === 'success' && (
