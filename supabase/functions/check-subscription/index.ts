@@ -129,10 +129,12 @@ serve(async (req) => {
     const creditsUsed = credits?.credits_used ?? 0;
 
     const isSubscribed = workspace.plan_tier !== "free" && !!workspace.stripe_subscription_id;
+    const billingStatus = workspace.billing_status || (isSubscribed ? "active" : "canceled");
 
     log("Returning subscription state", {
       tier: workspace.plan_tier,
       subscribed: isSubscribed,
+      billingStatus,
       role: membership.role,
     });
 
@@ -140,6 +142,7 @@ serve(async (req) => {
       JSON.stringify({
         subscribed: isSubscribed,
         tier: workspace.plan_tier,
+        billing_status: billingStatus,
         subscription_end: workspace.current_period_end,
         workspace_id: workspace.id,
         workspace_name: workspace.name,
