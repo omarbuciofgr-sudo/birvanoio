@@ -621,6 +621,96 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_cost_analysis: {
+        Row: {
+          calculated_at: string
+          calculated_cost_cents: number
+          cogs_cost_cents: number
+          event_type: string
+          id: string
+          margin_percent: number
+          scenario: string
+          sell_price_cents: number
+        }
+        Insert: {
+          calculated_at?: string
+          calculated_cost_cents: number
+          cogs_cost_cents: number
+          event_type: string
+          id?: string
+          margin_percent: number
+          scenario?: string
+          sell_price_cents: number
+        }
+        Update: {
+          calculated_at?: string
+          calculated_cost_cents?: number
+          cogs_cost_cents?: number
+          event_type?: string
+          id?: string
+          margin_percent?: number
+          scenario?: string
+          sell_price_cents?: number
+        }
+        Relationships: []
+      }
+      credit_event_config: {
+        Row: {
+          avg_calls_per_lead: number
+          base_credits: number
+          cache_ttl_hours: number
+          confidence_threshold: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_name: string
+          event_type: string
+          id: string
+          is_active: boolean
+          max_provider_calls: number
+          providers_involved: string[] | null
+          success_rate: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          avg_calls_per_lead?: number
+          base_credits?: number
+          cache_ttl_hours?: number
+          confidence_threshold?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_name: string
+          event_type: string
+          id?: string
+          is_active?: boolean
+          max_provider_calls?: number
+          providers_involved?: string[] | null
+          success_rate?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          avg_calls_per_lead?: number
+          base_credits?: number
+          cache_ttl_hours?: number
+          confidence_threshold?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_name?: string
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          max_provider_calls?: number
+          providers_involved?: string[] | null
+          success_rate?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       credit_purchases: {
         Row: {
           amount_paid_cents: number
@@ -1776,6 +1866,48 @@ export type Database = {
           twilio_phone_number?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      provider_pricing_config: {
+        Row: {
+          api_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          provider_name: string
+          unit_cost_cents: number
+          unit_type: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          provider_name: string
+          unit_cost_cents?: number
+          unit_type?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          provider_name?: string
+          unit_cost_cents?: number
+          unit_type?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }

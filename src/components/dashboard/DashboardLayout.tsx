@@ -28,6 +28,7 @@ import {
   Command,
   Zap,
   Sparkles,
+  Calculator,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -112,6 +113,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
     { name: "Schema Templates", href: "/admin/schema-templates", icon: FileText },
     { name: "Client Orgs", href: "/admin/clients", icon: Inbox },
     { name: "API Settings", href: "/admin/api-settings", icon: Key },
+    { name: "Cost Calculator", href: "/admin/cost-calculator", icon: Calculator },
   ];
 
   const clientNavItems = [

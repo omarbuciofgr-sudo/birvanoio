@@ -26,6 +26,7 @@ import ScrapeJobs from "./pages/admin/ScrapeJobs";
 import ScrapedLeads from "./pages/admin/ScrapedLeads";
 import APISettings from "./pages/admin/APISettings";
 import ScraperSettings from "./pages/admin/ScraperSettings";
+import CostCalculator from "./pages/admin/CostCalculator";
 import ClientLeads from "./pages/client/ClientLeads";
 import CSVEnrichment from "./pages/CSVEnrichment";
 import ProspectSearch from "./pages/ProspectSearch";
@@ -62,8 +63,9 @@ const App = () => (
               <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />
               <Route path="/admin/scraped-leads" element={<ProtectedRoute><ScrapedLeads /></ProtectedRoute>} />
               <Route path="/admin/api-settings" element={<ProtectedRoute><APISettings /></ProtectedRoute>} />
-              <Route path="/admin/scraper-settings" element={<ProtectedRoute><ScraperSettings /></ProtectedRoute>} />
-              <Route path="/client/leads" element={<ProtectedRoute><ClientLeads /></ProtectedRoute>} />
+               <Route path="/admin/scraper-settings" element={<ProtectedRoute><ScraperSettings /></ProtectedRoute>} />
+               <Route path="/admin/cost-calculator" element={<ProtectedRoute><CostCalculator /></ProtectedRoute>} />
+               <Route path="/client/leads" element={<ProtectedRoute><ClientLeads /></ProtectedRoute>} />
               <Route path="/dashboard/csv-enrichment" element={<ProtectedRoute><CSVEnrichment /></ProtectedRoute>} />
               <Route path="/dashboard/prospect-search" element={<ProtectedRoute><ProspectSearch /></ProtectedRoute>} />
               <Route path="/dashboard/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
