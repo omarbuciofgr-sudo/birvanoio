@@ -52,7 +52,7 @@ const navSections = [
   {
     label: "Tools",
     items: [
-      { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe, adminOnly: true },
+      { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
       { name: "Signals", href: "/dashboard/signals", icon: Zap },
       { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
