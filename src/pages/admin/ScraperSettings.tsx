@@ -20,7 +20,8 @@ import { NotificationChannelsManager } from '@/components/scraper/NotificationCh
 import { CRMIntegrationsManager } from '@/components/scraper/CRMIntegrationsManager';
 import { BackupJobsManager } from '@/components/scraper/BackupJobsManager';
 import { PerformanceDashboard } from '@/components/scraper/PerformanceDashboard';
-import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target, Webhook, Brain, Bell, Link2, HardDrive, Gauge } from 'lucide-react';
+import { SpendAlertsPanel } from '@/components/scraper/SpendAlertsPanel';
+import { Loader2, Zap, Route, Calendar, BarChart3, Settings, Ban, History, Kanban, Activity, DollarSign, Target, Webhook, Brain, Bell, Link2, HardDrive, Gauge, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ClientOrganization, ScrapedLead } from '@/types/scraper';
@@ -178,6 +179,10 @@ export default function ScraperSettings() {
               <Gauge className="h-4 w-4" />
               Performance
             </TabsTrigger>
+            <TabsTrigger value="spend-alerts" className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4" />
+              Spend Alerts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="monitoring">
@@ -242,6 +247,10 @@ export default function ScraperSettings() {
 
           <TabsContent value="performance">
             <PerformanceDashboard />
+          </TabsContent>
+
+          <TabsContent value="spend-alerts">
+            <SpendAlertsPanel />
           </TabsContent>
         </Tabs>
       </div>
