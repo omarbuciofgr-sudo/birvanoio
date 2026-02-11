@@ -26,6 +26,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { EnrichmentActionsPanel } from './EnrichmentActionsPanel';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 function CompanyLogo({ domain, name }: { domain: string | null | undefined; name: string }) {
   const [errored, setErrored] = useState(false);
@@ -401,13 +407,24 @@ export function SearchResults({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground max-w-[260px]">
-                      <span className="truncate block text-xs">
-                        {company.description
-                          ? company.description.length > 60
-                            ? company.description.slice(0, 60) + '…'
-                            : company.description
-                          : '—'}
-                      </span>
+                      {company.description ? (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="truncate block text-xs cursor-default">
+                                {company.description.length > 60
+                                  ? company.description.slice(0, 60) + '…'
+                                  : company.description}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-[360px] text-xs whitespace-normal">
+                              {company.description}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <span className="text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 max-w-[200px]">
                       <span className="truncate block text-xs">{company.industry || '—'}</span>
