@@ -109,6 +109,14 @@ export default function WebScraper() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
+  if (authLoading || adminLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div>
+      </DashboardLayout>
+    );
+  }
+
   if (!user) {
     navigate('/auth');
     return null;
