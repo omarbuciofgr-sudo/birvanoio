@@ -52,7 +52,7 @@ const navSections = [
   {
     label: "Tools",
     items: [
-      { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
+      { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe, adminOnly: true },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
       { name: "Signals", href: "/dashboard/signals", icon: Zap },
       { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
@@ -172,7 +172,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
                   </p>
                 )}
                 <div className="space-y-0.5">
-                  {section.items.map((item) => {
+                  {section.items.filter((item: any) => !item.adminOnly || isAdmin).map((item) => {
                     const isActive = location.pathname === item.href;
                     return (
                       <Link
