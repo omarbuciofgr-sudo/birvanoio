@@ -27,9 +27,10 @@ interface BrivanoLensProps {
   onSaveProspects?: (prospects: any[]) => void;
   externalFilters?: Partial<ProspectSearchFilters> | null;
   onSwitchTab?: (tab: string) => void;
+  onSearchTypeChange?: (hasSearchType: boolean) => void;
 }
 
-export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: BrivanoLensProps) {
+export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onSearchTypeChange }: BrivanoLensProps) {
   const { user } = useAuth();
   const [searchType, setSearchType] = useState<SearchType | null>(null);
   const [filters, setFilters] = useState<ProspectSearchFilters>(defaultFilters);
@@ -85,6 +86,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
     setResults([]);
     setHasSearched(false);
     setSelectedRows(new Set());
+    onSearchTypeChange?.(true);
   };
 
   const loadSavedSearches = useCallback(async () => {
@@ -420,11 +422,14 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab }: B
     );
   }
 
+  // When a search type is active, the parent hides tabs/header so we can use more vertical space
+  const isFullMode = !!onSearchTypeChange;
+
   return (
-    <div className="h-[calc(100vh-180px)] min-h-[500px] flex flex-col border border-border/60 rounded-lg overflow-hidden bg-background">
+    <div className={`${isFullMode ? 'h-[calc(100vh-80px)]' : 'h-[calc(100vh-180px)]'} min-h-[500px] flex flex-col border border-border/60 rounded-lg overflow-hidden bg-background`}>
       {/* Top bar */}
       <div className="flex-shrink-0 h-11 border-b border-border/60 flex items-center justify-between px-4 bg-muted/30">
-        <SearchTypeHeader type={searchType} onBack={() => setSearchType(null)} />
+        <SearchTypeHeader type={searchType} onBack={() => { setSearchType(null); onSearchTypeChange?.(false); }} />
         <div className="flex items-center gap-2">
           <Dialog open={loadDialogOpen} onOpenChange={(open) => {
             setLoadDialogOpen(open);
