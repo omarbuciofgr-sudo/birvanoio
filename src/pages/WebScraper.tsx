@@ -114,24 +114,6 @@ export default function WebScraper() {
     return null;
   }
 
-  if (adminLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-64 gap-2">
-          <p className="text-lg font-semibold">Access Denied</p>
-          <p className="text-muted-foreground text-sm">Brivano Scout is only available for admin accounts.</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   // ── AI Chat Handler (uses prospect-search-chat with tool calling) ──
   const handleChatSend = async () => {
