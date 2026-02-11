@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -66,6 +67,7 @@ type SearchResult = {
 
 export default function WebScraper() {
   const { user, loading: authLoading } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
   const navigate = useNavigate();
 
   // Search state
@@ -110,6 +112,25 @@ export default function WebScraper() {
   if (!user) {
     navigate('/auth');
     return null;
+  }
+
+  if (adminLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-64 gap-2">
+          <p className="text-lg font-semibold">Access Denied</p>
+          <p className="text-muted-foreground text-sm">Brivano Scout is only available for admin accounts.</p>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   // ── AI Chat Handler (uses prospect-search-chat with tool calling) ──
@@ -620,7 +641,7 @@ export default function WebScraper() {
               </div>
             )}
 
-            {reErrors.length > 0 && (
+            {isAdmin && reErrors.length > 0 && (
               <div className="px-4 py-3 rounded-lg bg-destructive/5 border border-destructive/20 text-xs">
                 <p className="font-medium text-destructive mb-1">Some sites couldn't be scraped:</p>
                 {reErrors.map((err, i) => (
