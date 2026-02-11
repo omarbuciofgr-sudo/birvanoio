@@ -36,6 +36,8 @@ import { scrapeJobsApi } from '@/lib/api/scraper';
 import { SchemaTemplate, CreateScrapeJobInput } from '@/types/scraper';
 import { toast } from 'sonner';
 import { Upload, Link, FileText } from 'lucide-react';
+import { JobCostEstimate } from './JobCostEstimate';
+import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 const formSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -61,6 +63,13 @@ export function CreateJobDialog({ open, onOpenChange, templates }: CreateJobDial
   const [urlsText, setUrlsText] = useState('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { limits } = usePlanLimits();
+
+  const parsedUrls = urlsText
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+  const targetCount = parsedUrls.length;
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -365,11 +374,20 @@ export function CreateJobDialog({ open, onOpenChange, templates }: CreateJobDial
               </div>
             </div>
 
+            {/* Job Cost Estimate */}
+            <JobCostEstimate
+              targetCount={targetCount}
+              maxPagesPerDomain={form.watch('max_pages_per_domain')}
+            />
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting || targetCount > limits.max_targets_per_job}
+              >
                 {isSubmitting ? 'Creating...' : 'Create Job'}
               </Button>
             </div>

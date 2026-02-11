@@ -1921,6 +1921,42 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_limits: {
+        Row: {
+          confidence_stop_threshold: number
+          created_at: string
+          id: string
+          max_concurrent_jobs: number
+          max_pages_per_domain: number
+          max_provider_calls_per_lead: number
+          max_targets_per_job: number
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          confidence_stop_threshold?: number
+          created_at?: string
+          id?: string
+          max_concurrent_jobs?: number
+          max_pages_per_domain?: number
+          max_provider_calls_per_lead?: number
+          max_targets_per_job?: number
+          tier: string
+          updated_at?: string
+        }
+        Update: {
+          confidence_stop_threshold?: number
+          created_at?: string
+          id?: string
+          max_concurrent_jobs?: number
+          max_pages_per_domain?: number
+          max_provider_calls_per_lead?: number
+          max_targets_per_job?: number
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -2237,6 +2273,7 @@ export type Database = {
           created_by: string | null
           current_cost_usd: number | null
           description: string | null
+          estimated_credits: number | null
           failed_targets: number | null
           id: string
           input_method: string | null
@@ -2267,6 +2304,7 @@ export type Database = {
           created_by?: string | null
           current_cost_usd?: number | null
           description?: string | null
+          estimated_credits?: number | null
           failed_targets?: number | null
           id?: string
           input_method?: string | null
@@ -2297,6 +2335,7 @@ export type Database = {
           created_by?: string | null
           current_cost_usd?: number | null
           description?: string | null
+          estimated_credits?: number | null
           failed_targets?: number | null
           id?: string
           input_method?: string | null
@@ -2833,6 +2872,56 @@ export type Database = {
           total_cost_usd?: number | null
         }
         Relationships: []
+      }
+      spend_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_type: string
+          created_at: string
+          id: string
+          is_acknowledged: boolean
+          message: string
+          metadata: Json | null
+          severity: string
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type: string
+          created_at?: string
+          id?: string
+          is_acknowledged?: boolean
+          message: string
+          metadata?: Json | null
+          severity?: string
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_acknowledged?: boolean
+          message?: string
+          metadata?: Json | null
+          severity?: string
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spend_alerts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppression_list_client: {
         Row: {
