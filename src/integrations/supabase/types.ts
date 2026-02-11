@@ -1279,6 +1279,62 @@ export type Database = {
         }
         Relationships: []
       }
+      field_evidence: {
+        Row: {
+          captured_at: string
+          created_at: string
+          evidence_snippet: string | null
+          evidence_type: Database["public"]["Enums"]["evidence_type"]
+          field_name: string
+          field_value: string
+          id: string
+          lead_id: string
+          provider_label: string | null
+          provider_reference: string | null
+          source_url: string | null
+          verification_method: string | null
+          verification_result: string | null
+        }
+        Insert: {
+          captured_at?: string
+          created_at?: string
+          evidence_snippet?: string | null
+          evidence_type: Database["public"]["Enums"]["evidence_type"]
+          field_name: string
+          field_value: string
+          id?: string
+          lead_id: string
+          provider_label?: string | null
+          provider_reference?: string | null
+          source_url?: string | null
+          verification_method?: string | null
+          verification_result?: string | null
+        }
+        Update: {
+          captured_at?: string
+          created_at?: string
+          evidence_snippet?: string | null
+          evidence_type?: Database["public"]["Enums"]["evidence_type"]
+          field_name?: string
+          field_value?: string
+          id?: string
+          lead_id?: string
+          provider_label?: string | null
+          provider_reference?: string | null
+          source_url?: string | null
+          verification_method?: string | null
+          verification_result?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_evidence_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "scraped_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intent_signals: {
         Row: {
           confidence_score: number | null
@@ -3733,6 +3789,11 @@ export type Database = {
         | "lusha"
         | "contactout"
         | "google_search"
+      evidence_type:
+        | "on_page_text"
+        | "structured_data"
+        | "pdf"
+        | "enrichment_provider"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
       plan_tier: "free" | "starter" | "growth" | "scale" | "enterprise"
       scrape_job_status:
@@ -3907,6 +3968,12 @@ export const Constants = {
         "lusha",
         "contactout",
         "google_search",
+      ],
+      evidence_type: [
+        "on_page_text",
+        "structured_data",
+        "pdf",
+        "enrichment_provider",
       ],
       lead_status: ["new", "contacted", "qualified", "converted", "lost"],
       plan_tier: ["free", "starter", "growth", "scale", "enterprise"],
