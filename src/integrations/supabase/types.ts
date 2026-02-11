@@ -3459,36 +3459,48 @@ export type Database = {
           billing_email: string | null
           created_at: string
           created_by: string
+          current_period_end: string | null
+          current_period_start: string | null
           id: string
           name: string
           plan_tier: Database["public"]["Enums"]["plan_tier"]
           seats_purchased: number
           stripe_customer_id: string | null
+          stripe_price_id: string | null
           stripe_subscription_id: string | null
+          stripe_subscription_item_id: string | null
           updated_at: string
         }
         Insert: {
           billing_email?: string | null
           created_at?: string
           created_by: string
+          current_period_end?: string | null
+          current_period_start?: string | null
           id?: string
           name: string
           plan_tier?: Database["public"]["Enums"]["plan_tier"]
           seats_purchased?: number
           stripe_customer_id?: string | null
+          stripe_price_id?: string | null
           stripe_subscription_id?: string | null
+          stripe_subscription_item_id?: string | null
           updated_at?: string
         }
         Update: {
           billing_email?: string | null
           created_at?: string
           created_by?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
           id?: string
           name?: string
           plan_tier?: Database["public"]["Enums"]["plan_tier"]
           seats_purchased?: number
           stripe_customer_id?: string | null
+          stripe_price_id?: string | null
           stripe_subscription_id?: string | null
+          stripe_subscription_item_id?: string | null
           updated_at?: string
         }
         Relationships: []

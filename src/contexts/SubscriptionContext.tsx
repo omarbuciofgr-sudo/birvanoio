@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type SubscriptionTier = "starter" | "growth" | "scale" | "enterprise" | null;
+export type SubscriptionTier = "free" | "starter" | "growth" | "scale" | "enterprise" | null;
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer" | null;
 
 // Feature definitions by tier
 export const TIER_FEATURES = {
+  free: [
+    "crm_access",
+    "basic_scraper",
+  ],
   starter: [
     "crm_access",
     "click_to_call",
@@ -15,9 +20,9 @@ export const TIER_FEATURES = {
     "csv_export",
     "basic_templates",
     "kanban_view",
+    "basic_scraper",
   ],
   growth: [
-    // Includes all starter features
     "crm_access",
     "click_to_call",
     "call_recording",
@@ -27,7 +32,7 @@ export const TIER_FEATURES = {
     "csv_export",
     "basic_templates",
     "kanban_view",
-    // Growth-specific features
+    "basic_scraper",
     "ai_call_recaps",
     "lead_scoring",
     "sentiment_analysis",
@@ -35,7 +40,6 @@ export const TIER_FEATURES = {
     "ai_voice_agent_limited",
   ],
   scale: [
-    // Includes all growth features
     "crm_access",
     "click_to_call",
     "call_recording",
@@ -45,32 +49,7 @@ export const TIER_FEATURES = {
     "csv_export",
     "basic_templates",
     "kanban_view",
-    "ai_call_recaps",
-    "lead_scoring",
-    "sentiment_analysis",
-    "ai_templates",
-    "ai_voice_agent_limited",
-    // Scale-specific features
-    "ai_voice_agent_unlimited",
-    "ai_weekly_digest",
-    "call_transcription",
-    "webhook_integrations",
-    "api_access",
-    // Self-service scraper
     "basic_scraper",
-    "scraper_50_leads_month",
-  ],
-  enterprise: [
-    // All scale features plus unlimited scraping
-    "crm_access",
-    "click_to_call",
-    "call_recording",
-    "sms_tools",
-    "email_tools",
-    "csv_import",
-    "csv_export",
-    "basic_templates",
-    "kanban_view",
     "ai_call_recaps",
     "lead_scoring",
     "sentiment_analysis",
@@ -81,15 +60,41 @@ export const TIER_FEATURES = {
     "call_transcription",
     "webhook_integrations",
     "api_access",
-    "basic_scraper",
     "scraper_50_leads_month",
-    // Enterprise scraper features
-    "unlimited_scraper",
     "prospect_search",
     "industry_search",
     "real_estate_scraper",
     "skip_tracing",
     "waterfall_enrichment",
+  ],
+  enterprise: [
+    "crm_access",
+    "click_to_call",
+    "call_recording",
+    "sms_tools",
+    "email_tools",
+    "csv_import",
+    "csv_export",
+    "basic_templates",
+    "kanban_view",
+    "basic_scraper",
+    "ai_call_recaps",
+    "lead_scoring",
+    "sentiment_analysis",
+    "ai_templates",
+    "ai_voice_agent_limited",
+    "ai_voice_agent_unlimited",
+    "ai_weekly_digest",
+    "call_transcription",
+    "webhook_integrations",
+    "api_access",
+    "scraper_50_leads_month",
+    "prospect_search",
+    "industry_search",
+    "real_estate_scraper",
+    "skip_tracing",
+    "waterfall_enrichment",
+    "unlimited_scraper",
     "priority_support",
     "custom_integrations",
   ],
@@ -102,6 +107,14 @@ interface SubscriptionState {
   subscribed: boolean;
   tier: SubscriptionTier;
   subscriptionEnd: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  workspaceRole: WorkspaceRole;
+  seatsPurchased: number;
+  seatsUsed: number;
+  creditsRemaining: number;
+  creditsAllowance: number;
+  creditsUsed: number;
   error: string | null;
 }
 
@@ -109,11 +122,12 @@ interface SubscriptionContextType extends SubscriptionState {
   checkSubscription: () => Promise<void>;
   hasFeature: (feature: Feature) => boolean;
   canAccessTier: (requiredTier: SubscriptionTier) => boolean;
+  isWorkspaceOwnerOrAdmin: boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
-const TIER_HIERARCHY: SubscriptionTier[] = ["starter", "growth", "scale", "enterprise"];
+const TIER_HIERARCHY: SubscriptionTier[] = ["free", "starter", "growth", "scale", "enterprise"];
 
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<SubscriptionState>({
@@ -121,6 +135,14 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     subscribed: false,
     tier: null,
     subscriptionEnd: null,
+    workspaceId: null,
+    workspaceName: null,
+    workspaceRole: null,
+    seatsPurchased: 0,
+    seatsUsed: 0,
+    creditsRemaining: 0,
+    creditsAllowance: 0,
+    creditsUsed: 0,
     error: null,
   });
 
@@ -134,6 +156,14 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           subscribed: false,
           tier: null,
           subscriptionEnd: null,
+          workspaceId: null,
+          workspaceName: null,
+          workspaceRole: null,
+          seatsPurchased: 0,
+          seatsUsed: 0,
+          creditsRemaining: 0,
+          creditsAllowance: 0,
+          creditsUsed: 0,
           error: null,
         });
         return;
@@ -143,11 +173,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error("Subscription check error:", error);
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: error.message,
-        }));
+        setState(prev => ({ ...prev, isLoading: false, error: error.message }));
         return;
       }
 
@@ -156,22 +182,26 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         subscribed: data.subscribed,
         tier: data.tier as SubscriptionTier,
         subscriptionEnd: data.subscription_end,
+        workspaceId: data.workspace_id,
+        workspaceName: data.workspace_name,
+        workspaceRole: data.workspace_role as WorkspaceRole,
+        seatsPurchased: data.seats_purchased ?? 0,
+        seatsUsed: data.seats_used ?? 0,
+        creditsRemaining: data.credits_remaining ?? 0,
+        creditsAllowance: data.credits_allowance ?? 0,
+        creditsUsed: data.credits_used ?? 0,
         error: null,
       });
     } catch (err) {
       console.error("Failed to check subscription:", err);
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: "Failed to check subscription status",
-      }));
+      setState(prev => ({ ...prev, isLoading: false, error: "Failed to check subscription status" }));
     }
   }, []);
 
   const hasFeature = useCallback((feature: Feature): boolean => {
     if (!state.tier) return false;
     const tierFeatures = TIER_FEATURES[state.tier];
-    return tierFeatures.includes(feature as never);
+    return (tierFeatures as readonly string[]).includes(feature);
   }, [state.tier]);
 
   const canAccessTier = useCallback((requiredTier: SubscriptionTier): boolean => {
@@ -181,38 +211,26 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return userTierIndex >= requiredTierIndex;
   }, [state.tier]);
 
-  // Check subscription on mount and auth state changes
+  const isWorkspaceOwnerOrAdmin = state.workspaceRole === "owner" || state.workspaceRole === "admin";
+
   useEffect(() => {
     checkSubscription();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       checkSubscription();
     });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [checkSubscription]);
 
-  // Periodic refresh every 5 minutes
   useEffect(() => {
     const interval = setInterval(() => {
-      if (state.subscribed) {
-        checkSubscription();
-      }
+      if (state.subscribed) checkSubscription();
     }, 5 * 60 * 1000);
-
     return () => clearInterval(interval);
   }, [state.subscribed, checkSubscription]);
 
   return (
     <SubscriptionContext.Provider
-      value={{
-        ...state,
-        checkSubscription,
-        hasFeature,
-        canAccessTier,
-      }}
+      value={{ ...state, checkSubscription, hasFeature, canAccessTier, isWorkspaceOwnerOrAdmin }}
     >
       {children}
     </SubscriptionContext.Provider>
