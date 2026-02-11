@@ -768,6 +768,56 @@ export type Database = {
         }
         Relationships: []
       }
+      credits_ledger: {
+        Row: {
+          balance_after: number | null
+          created_at: string
+          credits: number
+          description: string | null
+          event_type: string
+          id: string
+          period_end: string | null
+          period_start: string | null
+          reference_id: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          balance_after?: number | null
+          created_at?: string
+          credits: number
+          description?: string | null
+          event_type: string
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          reference_id?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          balance_after?: number | null
+          created_at?: string
+          credits?: number
+          description?: string | null
+          event_type?: string
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          reference_id?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credits_ledger_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_integrations: {
         Row: {
           api_key_secret_name: string | null
@@ -3457,6 +3507,7 @@ export type Database = {
       workspaces: {
         Row: {
           billing_email: string | null
+          billing_status: Database["public"]["Enums"]["billing_status"]
           created_at: string
           created_by: string
           current_period_end: string | null
@@ -3473,6 +3524,7 @@ export type Database = {
         }
         Insert: {
           billing_email?: string | null
+          billing_status?: Database["public"]["Enums"]["billing_status"]
           created_at?: string
           created_by: string
           current_period_end?: string | null
@@ -3489,6 +3541,7 @@ export type Database = {
         }
         Update: {
           billing_email?: string | null
+          billing_status?: Database["public"]["Enums"]["billing_status"]
           created_at?: string
           created_by?: string
           current_period_end?: string | null
@@ -3663,6 +3716,12 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "client"
+      billing_status:
+        | "active"
+        | "past_due"
+        | "canceled"
+        | "trialing"
+        | "incomplete"
       enrichment_provider:
         | "apollo"
         | "hunter"
@@ -3830,6 +3889,13 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "client"],
+      billing_status: [
+        "active",
+        "past_due",
+        "canceled",
+        "trialing",
+        "incomplete",
+      ],
       enrichment_provider: [
         "apollo",
         "hunter",

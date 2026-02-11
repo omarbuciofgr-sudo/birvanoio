@@ -34,15 +34,45 @@ const log = (step: string, details?: unknown) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
 };
 
+// ─── Helpers ────────────────────────────────────────────────────────
+
+function extractSubscriptionFields(subscription: Stripe.Subscription) {
+  const item = subscription.items.data[0];
+  const productId = item.price.product as string;
+  const tier = TIER_MAP[productId] || "starter";
+  const seats = item.quantity || 1;
+  return { item, productId, tier, seats };
+}
+
+function stripeBillingStatus(status: string): string {
+  // Map Stripe subscription statuses to our billing_status enum
+  switch (status) {
+    case "active": return "active";
+    case "past_due": return "past_due";
+    case "canceled":
+    case "unpaid": return "canceled";
+    case "trialing": return "trialing";
+    case "incomplete":
+    case "incomplete_expired": return "incomplete";
+    default: return "active";
+  }
+}
+
+async function findUserByEmail(email: string) {
+  const { data: userData } = await supabase.auth.admin.listUsers();
+  return userData?.users?.find(
+    (u) => u.email?.toLowerCase() === email.toLowerCase()
+  );
+}
+
+// ─── Workspace creation ─────────────────────────────────────────────
+
 async function findOrCreateWorkspaceForCustomer(
   customerId: string,
   subscription: Stripe.Subscription,
   customerEmail: string
 ) {
-  const item = subscription.items.data[0];
-  const productId = item.price.product as string;
-  const tier = TIER_MAP[productId] || "starter";
-  const seats = item.quantity || 1;
+  const { item, tier, seats } = extractSubscriptionFields(subscription);
 
   // Check if workspace already exists for this Stripe customer
   const { data: existing } = await supabase
@@ -56,12 +86,7 @@ async function findOrCreateWorkspaceForCustomer(
     return existing.id;
   }
 
-  // Find the user by email
-  const { data: userData } = await supabase.auth.admin.listUsers();
-  const user = userData?.users?.find(
-    (u) => u.email?.toLowerCase() === customerEmail.toLowerCase()
-  );
-
+  const user = await findUserByEmail(customerEmail);
   if (!user) {
     log("ERROR: No user found for email", { customerEmail });
     throw new Error(`No user found for email: ${customerEmail}`);
@@ -79,6 +104,7 @@ async function findOrCreateWorkspaceForCustomer(
       stripe_subscription_item_id: item.id,
       stripe_price_id: item.price.id,
       billing_email: customerEmail,
+      billing_status: stripeBillingStatus(subscription.status),
       created_by: user.id,
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
       current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
@@ -92,25 +118,74 @@ async function findOrCreateWorkspaceForCustomer(
   }
 
   log("Workspace created", { workspaceId: workspace.id, tier, seats });
-
-  // Provision initial monthly credits for the owner
-  const now = new Date();
-  const periodEnd = new Date(subscription.current_period_end * 1000);
-  await supabase.from("user_monthly_credits").upsert(
-    {
-      user_id: user.id,
-      workspace_id: workspace.id,
-      period_start: now.toISOString().slice(0, 10),
-      period_end: periodEnd.toISOString().slice(0, 10),
-      monthly_allowance: CREDITS_PER_SEAT[tier] || 500,
-      credits_used: 0,
-      topup_credits: 0,
-    },
-    { onConflict: "user_id,workspace_id,period_start" }
-  );
-
   return workspace.id;
 }
+
+// ─── Credit allocation ──────────────────────────────────────────────
+
+async function allocateMonthlyCredits(
+  workspaceId: string,
+  tier: string,
+  seats: number,
+  periodStart: string,
+  periodEnd: string,
+  invoiceId?: string
+) {
+  const creditsPerSeat = CREDITS_PER_SEAT[tier] || 500;
+
+  // Get all active workspace members (excluding viewers unless configured)
+  const { data: members } = await supabase
+    .from("workspace_memberships")
+    .select("user_id, role")
+    .eq("workspace_id", workspaceId);
+
+  if (!members?.length) {
+    log("No members to allocate credits for", { workspaceId });
+    return;
+  }
+
+  const { data: settings } = await supabase
+    .from("workspace_settings")
+    .select("viewer_consumes_seat")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  const viewerGetsCredits = settings?.viewer_consumes_seat !== false;
+
+  for (const member of members) {
+    if (member.role === "viewer" && !viewerGetsCredits) continue;
+
+    // Reset credits for the new period
+    await supabase.from("user_monthly_credits").upsert(
+      {
+        user_id: member.user_id,
+        workspace_id: workspaceId,
+        period_start: periodStart,
+        period_end: periodEnd,
+        monthly_allowance: creditsPerSeat,
+        credits_used: 0,
+        topup_credits: 0,
+      },
+      { onConflict: "user_id,workspace_id,period_start" }
+    );
+
+    // Record in credits ledger
+    await supabase.from("credits_ledger").insert({
+      workspace_id: workspaceId,
+      user_id: member.user_id,
+      event_type: "monthly_allocation",
+      credits: creditsPerSeat,
+      description: `Monthly ${tier} allocation (${creditsPerSeat} credits/seat)`,
+      reference_id: invoiceId || null,
+      period_start: periodStart,
+      period_end: periodEnd,
+    });
+  }
+
+  log("Credits allocated", { workspaceId, tier, members: members.length, creditsPerSeat });
+}
+
+// ─── Event handlers ─────────────────────────────────────────────────
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   log("checkout.session.completed", { sessionId: session.id });
@@ -129,29 +204,31 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // Fetch the full subscription to get item details
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   await findOrCreateWorkspaceForCustomer(customerId, subscription, customerEmail);
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  log("customer.subscription.updated", { subId: subscription.id });
+async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscription) {
+  log("subscription.created/updated", { subId: subscription.id, status: subscription.status });
 
   const customerId = subscription.customer as string;
-  const item = subscription.items.data[0];
-  const productId = item.price.product as string;
-  const tier = TIER_MAP[productId] || "starter";
-  const seats = item.quantity || 1;
+  const { item, tier, seats } = extractSubscriptionFields(subscription);
+  const billingStatus = stripeBillingStatus(subscription.status);
+
+  const periodStart = new Date(subscription.current_period_start * 1000).toISOString();
+  const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
 
   const { data: workspace, error } = await supabase
     .from("workspaces")
     .update({
       plan_tier: tier,
       seats_purchased: seats,
+      stripe_subscription_id: subscription.id,
       stripe_subscription_item_id: item.id,
       stripe_price_id: item.price.id,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      billing_status: billingStatus,
+      current_period_start: periodStart,
+      current_period_end: periodEnd,
       updated_at: new Date().toISOString(),
     })
     .eq("stripe_customer_id", customerId)
@@ -172,47 +249,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     return;
   }
 
-  log("Workspace updated", { workspaceId: workspace.id, tier, seats });
-
-  // Update monthly credit allowances for all workspace members
-  const periodStart = new Date(subscription.current_period_start * 1000)
-    .toISOString()
-    .slice(0, 10);
-  const periodEnd = new Date(subscription.current_period_end * 1000)
-    .toISOString()
-    .slice(0, 10);
-
-  const { data: members } = await supabase
-    .from("workspace_memberships")
-    .select("user_id, role")
-    .eq("workspace_id", workspace.id);
-
-  if (members) {
-    for (const member of members) {
-      // Check if viewer consumes credits
-      const { data: settings } = await supabase
-        .from("workspace_settings")
-        .select("viewer_consumes_seat")
-        .eq("workspace_id", workspace.id)
-        .maybeSingle();
-
-      const viewerGetsCredits = settings?.viewer_consumes_seat !== false;
-      if (member.role === "viewer" && !viewerGetsCredits) continue;
-
-      await supabase.from("user_monthly_credits").upsert(
-        {
-          user_id: member.user_id,
-          workspace_id: workspace.id,
-          period_start: periodStart,
-          period_end: periodEnd,
-          monthly_allowance: CREDITS_PER_SEAT[tier] || 500,
-          credits_used: 0,
-          topup_credits: 0,
-        },
-        { onConflict: "user_id,workspace_id,period_start" }
-      );
-    }
-  }
+  log("Workspace updated", { workspaceId: workspace.id, tier, seats, billingStatus });
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -224,6 +261,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     .from("workspaces")
     .update({
       plan_tier: "free",
+      billing_status: "canceled",
       stripe_subscription_id: null,
       stripe_subscription_item_id: null,
       stripe_price_id: null,
@@ -234,9 +272,73 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   if (error) {
     log("ERROR downgrading workspace", { error });
   } else {
-    log("Workspace downgraded to free", { customerId });
+    log("Workspace canceled", { customerId });
   }
 }
+
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  log("invoice.paid", { invoiceId: invoice.id, subscription: invoice.subscription });
+
+  if (!invoice.subscription) {
+    log("Skipping non-subscription invoice");
+    return;
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+  const customerId = subscription.customer as string;
+  const { tier, seats } = extractSubscriptionFields(subscription);
+
+  // Update workspace to active
+  const { data: workspace } = await supabase
+    .from("workspaces")
+    .update({
+      billing_status: "active",
+      plan_tier: tier,
+      seats_purchased: seats,
+      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_customer_id", customerId)
+    .select("id")
+    .maybeSingle();
+
+  if (!workspace) {
+    log("No workspace found for invoice.paid", { customerId });
+    return;
+  }
+
+  // Allocate monthly credits for the new period
+  const periodStart = new Date(subscription.current_period_start * 1000).toISOString().slice(0, 10);
+  const periodEnd = new Date(subscription.current_period_end * 1000).toISOString().slice(0, 10);
+
+  await allocateMonthlyCredits(workspace.id, tier, seats, periodStart, periodEnd, invoice.id);
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  log("invoice.payment_failed", { invoiceId: invoice.id, subscription: invoice.subscription });
+
+  if (!invoice.subscription) return;
+
+  const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+  const customerId = subscription.customer as string;
+
+  const { error } = await supabase
+    .from("workspaces")
+    .update({
+      billing_status: "past_due",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_customer_id", customerId);
+
+  if (error) {
+    log("ERROR setting past_due", { error });
+  } else {
+    log("Workspace set to past_due", { customerId });
+  }
+}
+
+// ─── Main handler ───────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -271,21 +373,24 @@ Deno.serve(async (req) => {
       case "checkout.session.completed":
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
         break;
+
+      case "customer.subscription.created":
       case "customer.subscription.updated":
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+        await handleSubscriptionCreatedOrUpdated(event.data.object as Stripe.Subscription);
         break;
+
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
-      case "invoice.paid": {
-        // On invoice.paid, refresh the subscription period on workspace
-        const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription) {
-          const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
-          await handleSubscriptionUpdated(sub);
-        }
+
+      case "invoice.paid":
+        await handleInvoicePaid(event.data.object as Stripe.Invoice);
         break;
-      }
+
+      case "invoice.payment_failed":
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        break;
+
       default:
         log("Unhandled event type", { type: event.type });
     }

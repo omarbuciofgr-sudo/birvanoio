@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type SubscriptionTier = "free" | "starter" | "growth" | "scale" | "enterprise" | null;
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer" | null;
+export type BillingStatus = "active" | "past_due" | "canceled" | "trialing" | "incomplete" | null;
 
 // Feature definitions by tier
 export const TIER_FEATURES = {
@@ -106,6 +107,7 @@ interface SubscriptionState {
   isLoading: boolean;
   subscribed: boolean;
   tier: SubscriptionTier;
+  billingStatus: BillingStatus;
   subscriptionEnd: string | null;
   workspaceId: string | null;
   workspaceName: string | null;
@@ -123,6 +125,12 @@ interface SubscriptionContextType extends SubscriptionState {
   hasFeature: (feature: Feature) => boolean;
   canAccessTier: (requiredTier: SubscriptionTier) => boolean;
   isWorkspaceOwnerOrAdmin: boolean;
+  /** True when billing_status is past_due — blocks new jobs/enrichment */
+  isPastDue: boolean;
+  /** True when billing_status is canceled — read-only mode */
+  isCanceled: boolean;
+  /** True when workspace can run new jobs (active or trialing) */
+  canRunJobs: boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -134,6 +142,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     isLoading: true,
     subscribed: false,
     tier: null,
+    billingStatus: null,
     subscriptionEnd: null,
     workspaceId: null,
     workspaceName: null,
@@ -155,6 +164,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isLoading: false,
           subscribed: false,
           tier: null,
+          billingStatus: null,
           subscriptionEnd: null,
           workspaceId: null,
           workspaceName: null,
@@ -181,6 +191,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isLoading: false,
         subscribed: data.subscribed,
         tier: data.tier as SubscriptionTier,
+        billingStatus: (data.billing_status as BillingStatus) || null,
         subscriptionEnd: data.subscription_end,
         workspaceId: data.workspace_id,
         workspaceName: data.workspace_name,
@@ -212,6 +223,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [state.tier]);
 
   const isWorkspaceOwnerOrAdmin = state.workspaceRole === "owner" || state.workspaceRole === "admin";
+  const isPastDue = state.billingStatus === "past_due";
+  const isCanceled = state.billingStatus === "canceled";
+  const canRunJobs = state.billingStatus === "active" || state.billingStatus === "trialing";
 
   useEffect(() => {
     checkSubscription();
@@ -230,7 +244,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   return (
     <SubscriptionContext.Provider
-      value={{ ...state, checkSubscription, hasFeature, canAccessTier, isWorkspaceOwnerOrAdmin }}
+      value={{ ...state, checkSubscription, hasFeature, canAccessTier, isWorkspaceOwnerOrAdmin, isPastDue, isCanceled, canRunJobs }}
     >
       {children}
     </SubscriptionContext.Provider>
