@@ -86,11 +86,29 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
       const isLocalhost =
         typeof window !== 'undefined' &&
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      const { data: adminData } = await supabase.rpc('has_role', {
-        _user_id: user.id,
-        _role: 'admin'
-      });
-      if (adminData || isLocalhost) setIsAdmin(true);
+      const isBrivanoProduction =
+        typeof window !== 'undefined' &&
+        (window.location.hostname === 'www.brivano.io' || window.location.hostname === 'brivano.io');
+      const adminEmailsEnv = typeof import.meta.env.VITE_ADMIN_EMAILS === 'string'
+        ? (import.meta.env.VITE_ADMIN_EMAILS as string).trim().toLowerCase().split(',').map((e) => e.trim()).filter(Boolean)
+        : [];
+      const emailIsAdmin =
+        user?.email &&
+        (adminEmailsEnv.includes(user.email.toLowerCase()) ||
+          user.email.toLowerCase().endsWith('@brivano.io'));
+
+      let adminData: boolean | null = null;
+      try {
+        const { data } = await supabase.rpc('has_role', {
+          _user_id: user.id,
+          _role: 'admin'
+        });
+        adminData = !!data;
+      } catch {
+        adminData = null;
+      }
+
+      if (adminData || isLocalhost || (isBrivanoProduction && emailIsAdmin)) setIsAdmin(true);
 
       const { data: clientData } = await supabase
         .from('client_users')
@@ -100,7 +118,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
       if (clientData?.organization_id) setIsClient(true);
     };
     checkUserRoles();
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
 
   const handleSignOut = async () => {
     await signOut();
