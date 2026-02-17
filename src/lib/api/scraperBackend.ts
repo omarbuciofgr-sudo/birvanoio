@@ -86,13 +86,15 @@ export function buildTruliaUrl(location: string): string | null {
 }
 
 const PRODUCTION_BACKEND = "https://resplendent-empathy-production.up.railway.app";
-const FRONTEND_ORIGINS = ["https://www.brivano.io", "https://brivano.io"];
 
 const getBaseUrl = (): string => {
   const url = import.meta.env.VITE_SCRAPER_BACKEND_URL;
   if (typeof url === "string" && url.trim()) return url.trim().replace(/\/$/, "");
-  if (typeof window !== "undefined" && FRONTEND_ORIGINS.includes(window.location.origin))
-    return PRODUCTION_BACKEND;
+  // Use deployed backend whenever not on localhost (brivano.io, Lovable preview, etc.)
+  if (typeof window !== "undefined") {
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (!isLocal) return PRODUCTION_BACKEND;
+  }
   return "http://localhost:8080";
 };
 
