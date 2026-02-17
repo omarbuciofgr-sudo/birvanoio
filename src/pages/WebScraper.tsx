@@ -265,7 +265,11 @@ export default function WebScraper() {
         // Check backend once so we show a clear message without multiple connection-refused console errors
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
         if (!backendReachable) {
-          toast.error('HotPads scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.');
+          const base = scraperBackendApi.getBaseUrl();
+          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+          toast.error(isLocal
+            ? 'HotPads scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
+            : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
           setReLoading(false);
           return;
         }
@@ -367,7 +371,11 @@ export default function WebScraper() {
         // Trulia: same flow as Hotpads (backend scraper, trigger-from-url, last-result)
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
         if (!backendReachable) {
-          toast.error('Trulia scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.');
+          const base = scraperBackendApi.getBaseUrl();
+          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+          toast.error(isLocal
+            ? 'Trulia scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
+            : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
           setReLoading(false);
           return;
         }
@@ -454,7 +462,11 @@ export default function WebScraper() {
         // Redfin: search-location to get URL, trigger-from-url, then last-result from redfin_listings
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
         if (!backendReachable) {
-          toast.error('Redfin scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO scraping.');
+          const base = scraperBackendApi.getBaseUrl();
+          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+          toast.error(isLocal
+            ? 'Redfin scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO scraping.'
+            : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
           setReLoading(false);
           return;
         }
@@ -570,7 +582,11 @@ export default function WebScraper() {
     } catch (e: any) {
       const msg = String(e?.message || '');
       if ((isHotpads || isTrulia) && /connection refused|failed to fetch|network error|ERR_|load failed/i.test(msg)) {
-        toast.error(`${isTrulia ? 'Trulia' : 'HotPads'} scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.`);
+        const base = scraperBackendApi.getBaseUrl();
+        const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+        toast.error(isLocal
+          ? `${isTrulia ? 'Trulia' : 'HotPads'} scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.`
+          : 'Deployed scraper backend is not reachable. Check your network or try again.');
       } else {
         toast.error(isHotpads ? 'Failed to run Hotpads scraper' : isTrulia ? 'Failed to run Trulia scraper' : 'Failed to scrape listings');
       }

@@ -90,7 +90,9 @@ const PRODUCTION_BACKEND = "https://resplendent-empathy-production.up.railway.ap
 const getBaseUrl = (): string => {
   const url = import.meta.env.VITE_SCRAPER_BACKEND_URL;
   if (typeof url === "string" && url.trim()) return url.trim().replace(/\/$/, "");
-  // Use deployed backend whenever not on localhost (brivano.io, Lovable preview, etc.)
+  // Production build (Lovable, brivano.io) always use deployed backend
+  if (import.meta.env.PROD) return PRODUCTION_BACKEND;
+  // Dev: use deployed backend whenever not on localhost (e.g. preview from another host)
   if (typeof window !== "undefined") {
     const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     if (!isLocal) return PRODUCTION_BACKEND;
