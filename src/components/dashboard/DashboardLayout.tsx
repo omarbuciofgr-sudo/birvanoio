@@ -86,9 +86,6 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
       const isLocalhost =
         typeof window !== 'undefined' &&
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      const isBrivanoProduction =
-        typeof window !== 'undefined' &&
-        (window.location.hostname === 'www.brivano.io' || window.location.hostname === 'brivano.io');
       const adminEmailsEnv = typeof import.meta.env.VITE_ADMIN_EMAILS === 'string'
         ? (import.meta.env.VITE_ADMIN_EMAILS as string).trim().toLowerCase().split(',').map((e) => e.trim()).filter(Boolean)
         : [];
@@ -108,7 +105,8 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
         adminData = null;
       }
 
-      if (adminData || isLocalhost || (isBrivanoProduction && emailIsAdmin)) setIsAdmin(true);
+      // Show Admin: Supabase role, localhost, or allowed email (any host so deployment/Lovable shows Admin)
+      if (adminData || isLocalhost || emailIsAdmin) setIsAdmin(true);
 
       const { data: clientData } = await supabase
         .from('client_users')
