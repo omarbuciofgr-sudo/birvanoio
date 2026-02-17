@@ -258,6 +258,7 @@ export default function WebScraper() {
 
     const isHotpads = rePlatform === 'hotpads';
     const isTrulia = rePlatform === 'trulia';
+    const isRedfin = rePlatform === 'redfin';
 
     try {
       if (isHotpads) {
@@ -442,6 +443,93 @@ export default function WebScraper() {
             if (!error && data?.length) {
               setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
               toast.success(`Saved ${data.length} Trulia listings to database`);
+            } else if (error) {
+              toast.error('Could not save listings to database');
+            }
+          } catch {
+            toast.error('Failed to save listings to database');
+          }
+        }
+        } else if (isRedfin) {
+        // Redfin: search-location to get URL, trigger-from-url, then last-result from redfin_listings
+        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
+        if (!backendReachable) {
+          toast.error('Redfin scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO scraping.');
+          setReLoading(false);
+          return;
+        }
+        const searchRes = await scraperBackendApi.searchLocation('redfin', reLocation.trim(), 'for-sale-by-owner');
+        if (!searchRes.success || !searchRes.url) {
+          toast.error(searchRes.error || 'Could not find Redfin URL for this location. Try "City, ST" (e.g. Chicago, IL).');
+          setReLoading(false);
+          return;
+        }
+        await scraperBackendApi.resetRedfinStatus();
+        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
+        if (triggerRes.error) {
+          toast.error(triggerRes.error);
+          setReLoading(false);
+          return;
+        }
+        toast.info('Redfin scraper started. Waiting for results…');
+        const pollInterval = 2000;
+        const maxWait = 5 * 60 * 1000;
+        const start = Date.now();
+        let status = await scraperBackendApi.getRedfinStatus();
+        while (status.status === 'running' && Date.now() - start < maxWait) {
+          await new Promise((r) => setTimeout(r, pollInterval));
+          status = await scraperBackendApi.getRedfinStatus();
+        }
+        if (status.status === 'running') {
+          toast.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
+        }
+        const result = await scraperBackendApi.getRedfinLastResult();
+        const mapped = (result.listings || []).map((l) => ({
+          address: l.address,
+          bedrooms: l.bedrooms,
+          bathrooms: l.bathrooms,
+          price: l.price,
+          owner_name: l.owner_name,
+          owner_phone: l.owner_phone,
+          listing_url: l.listing_url,
+          source_url: l.listing_url,
+          source_platform: 'redfin',
+          listing_type: 'sale',
+          square_feet: l.square_feet,
+        }));
+        setReListings(mapped);
+        toast.success(`Found ${mapped.length} Redfin listings`);
+        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        if (reSaveToDb && mapped.length > 0 && user?.id) {
+          try {
+            const rows = mapped.map((listing) => ({
+              domain: 'redfin.com',
+              source_url: listing.source_url || listing.listing_url || null,
+              address: listing.address || null,
+              full_name: listing.owner_name || null,
+              best_email: null,
+              best_phone: listing.owner_phone || null,
+              all_emails: [],
+              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
+              status: 'new' as const,
+              confidence_score: 50,
+              lead_type: 'person',
+              source_type: 'real_estate_scraper',
+              schema_data: {
+                address: listing.address,
+                bedrooms: listing.bedrooms,
+                bathrooms: listing.bathrooms,
+                price: listing.price,
+                listing_type: 'sale',
+                source_platform: 'redfin',
+                square_feet: listing.square_feet,
+              },
+              enrichment_providers_used: [],
+            }));
+            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
+            if (!error && data?.length) {
+              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              toast.success(`Saved ${data.length} Redfin listings to database`);
             } else if (error) {
               toast.error('Could not save listings to database');
             }
