@@ -103,6 +103,9 @@ export default function APISettings() {
   const { data: dbProviders = [] } = useQuery({
     queryKey: ['enrichment-providers'],
     queryFn: () => enrichmentProvidersApi.list(),
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const toggleMutation = useMutation({

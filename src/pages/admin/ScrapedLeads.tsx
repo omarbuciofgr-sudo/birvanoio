@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag, ListTodo, Webhook, Cpu, MessageSquareText, Contact, Radar, RefreshCw, Bell } from 'lucide-react';
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
@@ -86,6 +94,8 @@ export default function ScrapedLeads() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<ScrapedLead | null>(null);
   const [editingLead, setEditingLead] = useState<ScrapedLead | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ['scraped-leads', statusFilter, jobFilter, sourceTypeFilter],
@@ -265,13 +275,38 @@ export default function ScrapedLeads() {
     );
   });
 
+  const totalFiltered = filteredLeads.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const paginatedLeads = useMemo(
+    () => filteredLeads.slice((page - 1) * pageSize, page * pageSize),
+    [filteredLeads, page, pageSize]
+  );
+  const startRow = totalFiltered === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRow = Math.min(page * pageSize, totalFiltered);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, jobFilter, sourceTypeFilter, searchTerm]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const toggleSelectAll = () => {
-    if (selectedLeads.size === filteredLeads.length) {
-      setSelectedLeads(new Set());
+    const onPage = paginatedLeads.map(l => l.id);
+    const allOnPageSelected = onPage.length > 0 && onPage.every(id => selectedLeads.has(id));
+    if (allOnPageSelected) {
+      const next = new Set(selectedLeads);
+      onPage.forEach(id => next.delete(id));
+      setSelectedLeads(next);
     } else {
-      setSelectedLeads(new Set(filteredLeads.map(l => l.id)));
+      const next = new Set(selectedLeads);
+      onPage.forEach(id => next.add(id));
+      setSelectedLeads(next);
     }
   };
+  const allOnPageSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.has(l.id));
+  const someOnPageSelected = paginatedLeads.some(l => selectedLeads.has(l.id));
 
   const toggleSelect = (id: string) => {
     const newSelected = new Set(selectedLeads);
@@ -545,7 +580,7 @@ export default function ScrapedLeads() {
                 <SelectContent>
                   <SelectItem value="all">All Sources</SelectItem>
                   <SelectItem value="scrape">Web Scraper</SelectItem>
-                  <SelectItem value="real_estate_scraper">Real Estate</SelectItem>
+                  <SelectItem value="real_estate_scraper">Brivano Scout (Real Estate)</SelectItem>
                   <SelectItem value="prospect_search">Prospect Search</SelectItem>
                   <SelectItem value="google_places">Google Places</SelectItem>
                   <SelectItem value="apollo">Apollo</SelectItem>
@@ -577,7 +612,7 @@ export default function ScrapedLeads() {
                   <TableRow>
                     <TableHead className="w-[50px]">
                       <Checkbox
-                        checked={selectedLeads.size === filteredLeads.length && filteredLeads.length > 0}
+                        checked={allOnPageSelected ? true : someOnPageSelected ? 'indeterminate' : false}
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
@@ -592,7 +627,7 @@ export default function ScrapedLeads() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLeads.map((lead) => (
+                  {paginatedLeads.map((lead) => (
                     <TableRow key={lead.id} className="cursor-pointer hover:bg-muted/50">
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -722,6 +757,85 @@ export default function ScrapedLeads() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+
+            {!isLoading && filteredLeads.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-muted-foreground">
+                    Rows per page
+                  </span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[70px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">
+                    Showing {startRow}–{endRow} of {totalFiltered}
+                  </span>
+                </div>
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (page > 1) setPage(page - 1);
+                        }}
+                        className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        aria-disabled={page <= 1}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let p: number;
+                      if (totalPages <= 5) p = i + 1;
+                      else if (page <= 3) p = i + 1;
+                      else if (page >= totalPages - 2) p = totalPages - 4 + i;
+                      else p = page - 2 + i;
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(p);
+                            }}
+                            isActive={page === p}
+                            className="cursor-pointer"
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (page < totalPages) setPage(page + 1);
+                        }}
+                        className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        aria-disabled={page >= totalPages}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
             )}
           </CardContent>
         </Card>

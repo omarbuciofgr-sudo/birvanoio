@@ -18,6 +18,8 @@ const DEFAULT_LIMITS: PlanLimits = {
   confidence_stop_threshold: 0.80,
 };
 
+const skipOptionalTables = import.meta.env.VITE_SKIP_OPTIONAL_TABLES === "true";
+
 export function usePlanLimits() {
   const { tier } = useSubscription();
   const effectiveTier = tier || "free";
@@ -25,15 +27,22 @@ export function usePlanLimits() {
   const { data: limits, isLoading } = useQuery({
     queryKey: ["plan-limits", effectiveTier],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("plan_limits")
-        .select("*")
-        .eq("tier", effectiveTier)
-        .maybeSingle();
-
-      if (error || !data) return DEFAULT_LIMITS;
-      return data as PlanLimits;
+      if (skipOptionalTables) return DEFAULT_LIMITS;
+      try {
+        const { data, error } = await supabase
+          .from("plan_limits")
+          .select("*")
+          .eq("tier", effectiveTier)
+          .maybeSingle();
+        if (error || !data) return DEFAULT_LIMITS;
+        return data as PlanLimits;
+      } catch {
+        return DEFAULT_LIMITS;
+      }
     },
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   return {

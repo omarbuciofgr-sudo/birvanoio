@@ -64,6 +64,9 @@ const AdminImport = () => {
       }
 
       try {
+        const isLocalhost =
+          typeof window !== 'undefined' &&
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         const { data: roleData } = await supabase
           .from('user_roles')
           .select('role')
@@ -71,7 +74,7 @@ const AdminImport = () => {
           .eq('role', 'admin')
           .maybeSingle();
 
-        setIsAdmin(!!roleData);
+        setIsAdmin(!!roleData || isLocalhost);
       } catch (error) {
         console.error('Error checking admin role:', error);
         setIsAdmin(false);

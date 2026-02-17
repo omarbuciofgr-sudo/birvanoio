@@ -7,6 +7,7 @@ import { AIDealForecast } from "@/components/dashboard/AIDealForecast";
 import { AISmartPriority } from "@/components/dashboard/AISmartPriority";
 import { AIChurnDetection } from "@/components/dashboard/AIChurnDetection";
 import { supabase } from "@/integrations/supabase/client";
+import { isOptionalTableMissing, markOptionalTableMissing, markOptionalTableMissingOnError } from "../integrations/supabase/optionalTables";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +104,19 @@ const Dashboard = () => {
   };
 
   const fetchNotifications = async () => {
-    const { data } = await supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(10);
+    const table = "notifications";
+    if (isOptionalTableMissing(table)) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false }).limit(10);
+    if (error) {
+      markOptionalTableMissingOnError(table, error);
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
     if (data) {
       setNotifications(data);
       setUnreadCount(data.filter(n => !n.is_read).length);
@@ -111,12 +124,28 @@ const Dashboard = () => {
   };
 
   const fetchActivities = async () => {
-    const { data } = await supabase.from("team_activity_log").select("*").order("created_at", { ascending: false }).limit(8);
+    const table = "team_activity_log";
+    if (isOptionalTableMissing(table)) {
+      setActivities([]);
+      return;
+    }
+    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false }).limit(8);
+    if (error) {
+      markOptionalTableMissingOnError(table, error);
+      setActivities([]);
+      return;
+    }
     if (data) setActivities(data);
   };
 
   const markNotificationRead = async (id: string) => {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    if (isOptionalTableMissing("notifications")) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      return;
+    }
+    const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    if (error) markOptionalTableMissingOnError("notifications", error);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
   };
@@ -332,16 +361,14 @@ const Dashboard = () => {
               </div>
             </CardHeader>
             <CardContent className="px-5 pb-4">
-              <div className="flex justify-center mb-4">
-                <ResponsiveContainer width={140} height={140}>
-                  <PieChart>
-                    <Pie data={funnelData} innerRadius={48} outerRadius={62} paddingAngle={4} dataKey="value" strokeWidth={0}>
-                      {funnelData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="flex justify-center mb-4 size-[140px]">
+                <PieChart width={140} height={140}>
+                  <Pie data={funnelData} innerRadius={48} outerRadius={62} paddingAngle={4} dataKey="value" strokeWidth={0}>
+                    {funnelData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
               </div>
               <div className="space-y-2">
                 {funnelData.map((stage) => (

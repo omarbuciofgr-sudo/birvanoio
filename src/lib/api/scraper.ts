@@ -521,15 +521,21 @@ export const scrapedLeadsApi = {
 // Enrichment Providers API
 // ============================================
 
+const skipOptionalTables = import.meta.env.VITE_SKIP_OPTIONAL_TABLES === 'true';
+
 export const enrichmentProvidersApi = {
   async list(): Promise<EnrichmentProviderConfig[]> {
-    const { data, error } = await supabase
-      .from('enrichment_providers_config')
-      .select('*')
-      .order('display_name');
-    
-    if (error) throw error;
-    return (data || []) as unknown as EnrichmentProviderConfig[];
+    if (skipOptionalTables) return [];
+    try {
+      const { data, error } = await supabase
+        .from('enrichment_providers_config')
+        .select('*')
+        .order('display_name');
+      if (error) return [];
+      return (data || []) as unknown as EnrichmentProviderConfig[];
+    } catch {
+      return [];
+    }
   },
 
   async update(provider: string, config: Partial<EnrichmentProviderConfig>): Promise<EnrichmentProviderConfig> {

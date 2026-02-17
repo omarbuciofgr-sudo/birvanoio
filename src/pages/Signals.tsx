@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { isOptionalTableMissing, markOptionalTableMissingOnError } from '../integrations/supabase/optionalTables';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,21 +51,28 @@ export default function Signals() {
     notify_email: true, notify_in_app: true,
   });
 
+  const TABLE = 'signal_subscriptions';
   const { data: subscriptions = [], isLoading } = useQuery({
     queryKey: ['signal-subscriptions'],
     queryFn: async () => {
+      if (isOptionalTableMissing(TABLE)) return [];
       const { data, error } = await supabase
-        .from('signal_subscriptions')
+        .from(TABLE)
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      if (error) {
+        markOptionalTableMissingOnError(TABLE, error);
+        return [];
+      }
+      return data ?? [];
     },
+    retry: false,
   });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('signal_subscriptions').insert({
+      if (isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).insert({
         user_id: user!.id,
         name: newSignal.name || QUICK_START_SIGNALS.find(s => s.type === newSignal.signal_type)?.label || 'New Signal',
         signal_type: newSignal.signal_type,
@@ -73,7 +81,7 @@ export default function Signals() {
         notify_email: newSignal.notify_email,
         notify_in_app: newSignal.notify_in_app,
       });
-      if (error) throw error;
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['signal-subscriptions'] });
@@ -87,16 +95,18 @@ export default function Signals() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from('signal_subscriptions').update({ is_active }).eq('id', id);
-      if (error) throw error;
+      if (isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).update({ is_active }).eq('id', id);
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signal-subscriptions'] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('signal_subscriptions').delete().eq('id', id);
-      if (error) throw error;
+      if (isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).delete().eq('id', id);
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['signal-subscriptions'] });

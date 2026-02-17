@@ -113,7 +113,7 @@ const VoiceAgent = () => {
       .from("profiles")
       .select("elevenlabs_agent_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!error && data?.elevenlabs_agent_id) {
       setElevenLabsAgentId(data.elevenlabs_agent_id);

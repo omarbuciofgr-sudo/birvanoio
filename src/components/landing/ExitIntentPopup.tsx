@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -64,6 +65,9 @@ const ExitIntentPopup = () => {
           <DialogTitle className="font-display text-2xl font-bold text-foreground">
             Wait! Don't miss out
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Get 10 free sample leads for your industry. Enter your email to receive them.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="text-center py-4">

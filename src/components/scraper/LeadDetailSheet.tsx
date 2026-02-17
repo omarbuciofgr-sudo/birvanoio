@@ -1,6 +1,7 @@
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -77,6 +78,7 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-border bg-muted/30">
           <SheetHeader className="space-y-3">
+            <SheetDescription className="sr-only">Lead details for {lead.domain}</SheetDescription>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <SheetTitle className="text-base font-semibold truncate">{lead.domain}</SheetTitle>

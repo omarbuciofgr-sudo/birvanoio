@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isOptionalTableMissing, markOptionalTableMissingOnError } from '../../integrations/supabase/optionalTables';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,53 +17,62 @@ export function NotificationBell() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications'],
+  const TABLE = 'user_notifications';
+  const { data: notifications = [], isFetched } = useQuery({
+    queryKey: ['notifications', TABLE],
     queryFn: async () => {
       if (!user) return [];
+      if (isOptionalTableMissing(TABLE)) return [];
       const { data, error } = await supabase
-        .from('user_notifications')
+        .from(TABLE)
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(30);
-      if (error) throw error;
-      return data;
+      if (error) {
+        markOptionalTableMissingOnError(TABLE, error);
+        return [];
+      }
+      return data ?? [];
     },
     enabled: !!user,
     refetchInterval: 30000,
+    retry: false,
   });
 
-  // Realtime subscription
+  // Realtime: only subscribe after query has completed and table exists (avoids 404 + WebSocket closed before connection)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isFetched || isOptionalTableMissing(TABLE)) return;
     const channel = supabase
       .channel('notifications')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'user_notifications',
+        table: TABLE,
         filter: `user_id=eq.${user.id}`,
       }, () => {
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, queryClient]);
+  }, [user, queryClient, isFetched]);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('user_notifications').update({ is_read: true }).eq('id', id);
+      if (isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).update({ is_read: true }).eq('id', id);
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      if (!user) return;
-      await supabase.from('user_notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+      if (!user || isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });

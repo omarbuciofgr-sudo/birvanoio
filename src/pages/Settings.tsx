@@ -67,7 +67,7 @@ const Settings = () => {
       .from("profiles")
       .select("first_name, last_name, company_name, twilio_phone_number, sender_email")
       .eq("user_id", user?.id)
-      .single();
+      .maybeSingle();
 
     if (!error && data) {
       setProfile({

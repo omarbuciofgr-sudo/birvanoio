@@ -1,5 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
-
 export interface SkipTraceInput {
   address: string;
   city?: string;
@@ -41,19 +39,37 @@ export interface SkipTraceResult {
   message?: string;
 }
 
+const PRODUCTION_BACKEND = "https://resplendent-empathy-production.up.railway.app";
+const FRONTEND_ORIGINS = ["https://www.brivano.io", "https://brivano.io"];
+
+const getBackendUrl = (): string => {
+  const url = import.meta.env.VITE_SCRAPER_BACKEND_URL;
+  if (typeof url === "string" && url.trim()) return url.trim().replace(/\/$/, "");
+  if (typeof window !== "undefined" && FRONTEND_ORIGINS.includes(window.location.origin))
+    return PRODUCTION_BACKEND;
+  return "http://localhost:8080";
+};
+
 export const skipTraceApi = {
   /**
-   * Perform skip tracing on a property address to find owner contact info
-   * Uses BatchData exclusively for residential property skip tracing
+   * Perform skip tracing on a property address to find owner contact info.
+   * Calls the scraper backend (BatchData), not Supabase Edge Function.
    */
   async lookupOwner(input: SkipTraceInput): Promise<SkipTraceResult> {
-    const { data, error } = await supabase.functions.invoke('tracerfy-skip-trace', {
-      body: input,
+    const base = getBackendUrl();
+    const res = await fetch(`${base}/api/skip-trace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
     });
+    const data = await res.json().catch(() => ({}));
 
-    if (error) {
-      console.error('Skip trace error:', error);
-      return { success: false, error: error.message };
+    if (!res.ok) {
+      console.error('Skip trace error:', res.status, data);
+      return {
+        success: false,
+        error: (data as { error?: string }).error || res.statusText || 'Skip trace failed',
+      };
     }
 
     return data as SkipTraceResult;

@@ -187,8 +187,13 @@ export const firecrawlApi = {
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      // Prefer backend message (e.g. "Authentication required", "Admin access required")
+      const message = (data as any)?.error ?? error.message;
+      return { success: false, error: message };
     }
-    return data;
+    if (data && !(data as FSBOScrapeAndTraceResponse).success && (data as FSBOScrapeAndTraceResponse).error) {
+      return data as FSBOScrapeAndTraceResponse;
+    }
+    return data as FSBOScrapeAndTraceResponse;
   },
 };

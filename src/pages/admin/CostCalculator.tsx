@@ -70,15 +70,21 @@ export default function CostCalculator() {
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showEventDialog, setShowEventDialog] = useState(false);
 
-  // Fetch data
+  // Fetch data (retry: false, no refetch on focus - avoid repeated 404s when tables don't exist)
   const { data: providers = [], isLoading: providersLoading } = useQuery({
     queryKey: ['provider-pricing'],
     queryFn: fetchProviderPricing,
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ['credit-event-configs'],
     queryFn: fetchCreditEventConfigs,
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // Calculate costs
@@ -262,7 +268,7 @@ export default function CostCalculator() {
               </CardContent>
             </Card>
 
-            {/* Summary Stats */}
+            {/* Summary Stats - guard for empty costs to avoid reduce on empty array */}
             <div className="grid grid-cols-3 gap-4">
               <Card>
                 <CardHeader>
@@ -270,7 +276,9 @@ export default function CostCalculator() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {(costs.reduce((sum, c) => sum + c.margin_percent, 0) / costs.length).toFixed(1)}%
+                    {costs.length
+                      ? `${(costs.reduce((sum, c) => sum + c.margin_percent, 0) / costs.length).toFixed(1)}%`
+                      : "0.0%"}
                   </div>
                 </CardContent>
               </Card>
@@ -280,10 +288,14 @@ export default function CostCalculator() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-lg font-semibold">
-                    {costs.reduce((max, c) => (c.cogs_cost_cents > max.cogs_cost_cents ? c : max)).event_name}
+                    {costs.length
+                      ? costs.reduce((max, c) => (c.cogs_cost_cents > max.cogs_cost_cents ? c : max), costs[0]).event_name
+                      : "—"}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    ${(costs.reduce((max, c) => (c.cogs_cost_cents > max.cogs_cost_cents ? c : max)).cogs_cost_cents / 100).toFixed(3)}
+                    {costs.length
+                      ? `$${(costs.reduce((max, c) => (c.cogs_cost_cents > max.cogs_cost_cents ? c : max), costs[0]).cogs_cost_cents / 100).toFixed(3)}`
+                      : "—"}
                   </div>
                 </CardContent>
               </Card>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { isOptionalTableMissing, markOptionalTableMissingOnError } from '../integrations/supabase/optionalTables';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,28 +46,35 @@ export default function AIAgents() {
   const [createPrompt, setCreatePrompt] = useState('');
   const [createModel, setCreateModel] = useState('google/gemini-3-flash-preview');
 
+  const TABLE = 'ai_agents';
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['ai-agents'],
     queryFn: async () => {
+      if (isOptionalTableMissing(TABLE)) return [];
       const { data, error } = await supabase
-        .from('ai_agents')
+        .from(TABLE)
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      if (error) {
+        markOptionalTableMissingOnError(TABLE, error);
+        return [];
+      }
+      return data ?? [];
     },
+    retry: false,
   });
 
   const createMutation = useMutation({
     mutationFn: async ({ name, prompt, model }: { name: string; prompt: string; model: string }) => {
-      const { error } = await supabase.from('ai_agents').insert({
+      if (isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).insert({
         user_id: user!.id,
         name,
         prompt,
         model,
         tools: [],
       });
-      if (error) throw error;
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-agents'] });
@@ -78,8 +86,9 @@ export default function AIAgents() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('ai_agents').delete().eq('id', id);
-      if (error) throw error;
+      if (isOptionalTableMissing(TABLE)) return;
+      const { error } = await supabase.from(TABLE).delete().eq('id', id);
+      if (error) markOptionalTableMissingOnError(TABLE, error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-agents'] });

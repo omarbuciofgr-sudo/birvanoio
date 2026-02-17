@@ -36,26 +36,36 @@ export interface CostAnalysis {
   margin_percent: number;
 }
 
-// Fetch provider pricing config
+const skipOptionalTables = import.meta.env.VITE_SKIP_OPTIONAL_TABLES === 'true';
+
+// Fetch provider pricing config (optional table - return [] if missing/error)
 export const fetchProviderPricing = async (): Promise<ProviderPricing[]> => {
-  const { data, error } = await supabase
-    .from('provider_pricing_config')
-    .select('*')
-    .eq('is_active', true);
-  
-  if (error) throw error;
-  return data || [];
+  if (skipOptionalTables) return [];
+  try {
+    const { data, error } = await supabase
+      .from('provider_pricing_config')
+      .select('*')
+      .eq('is_active', true);
+    if (error) return [];
+    return data || [];
+  } catch {
+    return [];
+  }
 };
 
-// Fetch credit event configurations
+// Fetch credit event configurations (optional table - return [] if missing/error)
 export const fetchCreditEventConfigs = async (): Promise<CreditEventConfig[]> => {
-  const { data, error } = await supabase
-    .from('credit_event_config')
-    .select('*')
-    .eq('is_active', true);
-  
-  if (error) throw error;
-  return data || [];
+  if (skipOptionalTables) return [];
+  try {
+    const { data, error } = await supabase
+      .from('credit_event_config')
+      .select('*')
+      .eq('is_active', true);
+    if (error) return [];
+    return data || [];
+  } catch {
+    return [];
+  }
 };
 
 // Update provider pricing

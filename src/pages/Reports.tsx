@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { isOptionalTableMissing, markOptionalTableMissingOnError } from "../integrations/supabase/optionalTables";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,29 +132,50 @@ export default function Reports() {
     if (!error && data) setLeads(data);
   };
 
+  const REPORTS_TABLE = "custom_reports";
   const fetchReports = async () => {
     setLoadingReports(true);
-    const { data } = await supabase.from("custom_reports").select("*").order("updated_at", { ascending: false });
-    if (data) setSavedReports(data);
+    if (isOptionalTableMissing(REPORTS_TABLE)) {
+      setSavedReports([]);
+      setLoadingReports(false);
+      return;
+    }
+    const { data, error } = await supabase.from(REPORTS_TABLE).select("*").order("updated_at", { ascending: false });
+    if (error) {
+      markOptionalTableMissingOnError(REPORTS_TABLE, error);
+      setSavedReports([]);
+    } else if (data) setSavedReports(data);
     setLoadingReports(false);
   };
 
   const handleCreateReport = async () => {
     if (!newReportName.trim()) { toast.error("Please enter a report name"); return; }
     if (!user?.id) return;
+    if (isOptionalTableMissing(REPORTS_TABLE)) { setSaving(false); return; }
     setSaving(true);
-    const { error } = await supabase.from("custom_reports").insert({
+    const { error } = await supabase.from(REPORTS_TABLE).insert({
       user_id: user.id, name: newReportName, description: newReportDesc || null,
       report_type: newReportType, config: { metrics: selectedMetrics, dateRange, filters: {} }, is_shared: isShared,
     });
-    if (error) toast.error("Failed to save report");
-    else { toast.success("Report created"); setCreateDialogOpen(false); setNewReportName(""); setNewReportDesc(""); setSelectedMetrics(["calls", "emails", "conversions"]); fetchReports(); }
+    if (error) {
+      markOptionalTableMissingOnError(REPORTS_TABLE, error);
+      setSaving(false);
+      return;
+    }
+    toast.success("Report created");
+    setCreateDialogOpen(false);
+    setNewReportName("");
+    setNewReportDesc("");
+    setSelectedMetrics(["calls", "emails", "conversions"]);
+    fetchReports();
     setSaving(false);
   };
 
   const handleDeleteReport = async (id: string) => {
-    const { error } = await supabase.from("custom_reports").delete().eq("id", id);
-    if (!error) { setSavedReports(prev => prev.filter(r => r.id !== id)); toast.success("Report deleted"); }
+    if (isOptionalTableMissing(REPORTS_TABLE)) return;
+    const { error } = await supabase.from(REPORTS_TABLE).delete().eq("id", id);
+    if (error) markOptionalTableMissingOnError(REPORTS_TABLE, error);
+    else { setSavedReports(prev => prev.filter(r => r.id !== id)); toast.success("Report deleted"); }
   };
 
   const toggleMetric = (metric: string) => {
