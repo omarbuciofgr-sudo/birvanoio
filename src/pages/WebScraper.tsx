@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -123,6 +123,8 @@ export default function WebScraper() {
   const [reListings, setReListings] = useState<any[]>([]);
   const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
   const [reSkipTraceStats, setReSkipTraceStats] = useState<{ attempted: number; successful: number; rate: number } | null>(null);
+  const [reBackendReachable, setReBackendReachable] = useState<boolean | null>(null);
+  const [reBackendCheckInProgress, setReBackendCheckInProgress] = useState(false);
   const [skipTracingIndex, setSkipTracingIndex] = useState<number | null>(null);
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [selectedListings, setSelectedListings] = useState<Set<number>>(new Set());
@@ -280,6 +282,21 @@ export default function WebScraper() {
     const blob = new Blob([content], { type: 'text/plain' }); const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
   };
+
+  const checkReBackendReachable = useCallback(async () => {
+    setReBackendCheckInProgress(true);
+    setReBackendReachable(null);
+    try {
+      const ok = await scraperBackendApi.isScraperBackendReachable();
+      setReBackendReachable(ok);
+    } finally {
+      setReBackendCheckInProgress(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'real-estate') checkReBackendReachable();
+  }, [activeTab, checkReBackendReachable]);
 
   const handleRealEstateScrape = async () => {
     if (!reLocation.trim()) { toast.error('Please enter a location'); return; }
@@ -1471,6 +1488,20 @@ export default function WebScraper() {
                     <Switch checked={reSaveToDb} onCheckedChange={setReSaveToDb} className="scale-90" />
                     <span className="text-xs font-medium">Save to Database</span>
                   </label>
+              </div>
+
+              {/* Backend status: only relevant for per-platform scrapers (Hotpads, Trulia, etc.); All Platforms uses Edge Function */}
+              <div className="flex items-center gap-2 pt-1.5 text-[11px] text-muted-foreground flex-wrap">
+                {reBackendCheckInProgress && <span>Checking backend…</span>}
+                {!reBackendCheckInProgress && reBackendReachable === true && (
+                  <span>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={scraperBackendApi.getBaseUrl()}>{scraperBackendApi.getBaseUrl().replace(/^https?:\/\//, '')}</span> — <span className="text-green-600 dark:text-green-400">Reachable</span></span>
+                )}
+                {!reBackendCheckInProgress && reBackendReachable === false && (
+                  <span className="flex items-center gap-2 flex-wrap">
+                    <span>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={scraperBackendApi.getBaseUrl()}>{scraperBackendApi.getBaseUrl().replace(/^https?:\/\//, '')}</span> — <span className="text-destructive">Not reachable.</span> Check Railway or network.</span>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={checkReBackendReachable}>Retry</Button>
+                  </span>
+                )}
               </div>
               
                 <div className="flex flex-wrap gap-1.5 pt-1">
