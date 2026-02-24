@@ -85,24 +85,21 @@ export function buildTruliaUrl(location: string): string | null {
   return `https://www.trulia.com/for_sale/${encoded}/fsbo_lt/1_als/`;
 }
 
-/** Backend URL when frontend is at https://www.brivano.io or Railway deployment */
+/** Backend URL when frontend is at brivano.io, Lovable preview, or any non-local host */
 const PRODUCTION_BACKEND = "https://resplendent-empathy-production.up.railway.app";
+
+function isProductionHost(): boolean {
+  if (typeof window === "undefined") return import.meta.env.PROD;
+  const host = window.location.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1") return false;
+  // brivano.io, Lovable preview, or any other deployment → use Railway backend
+  return true;
+}
 
 const getBaseUrl = (): string => {
   const url = import.meta.env.VITE_SCRAPER_BACKEND_URL;
   if (typeof url === "string" && url.trim()) return url.trim().replace(/\/$/, "");
-  // When running on brivano.io (production), always use Railway backend
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname.toLowerCase();
-    if (host === "www.brivano.io" || host === "brivano.io") return PRODUCTION_BACKEND;
-  }
-  // Production build (Lovable, etc.) use deployed backend
-  if (import.meta.env.PROD) return PRODUCTION_BACKEND;
-  // Dev: use deployed backend whenever not on localhost (e.g. preview from another host)
-  if (typeof window !== "undefined") {
-    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    if (!isLocal) return PRODUCTION_BACKEND;
-  }
+  if (isProductionHost()) return PRODUCTION_BACKEND;
   return "http://localhost:8080";
 };
 
@@ -147,25 +144,37 @@ export type BackendHotpadsLastResultResponse = {
   message?: string;
 };
 
-const HEALTH_CHECK_TIMEOUT_MS = 15000; // 15s for Railway cold start
+const HEALTH_CHECK_TIMEOUT_MS = 20000; // 20s for Railway cold start
+const HEALTH_CHECK_RETRY_DELAY_MS = 2000; // wait 2s before retry
 
-/** Returns true if the backend is reachable (e.g. GET /api/health). Use before HotPads flow to avoid multiple connection-refused errors. */
+async function pingHealthOnce(base: string, signal: AbortSignal): Promise<boolean> {
+  const res = await fetch(`${base}/api/health`, {
+    method: "GET",
+    mode: "cors",
+    credentials: "omit",
+    signal,
+  });
+  return res.ok;
+}
+
+/** Returns true if the backend is reachable (e.g. GET /api/health). Retries once after delay for Railway cold start. */
 export async function isScraperBackendReachable(): Promise<boolean> {
-  try {
-    const base = getBaseUrl();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
-    const res = await fetch(`${base}/api/health`, {
-      method: "GET",
-      mode: "cors",
-      credentials: "omit",
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return res.ok;
-  } catch {
-    return false;
+  const base = getBaseUrl();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+      const ok = await pingHealthOnce(base, controller.signal);
+      clearTimeout(timeoutId);
+      if (ok) return true;
+    } catch {
+      // timeout or network error
+    }
+    if (attempt === 0) {
+      await new Promise((r) => setTimeout(r, HEALTH_CHECK_RETRY_DELAY_MS));
+    }
   }
+  return false;
 }
 
 export const scraperBackendApi = {
