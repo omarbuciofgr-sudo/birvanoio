@@ -29,7 +29,7 @@ const steps = [
   },
 ];
 
-const HowItWorks = React.forwardRef<HTMLElement>(function HowItWorks(_props, ref) {
+const HowItWorks = React.forwardRef<HTMLDivElement>(function HowItWorks(_props, ref) {
   const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (

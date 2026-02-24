@@ -11,7 +11,7 @@ const useCases = [
   { icon: BarChart3, label: "Account-based marketing" },
 ];
 
-const UseCases = React.forwardRef<HTMLElement>(function UseCases(_props, ref) {
+const UseCases = React.forwardRef<HTMLDivElement>(function UseCases(_props, ref) {
   const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (

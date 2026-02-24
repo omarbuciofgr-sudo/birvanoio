@@ -11,7 +11,7 @@ const features = [
   { icon: MessageSquare, title: "SMS & Email", description: "Send texts and emails without leaving the platform" },
 ];
 
-const CRMShowcase = React.forwardRef<HTMLElement>(function CRMShowcase(_props, ref) {
+const CRMShowcase = React.forwardRef<HTMLDivElement>(function CRMShowcase(_props, ref) {
   const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (

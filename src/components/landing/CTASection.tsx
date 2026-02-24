@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
-const CTASection = React.forwardRef<HTMLElement>(function CTASection(_props, ref) {
+const CTASection = React.forwardRef<HTMLDivElement>(function CTASection(_props, ref) {
   const navigate = useNavigate();
   const { ref: scrollRef, isVisible } = useScrollAnimation();
 

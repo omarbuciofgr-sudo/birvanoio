@@ -35,7 +35,7 @@ const services = [
   },
 ];
 
-const Services = React.forwardRef<HTMLElement>(function Services(_props, ref) {
+const Services = React.forwardRef<HTMLDivElement>(function Services(_props, ref) {
   const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (
