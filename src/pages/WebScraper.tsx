@@ -145,6 +145,21 @@ export default function WebScraper() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
+  const checkReBackendReachable = useCallback(async () => {
+    setReBackendCheckInProgress(true);
+    setReBackendReachable(null);
+    try {
+      const ok = await scraperBackendApi.isScraperBackendReachable();
+      setReBackendReachable(ok);
+    } finally {
+      setReBackendCheckInProgress(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'real-estate') checkReBackendReachable();
+  }, [activeTab, checkReBackendReachable]);
+
   if (authLoading || adminLoading) {
     return (
       <DashboardLayout>
@@ -283,20 +298,6 @@ export default function WebScraper() {
     const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
   };
 
-  const checkReBackendReachable = useCallback(async () => {
-    setReBackendCheckInProgress(true);
-    setReBackendReachable(null);
-    try {
-      const ok = await scraperBackendApi.isScraperBackendReachable();
-      setReBackendReachable(ok);
-    } finally {
-      setReBackendCheckInProgress(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'real-estate') checkReBackendReachable();
-  }, [activeTab, checkReBackendReachable]);
 
   const handleRealEstateScrape = async () => {
     if (!reLocation.trim()) { toast.error('Please enter a location'); return; }
