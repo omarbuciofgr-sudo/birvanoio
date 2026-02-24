@@ -1,15 +1,17 @@
+import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
-const CTASection = () => {
+const CTASection = React.forwardRef<HTMLElement>(function CTASection(_props, ref) {
   const navigate = useNavigate();
-  const { ref, isVisible } = useScrollAnimation();
+  const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <section className="py-24">
-      <div ref={ref} className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <div ref={scrollRef} className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Ready to scale your pipeline?
@@ -29,7 +31,10 @@ const CTASection = () => {
         </div>
       </div>
     </section>
+    </div>
   );
-};
+});
+
+CTASection.displayName = "CTASection";
 
 export default CTASection;

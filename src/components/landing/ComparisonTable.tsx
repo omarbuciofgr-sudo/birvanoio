@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Check, X, Minus } from "lucide-react";
 
 const features = [
@@ -14,16 +15,18 @@ const features = [
   { name: "Starting Price", brivano: "$49/mo", apollo: "$99/mo", zoominfo: "$15K/yr", lusha: "$79/mo" },
 ];
 
-const FeatureCell = ({ value }: { value: boolean | string }) => {
-  if (value === true) return <Check className="w-4 h-4 text-primary mx-auto" />;
-  if (value === false) return <X className="w-4 h-4 text-muted-foreground/40 mx-auto" />;
-  if (value === "partial") return <Minus className="w-4 h-4 text-muted-foreground mx-auto" />;
-  return <span className="text-sm text-foreground font-medium">{value}</span>;
-};
+const FeatureCell = React.forwardRef<HTMLSpanElement, { value: boolean | string }>(
+  function FeatureCell({ value }, ref) {
+    if (value === true) return <span ref={ref}><Check className="w-4 h-4 text-primary mx-auto" /></span>;
+    if (value === false) return <span ref={ref}><X className="w-4 h-4 text-muted-foreground/40 mx-auto" /></span>;
+    if (value === "partial") return <span ref={ref}><Minus className="w-4 h-4 text-muted-foreground mx-auto" /></span>;
+    return <span ref={ref} className="text-sm text-foreground font-medium">{value}</span>;
+  }
+);
 
-const ComparisonTable = () => {
+const ComparisonTable = React.forwardRef<HTMLElement>(function ComparisonTable(_props, ref) {
   return (
-    <section id="compare" className="py-24 bg-muted/30">
+    <section ref={ref} id="compare" className="py-24 bg-muted/30">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Compare</p>
@@ -59,6 +62,8 @@ const ComparisonTable = () => {
       </div>
     </section>
   );
-};
+});
+
+ComparisonTable.displayName = "ComparisonTable";
 
 export default ComparisonTable;

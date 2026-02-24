@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Database, Search, Mail, BarChart3, Bot, Target } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
@@ -10,12 +11,13 @@ const useCases = [
   { icon: BarChart3, label: "Account-based marketing" },
 ];
 
-const UseCases = () => {
-  const { ref, isVisible } = useScrollAnimation();
+const UseCases = React.forwardRef<HTMLElement>(function UseCases(_props, ref) {
+  const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <section className="py-24">
-      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={scrollRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`rounded-2xl border border-border bg-card p-10 lg:p-14 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
             <div>
@@ -44,7 +46,10 @@ const UseCases = () => {
         </div>
       </div>
     </section>
+    </div>
   );
-};
+});
+
+UseCases.displayName = "UseCases";
 
 export default UseCases;

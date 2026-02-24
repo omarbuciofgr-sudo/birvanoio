@@ -1,8 +1,9 @@
+import * as React from "react";
 import productDemoVideo from "@/assets/product-demo.mp4";
 
-const ProductDemo = () => {
+const ProductDemo = React.forwardRef<HTMLElement>(function ProductDemo(_props, ref) {
   return (
-    <section className="py-24 bg-muted/30">
+    <section ref={ref} className="py-24 bg-muted/30">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Demo</p>
@@ -44,6 +45,8 @@ const ProductDemo = () => {
       </div>
     </section>
   );
-};
+});
+
+ProductDemo.displayName = "ProductDemo";
 
 export default ProductDemo;

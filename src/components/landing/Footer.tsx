@@ -1,12 +1,13 @@
+import * as React from "react";
 import { Link } from "react-router-dom";
 import { Instagram, Linkedin, Twitter, Mail, Phone } from "lucide-react";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
 
-const Footer = () => {
+const Footer = React.forwardRef<HTMLElement>(function Footer(_props, ref) {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="py-12 border-t border-border">
+    <footer ref={ref} className="py-12 border-t border-border">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
@@ -69,6 +70,8 @@ const Footer = () => {
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = "Footer";
 
 export default Footer;

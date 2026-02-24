@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Phone, MessageSquare, Mic, Sparkles, Bot, BarChart3 } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
@@ -10,12 +11,13 @@ const features = [
   { icon: MessageSquare, title: "SMS & Email", description: "Send texts and emails without leaving the platform" },
 ];
 
-const CRMShowcase = () => {
-  const { ref, isVisible } = useScrollAnimation();
+const CRMShowcase = React.forwardRef<HTMLElement>(function CRMShowcase(_props, ref) {
+  const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <section className="py-24">
-      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={scrollRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">CRM + AI</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -45,7 +47,10 @@ const CRMShowcase = () => {
         </div>
       </div>
     </section>
+    </div>
   );
-};
+});
+
+CRMShowcase.displayName = "CRMShowcase";
 
 export default CRMShowcase;

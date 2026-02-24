@@ -1,8 +1,8 @@
+import * as React from "react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { ReactNode } from "react";
 
 interface ThemeProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
   attribute?: "class" | "data-theme";
   defaultTheme?: string;
   enableSystem?: boolean;
@@ -10,6 +10,11 @@ interface ThemeProviderProps {
   disableTransitionOnChange?: boolean;
 }
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
-}
+export const ThemeProvider = React.forwardRef<HTMLDivElement, ThemeProviderProps>(
+  ({ children, ...props }, ref) => (
+    <div ref={ref} style={{ display: "contents" }}>
+      <NextThemesProvider {...props}>{children}</NextThemesProvider>
+    </div>
+  )
+);
+ThemeProvider.displayName = "ThemeProvider";

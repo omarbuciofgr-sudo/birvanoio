@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Lightbulb, Heart, TrendingUp, Globe } from "lucide-react";
 
 const values = [
@@ -7,9 +8,9 @@ const values = [
   { icon: Globe, title: "Global Reach", description: "Any niche, any market, anywhere in the world." },
 ];
 
-const About = () => {
+const About = React.forwardRef<HTMLElement>(function About(_props, ref) {
   return (
-    <section id="about" className="py-24 bg-muted/30">
+    <section ref={ref} id="about" className="py-24 bg-muted/30">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
           <div>
@@ -46,6 +47,8 @@ const About = () => {
       </div>
     </section>
   );
-};
+});
+
+About.displayName = "About";
 
 export default About;

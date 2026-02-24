@@ -1,12 +1,13 @@
+import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Bot } from "lucide-react";
 
-const Hero = () => {
+const Hero = React.forwardRef<HTMLElement>(function Hero(_props, ref) {
   const navigate = useNavigate();
 
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center pt-16 overflow-hidden">
+    <section ref={ref} className="relative min-h-[90vh] flex items-center justify-center pt-16 overflow-hidden">
       {/* Subtle dot pattern */}
       <div 
         className="absolute inset-0 opacity-[0.03]"
@@ -93,6 +94,8 @@ const Hero = () => {
       </div>
     </section>
   );
-};
+});
+
+Hero.displayName = "Hero";
 
 export default Hero;

@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useState, useEffect } from "react";
 import { X, Gift, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const ExitIntentPopup = () => {
+const ExitIntentPopup = React.forwardRef<HTMLDivElement>(function ExitIntentPopup(_props, ref) {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [hasShown, setHasShown] = useState(false);
@@ -48,6 +49,7 @@ const ExitIntentPopup = () => {
   };
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-md bg-card border-border">
         <button
@@ -108,7 +110,10 @@ const ExitIntentPopup = () => {
         </div>
       </DialogContent>
     </Dialog>
+    </div>
   );
-};
+});
+
+ExitIntentPopup.displayName = "ExitIntentPopup";
 
 export default ExitIntentPopup;

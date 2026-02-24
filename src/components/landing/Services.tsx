@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Database, Sparkles, Bot, Search, BarChart3, Workflow } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
@@ -34,12 +35,13 @@ const services = [
   },
 ];
 
-const Services = () => {
-  const { ref, isVisible } = useScrollAnimation();
+const Services = React.forwardRef<HTMLElement>(function Services(_props, ref) {
+  const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <section id="services" className="py-24 bg-muted/30">
-      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={scrollRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Platform</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -69,7 +71,10 @@ const Services = () => {
         </div>
       </div>
     </section>
+    </div>
   );
-};
+});
+
+Services.displayName = "Services";
 
 export default Services;

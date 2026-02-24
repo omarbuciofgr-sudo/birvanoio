@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,7 +39,8 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
+  <div ref={ref} style={{ display: "contents" }}>
   <ThemeProvider attribute="class" defaultTheme="light">
     <QueryClientProvider client={queryClient}>
       <SubscriptionProvider>
@@ -82,6 +84,9 @@ const App = () => (
       </SubscriptionProvider>
     </QueryClientProvider>
   </ThemeProvider>
-);
+  </div>
+));
+
+App.displayName = "App";
 
 export default App;

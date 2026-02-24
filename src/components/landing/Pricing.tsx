@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Check, Zap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -84,12 +85,12 @@ const plans = [
   },
 ];
 
-const Pricing = () => {
+const Pricing = React.forwardRef<HTMLElement>(function Pricing(_props, ref) {
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [seatCount, setSeatCount] = useState(1);
   const navigate = useNavigate();
-  const { ref, isVisible } = useScrollAnimation();
+  const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   const handleSubscribe = async (plan: typeof plans[0]) => {
     if (!plan.monthlyPriceId) {
@@ -123,8 +124,9 @@ const Pricing = () => {
   };
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <section id="pricing" className="py-24">
-      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={scrollRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Pricing</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -255,7 +257,10 @@ const Pricing = () => {
         </div>
       </div>
     </section>
+    </div>
   );
-};
+});
+
+Pricing.displayName = "Pricing";
 
 export default Pricing;

@@ -1,3 +1,4 @@
+import * as React from "react";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 
@@ -17,9 +18,9 @@ import Footer from "@/components/landing/Footer";
 import ChatWidget from "@/components/landing/ChatWidget";
 import ExitIntentPopup from "@/components/landing/ExitIntentPopup";
 
-const Index = () => {
+const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
   return (
-    <div className="min-h-screen bg-background">
+    <div ref={ref} className="min-h-screen bg-background">
       <Navbar />
       <Hero />
       
@@ -44,6 +45,8 @@ const Index = () => {
       <ExitIntentPopup />
     </div>
   );
-};
+});
+
+Index.displayName = "Index";
 
 export default Index;

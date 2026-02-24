@@ -1,9 +1,10 @@
+import * as React from "react";
 import { useState } from "react";
 import { Users, DollarSign, TrendingUp, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 
-const ROICalculator = () => {
+const ROICalculator = React.forwardRef<HTMLElement>(function ROICalculator(_props, ref) {
   const [reps, setReps] = useState(5);
   const [avgDealSize, setAvgDealSize] = useState(5000);
   const [currentCloseRate, setCurrentCloseRate] = useState(10);
@@ -20,7 +21,7 @@ const ROICalculator = () => {
   const roi = Math.round(((additionalRevenue - brivanoCost) / brivanoCost) * 100);
 
   return (
-    <section id="roi-calculator" className="py-24">
+    <section ref={ref} id="roi-calculator" className="py-24">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">ROI</p>
@@ -109,6 +110,8 @@ const ROICalculator = () => {
       </div>
     </section>
   );
-};
+});
+
+ROICalculator.displayName = "ROICalculator";
 
 export default ROICalculator;

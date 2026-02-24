@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Search, Sparkles, Mail, TrendingUp } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
@@ -28,12 +29,13 @@ const steps = [
   },
 ];
 
-const HowItWorks = () => {
-  const { ref, isVisible } = useScrollAnimation();
+const HowItWorks = React.forwardRef<HTMLElement>(function HowItWorks(_props, ref) {
+  const { ref: scrollRef, isVisible } = useScrollAnimation();
 
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <section id="how-it-works" className="py-24">
-      <div ref={ref} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={scrollRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Process</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground">
@@ -63,7 +65,10 @@ const HowItWorks = () => {
         </div>
       </div>
     </section>
+    </div>
   );
-};
+});
+
+HowItWorks.displayName = "HowItWorks";
 
 export default HowItWorks;

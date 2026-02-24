@@ -137,7 +137,8 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 const TIER_HIERARCHY: SubscriptionTier[] = ["free", "starter", "growth", "scale", "enterprise"];
 
-export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const SubscriptionProvider = React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(
+  function SubscriptionProviderInner({ children }, ref) {
   const [state, setState] = useState<SubscriptionState>({
     isLoading: true,
     subscribed: false,
@@ -243,13 +244,16 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [state.subscribed, checkSubscription]);
 
   return (
-    <SubscriptionContext.Provider
-      value={{ ...state, checkSubscription, hasFeature, canAccessTier, isWorkspaceOwnerOrAdmin, isPastDue, isCanceled, canRunJobs }}
-    >
-      {children}
-    </SubscriptionContext.Provider>
+    <div ref={ref} style={{ display: "contents" }}>
+      <SubscriptionContext.Provider
+        value={{ ...state, checkSubscription, hasFeature, canAccessTier, isWorkspaceOwnerOrAdmin, isPastDue, isCanceled, canRunJobs }}
+      >
+        {children}
+      </SubscriptionContext.Provider>
+    </div>
   );
-};
+});
+SubscriptionProvider.displayName = "SubscriptionProvider";
 
 export const useSubscription = (): SubscriptionContextType => {
   const context = useContext(SubscriptionContext);
