@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,14 +97,20 @@ export default function ScrapedLeads() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const { data: leads = [], isLoading } = useQuery({
-    queryKey: ['scraped-leads', statusFilter, jobFilter, sourceTypeFilter],
+  const { data: leadsResult, isLoading, isError, error } = useQuery({
+    queryKey: ['scraped-leads', statusFilter, jobFilter, sourceTypeFilter, searchTerm, page, pageSize],
     queryFn: () => scrapedLeadsApi.list({
       status: statusFilter !== 'all' ? statusFilter as ScrapedLeadStatus : undefined,
       job_id: jobFilter !== 'all' ? jobFilter : undefined,
       source_type: sourceTypeFilter !== 'all' ? sourceTypeFilter : undefined,
+      search: searchTerm || undefined,
+      page,
+      pageSize,
     }),
+    placeholderData: keepPreviousData,
   });
+  const leads = leadsResult?.data ?? [];
+  const totalLeads = leadsResult?.total ?? 0;
 
   const { data: jobs = [] } = useQuery({
     queryKey: ['scrape-jobs'],
@@ -254,43 +260,21 @@ export default function ScrapedLeads() {
     onError: (error) => toast.error(`Auto-nurture failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
   });
 
-  const filteredLeads = leads.filter(lead => {
-    if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
-    const schema = lead.schema_data as any;
-    
-    // Build full address for search
-    const street = lead.address || schema?.address || schema?.full_address || '';
-    const city = schema?.city || '';
-    const state = schema?.state || '';
-    const zip = schema?.zip || schema?.zip_code || '';
-    const fullAddress = [street, city, state, zip].filter(Boolean).join(' ').toLowerCase();
-    
-    return (
-      lead.domain.toLowerCase().includes(search) ||
-      lead.full_name?.toLowerCase().includes(search) ||
-      lead.best_email?.toLowerCase().includes(search) ||
-      lead.best_phone?.includes(search) ||
-      fullAddress.includes(search)
-    );
-  });
-
-  const totalFiltered = filteredLeads.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
-  const paginatedLeads = useMemo(
-    () => filteredLeads.slice((page - 1) * pageSize, page * pageSize),
-    [filteredLeads, page, pageSize]
-  );
-  const startRow = totalFiltered === 0 ? 0 : (page - 1) * pageSize + 1;
-  const endRow = Math.min(page * pageSize, totalFiltered);
+  // Server-side pagination and search: leads = current page, totalLeads = total count from DB
+  const totalFiltered = totalLeads;
+  const totalPages = Math.max(1, Math.ceil(totalLeads / pageSize));
+  const paginatedLeads = leads;
+  const startRow = totalLeads === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRow = totalLeads === 0 ? 0 : Math.min(page * pageSize, totalLeads);
 
   useEffect(() => {
     setPage(1);
   }, [statusFilter, jobFilter, sourceTypeFilter, searchTerm]);
 
+  // Only correct page when we have data (not during refetch after page change), so clicking page 7 doesn't reset to 1
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (!isLoading && totalPages >= 1 && page > totalPages) setPage(totalPages);
+  }, [isLoading, page, totalPages]);
 
   const toggleSelectAll = () => {
     const onPage = paginatedLeads.map(l => l.id);
@@ -366,6 +350,19 @@ export default function ScrapedLeads() {
           </div>
         </div>
 
+        {isError && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="pt-6">
+              <p className="text-destructive font-medium">Failed to load leads</p>
+              <p className="text-sm text-muted-foreground mt-1">{error instanceof Error ? error.message : String(error)}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => queryClient.invalidateQueries({ queryKey: ['scraped-leads'] })}>
+                <RefreshCw className="h-3 w-3 mr-2" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="pipeline" className="flex items-center gap-2">
@@ -374,7 +371,7 @@ export default function ScrapedLeads() {
             </TabsTrigger>
             <TabsTrigger value="leads" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Leads ({leads.length})
+              Leads ({totalLeads.toLocaleString()})
             </TabsTrigger>
             <TabsTrigger value="analytics" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -521,7 +518,7 @@ export default function ScrapedLeads() {
                 }}
               />
               <BulkExportDialog 
-                leads={filteredLeads} 
+                leads={leads} 
                 selectedIds={selectedLeads.size > 0 ? Array.from(selectedLeads) : undefined}
               />
             </div>
@@ -594,15 +591,15 @@ export default function ScrapedLeads() {
         {/* Leads Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Leads ({filteredLeads.length})</CardTitle>
+            <CardTitle>Leads ({totalLeads.toLocaleString()})</CardTitle>
             <CardDescription>
-              Click on a lead to view full details and evidence
+              Click on a lead to view full details and evidence. {totalLeads > 0 && `Showing ${startRow}–${endRow} of ${totalLeads.toLocaleString()}.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="text-center py-8 text-muted-foreground">Loading leads...</div>
-            ) : filteredLeads.length === 0 ? (
+            ) : totalLeads === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No leads found. Run a scrape job to get started.
               </div>
@@ -759,7 +756,7 @@ export default function ScrapedLeads() {
               </Table>
             )}
 
-            {!isLoading && filteredLeads.length > 0 && (
+            {!isLoading && totalLeads > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
                 <div className="flex items-center gap-4">
                   <span className="text-sm text-muted-foreground">

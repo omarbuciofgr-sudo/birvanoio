@@ -353,12 +353,21 @@ export const scrapedLeadsApi = {
     assigned_to_org?: string;
     unassigned_only?: boolean;
     source_type?: string;
-  }): Promise<ScrapedLead[]> {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ data: ScrapedLead[]; total: number }> {
+    const page = Math.max(1, filters?.page ?? 1);
+    const pageSize = Math.min(500, Math.max(1, filters?.pageSize ?? 1000));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
     let query = supabase
       .from('scraped_leads')
-      .select('*, schema_template:schema_templates(*), assigned_organization:client_organizations(*)')
-      .order('created_at', { ascending: false });
-    
+      .select('*, schema_template:schema_templates(*), assigned_organization:client_organizations(*)', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
     if (filters?.job_id) {
       query = query.eq('job_id', filters.job_id);
     }
@@ -374,11 +383,24 @@ export const scrapedLeadsApi = {
     if (filters?.source_type) {
       query = query.eq('source_type', filters.source_type);
     }
-    
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    return (data || []) as unknown as ScrapedLead[];
+    const search = (filters?.search || '').trim();
+    if (search) {
+      // Quote term so commas (e.g. "Chicago, IL") don't break .or() parsing
+      const term = `%${search}%`;
+      const q = term.includes(',') ? `"${term.replace(/"/g, '""')}"` : term;
+      query = query.or(
+        `domain.ilike.${q},full_name.ilike.${q},best_email.ilike.${q},best_phone.ilike.${q},address.ilike.${q}`
+      );
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('[scrapedLeadsApi.list]', error);
+      throw error;
+    }
+    const total = count ?? (data?.length ?? 0);
+    return { data: (data || []) as unknown as ScrapedLead[], total };
   },
 
   async get(id: string): Promise<ScrapedLead | null> {
@@ -456,24 +478,33 @@ export const scrapedLeadsApi = {
     if (error) throw error;
   },
 
-  // Export to CSV
+  // Export to CSV (fetches all pages)
   async exportToCsv(filters?: {
     job_id?: string;
     assigned_to_org?: string;
   }): Promise<string> {
-    const leads = await this.list(filters);
-    
+    const allLeads: ScrapedLead[] = [];
+    let page = 1;
+    const pageSize = 1000;
+    while (true) {
+      const { data, total } = await this.list({ ...filters, page, pageSize });
+      allLeads.push(...data);
+      if (allLeads.length >= total || data.length === 0) break;
+      page++;
+    }
+    const leads = allLeads;
+
     if (leads.length === 0) {
       return '';
     }
-    
+
     // Define CSV columns
     const universalColumns = [
       'id', 'domain', 'source_url', 'full_name', 'best_email', 'best_phone',
       'contact_form_url', 'linkedin_search_url', 'confidence_score', 'qc_flag',
       'email_validation_status', 'phone_validation_status', 'status', 'scraped_at'
     ];
-    
+
     // Get schema fields from first lead if available
     const schemaFields = leads[0]?.schema_template?.fields || [];
     const schemaColumns = schemaFields.map((f: { field_name: string }) => f.field_name);
@@ -507,13 +538,21 @@ export const scrapedLeadsApi = {
     return rows.join('\n');
   },
 
-  // Export to JSON
+  // Export to JSON (fetches all pages)
   async exportToJson(filters?: {
     job_id?: string;
     assigned_to_org?: string;
   }): Promise<string> {
-    const leads = await this.list(filters);
-    return JSON.stringify(leads, null, 2);
+    const allLeads: ScrapedLead[] = [];
+    let page = 1;
+    const pageSize = 1000;
+    while (true) {
+      const { data, total } = await this.list({ ...filters, page, pageSize });
+      allLeads.push(...data);
+      if (allLeads.length >= total || data.length === 0) break;
+      page++;
+    }
+    return JSON.stringify(allLeads, null, 2);
   },
 };
 

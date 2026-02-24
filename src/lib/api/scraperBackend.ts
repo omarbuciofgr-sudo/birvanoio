@@ -130,6 +130,7 @@ export type BackendHotpadsLastResultResponse = {
     price?: string;
     owner_name?: string;
     owner_phone?: string;
+    owner_email?: string;
     listing_url?: string;
     square_feet?: number;
     source_platform?: string;
@@ -292,6 +293,166 @@ export const scraperBackendApi = {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const res = await fetch(`${base}/api/redfin/last-result`);
+        const data = await res.json().catch(() => ({ listings: [] }));
+        if (!res.ok) {
+          lastError = data.error || `Request failed: ${res.status}`;
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return data;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : "Network error";
+        if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { listings: [], error: lastError || "Failed after retries" };
+  },
+
+  async getZillowFrboStatus(): Promise<BackendHotpadsStatusResponse> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-zillow-frbo`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    }
+    return data;
+  },
+
+  async resetZillowFrboStatus(): Promise<{ message?: string; error?: string }> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-zillow-frbo?reset=1`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
+    return data;
+  },
+
+  async getZillowFrboLastResult(options?: { retries?: number }): Promise<BackendHotpadsLastResultResponse> {
+    const base = getBaseUrl();
+    const maxAttempts = options?.retries != null ? options.retries + 1 : 3;
+    let lastError: string | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(`${base}/api/zillow-frbo/last-result`);
+        const data = await res.json().catch(() => ({ listings: [] }));
+        if (!res.ok) {
+          lastError = data.error || `Request failed: ${res.status}`;
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return data;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : "Network error";
+        if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { listings: [], error: lastError || "Failed after retries" };
+  },
+
+  async getZillowFsboStatus(): Promise<BackendHotpadsStatusResponse> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-zillow-fsbo`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    }
+    return data;
+  },
+
+  async resetZillowFsboStatus(): Promise<{ message?: string; error?: string }> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-zillow-fsbo?reset=1`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
+    return data;
+  },
+
+  async getZillowFsboLastResult(options?: { retries?: number }): Promise<BackendHotpadsLastResultResponse> {
+    const base = getBaseUrl();
+    const maxAttempts = options?.retries != null ? options.retries + 1 : 3;
+    let lastError: string | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(`${base}/api/zillow-fsbo/last-result`);
+        const data = await res.json().catch(() => ({ listings: [] }));
+        if (!res.ok) {
+          lastError = data.error || `Request failed: ${res.status}`;
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return data;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : "Network error";
+        if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { listings: [], error: lastError || "Failed after retries" };
+  },
+
+  async getFsboStatus(): Promise<BackendHotpadsStatusResponse> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-fsbo`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    }
+    return data;
+  },
+
+  async resetFsboStatus(): Promise<{ message?: string; error?: string }> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-fsbo?reset=1`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
+    return data;
+  },
+
+  async getFsboLastResult(options?: { retries?: number }): Promise<BackendHotpadsLastResultResponse> {
+    const base = getBaseUrl();
+    const maxAttempts = options?.retries != null ? options.retries + 1 : 3;
+    let lastError: string | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(`${base}/api/fsbo/last-result`);
+        const data = await res.json().catch(() => ({ listings: [] }));
+        if (!res.ok) {
+          lastError = data.error || `Request failed: ${res.status}`;
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return data;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : "Network error";
+        if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { listings: [], error: lastError || "Failed after retries" };
+  },
+
+  async getApartmentsStatus(): Promise<BackendHotpadsStatusResponse> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-apartments`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    }
+    return data;
+  },
+
+  async resetApartmentsStatus(): Promise<{ message?: string; error?: string }> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/status-apartments?reset=1`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
+    return data;
+  },
+
+  async getApartmentsLastResult(options?: { retries?: number }): Promise<BackendHotpadsLastResultResponse> {
+    const base = getBaseUrl();
+    const maxAttempts = options?.retries != null ? options.retries + 1 : 3;
+    let lastError: string | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(`${base}/api/apartments/last-result`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;

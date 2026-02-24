@@ -1,6 +1,7 @@
 // Platform logo URLs using Google's favicon service
 const PLATFORM_CONFIG: Record<string, { label: string; domain: string; color: string }> = {
-  zillow: { label: 'Zillow', domain: 'zillow.com', color: '#006AFF' },
+  zillow: { label: 'Zillow (FSBO)', domain: 'zillow.com', color: '#006AFF' },
+  zillow_frbo: { label: 'Zillow (FRBO)', domain: 'zillow.com', color: '#006AFF' },
   fsbo: { label: 'FSBO.com', domain: 'fsbo.com', color: '#2D8C3C' },
   trulia: { label: 'Trulia', domain: 'trulia.com', color: '#1FB6A8' },
   redfin: { label: 'Redfin', domain: 'redfin.com', color: '#A02021' },

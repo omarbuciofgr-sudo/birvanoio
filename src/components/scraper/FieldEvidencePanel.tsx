@@ -50,9 +50,16 @@ export function FieldEvidencePanel({ leadId }: FieldEvidencePanelProps) {
   const [loading, setLoading] = useState(true);
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
 
+  const skipOptionalTables = import.meta.env.VITE_SKIP_OPTIONAL_TABLES === "true";
+
   useEffect(() => {
     const fetchEvidence = async () => {
       setLoading(true);
+      if (skipOptionalTables) {
+        setEvidence([]);
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase
         .from("field_evidence")
         .select("*")
@@ -60,16 +67,20 @@ export function FieldEvidencePanel({ leadId }: FieldEvidencePanelProps) {
         .order("field_name")
         .order("captured_at", { ascending: false });
 
-      if (!error && data) {
+      if (error) {
+        const code = (error as { code?: string })?.code;
+        const isMissing = code === "PGRST116" || (error?.message ?? "").includes("404") || (error?.message ?? "").includes("not found");
+        if (!isMissing) console.warn("[FieldEvidencePanel] field_evidence fetch:", error.message);
+        setEvidence([]);
+      } else if (data) {
         setEvidence(data as FieldEvidence[]);
-        // Auto-expand first 3 fields
         const fields = [...new Set(data.map((e: any) => e.field_name))];
         setExpandedFields(new Set(fields.slice(0, 3)));
       }
       setLoading(false);
     };
     fetchEvidence();
-  }, [leadId]);
+  }, [leadId, skipOptionalTables]);
 
   if (loading) {
     return (

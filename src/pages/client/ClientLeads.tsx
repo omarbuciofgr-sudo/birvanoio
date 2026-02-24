@@ -93,14 +93,17 @@ export default function ClientLeads() {
     },
   });
 
-  const { data: leads = [], isLoading } = useQuery({
+  const { data: leadsResult, isLoading } = useQuery({
     queryKey: ['client-leads', userOrg, statusFilter],
     queryFn: () => scrapedLeadsApi.list({
       assigned_to_org: userOrg || undefined,
       status: statusFilter !== 'all' ? statusFilter as ScrapedLeadStatus : undefined,
+      page: 1,
+      pageSize: 1000,
     }),
     enabled: !!userOrg,
   });
+  const leads = leadsResult?.data ?? [];
 
   // AI Lead Scoring mutation
   const scoringMutation = useMutation({
