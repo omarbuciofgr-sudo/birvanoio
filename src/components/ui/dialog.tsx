@@ -4,7 +4,14 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const Dialog = DialogPrimitive.Root;
+const Dialog = React.forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>
+>((props, _ref) => {
+  // Root is a function component and cannot receive refs; ref is intentionally not forwarded
+  return <DialogPrimitive.Root {...props} />;
+});
+Dialog.displayName = "Dialog";
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
