@@ -57,7 +57,15 @@ import { lazy, Suspense } from 'react';
 const ListingsMap = lazy(() => import('@/components/scraper/ListingsMap'));
 import { getPlatformLogo, PLATFORM_CONFIG } from '@/lib/platformLogos';
 
-const LOCATION_SUGGESTIONS = ['Washington', 'Minneapolis', 'Chicago', 'New York', 'San Francisco', 'Los Angeles'];
+/** Cities for Real Estate scraper dropdown (same as before, City ST format for backend). */
+const SCRAPER_CITIES = [
+  'Washington, DC',
+  'Minneapolis, MN',
+  'Chicago, IL',
+  'New York, NY',
+  'San Francisco, CA',
+  'Los Angeles, CA',
+];
 
 /** Parse address from Zillow homedetails URL slug (e.g. .../homedetails/623-Russell-Ave-N-Minneapolis-MN-55411/1887741_zpid/ → "623 Russell Ave N Minneapolis MN 55411"). Works for any city. */
 function addressFromZillowUrl(url: string | null | undefined): string | null {
@@ -113,8 +121,7 @@ export default function WebScraper() {
   const [bulkImporting, setBulkImporting] = useState(false);
 
   // Real Estate state
-  const [reLocation, setReLocation] = useState('');
-  const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
+  const [reLocation, setReLocation] = useState(SCRAPER_CITIES[0] ?? 'Chicago, IL');
   const [rePlatform, setRePlatform] = useState<string>('all');
   const reListingType = 'sale'; // fixed; user skip traces manually after search
   const [reSaveToDb, setReSaveToDb] = useState(false);
@@ -1410,43 +1417,22 @@ export default function WebScraper() {
                 </p>
 
                 <div className="flex gap-3 items-end">
-                  <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Location</Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground z-10" />
-                      <Input
-                        placeholder={rePlatform === 'hotpads' ? 'e.g. Minneapolis, Washington, Chicago...' : rePlatform === 'zillow' || rePlatform === 'zillow_frbo' || rePlatform === 'fsbo' || rePlatform === 'apartments' ? 'e.g. Austin, TX, Chicago, IL, Minneapolis, MN...' : 'Austin, TX or 90210'}
-                        value={reLocation}
-                        onChange={(e) => setReLocation(e.target.value)}
-                        onFocus={() => setLocationDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setLocationDropdownOpen(false), 200)}
-                        className="pl-8 h-9 text-sm"
-                      />
-                      {locationDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-md border border-border bg-popover text-popover-foreground shadow-md overflow-hidden">
-                          <div className="p-1 max-h-[220px] overflow-auto">
-                            {LOCATION_SUGGESTIONS.filter(loc =>
-                              !reLocation.trim() || loc.toLowerCase().includes(reLocation.toLowerCase().trim())
-                            ).map((loc) => (
-                              <button
-                                key={loc}
-                                type="button"
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-sm focus:bg-accent focus:outline-none"
-                                onMouseDown={(e) => { e.preventDefault(); setReLocation(loc); setLocationDropdownOpen(false); }}
-                              >
-                                {loc}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  <div className="w-52 space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">City</Label>
+                    <Select value={reLocation} onValueChange={setReLocation}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select city" /></SelectTrigger>
+                      <SelectContent>
+                        {SCRAPER_CITIES.map((city) => (
+                          <SelectItem key={city} value={city}>{city}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="w-40 space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Platform</Label>
-                  <Select value={rePlatform} onValueChange={setRePlatform}>
+                    <Select value={rePlatform} onValueChange={setRePlatform}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Platform" /></SelectTrigger>
-                    <SelectContent>
+                      <SelectContent>
                         <SelectItem value="all">
                           <span className="flex items-center gap-2">All Platforms</span>
                         </SelectItem>
@@ -1469,7 +1455,7 @@ export default function WebScraper() {
                   <Button onClick={handleRealEstateScrape} disabled={reLoading} size="sm" className="h-9 px-4">
                     {reLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-3.5 w-3.5 mr-1.5" /> Find Listings</>}
                   </Button>
-              </div>
+                </div>
 
                 <div className="flex items-center gap-6 pt-1">
                   <label className="flex items-center gap-2 cursor-pointer">

@@ -182,13 +182,26 @@ export const firecrawlApi = {
    * Cost: Firecrawl credits + ~$0.009 per address for skip tracing
    */
   async scrapeAndTraceFSBO(options: FSBOScrapeAndTraceOptions): Promise<FSBOScrapeAndTraceResponse> {
+    // Refresh session so Edge Function gets a valid JWT (avoids 401 from expired token)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return { success: false, error: 'Please sign in to use the All Platforms scraper.' };
+    }
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      // Proceed anyway with current session; refresh might fail if already valid
+    }
+
     const { data, error } = await supabase.functions.invoke('fsbo-scrape-and-trace', {
       body: options,
     });
 
     if (error) {
-      // Prefer backend message (e.g. "Authentication required", "Admin access required")
-      const message = (data as any)?.error ?? error.message;
+      const raw = (data as any)?.error ?? error.message;
+      const is401 = /401|unauthorized/i.test(String(raw));
+      const message = is401
+        ? 'Session expired or not authorized. Sign out and sign in again. If the problem continues, ensure the Edge Function "fsbo-scrape-and-trace" is deployed to your Supabase project.'
+        : raw;
       return { success: false, error: message };
     }
     if (data && !(data as FSBOScrapeAndTraceResponse).success && (data as FSBOScrapeAndTraceResponse).error) {
