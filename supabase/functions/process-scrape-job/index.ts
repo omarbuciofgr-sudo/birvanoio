@@ -686,9 +686,6 @@ async function processTarget(
     if (contactFormUrl) confidenceScore += 5;
     if (mergedEmails.length > 1) confidenceScore += 3; // Multiple emails = more reliable
     if (mergedPhones.length > 1) confidenceScore += 3;
-    if (allContacts.length > 2) confidenceScore += 5; // Rich team data
-    if (schemaTemplate) confidenceScore += 4; // Schema-guided extraction
-
     const allContacts = teamContacts.map(c => ({
       name: c.name,
       title: c.title,
@@ -696,6 +693,8 @@ async function processTarget(
       phone: c.phone,
       priority: c.priority,
     }));
+    if (allContacts.length > 2) confidenceScore += 5; // Rich team data
+    if (schemaTemplate) confidenceScore += 4; // Schema-guided extraction
 
     const leadData: Record<string, unknown> = {
       job_id: jobId,
