@@ -97,6 +97,11 @@ function isProductionHost(): boolean {
 }
 
 const getBaseUrl = (): string => {
+  // When app is opened from localhost, always use local backend so both deployment and local work
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1") return "http://localhost:8080";
+  }
   const url = import.meta.env.VITE_SCRAPER_BACKEND_URL;
   if (typeof url === "string" && url.trim()) return url.trim().replace(/\/$/, "");
   if (isProductionHost()) return PRODUCTION_BACKEND;

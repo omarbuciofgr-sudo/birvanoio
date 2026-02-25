@@ -1,11 +1,23 @@
 /**
  * Optional Supabase tables that may not exist yet (e.g. before migrations).
  * Once we get an error for a table, we skip further requests (persisted in sessionStorage for the tab).
+ * When VITE_SKIP_OPTIONAL_TABLES is true, we never request these tables (avoids 404s).
  */
 
 const STORAGE_KEY = "supabase_optional_tables_missing";
 
+/** Tables that are optional and often missing; skip entirely when env flag is set */
+const KNOWN_OPTIONAL_TABLES = [
+  "notifications",
+  "user_notifications",
+  "team_activity_log",
+];
+
 function loadMissing(): Set<string> {
+  const skipOptional = typeof import.meta !== "undefined" && import.meta.env?.VITE_SKIP_OPTIONAL_TABLES === "true";
+  if (skipOptional) {
+    return new Set(KNOWN_OPTIONAL_TABLES);
+  }
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (raw) {

@@ -1495,18 +1495,33 @@ export default function WebScraper() {
                   </label>
               </div>
 
-              {/* Backend status: only relevant for per-platform scrapers (Hotpads, Trulia, etc.); All Platforms uses Edge Function */}
+              {/* Backend status: check if local or deployed backend is running */}
               <div className="flex items-center gap-2 pt-1.5 text-[11px] text-muted-foreground flex-wrap">
                 {reBackendCheckInProgress && <span>Checking backend…</span>}
-                {!reBackendCheckInProgress && reBackendReachable === true && (
-                  <span>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={scraperBackendApi.getBaseUrl()}>{scraperBackendApi.getBaseUrl().replace(/^https?:\/\//, '')}</span> — <span className="text-green-600 dark:text-green-400">Reachable</span></span>
-                )}
-                {!reBackendCheckInProgress && reBackendReachable === false && (
-                  <span className="flex items-center gap-2 flex-wrap">
-                    <span>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={scraperBackendApi.getBaseUrl()}>{scraperBackendApi.getBaseUrl().replace(/^https?:\/\//, '')}</span> — <span className="text-destructive">Not reachable.</span> Check Railway or network.</span>
-                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={checkReBackendReachable}>Retry</Button>
-                  </span>
-                )}
+                {!reBackendCheckInProgress && reBackendReachable === true && (() => {
+                  const base = scraperBackendApi.getBaseUrl();
+                  const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+                  return (
+                    <span>
+                      {isLocal ? 'Local backend (localhost:8080): ' : <>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={base}>{base.replace(/^https?:\/\//, '')}</span> — </>}
+                      <span className="text-green-600 dark:text-green-400">{isLocal ? 'Running' : 'Reachable'}</span>
+                    </span>
+                  );
+                })()}
+                {!reBackendCheckInProgress && reBackendReachable === false && (() => {
+                  const base = scraperBackendApi.getBaseUrl();
+                  const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+                  return (
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <span>
+                        {isLocal
+                          ? <>Local backend not running. Start it with: <span className="font-mono">python api_server.py</span> (port 8080).</>
+                          : <>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={base}>{base.replace(/^https?:\/\//, '')}</span> — <span className="text-destructive">Not reachable.</span> Check Railway or network.</>}
+                      </span>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={checkReBackendReachable}>Retry</Button>
+                    </span>
+                  );
+                })()}
               </div>
               
                 <div className="flex flex-wrap gap-1.5 pt-1">
