@@ -1029,15 +1029,19 @@ export default function WebScraper() {
         }
       }
     } catch (e: any) {
-      const msg = String(e?.message || '');
-      if ((isHotpads || isTrulia || isZillowFsbo || isZillowFrbo || isFsbo || isApartments) && /connection refused|failed to fetch|network error|ERR_|load failed/i.test(msg)) {
+      const msg = String(e?.message || '').trim();
+      const isNetworkError = /connection refused|failed to fetch|network error|ERR_|load failed|timeout/i.test(msg);
+      const usesBackend = isHotpads || isTrulia || isRedfin || isZillowFsbo || isZillowFrbo || isFsbo || isApartments;
+      if (usesBackend && isNetworkError) {
         const base = scraperBackendApi.getBaseUrl();
         const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
         toast.error(isLocal
-          ? `${isTrulia ? 'Trulia' : 'HotPads'} scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.`
+          ? 'Scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
           : 'Deployed scraper backend is not reachable. Check your network or try again.');
       } else {
-        toast.error(isHotpads ? 'Failed to run Hotpads scraper' : isTrulia ? 'Failed to run Trulia scraper' : 'Failed to scrape listings');
+        const platformLabel = isHotpads ? 'Hotpads' : isTrulia ? 'Trulia' : isRedfin ? 'Redfin' : isZillowFsbo || isZillowFrbo ? 'Zillow' : isApartments ? 'Apartments.com' : '';
+        const fallback = platformLabel ? `Failed to run ${platformLabel} scraper` : 'Failed to scrape listings';
+        toast.error(msg ? `${fallback}: ${msg}` : fallback);
       }
     } finally {
       setReLoading(false);
