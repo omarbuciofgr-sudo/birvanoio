@@ -116,13 +116,12 @@ export default function WebScraper() {
   const [reLocation, setReLocation] = useState('');
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
   const [rePlatform, setRePlatform] = useState<string>('all');
-  const [reListingType, setReListingType] = useState<'sale' | 'rent'>('sale');
-  const [reEnableSkipTrace, setReEnableSkipTrace] = useState(true);
+  const reListingType = 'sale'; // fixed; user skip traces manually after search
   const [reSaveToDb, setReSaveToDb] = useState(false);
   const [reLoading, setReLoading] = useState(false);
   const [reListings, setReListings] = useState<any[]>([]);
   const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
-  const [reSkipTraceStats, setReSkipTraceStats] = useState<{ attempted: number; successful: number; rate: number } | null>(null);
+  
   const [reBackendReachable, setReBackendReachable] = useState<boolean | null>(null);
   const [reBackendCheckInProgress, setReBackendCheckInProgress] = useState(false);
   const [skipTracingIndex, setSkipTracingIndex] = useState<number | null>(null);
@@ -301,7 +300,7 @@ export default function WebScraper() {
 
   const handleRealEstateScrape = async () => {
     if (!reLocation.trim()) { toast.error('Please enter a location'); return; }
-    setReLoading(true); setReListings([]); setReErrors([]); setReSkipTraceStats(null);
+    setReLoading(true); setReListings([]); setReErrors([]);
 
     const isHotpads = rePlatform === 'hotpads';
     const isTrulia = rePlatform === 'trulia';
@@ -326,7 +325,7 @@ export default function WebScraper() {
         }
         // Build Hotpads URL on frontend to avoid backend search-location 500/encoding issues
         // When "For Rent (FRBO)" is selected, use FRBO-only URL (for-rent-by-owner); otherwise general rentals
-        const propertyType = reListingType === 'rent' ? 'for-rent-by-owner' : 'apartments';
+        const propertyType = 'apartments';
         let url: string | null = buildHotpadsUrl(reLocation.trim(), propertyType);
         if (!url) {
           toast.error('Could not build Hotpads URL. Use a city (e.g. Minneapolis, Washington, Chicago, New York, San Francisco, Los Angeles) or "City, ST" (e.g. Minneapolis, MN or Chicago IL).');
@@ -363,7 +362,7 @@ export default function WebScraper() {
           listing_url: l.listing_url,
           source_url: l.listing_url,
           source_platform: 'hotpads',
-          listing_type: reListingType === 'rent' ? 'rent' : 'sale',
+          listing_type: 'sale',
           square_feet: l.square_feet,
         }));
         setReListings(mapped);
@@ -929,7 +928,7 @@ export default function WebScraper() {
           setReLoading(false);
           return;
         }
-        const searchRes = await scraperBackendApi.searchLocation('apartments', reLocation.trim(), reListingType === 'rent' ? 'for-rent-by-owner' : 'apartments');
+        const searchRes = await scraperBackendApi.searchLocation('apartments', reLocation.trim(), 'apartments');
         if (!searchRes.success || !searchRes.url) {
           toast.error(searchRes.error || 'Could not find Apartments.com URL for this location. Try "City, ST" (e.g. Chicago, IL).');
           setReLoading(false);
@@ -1016,13 +1015,11 @@ export default function WebScraper() {
         } catch {
           // has_role RPC may be missing if migrations not run; let Edge Function enforce auth
         }
-        const response = await firecrawlApi.scrapeAndTraceFSBO({ location: reLocation, platform: rePlatform as any, listingType: reListingType, enableSkipTrace: reEnableSkipTrace, saveToDatabase: reSaveToDb });
+        const response = await firecrawlApi.scrapeAndTraceFSBO({ location: reLocation, platform: rePlatform as any, listingType: reListingType, enableSkipTrace: false, saveToDatabase: reSaveToDb });
         if (response.success) {
           setReListings(response.listings || []);
           if (response.errors?.length) setReErrors(response.errors);
-          if (response.skip_trace_stats) setReSkipTraceStats(response.skip_trace_stats);
-          const skipInfo = reEnableSkipTrace && response.skip_trace_stats ? ` (${response.skip_trace_stats.successful}/${response.skip_trace_stats.attempted} skip traced)` : '';
-          toast.success(`Found ${response.total || 0} listings${skipInfo}`);
+          toast.success(`Found ${response.total || 0} listings`);
           if (reSaveToDb && response.saved_to_database) toast.success(`Saved ${response.saved_to_database} leads to database`);
         } else {
           toast.error(response.error || 'Failed to scrape listings');
@@ -1469,26 +1466,12 @@ export default function WebScraper() {
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="w-36 space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Listing Type</Label>
-                  <Select value={reListingType} onValueChange={(v) => setReListingType(v as 'sale' | 'rent')}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sale">For Sale (FSBO)</SelectItem>
-                      <SelectItem value="rent">For Rent (FRBO)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
                   <Button onClick={handleRealEstateScrape} disabled={reLoading} size="sm" className="h-9 px-4">
                     {reLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-3.5 w-3.5 mr-1.5" /> Find Listings</>}
                   </Button>
               </div>
 
                 <div className="flex items-center gap-6 pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <Switch checked={reEnableSkipTrace} onCheckedChange={setReEnableSkipTrace} className="scale-90" />
-                    <span className="text-xs font-medium">Auto Skip Trace</span>
-                  </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Switch checked={reSaveToDb} onCheckedChange={setReSaveToDb} className="scale-90" />
                     <span className="text-xs font-medium">Save to Database</span>
@@ -1528,23 +1511,10 @@ export default function WebScraper() {
                   {['Address', 'Beds', 'Baths', 'Price', 'Days on Market', 'Favorites', 'Views', 'Owner Name', 'Owner Phone', 'Owner Email', 'Source'].map(field => (
                     <span key={field} className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted text-[10px] font-medium text-muted-foreground">{field}</span>
                   ))}
-                  {reEnableSkipTrace && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-green-500/10 text-[10px] font-medium text-green-600 dark:text-green-400">+ Skip Trace Data</span>
-                  )}
                 </div>
               </CardContent>
             </Card>
 
-              {reSkipTraceStats && (
-              <div className="flex items-center gap-6 px-4 py-3 rounded-lg bg-green-500/5 border border-green-500/20 text-sm">
-                <span className="text-xs font-medium text-green-700 dark:text-green-400">Skip Trace Results</span>
-                <div className="flex gap-4 text-xs">
-                  <span>Attempted: <strong>{reSkipTraceStats.attempted}</strong></span>
-                  <span>Successful: <strong className="text-green-600">{reSkipTraceStats.successful}</strong></span>
-                  <span>Rate: <strong>{reSkipTraceStats.rate}%</strong></span>
-                  </div>
-                </div>
-              )}
 
             {isAdmin && reErrors.length > 0 && (
               <div className="px-4 py-3 rounded-lg bg-destructive/5 border border-destructive/20 text-xs">

@@ -270,8 +270,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
     const totalEntries = data.pagination?.total_entries || orgs.length;
     const totalPages = data.pagination?.total_pages || 1;
 
-    return {
-      results: orgs.map((org: any) => ({
+    const results: CompanyResult[] = orgs.map((org: any) => ({
         name: org.name || '',
         domain: org.primary_domain || org.domain || org.website_url?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || '',
         website: org.website_url || (org.primary_domain ? `https://${org.primary_domain}` : null),
@@ -293,10 +292,8 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
         market_cap: org.market_cap || null,
         sic_codes: org.sic_codes || [],
         naics_codes: org.naics_codes || [],
-      })),
-      totalEntries,
-      totalPages,
-    };
+      }));
+    return { results, totalEntries, totalPages };
   } catch (e) {
     console.error('[Apollo] Exception:', e);
     return null;
