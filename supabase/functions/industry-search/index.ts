@@ -293,7 +293,7 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
         sic_codes: org.sic_codes || [],
         naics_codes: org.naics_codes || [],
       }));
-    return { results, totalEntries, totalPages };
+    return results;
   } catch (e) {
     console.error('[Apollo] Exception:', e);
     return null;

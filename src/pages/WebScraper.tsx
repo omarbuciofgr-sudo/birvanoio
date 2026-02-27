@@ -57,16 +57,6 @@ import { lazy, Suspense } from 'react';
 const ListingsMap = lazy(() => import('@/components/scraper/ListingsMap'));
 import { getPlatformLogo, PLATFORM_CONFIG } from '@/lib/platformLogos';
 
-/** Cities for Real Estate scraper dropdown (same as before, City ST format for backend). */
-const SCRAPER_CITIES = [
-  'Washington, DC',
-  'Minneapolis, MN',
-  'Chicago, IL',
-  'New York, NY',
-  'San Francisco, CA',
-  'Los Angeles, CA',
-];
-
 /** Parse address from Zillow homedetails URL slug (e.g. .../homedetails/623-Russell-Ave-N-Minneapolis-MN-55411/1887741_zpid/ → "623 Russell Ave N Minneapolis MN 55411"). Works for any city. */
 function addressFromZillowUrl(url: string | null | undefined): string | null {
   if (!url?.includes?.('/homedetails/')) return null;
@@ -121,7 +111,7 @@ export default function WebScraper() {
   const [bulkImporting, setBulkImporting] = useState(false);
 
   // Real Estate state
-  const [reLocation, setReLocation] = useState(SCRAPER_CITIES[0] ?? 'Chicago, IL');
+  const [reLocation, setReLocation] = useState('');
   const [rePlatform, setRePlatform] = useState<string>('all');
   const reListingType = 'sale'; // fixed; user skip traces manually after search
   const [reSaveToDb, setReSaveToDb] = useState(false);
@@ -1417,16 +1407,14 @@ export default function WebScraper() {
                 </p>
 
                 <div className="flex gap-3 items-end">
-                  <div className="w-52 space-y-1.5">
+                  <div className="w-64 space-y-1.5">
                     <Label className="text-xs text-muted-foreground">City</Label>
-                    <Select value={reLocation} onValueChange={setReLocation}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select city" /></SelectTrigger>
-                      <SelectContent>
-                        {SCRAPER_CITIES.map((city) => (
-                          <SelectItem key={city} value={city}>{city}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      value={reLocation}
+                      onChange={(e) => setReLocation(e.target.value)}
+                      placeholder="e.g. Chicago, IL or Houston TX"
+                      className="h-9 text-sm"
+                    />
                   </div>
                   <div className="w-40 space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Platform</Label>
