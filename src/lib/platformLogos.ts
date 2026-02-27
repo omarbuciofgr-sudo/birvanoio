@@ -7,7 +7,6 @@ const PLATFORM_CONFIG: Record<string, { label: string; domain: string; color: st
   redfin: { label: 'Redfin', domain: 'redfin.com', color: '#A02021' },
   apartments: { label: 'Apartments.com', domain: 'apartments.com', color: '#65AC1E' },
   hotpads: { label: 'HotPads', domain: 'hotpads.com', color: '#FF6347' },
-  realtor: { label: 'Realtor.com', domain: 'realtor.com', color: '#D92228' },
 };
 
 export function getPlatformLogo(platformKey: string): string | null {
