@@ -45,22 +45,37 @@ const searchLocationIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-/** True if listing address matches the searched location (e.g. "washington" matches "123 Main St, Washington, DC"). */
-function addressMatchesSearch(address: string | undefined, searchLocation: string | undefined): boolean {
-  if (!searchLocation?.trim() || !address?.trim()) return true;
+/** True if listing address matches the searched location (e.g. "chicago" or "Chicago, Illinois" matches "123 Main St, Chicago, IL"). Exported for use in list filtering. */
+export function addressMatchesSearch(address: string | undefined, searchLocation: string | undefined): boolean {
+  if (!searchLocation?.trim()) return true;
+  if (!address?.trim()) return false; // can't verify city, so hide when a search is active
   const q = searchLocation.toLowerCase().trim();
   const addr = address.toLowerCase();
   if (addr.includes(q)) return true;
   const cityAliases: Record<string, string[]> = {
     washington: ['washington', 'dc', 'district of columbia'],
-    chicago: ['chicago'],
-    minneapolis: ['minneapolis'],
-    'new york': ['new york', 'nyc', 'manhattan', 'brooklyn'],
+    chicago: ['chicago', ', il ', ' illinois'],
+    illinois: ['chicago', 'illinois', ', il '],
+    minneapolis: ['minneapolis', ', mn '],
+    minnesota: ['minneapolis', 'minnesota', ', mn '],
+    'new york': ['new york', 'nyc', 'manhattan', 'brooklyn', 'jamaica', 'bronx', 'queens', 'floral park', ', ny '],
     'san francisco': ['san francisco', 'sf'],
     'los angeles': ['los angeles', ', la '],
   };
-  const terms = cityAliases[q] || [q];
-  return terms.some(term => addr.includes(term));
+  // When search is for one metro, exclude addresses that clearly belong to another
+  const excludeWhenSearching: Record<string, string[]> = {
+    chicago: [', ny ', 'brooklyn', 'bronx', 'queens', 'jamaica', 'floral park', 'manhattan', 'new york'],
+    illinois: [', ny ', 'brooklyn', 'bronx', 'queens', 'jamaica', 'floral park', 'manhattan', 'new york'],
+    'new york': [', il ', ' chicago ', ' illinois'],
+    minneapolis: [', ny ', 'brooklyn', 'bronx', 'queens', 'jamaica', 'floral park'],
+  };
+  const parts = q.split(',').map((p) => p.trim()).filter(Boolean);
+  for (const part of parts) {
+    const exclude = excludeWhenSearching[part];
+    if (exclude?.some((bad) => addr.includes(bad))) return false;
+  }
+  const terms = [q, ...parts, ...(parts.flatMap((p) => cityAliases[p] || []))];
+  return terms.some((term) => term.length > 0 && addr.includes(term));
 }
 
 interface ListingsMapProps {

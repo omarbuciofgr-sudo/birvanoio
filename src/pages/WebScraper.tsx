@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/select';
 import { lazy, Suspense } from 'react';
 const ListingsMap = lazy(() => import('@/components/scraper/ListingsMap'));
+import { addressMatchesSearch } from '@/components/scraper/ListingsMap';
 import { getPlatformLogo, PLATFORM_CONFIG } from '@/lib/platformLogos';
 
 /** Parse address from Zillow homedetails URL slug (e.g. .../homedetails/623-Russell-Ave-N-Minneapolis-MN-55411/1887741_zpid/ → "623 Russell Ave N Minneapolis MN 55411"). Works for any city. */
@@ -69,7 +70,20 @@ function addressFromFsboUrl(url: string | null | undefined): string | null {
   const match = url.match(/\/listing\/([^/]+)/);
   return match ? match[1].replace(/-/g, ' ').trim() : null;
 }
-/** Derive display address: use listing.address, or parse URL slug for Zillow/FSBO when address is missing (works for all cities). */
+/** Try to get city/state from Hotpads, Trulia, Redfin, Apartments URL paths (e.g. .../chicago-il/... → "chicago il") for city filter when backend omits address. */
+function cityStateFromListingUrl(url: string | null | undefined): string | null {
+  if (!url?.trim()) return null;
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    // Match segments like /chicago-il/ or /chicago_il/ or /il/chicago/ (Redfin-style)
+    const citySt = path.match(/\/([a-z0-9]+)[-_]([a-z]{2})(?:\/|$)/);
+    if (citySt) return `${citySt[1]} ${citySt[2]}`;
+    const stateCity = path.match(/\/([a-z]{2})\/([a-z0-9-]+)(?:\/|$)/);
+    if (stateCity) return `${stateCity[2].replace(/-/g, ' ')} ${stateCity[1]}`;
+  } catch { /* ignore */ }
+  return null;
+}
+/** Derive display address: use listing.address, or parse URL for Zillow/FSBO, or city-state from URL for other scrapers. Used for city filter on all platforms. */
 function listingDisplayAddress(listing: { address?: string | null; listing_url?: string | null; source_url?: string | null; source_platform?: string | null }): string {
   const addr = (listing.address || '').trim();
   if (addr) return addr;
@@ -83,7 +97,26 @@ function listingDisplayAddress(listing: { address?: string | null; listing_url?:
     const fromUrl = addressFromZillowUrl(url);
     if (fromUrl) return fromUrl;
   }
+  // Hotpads, Trulia, Redfin, Apartments: use city-state from URL for filtering when address missing
+  const fromUrl = cityStateFromListingUrl(url);
+  if (fromUrl) return fromUrl;
   return 'Address not available';
+}
+
+/** Parse city from full address string (e.g. "559 Carlton Ave, Brooklyn, NY 11238" -> "Brooklyn"). */
+function listingCity(displayAddress: string): string | null {
+  const a = (displayAddress || '').trim();
+  if (!a) return null;
+  const parts = a.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) return parts[1];
+  // No comma: try "Street City ST Zip" – state is 2-letter, optionally followed by 5-digit zip
+  const stateZip = a.match(/\b([A-Z]{2})\s*(?:\d{5}(-\d{4})?)?\s*$/i);
+  if (stateZip) {
+    const before = a.slice(0, stateZip.index).trim();
+    const tokens = before.split(/\s+/);
+    if (tokens.length >= 2) return tokens[tokens.length - 1];
+  }
+  return null;
 }
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string; appliedFilters?: Record<string, any> };
@@ -128,6 +161,14 @@ export default function WebScraper() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [showMap, setShowMap] = useState(true);
 
+  // Only show listings that match the searched city (applies to all scrapers: Zillow, Hotpads, Trulia, Redfin, Apartments, FSBO/All Platforms)
+  const reListingsFilteredForDisplay = useMemo(() => {
+    if (!reLocation?.trim()) return reListings.map((listing, index) => ({ listing, realIndex: index }));
+    return reListings
+      .map((listing, index) => ({ listing, realIndex: index }))
+      .filter(({ listing }) => addressMatchesSearch(listingDisplayAddress(listing), reLocation));
+  }, [reListings, reLocation]);
+
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
   const [externalFilters, setExternalFilters] = useState<Record<string, any> | null>(null);
@@ -155,6 +196,9 @@ export default function WebScraper() {
   useEffect(() => {
     if (activeTab === 'real-estate') checkReBackendReachable();
   }, [activeTab, checkReBackendReachable]);
+
+  const filteredUnsavedIndices = useMemo(() => reListingsFilteredForDisplay.filter(({ listing }) => !listing.saved_to_db).map(({ realIndex }) => realIndex), [reListingsFilteredForDisplay]);
+  const toggleSelectAllListings = () => { if (selectedListings.size === filteredUnsavedIndices.length) setSelectedListings(new Set()); else setSelectedListings(new Set(filteredUnsavedIndices)); };
 
   if (authLoading || adminLoading) {
     return (
@@ -1152,7 +1196,6 @@ export default function WebScraper() {
   };
 
   const toggleListingSelection = (index: number) => { setSelectedListings(prev => { const next = new Set(prev); if (next.has(index)) next.delete(index); else next.add(index); return next; }); };
-  const toggleSelectAllListings = () => { if (selectedListings.size === reListings.filter(l => !l.saved_to_db).length) setSelectedListings(new Set()); else setSelectedListings(new Set(reListings.map((l, i) => l.saved_to_db ? -1 : i).filter(i => i >= 0))); };
 
   const handleBulkSkipTrace = async () => {
     const toProcess = Array.from(selectedListings).filter(i => reListings[i] && !reListings[i].owner_phone && !reListings[i].skip_trace_status);
@@ -1521,27 +1564,35 @@ export default function WebScraper() {
                       <Building className="h-3 w-3" /> List View
                     </Button>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">{reListings.length} listings found</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {reListingsFilteredForDisplay.length} listing{reListingsFilteredForDisplay.length !== 1 ? 's' : ''} found
+                    {reLocation?.trim() && reListingsFilteredForDisplay.length !== reListings.length && (
+                      <span> (matching &quot;{reLocation.trim()}&quot; — {reListings.length} total)</span>
+                    )}
+                  </span>
                 </div>
 
                 {/* Map */}
                 {showMap && (
                   <Suspense fallback={<div className="h-[400px] rounded-lg bg-muted/30 border border-border/60 flex items-center justify-center text-xs text-muted-foreground">Loading map...</div>}>
-                    <ListingsMap listings={reListings} onSelectListing={(i) => { setShowMap(false); }} searchLocation={reLocation} />
+                    <ListingsMap listings={reListingsFilteredForDisplay.map(({ listing }) => listing)} onSelectListing={(i) => { setShowMap(false); }} searchLocation={reLocation} />
                   </Suspense>
                 )}
 
               <Card className="border-border/60">
                 <div className="flex items-center justify-between px-5 py-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-medium">{reListings.length} Listings</h3>
+                    <h3 className="text-sm font-medium">{reListingsFilteredForDisplay.length} Listings</h3>
+                    {reLocation?.trim() && reListingsFilteredForDisplay.length < reListings.length && (
+                      <span className="text-[10px] text-muted-foreground">(matching city)</span>
+                    )}
                     {selectedListings.size > 0 && (
                       <Badge variant="secondary" className="text-[10px] h-5">{selectedListings.size} selected</Badge>
                     )}
                   </div>
                   <div className="flex gap-1.5">
                     <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={toggleSelectAllListings}>
-                      {selectedListings.size === reListings.filter(l => !l.saved_to_db).length ? 'Deselect All' : 'Select All'}
+                      {selectedListings.size === filteredUnsavedIndices.length ? 'Deselect All' : 'Select All'}
                     </Button>
                     {selectedListings.size > 0 && (
                       <>
@@ -1561,15 +1612,15 @@ export default function WebScraper() {
                 <CardContent className="p-0">
                 <ScrollArea className="h-[500px]">
                     <div className="divide-y divide-border/40">
-                    {reListings.map((listing, index) => (
+                    {reListingsFilteredForDisplay.map(({ listing, realIndex }) => (
                       <div 
-                        key={index} 
+                        key={realIndex} 
                           className={`px-5 py-3.5 flex gap-3 transition-colors hover:bg-muted/30 ${
-                            selectedListings.has(index) ? 'bg-primary/[0.03]' : ''
+                            selectedListings.has(realIndex) ? 'bg-primary/[0.03]' : ''
                           } ${listing.saved_to_db ? 'opacity-50' : ''}`}
                         >
                           {!listing.saved_to_db ? (
-                            <Checkbox checked={selectedListings.has(index)} onCheckedChange={() => toggleListingSelection(index)} className="mt-0.5" />
+                            <Checkbox checked={selectedListings.has(realIndex)} onCheckedChange={() => toggleListingSelection(realIndex)} className="mt-0.5" />
                           ) : (
                             <Check className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
                           )}
@@ -1592,6 +1643,11 @@ export default function WebScraper() {
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                   {[listing.property_type, listing.bedrooms && `${listing.bedrooms} bed`, listing.bathrooms && `${listing.bathrooms} bath`, listing.square_feet && `${listing.square_feet.toLocaleString()} sqft`].filter(Boolean).join(' · ')}
                                 </p>
+                                {listingCity(listingDisplayAddress(listing)) && (
+                                  <p className="text-[11px] text-muted-foreground/90 mt-0.5">
+                                    City: {listingCity(listingDisplayAddress(listing))}
+                                  </p>
+                                )}
                               </div>
                               <div className="text-right shrink-0">
                                 <p className="text-sm font-semibold">{listing.price || '—'}</p>
@@ -1636,23 +1692,23 @@ export default function WebScraper() {
 
                             <div className="flex items-center gap-1.5">
                                 {!listing.owner_phone && !listing.skip_trace_status && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleSkipTraceListing(listing, index)} disabled={skipTracingIndex === index}>
-                                  {skipTracingIndex === index ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
+                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
+                                  {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
                                   </Button>
                                 )}
                                 {listing.skip_trace_status === 'not_found' && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20" onClick={() => handleRetrySkipTrace(listing, index)} disabled={skipTracingIndex === index}>
-                                  {skipTracingIndex === index ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Retry
+                                <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20" onClick={() => handleRetrySkipTrace(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
+                                  {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Retry
                                   </Button>
                                 )}
                                 {!listing.saved_to_db && (
-                                <Button size="sm" className="h-7 text-xs" onClick={() => handleSaveListing(listing, index)} disabled={savingIndex === index}>
-                                  {savingIndex === index ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
+                                <Button size="sm" className="h-7 text-xs" onClick={() => handleSaveListing(listing, realIndex)} disabled={savingIndex === realIndex}>
+                                  {savingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
                                   </Button>
                                 )}
-                              {listing.source_url && (
-                                <a href={listing.source_url} target="_blank" rel="noopener noreferrer" className="ml-auto text-[10px] text-muted-foreground hover:text-primary flex items-center gap-0.5">
-                                  View <ExternalLink className="h-2.5 w-2.5" />
+                              {(listing.source_url || listing.listing_url) && (
+                                <a href={listing.source_url || listing.listing_url || '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 hover:underline" title="Open listing in new tab">
+                                  View listing <ExternalLink className="h-3 w-3 shrink-0" />
                                 </a>
                               )}
                           </div>
