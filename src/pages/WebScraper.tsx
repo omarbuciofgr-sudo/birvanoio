@@ -103,6 +103,28 @@ function listingDisplayAddress(listing: { address?: string | null; listing_url?:
   return 'Address not available';
 }
 
+/** Get URL for "View listing" button: use direct listing URL if present, else a platform search fallback so the button always shows. */
+function getListingViewUrl(listing: { address?: string | null; listing_url?: string | null; source_url?: string | null; source_platform?: string | null; [k: string]: any }): string | null {
+  const direct = (listing.source_url || listing.listing_url || listing.url || '').trim();
+  if (direct && direct !== '#') return direct;
+  const platform = (listing.source_platform || '').toLowerCase();
+  const addr = (listing.address || listingDisplayAddress(listing) || '').trim();
+  const city = listingCity(addr) || '';
+  const stateMatch = addr.match(/\b([A-Za-z]{2})\s*(?:\d{5})?\s*$/);
+  const state = stateMatch ? stateMatch[1].toLowerCase() : '';
+  const cityStateSlug = city && state ? `${city.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '')}-${state}` : '';
+  if (platform.includes('zillow')) {
+    if (cityStateSlug) return `https://www.zillow.com/${state}/${city.replace(/\s+/g, '-').toLowerCase()}/`;
+    return 'https://www.zillow.com/';
+  }
+  if (platform.includes('hotpads')) return cityStateSlug ? `https://hotpads.com/${cityStateSlug}/apartments-for-rent` : 'https://hotpads.com/';
+  if (platform.includes('trulia')) return cityStateSlug ? `https://www.trulia.com/${state}/${city.replace(/\s+/g, '-').toLowerCase()}/` : 'https://www.trulia.com/';
+  if (platform.includes('redfin')) return cityStateSlug ? `https://www.redfin.com/state/${state.toUpperCase()}/city/${city.replace(/\s+/g, '-')}` : 'https://www.redfin.com/';
+  if (platform.includes('apartments')) return cityStateSlug ? `https://www.apartments.com/${cityStateSlug}/` : 'https://www.apartments.com/';
+  if (platform.includes('fsbo')) return 'https://www.forsalebyowner.com/';
+  return null;
+}
+
 /** Parse city from full address string (e.g. "559 Carlton Ave, Brooklyn, NY 11238" -> "Brooklyn"). */
 function listingCity(displayAddress: string): string | null {
   const a = (displayAddress || '').trim();
@@ -369,7 +391,7 @@ export default function WebScraper() {
         const propertyType = 'apartments';
         let url: string | null = buildHotpadsUrl(reLocation.trim(), propertyType);
         if (!url) {
-          toast.error('Could not build Hotpads URL. Use a city (e.g. Minneapolis, Washington, Chicago, New York, San Francisco, Los Angeles) or "City, ST" (e.g. Minneapolis, MN or Chicago IL).');
+          toast.error('Could not build Hotpads URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
           setReLoading(false);
           return;
         }
@@ -472,7 +494,7 @@ export default function WebScraper() {
         }
         const url = buildTruliaUrl(reLocation.trim());
         if (!url) {
-          toast.error('Could not build Trulia URL. Use a city (e.g. Minneapolis, Washington, Chicago, New York, San Francisco, Los Angeles) or "City, ST" (e.g. Chicago IL).');
+          toast.error('Could not build Trulia URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
           setReLoading(false);
           return;
         }
@@ -563,7 +585,7 @@ export default function WebScraper() {
         }
         const searchRes = await scraperBackendApi.searchLocation('redfin', reLocation.trim(), 'for-sale-by-owner');
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Redfin URL for this location. Try "City, ST" (e.g. Chicago, IL).');
+          toast.error(searchRes.error || 'Could not find Redfin URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           setReLoading(false);
           return;
         }
@@ -654,7 +676,7 @@ export default function WebScraper() {
         }
         const searchRes = await scraperBackendApi.searchLocation('zillow_fsbo', reLocation.trim());
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Zillow FSBO URL for this location. Try "City, ST" (e.g. Chicago, IL).');
+          toast.error(searchRes.error || 'Could not find Zillow FSBO URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           setReLoading(false);
           return;
         }
@@ -749,7 +771,7 @@ export default function WebScraper() {
         }
         const searchRes = await scraperBackendApi.searchLocation('zillow_frbo', reLocation.trim());
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Zillow FRBO URL for this location. Try "City, ST" (e.g. Chicago, IL).');
+          toast.error(searchRes.error || 'Could not find Zillow FRBO URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           setReLoading(false);
           return;
         }
@@ -844,7 +866,7 @@ export default function WebScraper() {
         }
         const searchRes = await scraperBackendApi.searchLocation('fsbo', reLocation.trim());
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find FSBO.com URL for this location. Try a city or "City, ST".');
+          toast.error(searchRes.error || 'Could not find FSBO.com URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           setReLoading(false);
           return;
         }
@@ -971,7 +993,7 @@ export default function WebScraper() {
         }
         const searchRes = await scraperBackendApi.searchLocation('apartments', reLocation.trim(), 'apartments');
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Apartments.com URL for this location. Try "City, ST" (e.g. Chicago, IL).');
+          toast.error(searchRes.error || 'Could not find Apartments.com URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           setReLoading(false);
           return;
         }
@@ -1455,7 +1477,7 @@ export default function WebScraper() {
                     <Input
                       value={reLocation}
                       onChange={(e) => setReLocation(e.target.value)}
-                      placeholder="e.g. Chicago, IL or Houston TX"
+                      placeholder="e.g. Chicago or Chicago, Illinois"
                       className="h-9 text-sm"
                     />
                   </div>
@@ -1629,8 +1651,8 @@ export default function WebScraper() {
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  {(listing.source_url || listing.listing_url) ? (
-                                    <a href={listing.source_url || listing.listing_url || '#'} target="_blank" rel="noopener noreferrer" className="text-sm font-medium truncate hover:text-primary hover:underline block min-w-0">
+                                  {getListingViewUrl(listing) ? (
+                                    <a href={getListingViewUrl(listing) || '#'} target="_blank" rel="noopener noreferrer" className="text-sm font-medium truncate hover:text-primary hover:underline block min-w-0">
                                       {listingDisplayAddress(listing)}
                                     </a>
                                   ) : (
@@ -1649,9 +1671,14 @@ export default function WebScraper() {
                                   </p>
                                 )}
                               </div>
-                              <div className="text-right shrink-0">
+                              <div className="text-right shrink-0 flex flex-col items-end gap-1">
                                 <p className="text-sm font-semibold">{listing.price || '—'}</p>
                                 {listing.days_on_market && <p className="text-[10px] text-muted-foreground">{listing.days_on_market}d on market</p>}
+                                {getListingViewUrl(listing) && (
+                                  <a href={getListingViewUrl(listing) || '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 hover:underline" title="Open this listing in a new tab">
+                                    View listing <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                  </a>
+                                )}
                               </div>
                             </div>
                             
@@ -1690,27 +1717,22 @@ export default function WebScraper() {
                                 </div>
                             ) : null}
 
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                                 {!listing.owner_phone && !listing.skip_trace_status && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
+                                <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
                                   {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
                                   </Button>
                                 )}
                                 {listing.skip_trace_status === 'not_found' && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20" onClick={() => handleRetrySkipTrace(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
+                                <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20 shrink-0" onClick={() => handleRetrySkipTrace(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
                                   {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Retry
                                   </Button>
                                 )}
                                 {!listing.saved_to_db && (
-                                <Button size="sm" className="h-7 text-xs" onClick={() => handleSaveListing(listing, realIndex)} disabled={savingIndex === realIndex}>
+                                <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSaveListing(listing, realIndex)} disabled={savingIndex === realIndex}>
                                   {savingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
                                   </Button>
                                 )}
-                              {(listing.source_url || listing.listing_url) && (
-                                <a href={listing.source_url || listing.listing_url || '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 hover:underline" title="Open listing in new tab">
-                                  View listing <ExternalLink className="h-3 w-3 shrink-0" />
-                                </a>
-                              )}
                           </div>
                         </div>
                       </div>

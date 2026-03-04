@@ -3,6 +3,20 @@
  * Used for Hotpads (and future scrapers) instead of Supabase Edge Functions.
  */
 
+/** Full state name → 2-letter abbreviation (for "Chicago, Illinois" etc.). */
+const stateNameToAbbrev: Record<string, string> = {
+  alabama: "al", alaska: "ak", arizona: "az", arkansas: "ar", california: "ca", colorado: "co",
+  connecticut: "ct", delaware: "de", florida: "fl", georgia: "ga", hawaii: "hi", idaho: "id",
+  illinois: "il", indiana: "in", iowa: "ia", kansas: "ks", kentucky: "ky", louisiana: "la",
+  maine: "me", maryland: "md", massachusetts: "ma", michigan: "mi", minnesota: "mn",
+  mississippi: "ms", missouri: "mo", montana: "mt", nebraska: "ne", nevada: "nv",
+  "new hampshire": "nh", "new jersey": "nj", "new mexico": "nm", "new york": "ny",
+  "north carolina": "nc", "north dakota": "nd", ohio: "oh", oklahoma: "ok", oregon: "or",
+  pennsylvania: "pa", "rhode island": "ri", "south carolina": "sc", "south dakota": "sd",
+  tennessee: "tn", texas: "tx", utah: "ut", vermont: "vt", virginia: "va", washington: "wa",
+  "west virginia": "wv", wisconsin: "wi", wyoming: "wy", "district of columbia": "dc", "d.c.": "dc",
+};
+
 /** Build Hotpads URL on the frontend so we don't depend on backend search-location (avoids 500/encoding issues). */
 export function buildHotpadsUrl(location: string, propertyType: string = "apartments"): string | null {
   const loc = (location || "").trim();
@@ -20,10 +34,20 @@ export function buildHotpadsUrl(location: string, propertyType: string = "apartm
   const low = loc.toLowerCase();
   let stateAbbrev: string | null = cityToState[low] ?? null;
   let city = loc;
-  const commaMatch = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
-  if (commaMatch) {
-    city = commaMatch[1].trim();
-    stateAbbrev = commaMatch[2].trim().toLowerCase();
+  // "City, ST" (2-letter state)
+  const commaMatch2 = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
+  if (commaMatch2) {
+    city = commaMatch2[1].trim();
+    stateAbbrev = commaMatch2[2].trim().toLowerCase();
+  }
+  // "City, Full State Name" (e.g. Chicago, Illinois)
+  if (!stateAbbrev) {
+    const commaMatchFull = loc.match(/^(.+?),\s*(.+)$/);
+    if (commaMatchFull) {
+      city = commaMatchFull[1].trim();
+      const statePart = commaMatchFull[2].trim().toLowerCase();
+      stateAbbrev = stateNameToAbbrev[statePart] ?? (statePart.length === 2 ? statePart : null);
+    }
   }
   if (!stateAbbrev) {
     const spaceMatch = loc.match(/^(.+?)\s+([A-Za-z]{2})\s*$/);
@@ -66,10 +90,18 @@ export function buildTruliaUrl(location: string): string | null {
   const low = loc.toLowerCase();
   let stateAbbrev: string | null = cityToState[low] ?? null;
   let city = loc;
-  const commaMatch = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
-  if (commaMatch) {
-    city = commaMatch[1].trim();
-    stateAbbrev = commaMatch[2].trim().toLowerCase();
+  const commaMatch2 = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
+  if (commaMatch2) {
+    city = commaMatch2[1].trim();
+    stateAbbrev = commaMatch2[2].trim().toLowerCase();
+  }
+  if (!stateAbbrev) {
+    const commaMatchFull = loc.match(/^(.+?),\s*(.+)$/);
+    if (commaMatchFull) {
+      city = commaMatchFull[1].trim();
+      const statePart = commaMatchFull[2].trim().toLowerCase();
+      stateAbbrev = stateNameToAbbrev[statePart] ?? (statePart.length === 2 ? statePart : null);
+    }
   }
   if (!stateAbbrev) {
     const spaceMatch = loc.match(/^(.+?)\s+([A-Za-z]{2})\s*$/);
