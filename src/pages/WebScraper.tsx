@@ -1578,7 +1578,13 @@ export default function WebScraper() {
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <h4 className="text-sm font-medium truncate">{listingDisplayAddress(listing)}</h4>
+                                  {(listing.source_url || listing.listing_url) ? (
+                                    <a href={listing.source_url || listing.listing_url || '#'} target="_blank" rel="noopener noreferrer" className="text-sm font-medium truncate hover:text-primary hover:underline block min-w-0">
+                                      {listingDisplayAddress(listing)}
+                                    </a>
+                                  ) : (
+                                    <h4 className="text-sm font-medium truncate">{listingDisplayAddress(listing)}</h4>
+                                  )}
                                   {listing.saved_to_db && <Badge variant="secondary" className="text-[10px] h-4 shrink-0">Saved</Badge>}
                                   {listing.skip_trace_status === 'success' && <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] h-4 border-0 shrink-0">Traced</Badge>}
                                   {listing.skip_trace_status === 'not_found' && <Badge variant="outline" className="text-[10px] h-4 shrink-0">Not Found</Badge>}

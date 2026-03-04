@@ -196,15 +196,18 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
   const cityStateSlug = buildCityStateSlug(decodedLocation);
 
   switch (platform) {
-    case 'zillow':
+    case 'zillow': {
+      // Zillow expects city-state slug with state abbreviation (e.g. chicago-il), not full state name
+      const zillowSlug = cityStateSlug || formattedLocation;
       if (listingType === 'sale') {
         // FSBO for sale listings
-        return `https://www.zillow.com/${formattedLocation}/fsbo/`;
+        return `https://www.zillow.com/${zillowSlug}/fsbo/`;
       } else {
         // For rent by owner - use the proper filter parameters
         // Zillow uses lotId filter: 43094 = For Rent By Owner
-        return `https://www.zillow.com/${formattedLocation}/rentals/?searchQueryState=%7B%22filterState%22%3A%7B%22fsbo%22%3A%7B%22value%22%3Atrue%7D%2C%22fsba%22%3A%7B%22value%22%3Afalse%7D%2C%22fore%22%3A%7B%22value%22%3Afalse%7D%2C%22auc%22%3A%7B%22value%22%3Afalse%7D%2C%22nc%22%3A%7B%22value%22%3Afalse%7D%2C%22cmsn%22%3A%7B%22value%22%3Afalse%7D%2C%22fr%22%3A%7B%22value%22%3Atrue%7D%7D%7D`;
+        return `https://www.zillow.com/${zillowSlug}/rentals/?searchQueryState=%7B%22filterState%22%3A%7B%22fsbo%22%3A%7B%22value%22%3Atrue%7D%2C%22fsba%22%3A%7B%22value%22%3Afalse%7D%2C%22fore%22%3A%7B%22value%22%3Afalse%7D%2C%22auc%22%3A%7B%22value%22%3Afalse%7D%2C%22nc%22%3A%7B%22value%22%3Afalse%7D%2C%22cmsn%22%3A%7B%22value%22%3Afalse%7D%2C%22fr%22%3A%7B%22value%22%3Atrue%7D%7D%7D`;
       }
+    }
     case 'fsbo': {
       const { city } = parseCityState(decodedLocation);
       const fsboCity = city.trim().toLowerCase().replace(/\s+/g, '-');

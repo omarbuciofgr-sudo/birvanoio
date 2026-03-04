@@ -112,21 +112,28 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
   const cityStateSlug = buildCityStateSlug(decodedLocation);
 
   switch (platform) {
-    case 'zillow':
+    case 'zillow': {
+      // Zillow expects city-state slug with state abbreviation (e.g. chicago-il), not full state name
+      const zillowSlug = cityStateSlug || formattedLocation;
       if (listingType === 'sale') {
-        return `https://www.zillow.com/${formattedLocation}/fsbo/`;
+        return `https://www.zillow.com/${zillowSlug}/fsbo/`;
       } else {
-        return `https://www.zillow.com/homes/for_rent/${formattedLocation}/`;
+        return `https://www.zillow.com/homes/for_rent/${zillowSlug}/`;
       }
+    }
     case 'fsbo': {
       const { city } = parseCityState(decodedLocation);
       const fsboCity = city.trim().toLowerCase().replace(/\s+/g, '-');
       return `https://www.forsalebyowner.com/search/list/${fsboCity}`;
     }
-    case 'trulia':
+    case 'trulia': {
+      const { city: truliaCity, state: truliaState } = parseCityState(decodedLocation);
+      const truliaLocationStr = `${truliaCity},${getStateAbbreviation(truliaState || '')}`;
+      const truliaEncoded = encodeURIComponent(truliaLocationStr).replace(/%2C/g, ',');
       return listingType === 'sale'
-        ? `https://www.trulia.com/for_sale/${decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_')}/fsbo_lt/`
-        : `https://www.trulia.com/for_rent/${decodedLocation.toLowerCase().replace(/,/g, '').replace(/\s+/g, '_')}/`;
+        ? `https://www.trulia.com/for_sale/${truliaEncoded}/fsbo_lt/1_als/`
+        : `https://www.trulia.com/for_rent/${truliaEncoded}/`;
+    }
     case 'redfin': {
       const { city, state } = parseCityState(decodedLocation);
       const cityPath = city.replace(/\s+/g, '-');
