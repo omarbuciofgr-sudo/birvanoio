@@ -1517,8 +1517,12 @@ export default function WebScraper() {
                   </label>
               </div>
 
-              {/* Backend status: check if local or deployed backend is running */}
+              {/* Backend status, cap verification, and PM/realtor filter note */}
               <div className="flex items-center gap-2 pt-1.5 text-[11px] text-muted-foreground flex-wrap">
+                <span className="text-green-600 dark:text-green-400 font-medium">No listing cap</span>
+                <span>— all platforms return every scraped listing for verification.</span>
+                <span className="text-amber-600 dark:text-amber-400 font-medium">PM/realtor hidden</span>
+                <span>— only by-owner leads are shown.</span>
                 {reBackendCheckInProgress && <span>Checking backend…</span>}
                 {!reBackendCheckInProgress && reBackendReachable === true && (() => {
                   const base = scraperBackendApi.getBaseUrl();
@@ -1586,12 +1590,28 @@ export default function WebScraper() {
                       <Building className="h-3 w-3" /> List View
                     </Button>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    {reListingsFilteredForDisplay.length} listing{reListingsFilteredForDisplay.length !== 1 ? 's' : ''} found
-                    {reLocation?.trim() && reListingsFilteredForDisplay.length !== reListings.length && (
-                      <span> (matching &quot;{reLocation.trim()}&quot; — {reListings.length} total)</span>
-                    )}
-                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        {reListingsFilteredForDisplay.length} listing{reListingsFilteredForDisplay.length !== 1 ? 's' : ''} found
+                        {reLocation?.trim() && reListingsFilteredForDisplay.length !== reListings.length && (
+                          <span> (matching &quot;{reLocation.trim()}&quot; — {reListings.length} total)</span>
+                        )}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] font-normal text-green-600 dark:text-green-400 border-green-500/50" title="Backend returns all scraped listings with no limit">
+                        No cap
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] font-normal text-amber-600 dark:text-amber-400 border-amber-500/50" title="Property management and realtor listings are hidden; only by-owner leads shown">
+                        By-owner only
+                      </Badge>
+                    </div>
+                    <span className="text-[10px] text-green-600/90 dark:text-green-400/90" title="Verify: this is the full count from the scraper with no limit">
+                      Verify: {reListings.length} total from backend (no limit — all scraped listings shown)
+                    </span>
+                    <span className="text-[10px] text-amber-600/90 dark:text-amber-400/90" title="PM/realtor filter is applied by the backend">
+                      PM/realtor listings hidden — you see only by-owner leads
+                    </span>
+                  </div>
                 </div>
 
                 {/* Map */}
@@ -1605,6 +1625,12 @@ export default function WebScraper() {
                 <div className="flex items-center justify-between px-5 py-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium">{reListingsFilteredForDisplay.length} Listings</h3>
+                    <Badge variant="outline" className="text-[10px] font-normal text-green-600 dark:text-green-400 border-green-500/50" title="All scrapers return unlimited listings; no 500 cap">
+                      No cap
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] font-normal text-amber-600 dark:text-amber-400 border-amber-500/50" title="Only by-owner leads; PM/realtor hidden">
+                      By-owner only
+                    </Badge>
                     {reLocation?.trim() && reListingsFilteredForDisplay.length < reListings.length && (
                       <span className="text-[10px] text-muted-foreground">(matching city)</span>
                     )}
