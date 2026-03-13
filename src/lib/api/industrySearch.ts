@@ -43,6 +43,7 @@ export interface CompanyResult {
   keywords: string[];
   social_profiles?: Record<string, string>;
   phone?: string | null;
+  email?: string | null;
   logo_url?: string | null;
 }
 
@@ -65,6 +66,9 @@ export interface PersonResult {
   linkedin_url: string | null;
   email_status: string | null;
   photo_url: string | null;
+  /** When people-search returns contact info, saved to scraped_leads */
+  email?: string | null;
+  phone?: string | null;
 }
 
 export interface JobResult {
@@ -248,6 +252,11 @@ export const industrySearchApi = {
           lead_type: 'company',
           status: 'new',
           job_id: jobId || null,
+          full_name: company.name || null,
+          best_email: company.email || null,
+          all_emails: company.email ? [company.email] : [],
+          best_phone: company.phone || null,
+          all_phones: company.phone ? [company.phone] : [],
           schema_data: {
             company_name: company.name,
             industry: company.industry,

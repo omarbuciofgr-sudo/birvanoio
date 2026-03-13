@@ -527,11 +527,16 @@ export const prospectSearchApi = {
         return 'prospect_search';
       };
 
-      const leadsToInsert = prospects.map(prospect => ({
+      const leadsToInsert = prospects.map(prospect => {
+        const email = prospect.email || null;
+        const phone = prospect.phone || prospect.mobile_phone || prospect.direct_phone || null;
+        return {
         domain: prospect.company_domain || 'unknown',
         full_name: prospect.full_name,
-        best_email: prospect.email,
-        best_phone: prospect.phone || prospect.mobile_phone || prospect.direct_phone,
+        best_email: email,
+        all_emails: email ? [email] : [],
+        best_phone: phone,
+        all_phones: phone ? [phone] : [],
         best_contact_title: prospect.job_title,
         lead_type: 'company' as const,
         source_type: getSourceType(prospect.source),
@@ -552,7 +557,8 @@ export const prospectSearchApi = {
         status: 'new' as const,
         job_id: jobId || null,
         enrichment_providers_used: prospect.enrichment_providers || [],
-      }));
+      };
+      });
 
       const { data, error } = await supabase
         .from('scraped_leads')

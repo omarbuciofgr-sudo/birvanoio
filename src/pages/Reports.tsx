@@ -58,34 +58,44 @@ const CHART_COLORS = [
   "hsl(195 100% 45%)",
 ];
 
-const generateMockPerformanceData = () => {
+/** Build performance chart data from real leads. Use last 14 days from today; if no leads in that range, use last 14 days from most recent lead so the chart always shows bars when there is data. */
+const buildPerformanceDataFromLeads = (leads: Lead[]) => {
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+  let endDate = new Date(now);
+  if (leads.length > 0) {
+    const maxCreated = new Date(leads.reduce((max, l) => (l.created_at > max ? l.created_at : max), leads[0].created_at));
+    const daysAgo = Math.floor((now.getTime() - maxCreated.getTime()) / (24 * 60 * 60 * 1000));
+    if (daysAgo > 13) endDate = new Date(maxCreated);
+    endDate.setHours(23, 59, 59, 999);
+  }
   const days = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
+    const d = new Date(endDate);
     d.setDate(d.getDate() - (13 - i));
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return d;
   });
-  return days.map(day => ({
-    date: day,
-    calls: Math.floor(Math.random() * 30) + 5,
-    emails: Math.floor(Math.random() * 40) + 10,
-    sms: Math.floor(Math.random() * 15) + 2,
-    conversions: Math.floor(Math.random() * 8) + 1,
-    revenue: Math.floor(Math.random() * 5000) + 500,
-  }));
+  return days.map((date) => {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+    const inDay = (created: string) => {
+      const t = new Date(created).getTime();
+      return t >= dayStart.getTime() && t <= dayEnd.getTime();
+    };
+    const dayLeads = leads.filter((l) => inDay(l.created_at));
+    return {
+      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      new: dayLeads.filter((l) => l.status === "new").length,
+      contacted: dayLeads.filter((l) => l.status === "contacted").length,
+      conversions: dayLeads.filter((l) => l.status === "converted").length,
+      calls: dayLeads.filter((l) => l.status !== "new").length,
+      emails: dayLeads.filter((l) => l.status === "contacted" || l.status === "converted").length,
+      sms: 0,
+      revenue: 0,
+    };
+  });
 };
-
-const generateMockConversionData = () => [
-  { stage: "New", count: 245, rate: 100 },
-  { stage: "Contacted", count: 182, rate: 74 },
-  { stage: "Qualified", count: 98, rate: 40 },
-  { stage: "Proposal", count: 52, rate: 21 },
-  { stage: "Converted", count: 31, rate: 13 },
-];
-
-const generateMockTeamData = () => [
-  { name: "You", calls: 45, emails: 67, conversions: 12, revenue: 24500, responseTime: 22 },
-  { name: "Team Avg", calls: 32, emails: 48, conversions: 8, revenue: 18200, responseTime: 35 },
-];
 
 const ANALYTICS_COLORS: Record<string, string> = {
   New: "hsl(190, 100%, 50%)",
@@ -112,9 +122,7 @@ export default function Reports() {
   // Analytics data
   const [leads, setLeads] = useState<Lead[]>([]);
 
-  const performanceData = generateMockPerformanceData();
-  const conversionData = generateMockConversionData();
-  const teamData = generateMockTeamData();
+  const performanceData = buildPerformanceDataFromLeads(leads);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -185,10 +193,29 @@ export default function Reports() {
   if (authLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Loading...</div></div>;
   if (!user) return null;
 
-  // Analytics computed data
+  // Analytics computed data (real from leads)
   const statusCounts = leads.reduce((acc, lead) => { acc[lead.status] = (acc[lead.status] || 0) + 1; return acc; }, {} as Record<string, number>);
   const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
   const conversionRate = leads.length > 0 ? ((statusCounts.converted || 0) / leads.length * 100).toFixed(1) : "0";
+
+  const totalOutreach = (statusCounts.contacted ?? 0) + (statusCounts.qualified ?? 0) + (statusCounts.converted ?? 0);
+  const conversionData = (() => {
+    const total = leads.length;
+    const newCount = statusCounts.new ?? 0;
+    const contactedCount = statusCounts.contacted ?? 0;
+    const qualifiedCount = statusCounts.qualified ?? 0;
+    const convertedCount = statusCounts.converted ?? 0;
+    return [
+      { stage: "New", count: newCount, rate: total ? Math.round((newCount / total) * 100) : 0 },
+      { stage: "Contacted", count: contactedCount, rate: total ? Math.round((contactedCount / total) * 100) : 0 },
+      { stage: "Qualified", count: qualifiedCount, rate: total ? Math.round((qualifiedCount / total) * 100) : 0 },
+      { stage: "Converted", count: convertedCount, rate: total ? Math.round((convertedCount / total) * 100) : 0 },
+    ].filter((r) => r.count > 0 || r.stage === "New");
+  })();
+  const teamData = [
+    { name: "You", calls: statusCounts.contacted ?? 0, emails: leads.length, conversions: statusCounts.converted ?? 0, revenue: 0, responseTime: 0 },
+    { name: "Team Avg", calls: 0, emails: 0, conversions: 0, revenue: 0, responseTime: 0 },
+  ];
 
   const leadsByWeek = leads.reduce((acc, lead) => {
     const date = new Date(lead.created_at);
@@ -256,10 +283,10 @@ export default function Reports() {
           <TabsContent value="overview" className="space-y-4 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                { label: "Total Outreach", value: "312", change: "+18%", up: true, icon: Activity, color: "text-blue-500 bg-blue-500/10" },
-                { label: "Conversion Rate", value: "12.7%", change: "+2.3%", up: true, icon: TrendingUp, color: "text-green-500 bg-green-500/10" },
-                { label: "Avg Deal Size", value: "$2,450", change: "-5%", up: false, icon: DollarSign, color: "text-yellow-500 bg-yellow-500/10" },
-                { label: "Avg Response", value: "22 min", change: "-8 min", up: true, icon: Clock, color: "text-purple-500 bg-purple-500/10" },
+                { label: "Total Outreach", value: String(totalOutreach), change: null, up: true, icon: Activity, color: "text-blue-500 bg-blue-500/10" },
+                { label: "Conversion Rate", value: `${conversionRate}%`, change: null, up: true, icon: TrendingUp, color: "text-green-500 bg-green-500/10" },
+                { label: "Total Leads", value: String(leads.length), change: null, up: true, icon: Target, color: "text-yellow-500 bg-yellow-500/10" },
+                { label: "Converted", value: String(statusCounts.converted ?? 0), change: null, up: true, icon: CheckCircle, color: "text-purple-500 bg-purple-500/10" },
               ].map(metric => (
                 <Card key={metric.label} className="border-border/40">
                   <CardContent className="p-4">
@@ -271,10 +298,12 @@ export default function Reports() {
                     </div>
                     <div className="flex items-end gap-2">
                       <span className="text-xl font-bold">{metric.value}</span>
-                      <span className={`text-[10px] font-medium flex items-center gap-0.5 mb-0.5 ${metric.up ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
-                        {metric.up ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
-                        {metric.change}
-                      </span>
+                      {metric.change != null && (
+                        <span className={`text-[10px] font-medium flex items-center gap-0.5 mb-0.5 ${metric.up ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                          {metric.up ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
+                          {metric.change}
+                        </span>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -295,9 +324,9 @@ export default function Reports() {
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }} />
-                    <Bar dataKey="calls" fill={CHART_COLORS[0]} radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="emails" fill={CHART_COLORS[1]} radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="conversions" fill={CHART_COLORS[2]} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="new" name="New" fill={CHART_COLORS[0]} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="contacted" name="Contacted" fill={CHART_COLORS[1]} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="conversions" name="Converted" fill={CHART_COLORS[2]} radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -324,9 +353,9 @@ export default function Reports() {
                           {metric.isCurrency ? `$${(metric.you / 1000).toFixed(1)}k` : metric.you}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          Avg: {metric.isCurrency ? `$${(metric.avg / 1000).toFixed(1)}k` : metric.avg}
+                          Avg: {metric.avg === 0 ? "—" : metric.isCurrency ? `$${(metric.avg / 1000).toFixed(1)}k` : metric.avg}
                         </p>
-                        <Progress value={Math.min(100, (metric.you / Math.max(metric.avg, 1)) * 100)} className="h-1" />
+                        <Progress value={metric.avg === 0 ? 0 : Math.min(100, (metric.you / Math.max(metric.avg, 1)) * 100)} className="h-1" />
                       </div>
                     );
                   })}

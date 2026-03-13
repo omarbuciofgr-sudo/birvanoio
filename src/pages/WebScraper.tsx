@@ -164,6 +164,7 @@ export default function WebScraper() {
   const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set());
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
   const [bulkImporting, setBulkImporting] = useState(false);
+  const [searchCategory, setSearchCategory] = useState<'all' | 'companies' | 'people' | 'local'>('all');
 
   // Real Estate state
   const [reLocation, setReLocation] = useState('');
@@ -307,7 +308,12 @@ export default function WebScraper() {
     if (!searchQuery.trim()) { toast.error('Please enter a search query'); return; }
     setSearchLoading(true); setSearchResults([]); setSelectedResults(new Set());
     try {
-      const response = await firecrawlApi.search(searchQuery, { limit: searchLimit, scrapeOptions: { formats: ['markdown'] } });
+      const options: { limit: number; scrapeOptions: { formats: ('markdown')[] }; category?: string } = {
+        limit: searchLimit,
+        scrapeOptions: { formats: ['markdown'] },
+      };
+      if (searchCategory !== 'all') options.category = searchCategory;
+      const response = await firecrawlApi.search(searchQuery, options);
       if (response.success) { setSearchResults((response.data || []).map((r: SearchResult) => ({ ...r, imported: false }))); toast.success(`Found ${response.data?.length || 0} results`); }
       else { toast.error(response.error || 'Search failed'); }
     } catch { toast.error('Search failed'); } finally { setSearchLoading(false); }
@@ -1790,20 +1796,29 @@ export default function WebScraper() {
                   {/* Search Categories */}
                   <div className="flex items-center gap-1.5">
                     {[
-                      { label: "All", icon: Search },
-                      { label: "Companies", icon: Building },
-                      { label: "People", icon: UserPlus },
-                      { label: "Local", icon: MapPin },
-                    ].map(cat => (
-                      <button
-                        key={cat.label}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-all text-muted-foreground hover:text-foreground"
-                      >
-                        <cat.icon className="h-3 w-3" />
-                        {cat.label}
-                      </button>
-                        ))}
-                      </div>
+                      { label: "All", value: "all" as const, icon: Search },
+                      { label: "Companies", value: "companies" as const, icon: Building },
+                      { label: "People", value: "people" as const, icon: UserPlus },
+                      { label: "Local", value: "local" as const, icon: MapPin },
+                    ].map(cat => {
+                      const isSelected = searchCategory === cat.value;
+                      return (
+                        <button
+                          key={cat.label}
+                          type="button"
+                          onClick={() => setSearchCategory(cat.value)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all ${
+                            isSelected
+                              ? 'border-primary bg-primary/15 text-primary'
+                              : 'border-border/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <cat.icon className="h-3 w-3" />
+                          {cat.label}
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   {/* Main Search Input */}
                   <div className="flex gap-2">

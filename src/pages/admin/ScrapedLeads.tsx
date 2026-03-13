@@ -576,12 +576,13 @@ export default function ScrapedLeads() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Sources</SelectItem>
-                  <SelectItem value="scrape">Web Scraper</SelectItem>
                   <SelectItem value="real_estate_scraper">Brivano Scout (Real Estate)</SelectItem>
                   <SelectItem value="prospect_search">Prospect Search</SelectItem>
+                  <SelectItem value="industry_search">Industry Search (Companies / People)</SelectItem>
                   <SelectItem value="google_places">Google Places</SelectItem>
                   <SelectItem value="apollo">Apollo</SelectItem>
                   <SelectItem value="firecrawl">Firecrawl</SelectItem>
+                  <SelectItem value="scrape">Web Scraper</SelectItem>
                 </SelectContent>
               </Select>
             </div>

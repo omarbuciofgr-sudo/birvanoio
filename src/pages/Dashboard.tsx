@@ -70,6 +70,7 @@ const Dashboard = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  const [scrapedLeadsCount, setScrapedLeadsCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
@@ -81,7 +82,8 @@ const Dashboard = () => {
       fetchRecentLeads();
       fetchNotifications();
       fetchActivities();
-      generateWeeklyData();
+      fetchScrapedLeadsCount();
+      fetchLeadActivity();
     }
   }, [user]);
 
@@ -138,6 +140,68 @@ const Dashboard = () => {
     if (data) setActivities(data);
   };
 
+  const fetchScrapedLeadsCount = async () => {
+    const { count, error } = await supabase.from("scraped_leads").select("id", { count: "exact", head: true });
+    if (!error && count != null) setScrapedLeadsCount(count);
+    else setScrapedLeadsCount(null);
+  };
+
+  const fetchLeadActivity = async () => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const { data, error } = await supabase
+      .from("leads")
+      .select("created_at, status")
+      .gte("created_at", thirtyDaysAgo.toISOString());
+    const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const emptyWeek = dayLabels.map((day) => ({ day, leads: 0, contacted: 0, converted: 0 }));
+
+    if (error || !data || data.length === 0) {
+      setWeeklyData(emptyWeek);
+      return;
+    }
+
+    const now = new Date();
+    now.setHours(23, 59, 59, 999);
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const hasRecentActivity = data.some((l) => new Date(l.created_at).getTime() >= sevenDaysAgo.getTime());
+
+    let endDate = new Date(now);
+    if (!hasRecentActivity && data.length > 0) {
+      const maxCreated = data.reduce((max, l) => (l.created_at > max ? l.created_at : max), data[0].created_at);
+      endDate = new Date(maxCreated);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(endDate);
+      d.setDate(d.getDate() - (6 - i));
+      return d;
+    });
+
+    const weekly = last7Days.map((date) => {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      const inDay = (created: string) => {
+        const t = new Date(created).getTime();
+        return t >= dayStart.getTime() && t <= dayEnd.getTime();
+      };
+      const dayLeads = data.filter((l) => inDay(l.created_at));
+      return {
+        day: dayLabels[date.getDay()],
+        leads: dayLeads.length,
+        contacted: dayLeads.filter((l) => l.status !== "new").length,
+        converted: dayLeads.filter((l) => l.status === "converted").length,
+      };
+    });
+    setWeeklyData(weekly);
+  };
+
   const markNotificationRead = async (id: string) => {
     if (isOptionalTableMissing("notifications")) {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
@@ -148,16 +212,6 @@ const Dashboard = () => {
     if (error) markOptionalTableMissingOnError("notifications", error);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
-  };
-
-  const generateWeeklyData = () => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    setWeeklyData(days.map(day => ({
-      day,
-      leads: Math.floor(Math.random() * 20) + 5,
-      contacted: Math.floor(Math.random() * 15) + 2,
-      converted: Math.floor(Math.random() * 8) + 1,
-    })));
   };
 
   if (loading) {
@@ -277,36 +331,48 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* KPI Cards — Premium */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* KPI Cards — Premium (leads + scraped_leads) */}
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
           {[
             { title: "Total Leads", value: stats.total, icon: Users, change: "+12%", up: true, desc: "All time" },
             { title: "New This Week", value: stats.new, icon: TrendingUp, change: "+8%", up: true, desc: "vs last week" },
             { title: "Contact Rate", value: `${contactRate}%`, icon: Phone, change: "+3%", up: true, desc: `${stats.contacted} contacted` },
             { title: "In Pipeline", value: stats.qualified, icon: Target, change: "+5%", up: true, desc: "Qualified" },
             { title: "Win Rate", value: `${conversionRate}%`, icon: CheckCircle, change: "+1.2%", up: true, desc: `${stats.converted} won` },
-          ].map((stat) => (
-            <Card key={stat.title} className="border-border/40 bg-card/80 hover:shadow-md transition-all group cursor-default">
+            { title: "Scraped Leads", value: scrapedLeadsCount !== null ? scrapedLeadsCount.toLocaleString() : "—", icon: Search, change: null, up: true, desc: "From Scout & jobs", href: "/admin/scraped-leads" },
+          ].map((stat) => {
+            const href = 'href' in stat ? (stat as { href?: string }).href : undefined;
+            return (
+            <Card
+              key={stat.title}
+              className={`border-border/40 bg-card/80 hover:shadow-md transition-all group ${href ? 'cursor-pointer hover:border-primary/40' : 'cursor-default'}`}
+              onClick={href ? () => navigate(href) : undefined}
+            >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="h-8 w-8 rounded-lg bg-primary/[0.06] flex items-center justify-center group-hover:bg-primary/[0.1] transition-colors">
                     <stat.icon className="h-4 w-4 text-primary" />
                   </div>
+                  {href ? (
+                    <span className="text-[10px] font-medium text-muted-foreground">View</span>
+                  ) : (
                   <span className={`text-[10px] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
                     stat.up ? 'text-green-600 dark:text-green-400 bg-green-500/10' : 'text-destructive bg-destructive/10'
                   }`}>
                     {stat.up ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
                     {stat.change}
                   </span>
+                  )}
                 </div>
                 <span className="text-2xl font-bold tracking-tight">{stat.value}</span>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{stat.title} · {stat.desc}</p>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Main Grid — Chart + Pipeline */}
+        {/* Main Grid ΓÇö Chart + Pipeline */}
         <div className="grid lg:grid-cols-3 gap-4">
           {/* Lead Activity Chart */}
           <Card className="lg:col-span-2 border-border/40">
@@ -395,7 +461,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Bottom Grid — Activity, Notifications, Recent */}
+        {/* Bottom Grid ΓÇö Activity, Notifications, Recent */}
         <div className="grid lg:grid-cols-3 gap-4">
           {/* Activity Feed */}
           <Card className="border-border/40">
@@ -407,30 +473,41 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent className="px-0 pb-0">
               <ScrollArea className="h-[280px]">
-                {activities.length === 0 ? (
-                  <div className="text-center py-12 px-5">
-                    <Activity className="h-8 w-8 mx-auto mb-3 text-muted-foreground/15" />
-                    <p className="text-xs text-muted-foreground">No recent activity</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border/20">
-                    {activities.map((activity) => {
-                      const Icon = getActionIcon(activity.action_type);
-                      const colorClass = getActionColor(activity.action_type);
-                      return (
-                        <div key={activity.id} className="flex gap-3 px-5 py-3 hover:bg-muted/15 transition-colors">
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}>
-                            <Icon className="h-3.5 w-3.5" />
+                {(() => {
+                  const activityItems: ActivityItem[] = activities.length > 0
+                    ? activities
+                    : recentLeads.map((lead) => ({
+                        id: lead.id,
+                        action_type: "lead_created",
+                        description: `Lead ${lead.business_name || lead.website || "Unknown"} added`,
+                        created_at: lead.created_at,
+                        metadata: null,
+                      }));
+                  return activityItems.length === 0 ? (
+                    <div className="text-center py-12 px-5">
+                      <Activity className="h-8 w-8 mx-auto mb-3 text-muted-foreground/15" />
+                      <p className="text-xs text-muted-foreground">No recent activity</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/20">
+                      {activityItems.map((activity) => {
+                        const Icon = getActionIcon(activity.action_type);
+                        const colorClass = getActionColor(activity.action_type);
+                        return (
+                          <div key={activity.id} className="flex gap-3 px-5 py-3 hover:bg-muted/15 transition-colors">
+                            <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}>
+                              <Icon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium truncate">{activity.description || activity.action_type}</p>
+                              <p className="text-[10px] text-muted-foreground">{timeAgo(activity.created_at)}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium truncate">{activity.description || activity.action_type}</p>
-                            <p className="text-[10px] text-muted-foreground">{timeAgo(activity.created_at)}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </ScrollArea>
             </CardContent>
           </Card>

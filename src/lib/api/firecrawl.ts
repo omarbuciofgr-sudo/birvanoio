@@ -22,6 +22,7 @@ type SearchOptions = {
   lang?: string;
   country?: string;
   tbs?: string;
+  category?: 'all' | 'companies' | 'people' | 'local';
   scrapeOptions?: { formats?: ('markdown' | 'html')[] };
 };
 

@@ -21,6 +21,7 @@ import { SearchTypeSelector, SearchTypeHeader, SearchType } from '@/components/p
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
+import { prospectSearchApi, type ProspectResult } from '@/lib/api/prospectSearch';
 import { supabase } from '@/integrations/supabase/client';
 
 interface BrivanoLensProps {
@@ -38,6 +39,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
   const [jobFilters, setJobFilters] = useState<JobSearchFilters>(defaultJobFilters);
   const lastAppliedRef = useRef<string | null>(null);
   const [results, setResults] = useState<CompanyResult[]>([]);
+  const [prospectResults, setProspectResults] = useState<ProspectResult[] | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -84,6 +86,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
   const handleSelectSearchType = (type: SearchType) => {
     setSearchType(type);
     setResults([]);
+    setProspectResults(null);
     setHasSearched(false);
     setSelectedRows(new Set());
     onSearchTypeChange?.(true);
@@ -166,11 +169,49 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
   const searchMutation = useMutation({
     mutationFn: async (opts?: { page?: number; append?: boolean }) => {
       const page = opts?.page || 1;
-      // ── People Search ─────────────────────────────────
+      // ΓöÇΓöÇ People Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       if (searchType === 'people') {
         const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
+        const industryStr = peopleFilters.industries.length > 0
+          ? (INDUSTRIES.find((i) => i.value === peopleFilters.industries[0])?.label || peopleFilters.industries[0])
+          : undefined;
 
-        // Build profile keywords including certifications, languages, education, schools
+        // Try prospect-search first (Apollo + enrichment) for contact name/email/phone, then fallback to people-search
+        const prospectResp = await prospectSearchApi.search({
+          industry: industryStr,
+          location: locationParts.length > 0 ? { city: peopleFilters.cities[0], state: peopleFilters.states[0], country: peopleFilters.countries[0] } : undefined,
+          targetTitles: peopleFilters.jobTitles.length > 0 ? peopleFilters.jobTitles : undefined,
+          seniorityLevels: peopleFilters.seniority.length > 0 ? peopleFilters.seniority : undefined,
+          departments: peopleFilters.departments.length > 0 ? peopleFilters.departments : undefined,
+          searchType: 'apollo_search',
+          enrichWebResults: true,
+          limit: peopleFilters.limit || 25,
+        });
+
+        if (prospectResp.success && prospectResp.data && prospectResp.data.length > 0) {
+          const mapped: CompanyResult[] = prospectResp.data.map((p) => ({
+            name: p.full_name || p.company_name || '',
+            domain: p.company_domain || '',
+            website: p.company_website || (p.company_domain ? `https://${p.company_domain}` : null),
+            linkedin_url: p.linkedin_url,
+            industry: p.industry,
+            employee_count: p.employee_count,
+            employee_range: null,
+            annual_revenue: p.annual_revenue ?? null,
+            founded_year: p.founded_year ?? null,
+            description: [p.job_title, p.company_name].filter(Boolean).join(' at '),
+            headquarters_city: p.headquarters_city,
+            headquarters_state: p.headquarters_state,
+            headquarters_country: null,
+            technologies: [],
+            keywords: p.department ? [p.department] : [],
+            phone: p.phone || p.mobile_phone || p.direct_phone || null,
+            email: p.email || null,
+          }));
+          return { success: true, companies: mapped, prospectResults: prospectResp.data };
+        }
+
+        // Fallback: people-search (map includes email/phone when API returns them for scraped_leads)
         const allKeywords = [
           ...peopleFilters.skills,
           ...peopleFilters.profileKeywords,
@@ -211,7 +252,6 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
         });
 
         if (response.success && response.people) {
-          // Map people results to CompanyResult for display compatibility
           const mapped: CompanyResult[] = response.people.map((p) => ({
             name: p.name,
             domain: p.organization_domain || '',
@@ -228,13 +268,15 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             headquarters_country: p.country,
             technologies: [],
             keywords: p.departments || [],
+            email: p.email ?? null,
+            phone: p.phone ?? null,
           }));
-          return { success: true, companies: mapped };
+          return { success: true, companies: mapped, prospectResults: null };
         }
-        return { success: false, error: response.error || 'No results' };
+        return { success: false, error: response.error || prospectResp.error || 'No results' };
       }
 
-      // ── Job Search ─────────────────────────────────
+      // ΓöÇΓöÇ Job Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       if (searchType === 'jobs') {
         const locationParts = [...jobFilters.cities, ...jobFilters.states, ...jobFilters.countries];
 
@@ -265,7 +307,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             employee_range: null,
             annual_revenue: null,
             founded_year: null,
-            description: [j.company_name, j.location].filter(Boolean).join(' — '),
+            description: [j.company_name, j.location].filter(Boolean).join(' ΓÇö '),
             headquarters_city: null,
             headquarters_state: null,
             headquarters_country: null,
@@ -277,7 +319,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
         return { success: false, error: response.error || 'No results' };
       }
 
-      // ── Company Search ─────────────────────────────────
+      // ΓöÇΓöÇ Company Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       const industry = filters.industries
         .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
         .join(', ');
@@ -324,6 +366,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       });
     },
     onSuccess: (response, variables) => {
+      setProspectResults((response as { prospectResults?: ProspectResult[] | null }).prospectResults ?? null);
       if (response.success && response.companies) {
         const append = variables?.append;
         if (append) {
@@ -351,11 +394,19 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const selectedIndices = [...selectedRows].sort((a, b) => a - b);
+      if (prospectResults && prospectResults.length > 0 && selectedIndices.length > 0) {
+        const selectedProspects = selectedIndices.filter((i) => i < prospectResults.length).map((i) => prospectResults[i]);
+        if (selectedProspects.length > 0) {
+          const out = await prospectSearchApi.saveProspectsAsLeads(selectedProspects);
+          return { saved: out.savedCount, errors: out.success ? 0 : 1 };
+        }
+      }
       const selected = results.filter((_, i) => selectedRows.has(i));
       return industrySearchApi.saveAsLeads(selected);
     },
     onSuccess: (result) => {
-      toast.success(`Saved ${result.saved} companies as leads`);
+      toast.success(prospectResults?.length ? `Saved ${result.saved} contacts as leads` : `Saved ${result.saved} companies as leads`);
       if (result.errors > 0) toast.error(`${result.errors} failed to save`);
     },
     onError: () => toast.error('Failed to save leads'),
@@ -540,7 +591,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
                 size="sm"
                 className="h-7 px-5 text-xs font-semibold"
               >
-                {searchMutation.isPending ? 'Searching…' : 'Next'}
+                {searchMutation.isPending ? 'SearchingΓÇª' : 'Next'}
               </Button>
             </div>
           )}
