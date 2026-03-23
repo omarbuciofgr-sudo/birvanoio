@@ -3,27 +3,37 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-/** Lovable / CI often set SUPABASE_URL + SUPABASE_ANON_KEY (no VITE_ prefix). Vite only exposes VITE_* to the client by default, so we map them at build time. Never expose SUPABASE_SERVICE_KEY here. */
+/** Lovable Secrets sometimes only allow lowercase names — include those variants. Never expose SUPABASE_SERVICE_KEY here. */
+function pickEnv(file: Record<string, string>, keys: string[]): string {
+  for (const key of keys) {
+    const v = process.env[key] ?? file[key];
+    if (v !== undefined && String(v).trim() !== "") return String(v);
+  }
+  return "";
+}
+
 function resolveSupabaseForClient(mode: string) {
   const file = loadEnv(mode, process.cwd(), "");
   const stripQuotes = (s: string) => s.trim().replace(/^["']|["']$/g, "");
 
   const url = stripQuotes(
-    process.env.VITE_SUPABASE_URL ||
-      file.VITE_SUPABASE_URL ||
-      process.env.SUPABASE_URL ||
-      file.SUPABASE_URL ||
-      ""
+    pickEnv(file, [
+      "VITE_SUPABASE_URL",
+      "SUPABASE_URL",
+      "vite_supabase_url",
+      "supabase_url",
+    ])
   ).replace(/\/+$/, "");
 
   const key = stripQuotes(
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-      file.VITE_SUPABASE_PUBLISHABLE_KEY ||
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      file.VITE_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      file.SUPABASE_ANON_KEY ||
-      ""
+    pickEnv(file, [
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "VITE_SUPABASE_ANON_KEY",
+      "SUPABASE_ANON_KEY",
+      "vite_supabase_publishable_key",
+      "vite_supabase_anon_key",
+      "supabase_anon_key",
+    ])
   );
 
   return { url, key };
