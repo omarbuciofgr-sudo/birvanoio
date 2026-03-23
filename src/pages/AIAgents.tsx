@@ -51,12 +51,12 @@ export default function AIAgents() {
     queryKey: ['ai-agents'],
     queryFn: async () => {
       if (isOptionalTableMissing(TABLE)) return [];
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from(TABLE)
         .select('*')
         .order('created_at', { ascending: false });
       if (error) {
-        markOptionalTableMissingOnError(TABLE, error);
+        markOptionalTableMissingOnError(TABLE, error, status);
         return [];
       }
       return data ?? [];
@@ -67,14 +67,14 @@ export default function AIAgents() {
   const createMutation = useMutation({
     mutationFn: async ({ name, prompt, model }: { name: string; prompt: string; model: string }) => {
       if (isOptionalTableMissing(TABLE)) return;
-      const { error } = await supabase.from(TABLE).insert({
+      const { error, status } = await supabase.from(TABLE).insert({
         user_id: user!.id,
         name,
         prompt,
         model,
         tools: [],
       });
-      if (error) markOptionalTableMissingOnError(TABLE, error);
+      if (error) markOptionalTableMissingOnError(TABLE, error, status);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-agents'] });
@@ -87,8 +87,8 @@ export default function AIAgents() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       if (isOptionalTableMissing(TABLE)) return;
-      const { error } = await supabase.from(TABLE).delete().eq('id', id);
-      if (error) markOptionalTableMissingOnError(TABLE, error);
+      const { error, status } = await supabase.from(TABLE).delete().eq('id', id);
+      if (error) markOptionalTableMissingOnError(TABLE, error, status);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-agents'] });

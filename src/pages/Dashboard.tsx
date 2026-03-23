@@ -112,9 +112,9 @@ const Dashboard = () => {
       setUnreadCount(0);
       return;
     }
-    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false }).limit(10);
+    const { data, error, status } = await supabase.from(table).select("*").order("created_at", { ascending: false }).limit(10);
     if (error) {
-      markOptionalTableMissingOnError(table, error);
+      markOptionalTableMissingOnError(table, error, status);
       setNotifications([]);
       setUnreadCount(0);
       return;
@@ -131,9 +131,9 @@ const Dashboard = () => {
       setActivities([]);
       return;
     }
-    const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false }).limit(8);
+    const { data, error, status } = await supabase.from(table).select("*").order("created_at", { ascending: false }).limit(8);
     if (error) {
-      markOptionalTableMissingOnError(table, error);
+      markOptionalTableMissingOnError(table, error, status);
       setActivities([]);
       return;
     }
@@ -208,8 +208,8 @@ const Dashboard = () => {
       setUnreadCount(prev => Math.max(0, prev - 1));
       return;
     }
-    const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    if (error) markOptionalTableMissingOnError("notifications", error);
+    const { error, status } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    if (error) markOptionalTableMissingOnError("notifications", error, status);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
   };

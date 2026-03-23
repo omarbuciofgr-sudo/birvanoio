@@ -148,9 +148,9 @@ export default function Reports() {
       setLoadingReports(false);
       return;
     }
-    const { data, error } = await supabase.from(REPORTS_TABLE).select("*").order("updated_at", { ascending: false });
+    const { data, error, status } = await supabase.from(REPORTS_TABLE).select("*").order("updated_at", { ascending: false });
     if (error) {
-      markOptionalTableMissingOnError(REPORTS_TABLE, error);
+      markOptionalTableMissingOnError(REPORTS_TABLE, error, status);
       setSavedReports([]);
     } else if (data) setSavedReports(data);
     setLoadingReports(false);
@@ -161,12 +161,12 @@ export default function Reports() {
     if (!user?.id) return;
     if (isOptionalTableMissing(REPORTS_TABLE)) { setSaving(false); return; }
     setSaving(true);
-    const { error } = await supabase.from(REPORTS_TABLE).insert({
+    const { error, status } = await supabase.from(REPORTS_TABLE).insert({
       user_id: user.id, name: newReportName, description: newReportDesc || null,
       report_type: newReportType, config: { metrics: selectedMetrics, dateRange, filters: {} }, is_shared: isShared,
     });
     if (error) {
-      markOptionalTableMissingOnError(REPORTS_TABLE, error);
+      markOptionalTableMissingOnError(REPORTS_TABLE, error, status);
       setSaving(false);
       return;
     }
@@ -181,8 +181,8 @@ export default function Reports() {
 
   const handleDeleteReport = async (id: string) => {
     if (isOptionalTableMissing(REPORTS_TABLE)) return;
-    const { error } = await supabase.from(REPORTS_TABLE).delete().eq("id", id);
-    if (error) markOptionalTableMissingOnError(REPORTS_TABLE, error);
+    const { error, status } = await supabase.from(REPORTS_TABLE).delete().eq("id", id);
+    if (error) markOptionalTableMissingOnError(REPORTS_TABLE, error, status);
     else { setSavedReports(prev => prev.filter(r => r.id !== id)); toast.success("Report deleted"); }
   };
 

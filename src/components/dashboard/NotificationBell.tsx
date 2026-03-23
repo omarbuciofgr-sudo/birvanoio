@@ -23,14 +23,14 @@ export function NotificationBell() {
     queryFn: async () => {
       if (!user) return [];
       if (isOptionalTableMissing(TABLE)) return [];
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from(TABLE)
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(30);
       if (error) {
-        markOptionalTableMissingOnError(TABLE, error);
+        markOptionalTableMissingOnError(TABLE, error, status);
         return [];
       }
       return data ?? [];
@@ -62,8 +62,8 @@ export function NotificationBell() {
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
       if (isOptionalTableMissing(TABLE)) return;
-      const { error } = await supabase.from(TABLE).update({ is_read: true }).eq('id', id);
-      if (error) markOptionalTableMissingOnError(TABLE, error);
+      const { error, status } = await supabase.from(TABLE).update({ is_read: true }).eq('id', id);
+      if (error) markOptionalTableMissingOnError(TABLE, error, status);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
@@ -71,8 +71,8 @@ export function NotificationBell() {
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
       if (!user || isOptionalTableMissing(TABLE)) return;
-      const { error } = await supabase.from(TABLE).update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
-      if (error) markOptionalTableMissingOnError(TABLE, error);
+      const { error, status } = await supabase.from(TABLE).update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+      if (error) markOptionalTableMissingOnError(TABLE, error, status);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });

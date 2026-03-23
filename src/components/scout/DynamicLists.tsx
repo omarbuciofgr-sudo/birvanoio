@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { isOptionalTableMissing, markOptionalTableMissingOnError } from '@/integrations/supabase/optionalTables';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,8 @@ import {
 import { Loader2, Plus, ListFilter, Trash2, RefreshCw, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 
+const DYNAMIC_LISTS_TABLE = 'dynamic_lists';
+
 export function DynamicLists() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -35,11 +38,15 @@ export function DynamicLists() {
   const { data: lists = [], isLoading } = useQuery({
     queryKey: ['dynamic-lists'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('dynamic_lists')
+      if (isOptionalTableMissing(DYNAMIC_LISTS_TABLE)) return [];
+      const { data, error, status } = await supabase
+        .from(DYNAMIC_LISTS_TABLE)
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) { console.error(error); return []; }
+      if (error) {
+        markOptionalTableMissingOnError(DYNAMIC_LISTS_TABLE, error, status);
+        return [];
+      }
       return data || [];
     },
     enabled: !!user,
@@ -47,7 +54,8 @@ export function DynamicLists() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('dynamic_lists').insert({
+      if (isOptionalTableMissing(DYNAMIC_LISTS_TABLE)) return;
+      const { error } = await supabase.from(DYNAMIC_LISTS_TABLE).insert({
         user_id: user!.id,
         name: newList.name,
         search_type: newList.search_type,
@@ -68,7 +76,8 @@ export function DynamicLists() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('dynamic_lists').delete().eq('id', id);
+      if (isOptionalTableMissing(DYNAMIC_LISTS_TABLE)) return;
+      const { error } = await supabase.from(DYNAMIC_LISTS_TABLE).delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
