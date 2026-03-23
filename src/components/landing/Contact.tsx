@@ -1,0 +1,202 @@
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { Send, Mail, Calendar, Phone, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import ReCAPTCHA from "react-google-recaptcha";
+
+const RECAPTCHA_SITE_KEY = "6LeviUUsAAAAANOMWvBgY-qSK3y-yuNIYnrnDmUT";
+
+const Contact = () => {
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    message: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Get reCAPTCHA token
+    const recaptchaToken = recaptchaRef.current?.getValue();
+    if (!recaptchaToken) {
+      toast.error("Please complete the reCAPTCHA verification");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("contact-form", {
+        body: { ...formData, recaptchaToken },
+      });
+
+      if (error) throw error;
+
+      toast.success("Thanks for reaching out! Check your email - we'll send you 10 sample leads shortly.");
+      setFormData({ firstName: "", lastName: "", email: "", message: "" });
+      recaptchaRef.current?.reset();
+    } catch (error: any) {
+      console.error("Contact form error:", error);
+      toast.error("Something went wrong. Please try again or email us directly at info@brivano.io");
+      recaptchaRef.current?.reset();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <section id="contact" className="py-24 relative">
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-secondary/10 to-background" />
+      
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+          {/* Left Content */}
+          <div>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-6">
+              Let's Build Your <span className="gradient-text">Lead Plan</span>
+            </h2>
+            <p className="text-muted-foreground text-lg mb-8">
+              Tell us your niche and location. We'll send 10 sample rows and a calendar link 
+              for a 15-minute walkthrough.
+            </p>
+
+            <div className="space-y-6 mb-8">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-foreground mb-1">Email Us</h3>
+                  <a href="mailto:info@brivano.io" className="text-muted-foreground hover:text-primary transition-colors">
+                    info@brivano.io
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-foreground mb-1">Call or Text</h3>
+                  <a href="tel:+18723070387" className="text-muted-foreground hover:text-primary transition-colors">
+                    (872) 307-0387
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-foreground mb-1">Book a Demo</h3>
+                  <a 
+                    href="https://calendly.com/brivano-info-juke/30min" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                  >
+                    Schedule a 30-minute walkthrough
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Form */}
+          <div className="p-8 rounded-2xl bg-card border border-border">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    First Name
+                  </label>
+                  <Input
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    placeholder="John"
+                    required
+                    className="bg-secondary/50 border-border"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Last Name
+                  </label>
+                  <Input
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    placeholder="Doe"
+                    required
+                    className="bg-secondary/50 border-border"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Email
+                </label>
+                <Input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="john@company.com"
+                  required
+                  className="bg-secondary/50 border-border"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Tell us about your niche & target location
+                </label>
+                <Textarea
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                  placeholder="e.g., Roofing contractors in Austin, TX..."
+                  rows={4}
+                  required
+                  className="bg-secondary/50 border-border resize-none"
+                />
+              </div>
+
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  theme="dark"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  "Sending..."
+                ) : (
+                  <>
+                    Get 10 Sample Leads
+                    <Send className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default Contact;

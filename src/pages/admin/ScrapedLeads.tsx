@@ -1,0 +1,929 @@
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Check, Sparkles, ShieldCheck, Copy, FileJson, Edit, Ban, History, BarChart3, TrendingUp, Tag, ListTodo, Webhook, Cpu, MessageSquareText, Contact, Radar, RefreshCw, Bell } from 'lucide-react';
+import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
+import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { LeadDetailSheet } from '@/components/scraper/LeadDetailSheet';
+import { LeadEditDialog } from '@/components/scraper/LeadEditDialog';
+import { AssignLeadsDialog } from '@/components/scraper/AssignLeadsDialog';
+import { SuppressionListManager } from '@/components/scraper/SuppressionListManager';
+import { AuditLogViewer } from '@/components/scraper/AuditLogViewer';
+import { LeadPipelineView } from '@/components/scraper/LeadPipelineView';
+import { EnrichmentAnalyticsDashboard } from '@/components/scraper/EnrichmentAnalyticsDashboard';
+import { LeadTagsManager, BulkTagOperations } from '@/components/scraper/LeadTagsManager';
+import { SavedSearchesManager, SearchFilters } from '@/components/scraper/SavedSearchesManager';
+import { LeadDeduplicationPanel } from '@/components/scraper/LeadDeduplicationPanel';
+import { EnrichmentQueuePanel } from '@/components/scraper/EnrichmentQueuePanel';
+import { WebhookNotificationsManager } from '@/components/scraper/WebhookNotificationsManager';
+import { BulkExportDialog } from '@/components/scraper/BulkExportDialog';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  technographicsApi,
+  reviewSentimentApi,
+  contactPageApi,
+  autoNurtureApi,
+  reEnrichApi,
+  competitorMonitoringApi,
+} from '@/lib/api/advancedEnrichment';
+
+const statusColors: Record<ScrapedLeadStatus, string> = {
+  new: 'bg-blue-500/20 text-blue-600',
+  review: 'bg-yellow-500/20 text-yellow-600',
+  approved: 'bg-green-500/20 text-green-600',
+  assigned: 'bg-purple-500/20 text-purple-600',
+  in_progress: 'bg-orange-500/20 text-orange-600',
+  won: 'bg-emerald-500/20 text-emerald-600',
+  lost: 'bg-muted text-muted-foreground',
+  rejected: 'bg-destructive/20 text-destructive',
+};
+
+const validationColors = {
+  unverified: 'bg-muted text-muted-foreground',
+  likely_valid: 'bg-yellow-500/20 text-yellow-600',
+  verified: 'bg-green-500/20 text-green-600',
+  invalid: 'bg-destructive/20 text-destructive',
+};
+
+export default function ScrapedLeads() {
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('leads');
+  const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [jobFilter, setJobFilter] = useState<string>('all');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('all');
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<ScrapedLead | null>(null);
+  const [editingLead, setEditingLead] = useState<ScrapedLead | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const { data: leadsResult, isLoading, isError, error } = useQuery({
+    queryKey: ['scraped-leads', statusFilter, jobFilter, sourceTypeFilter, searchTerm, page, pageSize],
+    queryFn: () => scrapedLeadsApi.list({
+      status: statusFilter !== 'all' ? statusFilter as ScrapedLeadStatus : undefined,
+      job_id: jobFilter !== 'all' ? jobFilter : undefined,
+      source_type: sourceTypeFilter !== 'all' ? sourceTypeFilter : undefined,
+      search: searchTerm || undefined,
+      page,
+      pageSize,
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const leads = leadsResult?.data ?? [];
+  const totalLeads = leadsResult?.total ?? 0;
+
+  const { data: jobs = [] } = useQuery({
+    queryKey: ['scrape-jobs'],
+    queryFn: () => scrapeJobsApi.list(),
+  });
+
+  const { data: organizations = [] } = useQuery({
+    queryKey: ['client-organizations'],
+    queryFn: () => clientOrganizationsApi.list(),
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: ScrapedLeadStatus }) =>
+      scrapedLeadsApi.updateStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      toast.success('Status updated');
+    },
+    onError: (error) => toast.error(`Failed to update status: ${error.message}`),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => scrapedLeadsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      toast.success('Lead deleted');
+    },
+    onError: (error) => toast.error(`Failed to delete lead: ${error.message}`),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => scrapedLeadsApi.bulkDelete(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success('Leads deleted');
+    },
+    onError: (error) => toast.error(`Failed to delete leads: ${error.message}`),
+  });
+
+  const enrichMutation = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke('enrich-lead', {
+        body: { lead_ids: leadIds },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Enriched ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Enrichment failed: ${error.message}`),
+  });
+
+  const validateMutation = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke('validate-lead', {
+        body: { lead_ids: leadIds },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Validated ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Validation failed: ${error.message}`),
+  });
+
+  const dedupeMutation = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { data, error } = await supabase.functions.invoke('dedupe-leads', {
+        body: { lead_ids: leadIds, auto_merge: true },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Found ${data.duplicates_found || 0} duplicates, merged ${data.merged_count || 0}`);
+    },
+    onError: (error) => toast.error(`Dedupe failed: ${error.message}`),
+  });
+
+  // Advanced enrichment mutations
+  const techMutation = useMutation({
+    mutationFn: (leadIds: string[]) => technographicsApi.enrich(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      toast.success(`Tech stack enriched for ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Tech enrichment failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (leadIds: string[]) => reviewSentimentApi.analyze(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      const analyzed = data.results?.filter(r => r.analysis).length || 0;
+      toast.success(`Analyzed reviews for ${analyzed} lead(s)`);
+    },
+    onError: (error) => toast.error(`Review analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const contactExtractMutation = useMutation({
+    mutationFn: (leadIds: string[]) => contactPageApi.extract(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      const totalPeople = data.results?.reduce((s, r) => s + r.people_found, 0) || 0;
+      toast.success(`Found ${totalPeople} contact(s) from ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Contact extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const competitorMutation = useMutation({
+    mutationFn: (leadIds: string[]) => competitorMonitoringApi.scan(leadIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      setSelectedLeads(new Set());
+      const signals = data.results?.reduce((s, r) => s + r.signals_created, 0) || 0;
+      toast.success(`Detected ${signals} signal(s) across ${data.results?.length || 0} lead(s)`);
+    },
+    onError: (error) => toast.error(`Competitor scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const reEnrichMutation = useMutation({
+    mutationFn: () => reEnrichApi.reEnrichStale(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scraped-leads'] });
+      toast.success(`Re-enriched ${data.re_enriched} of ${data.total_stale} stale leads`);
+    },
+    onError: (error) => toast.error(`Re-enrichment failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  const autoNurtureMutation = useMutation({
+    mutationFn: () => autoNurtureApi.trigger('auto'),
+    onSuccess: (data) => {
+      toast.success(`Alerts: ${data.hot_lead_alerts}, Nurture enrolled: ${data.nurture_enrolled}, Webhooks: ${data.webhooks_fired}`);
+    },
+    onError: (error) => toast.error(`Auto-nurture failed: ${error instanceof Error ? error.message : 'Unknown error'}`),
+  });
+
+  // Server-side pagination and search: leads = current page, totalLeads = total count from DB
+  const totalFiltered = totalLeads;
+  const totalPages = Math.max(1, Math.ceil(totalLeads / pageSize));
+  const paginatedLeads = leads;
+  const startRow = totalLeads === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endRow = totalLeads === 0 ? 0 : Math.min(page * pageSize, totalLeads);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, jobFilter, sourceTypeFilter, searchTerm]);
+
+  // Only correct page when we have data (not during refetch after page change), so clicking page 7 doesn't reset to 1
+  useEffect(() => {
+    if (!isLoading && totalPages >= 1 && page > totalPages) setPage(totalPages);
+  }, [isLoading, page, totalPages]);
+
+  const toggleSelectAll = () => {
+    const onPage = paginatedLeads.map(l => l.id);
+    const allOnPageSelected = onPage.length > 0 && onPage.every(id => selectedLeads.has(id));
+    if (allOnPageSelected) {
+      const next = new Set(selectedLeads);
+      onPage.forEach(id => next.delete(id));
+      setSelectedLeads(next);
+    } else {
+      const next = new Set(selectedLeads);
+      onPage.forEach(id => next.add(id));
+      setSelectedLeads(next);
+    }
+  };
+  const allOnPageSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.has(l.id));
+  const someOnPageSelected = paginatedLeads.some(l => selectedLeads.has(l.id));
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedLeads);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedLeads(newSelected);
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const csv = await scrapedLeadsApi.exportToCsv({
+        job_id: jobFilter !== 'all' ? jobFilter : undefined,
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export completed');
+    } catch (error) {
+      toast.error('Failed to export leads');
+    }
+  };
+
+  const handleExportJson = async () => {
+    try {
+      const json = await scrapedLeadsApi.exportToJson({
+        job_id: jobFilter !== 'all' ? jobFilter : undefined,
+      });
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads-${format(new Date(), 'yyyy-MM-dd')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export completed');
+    } catch (error) {
+      toast.error('Failed to export leads');
+    }
+  };
+
+  const isProcessing = enrichMutation.isPending || validateMutation.isPending || dedupeMutation.isPending || techMutation.isPending || reviewMutation.isPending || contactExtractMutation.isPending || competitorMutation.isPending;
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Scraped Leads</h1>
+            <p className="text-muted-foreground">Review, validate, and assign scraped leads</p>
+          </div>
+        </div>
+
+        {isError && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="pt-6">
+              <p className="text-destructive font-medium">Failed to load leads</p>
+              <p className="text-sm text-muted-foreground mt-1">{error instanceof Error ? error.message : String(error)}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => queryClient.invalidateQueries({ queryKey: ['scraped-leads'] })}>
+                <RefreshCw className="h-3 w-3 mr-2" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="pipeline" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Pipeline
+            </TabsTrigger>
+            <TabsTrigger value="leads" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Leads ({totalLeads.toLocaleString()})
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
+            <TabsTrigger value="dedupe" className="flex items-center gap-2">
+              <Copy className="h-4 w-4" />
+              Deduplication
+            </TabsTrigger>
+            <TabsTrigger value="queue" className="flex items-center gap-2">
+              <ListTodo className="h-4 w-4" />
+              Queue
+            </TabsTrigger>
+            <TabsTrigger value="webhooks" className="flex items-center gap-2">
+              <Webhook className="h-4 w-4" />
+              Webhooks
+            </TabsTrigger>
+            <TabsTrigger value="suppression" className="flex items-center gap-2">
+              <Ban className="h-4 w-4" />
+              Suppression
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              Audit
+            </TabsTrigger>
+            <TabsTrigger value="automation" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Automation
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pipeline" className="mt-6">
+            <LeadPipelineView leads={leads} />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="mt-6">
+            <EnrichmentAnalyticsDashboard />
+          </TabsContent>
+
+          <TabsContent value="dedupe" className="mt-6">
+            <LeadDeduplicationPanel />
+          </TabsContent>
+
+          <TabsContent value="queue" className="mt-6">
+            <EnrichmentQueuePanel />
+          </TabsContent>
+
+          <TabsContent value="webhooks" className="mt-6">
+            <WebhookNotificationsManager />
+          </TabsContent>
+
+          <TabsContent value="leads" className="mt-6 space-y-6">
+            {/* Bulk Actions */}
+            <div className="flex flex-wrap gap-2">
+              {selectedLeads.size > 0 && (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => enrichMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {enrichMutation.isPending ? 'Enriching...' : `Enrich (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => validateMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    {validateMutation.isPending ? 'Validating...' : `Validate (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => dedupeMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    {dedupeMutation.isPending ? 'Checking...' : `Dedupe (${selectedLeads.size})`}
+                  </Button>
+                  <BulkTagOperations 
+                    selectedLeadIds={Array.from(selectedLeads)} 
+                    onComplete={() => setSelectedLeads(new Set())}
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => techMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Cpu className="h-4 w-4 mr-2" />
+                    {techMutation.isPending ? 'Scanning...' : `Tech Stack (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => reviewMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <MessageSquareText className="h-4 w-4 mr-2" />
+                    {reviewMutation.isPending ? 'Analyzing...' : `Reviews (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => contactExtractMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Contact className="h-4 w-4 mr-2" />
+                    {contactExtractMutation.isPending ? 'Extracting...' : `Extract Contacts (${selectedLeads.size})`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => competitorMutation.mutate(Array.from(selectedLeads))}
+                    disabled={isProcessing}
+                  >
+                    <Radar className="h-4 w-4 mr-2" />
+                    {competitorMutation.isPending ? 'Scanning...' : `Competitor Scan (${selectedLeads.size})`}
+                  </Button>
+                  <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
+                    <Users className="h-4 w-4 mr-2" />
+                    Assign ({selectedLeads.size})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-destructive"
+                    onClick={() => bulkDeleteMutation.mutate(Array.from(selectedLeads))}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </>
+              )}
+              <div className="flex-1" />
+              <SavedSearchesManager
+                currentFilters={{
+                  status: statusFilter,
+                  job_id: jobFilter,
+                  source_type: sourceTypeFilter,
+                  search: searchTerm,
+                }}
+                onLoadSearch={(filters) => {
+                  if (filters.status) setStatusFilter(filters.status);
+                  if (filters.job_id) setJobFilter(filters.job_id);
+                  if (filters.source_type) setSourceTypeFilter(filters.source_type);
+                  if (filters.search) setSearchTerm(filters.search);
+                }}
+              />
+              <BulkExportDialog 
+                leads={leads} 
+                selectedIds={selectedLeads.size > 0 ? Array.from(selectedLeads) : undefined}
+              />
+            </div>
+
+        {/* Filters */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by domain, name, email, phone, address..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="review">Review</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="won">Won</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={jobFilter} onValueChange={setJobFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="All jobs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Jobs</SelectItem>
+                  {jobs.map(job => (
+                    <SelectItem key={job.id} value={job.id}>
+                      {job.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={sourceTypeFilter} onValueChange={setSourceTypeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All sources" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  <SelectItem value="real_estate_scraper">Brivano Scout (Real Estate)</SelectItem>
+                  <SelectItem value="prospect_search">Prospect Search</SelectItem>
+                  <SelectItem value="industry_search">Industry Search (Companies / People)</SelectItem>
+                  <SelectItem value="google_places">Google Places</SelectItem>
+                  <SelectItem value="apollo">Apollo</SelectItem>
+                  <SelectItem value="firecrawl">Firecrawl</SelectItem>
+                  <SelectItem value="scrape">Web Scraper</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Leads Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads ({totalLeads.toLocaleString()})</CardTitle>
+            <CardDescription>
+              Click on a lead to view full details and evidence. {totalLeads > 0 && `Showing ${startRow}–${endRow} of ${totalLeads.toLocaleString()}.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading leads...</div>
+            ) : totalLeads === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No leads found. Run a scrape job to get started.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={allOnPageSelected ? true : someOnPageSelected ? 'indeterminate' : false}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>Domain</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Confidence</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedLeads.map((lead) => (
+                    <TableRow key={lead.id} className="cursor-pointer hover:bg-muted/50">
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedLeads.has(lead.id)}
+                          onCheckedChange={() => toggleSelect(lead.id)}
+                        />
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{lead.domain}</span>
+                          {lead.source_url && (
+                            <a
+                              href={lead.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                            </a>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        {(() => {
+                          const schema = lead.schema_data as any;
+                          // Build full address with city, state, zip if available
+                          const street = lead.address || schema?.address || schema?.full_address || '';
+                          const city = schema?.city || '';
+                          const state = schema?.state || '';
+                          const zip = schema?.zip || schema?.zip_code || '';
+                          
+                          // Construct full address
+                          let fullAddress = street;
+                          if (city || state || zip) {
+                            const cityStateZip = [city, state, zip].filter(Boolean).join(', ');
+                            fullAddress = street ? `${street}, ${cityStateZip}` : cityStateZip;
+                          }
+                          
+                          return (
+                            <span className="truncate max-w-[250px] block" title={fullAddress}>
+                              {fullAddress || '-'}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        {lead.full_name || '-'}
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        <div className="flex items-center gap-2">
+                          <span className="truncate max-w-[150px]">{lead.best_email || '-'}</span>
+                          {lead.email_validation_status && lead.email_validation_status !== 'unverified' && (
+                            <Badge className={validationColors[lead.email_validation_status]} variant="outline">
+                              {lead.email_validation_status === 'verified' && <Check className="h-3 w-3" />}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        <div className="flex items-center gap-2">
+                          <span>{lead.best_phone || '-'}</span>
+                          {lead.phone_validation_status && lead.phone_validation_status !== 'unverified' && (
+                            <Badge className={validationColors[lead.phone_validation_status]} variant="outline">
+                              {lead.phone_validation_status === 'verified' && <Check className="h-3 w-3" />}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        <Badge className={statusColors[lead.status]}>
+                          {lead.status.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell onClick={() => setSelectedLead(lead)}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-12 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${
+                                lead.confidence_score >= 80
+                                  ? 'bg-green-500'
+                                  : lead.confidence_score >= 50
+                                  ? 'bg-yellow-500'
+                                  : 'bg-destructive'
+                              }`}
+                              style={{ width: `${lead.confidence_score}%` }}
+                            />
+                          </div>
+                          <span className="text-sm">{lead.confidence_score}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setSelectedLead(lead)}>
+                              <Eye className="h-4 w-4 mr-2" /> View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingLead(lead)}>
+                              <Edit className="h-4 w-4 mr-2" /> Edit Lead
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => updateStatusMutation.mutate({ id: lead.id, status: 'approved' })}
+                            >
+                              Approve
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => updateStatusMutation.mutate({ id: lead.id, status: 'rejected' })}
+                            >
+                              Reject
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => deleteMutation.mutate(lead.id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+
+            {!isLoading && totalLeads > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-muted-foreground">
+                    Rows per page
+                  </span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[70px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">
+                    Showing {startRow}–{endRow} of {totalFiltered}
+                  </span>
+                </div>
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (page > 1) setPage(page - 1);
+                        }}
+                        className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        aria-disabled={page <= 1}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let p: number;
+                      if (totalPages <= 5) p = i + 1;
+                      else if (page <= 3) p = i + 1;
+                      else if (page >= totalPages - 2) p = totalPages - 4 + i;
+                      else p = page - 2 + i;
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(p);
+                            }}
+                            isActive={page === p}
+                            className="cursor-pointer"
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (page < totalPages) setPage(page + 1);
+                        }}
+                        className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        aria-disabled={page >= totalPages}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+          </TabsContent>
+
+          <TabsContent value="suppression" className="mt-6">
+            <SuppressionListManager organizations={organizations} />
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-6">
+            <AuditLogViewer tableName="scraped_leads" limit={100} />
+          </TabsContent>
+
+          <TabsContent value="automation" className="mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5" />
+                    Re-Enrich Stale Leads
+                  </CardTitle>
+                  <CardDescription>
+                    Automatically refresh enrichment data for leads older than 30 days
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => reEnrichMutation.mutate()}
+                    disabled={reEnrichMutation.isPending}
+                    className="w-full"
+                  >
+                    {reEnrichMutation.isPending ? (
+                      <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Re-Enriching...</>
+                    ) : (
+                      <><RefreshCw className="h-4 w-4 mr-2" /> Run Re-Enrichment</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    Auto-Nurture & Hot Alerts
+                  </CardTitle>
+                  <CardDescription>
+                    Trigger drip campaigns for warm leads (score ≥60) and alerts for hot leads (score ≥80)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={() => autoNurtureMutation.mutate()}
+                    disabled={autoNurtureMutation.isPending}
+                    className="w-full"
+                  >
+                    {autoNurtureMutation.isPending ? (
+                      <><Bell className="h-4 w-4 mr-2 animate-spin" /> Processing...</>
+                    ) : (
+                      <><Bell className="h-4 w-4 mr-2" /> Run Auto-Nurture & Alerts</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Lead Detail Sheet */}
+        <LeadDetailSheet
+          lead={selectedLead}
+          onClose={() => setSelectedLead(null)}
+        />
+
+        {/* Lead Edit Dialog */}
+        <LeadEditDialog
+          lead={editingLead}
+          open={!!editingLead}
+          onClose={() => setEditingLead(null)}
+        />
+
+        {/* Assign Dialog */}
+        <AssignLeadsDialog
+          open={assignDialogOpen}
+          onOpenChange={setAssignDialogOpen}
+          leadIds={Array.from(selectedLeads)}
+          organizations={organizations}
+          onSuccess={() => setSelectedLeads(new Set())}
+        />
+      </div>
+    </DashboardLayout>
+  );
+}

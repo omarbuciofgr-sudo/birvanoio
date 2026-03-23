@@ -1,0 +1,130 @@
+project_id = "eotfijnsfwroukhjwsbe"
+
+[functions.send-sms]
+verify_jwt = false
+
+[functions.make-call]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.recording-callback]
+verify_jwt = false
+
+[functions.generate-call-recap]
+verify_jwt = false
+
+[functions.import-leads]
+verify_jwt = false
+
+[functions.get-recording]
+verify_jwt = false
+
+[functions.chat-notification]
+verify_jwt = false
+
+[functions.score-lead]
+verify_jwt = false
+
+[functions.generate-message]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.analyze-sentiment]
+verify_jwt = false
+
+[functions.check-subscription]
+verify_jwt = false
+
+[functions.csv-enrich]
+verify_jwt = false
+
+[functions.ai-dashboard-chat]
+verify_jwt = false
+
+[functions.ai-outreach-agent]
+verify_jwt = false
+
+[functions.ai-qualify-lead]
+verify_jwt = false
+
+[functions.ai-company-summary]
+verify_jwt = false
+
+[functions.technographics-enrichment]
+verify_jwt = false
+
+[functions.review-sentiment-analysis]
+verify_jwt = false
+
+[functions.contact-page-extractor]
+verify_jwt = false
+
+[functions.auto-nurture-alerts]
+verify_jwt = false
+
+[functions.re-enrich-stale]
+verify_jwt = false
+
+[functions.bounce-tracking]
+verify_jwt = false
+
+[functions.competitor-monitoring]
+verify_jwt = false
+
+[functions.clay-enrich]
+verify_jwt = false
+
+[functions.ai-deal-forecast]
+verify_jwt = false
+
+[functions.ai-smart-priority]
+verify_jwt = false
+
+[functions.ai-churn-detection]
+verify_jwt = false
+
+[functions.ai-subject-optimizer]
+verify_jwt = false
+
+[functions.ai-smart-reply]
+verify_jwt = false
+
+[functions.ai-call-prep]
+verify_jwt = false
+
+[functions.ai-nl-reports]
+verify_jwt = false
+
+[functions.ai-anomaly-detection]
+verify_jwt = false
+
+[functions.ai-campaign-optimizer]
+verify_jwt = false
+
+[functions.ai-auto-tag]
+verify_jwt = false
+
+[functions.ai-smart-routing]
+verify_jwt = false
+
+[functions.ai-meeting-notes]
+verify_jwt = false
+
+[functions.people-search]
+verify_jwt = false
+
+[functions.job-search]
+verify_jwt = false
+
+[functions.send-smtp-email]
+verify_jwt = false
+
+[functions.verify-caller-id]
+verify_jwt = false
+
+[functions.manage-email-account]
+verify_jwt = false

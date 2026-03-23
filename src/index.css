@@ -1,0 +1,163 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nunito:wght@600;700;800&family=Quicksand:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brivano Design System - Minimalist AI Theme */
+
+@layer base {
+  :root {
+    /* Clean white palette */
+    --background: 0 0% 100%;
+    --foreground: 220 14% 10%;
+
+    --card: 220 20% 98%;
+    --card-foreground: 220 14% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 14% 10%;
+
+    /* Refined blue accent */
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 14% 10%;
+
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 210 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 210 100% 50%;
+
+    --radius: 0.75rem;
+
+    /* Brivano custom tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%) 0%, hsl(195 100% 45%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
+    --glow-primary: 0 0 30px hsl(210 100% 50% / 0.12);
+    --glow-subtle: 0 0 60px hsl(210 100% 50% / 0.06);
+
+    /* Status colors */
+    --status-new: 210 100% 50%;
+    --status-contacted: 45 100% 45%;
+    --status-qualified: 280 100% 55%;
+    --status-converted: 145 70% 45%;
+    --status-lost: 0 72% 51%;
+
+    --sidebar-background: 220 14% 98%;
+    --sidebar-foreground: 220 14% 20%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 95%;
+    --sidebar-accent-foreground: 220 14% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 210 100% 50%;
+  }
+
+  .dark {
+    /* Dark palette - softer dark, not pure black */
+    --background: 222 14% 12%;
+    --foreground: 210 20% 96%;
+
+    --card: 222 14% 15%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 222 14% 15%;
+    --popover-foreground: 210 20% 96%;
+
+    --primary: 210 100% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 14% 19%;
+    --secondary-foreground: 210 20% 96%;
+
+    --muted: 222 12% 22%;
+    --muted-foreground: 215 12% 58%;
+
+    --accent: 210 100% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 96%;
+
+    --border: 222 12% 24%;
+    --input: 222 12% 24%;
+    --ring: 210 100% 55%;
+
+    /* Brivano custom tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 55%) 0%, hsl(195 100% 50%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(222 14% 12%) 0%, hsl(222 14% 16%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(222 14% 17%) 0%, hsl(222 14% 14%) 100%);
+    --glow-primary: 0 0 30px hsl(210 100% 55% / 0.2);
+    --glow-subtle: 0 0 60px hsl(210 100% 55% / 0.1);
+
+    /* Status colors */
+    --status-new: 210 100% 55%;
+    --status-contacted: 45 100% 50%;
+    --status-qualified: 280 100% 60%;
+    --status-converted: 145 70% 50%;
+    --status-lost: 0 72% 51%;
+
+    --sidebar-background: 222 14% 14%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 210 100% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 12% 19%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 222 12% 22%;
+    --sidebar-ring: 210 100% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer utilities {
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-xl border border-border/50;
+  }
+
+  .glow-box {
+    box-shadow: var(--glow-primary);
+  }
+
+  .glow-subtle {
+    box-shadow: var(--glow-subtle);
+  }
+
+  .brivano-logo-font {
+    font-family: 'Quicksand', sans-serif !important;
+    letter-spacing: -0.01em;
+  }
+}
