@@ -93,9 +93,73 @@ function formatCityStateLineFromSlug(cs: string | null): string | null {
   return `${city}, ${st}`;
 }
 
+/** Collapse "4225 Emerson Ave N Unit 4225 Emerson Ave. N" (Apartments.com noise) → first clause. */
+function dedupeRedundantUnitStreetLine(streetPart: string): string {
+  const m = streetPart.match(/^(.+?)\s+Unit\s+(.+)$/i);
+  if (!m) return streetPart;
+  const a = m[1].trim();
+  const b = m[2].trim();
+  const norm = (x: string) => x.replace(/[\s.#]+/g, '').toLowerCase();
+  const na = norm(a);
+  const nb = norm(b);
+  const a0 = a.split(/\s+/)[0] || '';
+  const b0 = b.split(/\s+/)[0] || '';
+  const sameLead = /^\d+$/.test(a0) && a0 === b0;
+  const bStartsA = na.length > 0 && nb.startsWith(na.slice(0, Math.min(14, na.length)));
+  if (sameLead || bStartsA || na === nb) return a;
+  return streetPart;
+}
+
+function normalizeRentalAddressString(full: string): string {
+  const parts = full.split(',').map((p) => p.trim());
+  if (parts.length === 0 || !parts[0]) return full.trim();
+  parts[0] = dedupeRedundantUnitStreetLine(parts[0]);
+  return parts.join(', ');
+}
+
+/** Unusable for skip trace / display (e.g. "MN, 55414" or city-only). */
+function rentalAddressIsGarbage(s: string): boolean {
+  const t = s.trim();
+  if (!t) return true;
+  if (/^[A-Za-z]{2}\s*,\s*\d{5}(-\d{4})?\s*$/i.test(t)) return true;
+  const first = t.split(',')[0].trim();
+  if (first && !/\d/.test(first)) return true;
+  return false;
+}
+
+function rebuildGarbageRentalAddressFromUrl(url: string, prior: string): string {
+  const zip = prior.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+  const line = formatCityStateLineFromSlug(cityStateFromListingUrl(url));
+  if (!line) return prior;
+  const [city, st] = line.split(',').map((x) => x.trim());
+  if (zip) return `${city}, ${st} ${zip}`;
+  return `${city}, ${st}`;
+}
+
+function getNormalizedRentalAddressForListing(listing: {
+  address?: string | null;
+  listing_url?: string | null;
+  source_url?: string | null;
+  source_platform?: string | null;
+}): string {
+  const platform = (listing.source_platform || '').toLowerCase();
+  const rental =
+    platform.includes('apartments') || platform.includes('hotpads') || platform.includes('trulia');
+  if (!rental) return (listing.address || '').trim();
+  let raw = (listing.address || '').trim();
+  const url = (listing.listing_url || listing.source_url || '').trim();
+  if (!raw) return '';
+  raw = normalizeRentalAddressString(raw);
+  if (rentalAddressIsGarbage(raw) && url) {
+    const rebuilt = rebuildGarbageRentalAddressFromUrl(url, raw);
+    if (rebuilt) raw = rebuilt;
+  }
+  return raw;
+}
+
 /**
- * Prefer listing.address; FSBO.com can use URL slug. For Apartments/Hotpads/Trulia, many rows are street-only;
- * BatchData/skip trace works better with city + state (from listing URL path) appended.
+ * Prefer listing.address; FSBO.com can use URL slug. For Apartments/Hotpads/Trulia, normalize bad/duplicate
+ * address lines so BatchData gets the same quality as other scrapers.
  */
 function addressForSkipTrace(listing: {
   address?: string | null;
@@ -105,14 +169,15 @@ function addressForSkipTrace(listing: {
 }): string {
   const platform = (listing.source_platform || '').toLowerCase();
   const url = (listing.listing_url || listing.source_url || '').trim();
-  let raw = (listing.address || '').trim();
+  const rentalSite =
+    platform.includes('apartments') || platform.includes('hotpads') || platform.includes('trulia');
+
+  let raw = rentalSite ? getNormalizedRentalAddressForListing(listing) : (listing.address || '').trim();
 
   if (!raw && platform === 'fsbo') {
     return addressFromFsboUrl(url) || '';
   }
 
-  const rentalSite =
-    platform.includes('apartments') || platform.includes('hotpads') || platform.includes('trulia');
   if (raw && rentalSite) {
     const hasZip = /\b\d{5}(-\d{4})?\b/.test(raw);
     // "Street, City, ST" or "Street, City, ST 606xx"
@@ -150,8 +215,16 @@ function cityStateFromListingUrl(url: string | null | undefined): string | null 
 }
 /** Derive display address: use listing.address, or parse URL for Zillow/FSBO, or city-state from URL for other scrapers. Used for city filter on all platforms. */
 function listingDisplayAddress(listing: { address?: string | null; listing_url?: string | null; source_url?: string | null; source_platform?: string | null }): string {
-  const addr = (listing.address || '').trim();
-  if (addr) return addr;
+  const platform = (listing.source_platform || '').toLowerCase();
+  const rental =
+    platform.includes('apartments') || platform.includes('hotpads') || platform.includes('trulia');
+  if (rental) {
+    const n = getNormalizedRentalAddressForListing(listing);
+    if (n) return n;
+  } else {
+    const addr = (listing.address || '').trim();
+    if (addr) return addr;
+  }
   const url = (listing.listing_url || listing.source_url || '').trim();
   if (listing.source_platform === 'fsbo' && url) {
     const fromUrl = addressFromFsboUrl(url);
@@ -195,7 +268,11 @@ function listingCity(displayAddress: string): string | null {
   const a = (displayAddress || '').trim();
   if (!a) return null;
   const parts = a.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2) return parts[1];
+  if (parts.length >= 2) {
+    const first = parts[0];
+    if (/\d/.test(first)) return parts[1] || null;
+    return first || null;
+  }
   // No comma: try "Street City ST Zip" – state is 2-letter, optionally followed by 5-digit zip
   const stateZip = a.match(/\b([A-Z]{2})\s*(?:\d{5}(-\d{4})?)?\s*$/i);
   if (stateZip) {
