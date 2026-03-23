@@ -466,7 +466,8 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
 
   const canSearch = () => {
     if (searchType === 'local') return true;
-    if (searchType === 'people') return peopleFilters.jobTitles.length > 0 || peopleFilters.industries.length > 0 || peopleFilters.companies.length > 0;
+    // Edge function applies broad Apollo defaults when the body is sparse (same idea as job search).
+    if (searchType === 'people') return true;
     // job-search Edge Function applies defaults when body is sparse; allow Run/Next without filters
     if (searchType === 'jobs') return true;
     return filters.industries.length > 0;

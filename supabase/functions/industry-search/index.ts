@@ -58,9 +58,11 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   const { industry, employee_ranges, employee_count_min, employee_count_max, location, keywords, limit = 25 } = input;
 
   const page = input.page || 1;
+  // Post-merge filters often drop rows; over-fetch from Apollo so a requested limit of 50 is still attainable.
+  const perPage = Math.min(Math.max(limit, 50), 100);
   const searchParams: Record<string, unknown> = {
     page,
-    per_page: Math.min(limit, 100),
+    per_page: perPage,
   };
 
   if (industry) {
@@ -945,12 +947,16 @@ Deno.serve(async (req) => {
       if (requestedIndustries.length > 0) {
         const beforeCount = companies.length;
         companies = companies.filter(c => {
-          if (!c.industry) return true; // keep companies with no industry (will be filled by AI)
+          if (!c.industry) {
+            const blob = `${c.name || ''} ${c.description || ''}`.toLowerCase();
+            return requestedIndustries.some((ri) => {
+              const words = ri.split(/\s+/).filter((w) => w.length > 2);
+              return words.length > 0 && words.every((w) => blob.includes(w));
+            });
+          }
           const companyIndustry = c.industry.toLowerCase();
-          // Check if the company's industry matches any of the requested industries
           return requestedIndustries.some(ri => 
             companyIndustry.includes(ri) || ri.includes(companyIndustry) ||
-            // Also check partial word matches for related industries
             ri.split(/\s+/).some(word => word.length > 3 && companyIndustry.includes(word)) ||
             companyIndustry.split(/\s+/).some(word => word.length > 3 && ri.includes(word))
           );
@@ -973,14 +979,18 @@ Deno.serve(async (req) => {
       console.log(`[Filter] Exclude filter: ${beforeCount} → ${companies.length}`);
     }
 
-    // Keyword phrase filter: user "keywords" must appear in name, description, or keyword tags
+    // Keyword filter: comma-separated OR groups; within each group, every significant word must match (AND).
     if (body.keywords?.trim()) {
-      const toks = body.keywords.split(/[,;]/).map((s: string) => s.trim().toLowerCase()).filter((t) => t.length > 2);
-      if (toks.length > 0) {
+      const groups = body.keywords.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      if (groups.length > 0) {
         const beforeK = companies.length;
         companies = companies.filter((c) => {
           const hay = `${c.name || ''} ${c.description || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
-          return toks.some((t) => hay.includes(t));
+          return groups.some((group) => {
+            const words = group.split(/\s+/).filter((w) => w.length > 2);
+            if (words.length === 0) return true;
+            return words.every((w) => hay.includes(w));
+          });
         });
         console.log(`[Filter] Keyword relevance: ${beforeK} → ${companies.length}`);
       }

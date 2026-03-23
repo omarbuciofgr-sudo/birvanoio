@@ -182,6 +182,9 @@ export type BackendHotpadsLastResultResponse = {
   /** API stripped PM/realtor rows (default true when filter is active) */
   by_owner_only?: boolean;
   include_pm?: boolean;
+  /** Row count in DB before PM/realtor filter (only when filter applied) */
+  total_stored?: number;
+  pm_rows_hidden?: number;
 };
 
 export type LastResultFetchOptions = {

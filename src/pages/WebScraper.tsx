@@ -174,11 +174,6 @@ function parseDaysOnMarket(listing: { days_on_market?: unknown; days_on_zillow?:
   return Number.isFinite(n) ? n : null;
 }
 
-function listingHasSkippablePhone(listing: { owner_phone?: string | null }): boolean {
-  const d = (listing.owner_phone || '').replace(/\D/g, '');
-  return d.length >= 10;
-}
-
 function skipTraceHasUsefulContact(data: {
   phones?: { number?: string }[];
   emails?: { address?: string }[];
@@ -372,8 +367,8 @@ export default function WebScraper() {
   const [showMap, setShowMap] = useState(true);
   /** Hide listings that have been on market a long time (often already sold); needs days_on_* from backend. */
   const [reHideLongDom, setReHideLongDom] = useState(true);
-  /** When true, table/map only shows rows whose address matches the location search box (e.g. "chicago"). */
-  const [reMatchLocationFilter, setReMatchLocationFilter] = useState(true);
+  /** When true, table/map only shows rows whose address matches the location search box. Default off so full scrape counts match the list (many addresses omit city text). */
+  const [reMatchLocationFilter, setReMatchLocationFilter] = useState(false);
   /** When true, next last-result fetch uses ?include_pm=1 (PM/realtor rows included). Toggle then refresh listings. */
   const [reIncludePmListings, setReIncludePmListings] = useState(false);
   const [reRefreshingListings, setReRefreshingListings] = useState(false);
@@ -475,6 +470,12 @@ export default function WebScraper() {
       setReListings(mapped);
       const n = mapped.length;
       toast.success(`Loaded ${n} listing${n !== 1 ? 's' : ''}${reIncludePmListings ? ' (PM/realtor included)' : ''}`);
+      const r = result as { total_stored?: number; pm_rows_hidden?: number };
+      if (typeof r.pm_rows_hidden === 'number' && r.pm_rows_hidden > 0 && typeof r.total_stored === 'number') {
+        toast.info(
+          `${r.pm_rows_hidden} listing${r.pm_rows_hidden !== 1 ? 's' : ''} hidden as property-manager/realtor (${r.total_stored} in database). Turn on “Include PM listings” to show them.`,
+        );
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Refresh failed');
     } finally {
@@ -918,7 +919,13 @@ export default function WebScraper() {
         setReListings(mapped);
         toast.success(`Found ${mapped.length} Zillow FSBO listings`);
         const fsboTotal = (result as { total?: number }).total;
-        if (typeof fsboTotal === 'number' && fsboTotal > mapped.length) {
+        const r = result as { total_stored?: number; pm_rows_hidden?: number };
+        if (typeof r.pm_rows_hidden === 'number' && r.pm_rows_hidden > 0 && typeof r.total_stored === 'number') {
+          toast.info(
+            `${r.pm_rows_hidden} PM/realtor row${r.pm_rows_hidden !== 1 ? 's' : ''} hidden (${r.total_stored} in database). Enable “Include PM listings” and re-run refresh to see all.`,
+          );
+        }
+        if (typeof fsboTotal === 'number' && fsboTotal > mapped.length && !(r.pm_rows_hidden && r.pm_rows_hidden > 0)) {
           toast.info(
             `Database has ${fsboTotal} FSBO rows; UI received ${mapped.length}. Redeploy the scraper backend (latest api_server) if you expect the full set in one response.`,
           );
@@ -1363,8 +1370,8 @@ export default function WebScraper() {
         toast.error(result.error || result.message || 'No owner info found');
         setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: 'not_found' }));
       }
-    } catch {
-      toast.error('Failed to skip trace');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to skip trace');
     } finally { setSkipTracingIndex(null); }
   };
 
@@ -1403,8 +1410,8 @@ export default function WebScraper() {
         toast.error(result.error || result.message || 'Still no owner info found');
         setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: 'not_found' }));
       }
-    } catch {
-      toast.error('Failed to retry skip trace');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to retry skip trace');
       setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: 'not_found' }));
     } finally { setSkipTracingIndex(null); }
   };
@@ -1435,10 +1442,11 @@ export default function WebScraper() {
   const handleBulkSkipTrace = async () => {
     const toProcess = Array.from(selectedListings).filter((i) => {
       const l = reListings[i];
-      return l && !!addressForSkipTrace(l) && !listingHasSkippablePhone(l) && l.skip_trace_status !== 'success';
+      // User explicitly selected rows — allow re-skip even if the listing already has a scraped agent/office phone.
+      return l && !!addressForSkipTrace(l) && l.skip_trace_status !== 'success';
     });
     if (toProcess.length === 0) {
-      toast.error('No listings to skip trace (selected rows need an address or FSBO listing URL, and no verified phone yet).');
+      toast.error('No listings to skip trace (selected rows need a usable address or FSBO listing URL, and must not already be traced).');
       return;
     }
     setBulkSkipTracing(true); let successCount = 0; let errorCount = 0; let savedCount = 0;
@@ -2068,7 +2076,7 @@ export default function WebScraper() {
                             ) : null}
 
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                {!listing.owner_phone && !listing.skip_trace_status && addressForSkipTrace(listing) && (
+                                {addressForSkipTrace(listing) && listing.skip_trace_status !== 'success' && listing.skip_trace_status !== 'not_found' && (
                                 <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
                                   {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
                                   </Button>

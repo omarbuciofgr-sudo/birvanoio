@@ -100,10 +100,10 @@ async function searchApollo(input: JobSearchInput, apiKey: string): Promise<JobR
   console.log('[Job Apollo] Params:', JSON.stringify(params));
 
   try {
-    // Try the new endpoint first, fall back to the old one
+    // people/search is the stable catalog endpoint; mixed_people/api_search varies by account tier.
     const endpoints = [
-      'https://api.apollo.io/api/v1/mixed_people/api_search',
       'https://api.apollo.io/api/v1/people/search',
+      'https://api.apollo.io/api/v1/mixed_people/api_search',
     ];
 
     let data: any = null;

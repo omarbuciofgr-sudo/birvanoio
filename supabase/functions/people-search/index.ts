@@ -196,6 +196,33 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
     }));
   }
 
+  const orgTags = params.q_organization_keyword_tags as string[] | undefined;
+  const hasPeopleSignal = !!(
+    params.person_titles ||
+    params.person_locations ||
+    params.q_organization_name ||
+    (orgTags && orgTags.length > 0) ||
+    params.q_keywords ||
+    params.person_past_titles ||
+    params.q_person_past_organization_name ||
+    params.person_not_names ||
+    params.currently_using_any_of_technology_uids ||
+    params.organization_revenue_ranges ||
+    params.organization_latest_funding_stage_cd ||
+    params.organization_sic_codes ||
+    params.organization_naics_codes ||
+    params.organization_department_or_subdepartment_counts ||
+    params.organization_job_locations
+  );
+  if (!hasPeopleSignal) {
+    params.person_locations = ['United States'];
+    params.person_titles = [
+      'Chief Executive Officer', 'Founder', 'Owner', 'President', 'Director', 'Manager',
+      'VP Sales', 'Head of Operations', 'Sales Director',
+    ];
+    params.q_keywords = 'business';
+  }
+
   console.log('[People Apollo] Params:', JSON.stringify(params));
 
   try {
