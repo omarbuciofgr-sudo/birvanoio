@@ -305,6 +305,29 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
   }
 }
 
+/** Only show rows that belong to the scraper selected in the Platform dropdown (avoids stale Apartments rows when viewing Zillow FRBO, etc.). */
+function listingMatchesRealEstatePlatform(listing: { source_platform?: string | null }, platform: string): boolean {
+  if (platform === 'all') return true;
+  const sp = (listing.source_platform || '').toLowerCase();
+  if (!sp) return platform === 'all';
+  switch (platform) {
+    case 'hotpads':
+      return sp === 'hotpads';
+    case 'trulia':
+      return sp === 'trulia';
+    case 'zillow':
+      return sp === 'zillow_fsbo';
+    case 'zillow_frbo':
+      return sp === 'zillow_frbo';
+    case 'fsbo':
+      return sp === 'fsbo';
+    case 'apartments':
+      return sp === 'apartments';
+    default:
+      return true;
+  }
+}
+
 type ChatMsg = { role: 'user' | 'assistant'; content: string; appliedFilters?: Record<string, any> };
 
 type SearchResult = {
@@ -358,6 +381,7 @@ export default function WebScraper() {
   // Only show listings that match the searched city (applies to all scrapers: Zillow, Hotpads, Trulia, Apartments, FSBO/All Platforms)
   const reListingsFilteredForDisplay = useMemo(() => {
     let rows = reListings.map((listing, index) => ({ listing, realIndex: index }));
+    rows = rows.filter(({ listing }) => listingMatchesRealEstatePlatform(listing, rePlatform));
     if (reMatchLocationFilter && reLocation?.trim()) {
       rows = rows.filter(({ listing }) => addressMatchesSearch(listingDisplayAddress(listing), reLocation));
     }
@@ -369,20 +393,26 @@ export default function WebScraper() {
       });
     }
     return rows;
-  }, [reListings, reLocation, reHideLongDom, reMatchLocationFilter]);
+  }, [reListings, reLocation, reHideLongDom, reMatchLocationFilter, rePlatform]);
 
   /** Row count after stale filter only (no location text filter); used for "matching city" hint. */
   const reShownWithoutLocationFilter = useMemo(() => {
-    let rows = reListings.map((listing, index) => ({ listing, realIndex: index }));
+    let listings = reListings.filter((listing) => listingMatchesRealEstatePlatform(listing, rePlatform));
     if (reHideLongDom) {
-      rows = rows.filter(({ listing }) => {
+      listings = listings.filter((listing) => {
         const dom = parseDaysOnMarket(listing);
         if (dom == null) return true;
         return dom <= LONG_DOM_THRESHOLD;
       });
     }
-    return rows.length;
-  }, [reListings, reHideLongDom]);
+    return listings.length;
+  }, [reListings, reHideLongDom, rePlatform]);
+
+  /** Rows in memory that match the selected platform (honest count if rows were ever mixed). */
+  const reBackendRowCountForPlatform = useMemo(
+    () => reListings.filter((listing) => listingMatchesRealEstatePlatform(listing, rePlatform)).length,
+    [reListings, rePlatform]
+  );
 
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
@@ -414,6 +444,14 @@ export default function WebScraper() {
 
   const filteredUnsavedIndices = useMemo(() => reListingsFilteredForDisplay.filter(({ listing }) => !listing.saved_to_db).map(({ realIndex }) => realIndex), [reListingsFilteredForDisplay]);
   const toggleSelectAllListings = () => { if (selectedListings.size === filteredUnsavedIndices.length) setSelectedListings(new Set()); else setSelectedListings(new Set(filteredUnsavedIndices)); };
+
+  /** Changing platform must drop prior scraper rows so you only see the active source after Refresh / Find Listings. */
+  const handleRealEstatePlatformChange = (value: string) => {
+    setRePlatform(value);
+    setReListings([]);
+    setSelectedListings(new Set());
+    setReErrors([]);
+  };
 
   const refreshListingsFromBackend = useCallback(async () => {
     if (rePlatform === 'all') {
@@ -1693,7 +1731,7 @@ export default function WebScraper() {
                   </div>
                   <div className="w-40 space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Platform</Label>
-                    <Select value={rePlatform} onValueChange={setRePlatform}>
+                    <Select value={rePlatform} onValueChange={handleRealEstatePlatformChange}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Platform" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">
@@ -1865,7 +1903,7 @@ export default function WebScraper() {
                       </Badge>
                     </div>
                     <span className="text-[10px] text-green-600/90 dark:text-green-400/90 text-right" title="Rows currently loaded from the last scrape or refresh">
-                      {reListings.length} loaded from backend{reMatchLocationFilter ? '' : ' — table not filtered by search box'}
+                      {reBackendRowCountForPlatform} loaded from backend{reMatchLocationFilter ? '' : ' — table not filtered by search box'}
                     </span>
                     <span className={`text-[10px] text-right ${reIncludePmListings ? 'text-blue-600/90 dark:text-blue-400/90' : 'text-amber-600/90 dark:text-amber-400/90'}`}>
                       {reIncludePmListings
