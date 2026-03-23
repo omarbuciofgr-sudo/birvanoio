@@ -128,3 +128,7 @@ verify_jwt = false
 
 [functions.manage-email-account]
 verify_jwt = false
+
+# JWT verified inside the function (user access token). Matches other scraper-related invokes.
+[functions.tracerfy-skip-trace]
+verify_jwt = false

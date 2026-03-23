@@ -44,11 +44,39 @@ export interface SkipTraceResult {
 /**
  * Skip trace uses Supabase Edge Function (BatchData). The Flask scraper backend
  * does not expose /api/skip-trace in all deployments; the edge function is always available with secrets.
+ *
+ * Important: `supabase.functions.invoke` uses the shared fetch helper, which falls back to the
+ * **anon key** as `Authorization: Bearer` when there is no session. The edge function only
+ * accepts a **user** JWT, so we must pass the session access token explicitly and never invoke
+ * with the anon key as Bearer (that always yields 401 from the function).
  */
+async function getUserAccessTokenForEdgeFunction(): Promise<string | null> {
+  const {
+    data: { session: first },
+  } = await supabase.auth.getSession();
+  if (first?.access_token) return first.access_token;
+
+  const {
+    data: { session: refreshed },
+  } = await supabase.auth.refreshSession();
+  return refreshed?.access_token ?? null;
+}
+
 export const skipTraceApi = {
   async lookupOwner(input: SkipTraceInput): Promise<SkipTraceResult> {
+    const accessToken = await getUserAccessTokenForEdgeFunction();
+    if (!accessToken) {
+      return {
+        success: false,
+        error: 'Please sign in to use skip trace. If you are signed in, refresh the page and try again.',
+      };
+    }
+
     const { data, error } = await supabase.functions.invoke('tracerfy-skip-trace', {
       body: input,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
 
     if (error) {

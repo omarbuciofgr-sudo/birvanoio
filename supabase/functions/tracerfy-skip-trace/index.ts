@@ -291,19 +291,26 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    // Verify the user's JWT
-    const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: userError } = await authedClient.auth.getUser();
-    if (userError || !user) {
-      console.error('tracerfy-skip-trace auth error:', userError);
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!serviceKey) {
+      console.error('tracerfy-skip-trace: SUPABASE_SERVICE_ROLE_KEY is not set');
       return new Response(
-        JSON.stringify({ success: false, error: 'Unauthorized - Invalid token' }),
+        JSON.stringify({ success: false, error: 'Server misconfigured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const jwt = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const admin = createClient(supabaseUrl, serviceKey);
+    const { data: { user }, error: userError } = await admin.auth.getUser(jwt);
+    if (userError || !user) {
+      console.error('tracerfy-skip-trace auth error:', userError?.message ?? userError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            'Unauthorized - Sign in again. (If you see this while logged in, the session token was missing or invalid.)',
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
