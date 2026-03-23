@@ -305,6 +305,11 @@ function skipTraceHasUsefulContact(data: {
   return false;
 }
 
+/** Skip trace UI is hidden for Apartments.com (rentals; leasing contacts vs owner records). */
+function isApartmentsComListing(listing: { source_platform?: string | null }): boolean {
+  return (listing.source_platform || '').toLowerCase() === 'apartments';
+}
+
 /** Map Flask /api/.../last-result rows to the same listing shape as after a scrape (used for refresh). */
 function mapBackendListingsForPlatform(platform: string, listings: any[]): any[] {
   const list = listings || [];
@@ -1561,7 +1566,12 @@ export default function WebScraper() {
     const toProcess = Array.from(selectedListings).filter((i) => {
       const l = reListings[i];
       // User explicitly selected rows — allow re-skip even if the listing already has a scraped agent/office phone.
-      return l && !!addressForSkipTrace(l) && l.skip_trace_status !== 'success';
+      return (
+        l &&
+        !isApartmentsComListing(l) &&
+        !!addressForSkipTrace(l) &&
+        l.skip_trace_status !== 'success'
+      );
     });
     if (toProcess.length === 0) {
       toast.error('No listings to skip trace (selected rows need a usable address or FSBO listing URL, and must not already be traced).');
@@ -2092,11 +2102,19 @@ export default function WebScraper() {
                     <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={toggleSelectAllListings}>
                       {selectedListings.size === filteredUnsavedIndices.length ? 'Deselect All' : 'Select All'}
                     </Button>
-                    {selectedListings.size > 0 && (
+                    {selectedListings.size > 0 &&
+                      Array.from(selectedListings).some((i) => {
+                        const l = reListings[i];
+                        return l && !isApartmentsComListing(l);
+                      }) && (
                       <>
                         <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={handleBulkSkipTrace} disabled={bulkSkipTracing}>
                           {bulkSkipTracing ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RotateCw className="h-3 w-3 mr-1" /> Skip Trace</>}
                         </Button>
+                      </>
+                    )}
+                    {selectedListings.size > 0 && (
+                      <>
                         <Button size="sm" className="h-7 text-xs px-2.5" onClick={handleBulkSave} disabled={bulkSaving}>
                           {bulkSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" /> Save</>}
                       </Button>
@@ -2135,8 +2153,12 @@ export default function WebScraper() {
                                     <h4 className="text-sm font-medium truncate">{listingDisplayAddress(listing)}</h4>
                                   )}
                                   {listing.saved_to_db && <Badge variant="secondary" className="text-[10px] h-4 shrink-0">Saved</Badge>}
-                                  {listing.skip_trace_status === 'success' && <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] h-4 border-0 shrink-0">Traced</Badge>}
-                                  {listing.skip_trace_status === 'not_found' && <Badge variant="outline" className="text-[10px] h-4 shrink-0">Not Found</Badge>}
+                                  {!isApartmentsComListing(listing) && listing.skip_trace_status === 'success' && (
+                                    <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] h-4 border-0 shrink-0">Traced</Badge>
+                                  )}
+                                  {!isApartmentsComListing(listing) && listing.skip_trace_status === 'not_found' && (
+                                    <Badge variant="outline" className="text-[10px] h-4 shrink-0">Not Found</Badge>
+                                  )}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                   {[listing.property_type, listing.bedrooms && `${listing.bedrooms} bed`, listing.bathrooms && `${listing.bathrooms} bath`, listing.square_feet && `${listing.square_feet.toLocaleString()} sqft`].filter(Boolean).join(' · ')}
@@ -2194,12 +2216,15 @@ export default function WebScraper() {
                             ) : null}
 
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                {addressForSkipTrace(listing) && listing.skip_trace_status !== 'success' && listing.skip_trace_status !== 'not_found' && (
+                                {!isApartmentsComListing(listing) &&
+                                  addressForSkipTrace(listing) &&
+                                  listing.skip_trace_status !== 'success' &&
+                                  listing.skip_trace_status !== 'not_found' && (
                                 <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
                                   {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
                                   </Button>
                                 )}
-                                {listing.skip_trace_status === 'not_found' && (
+                                {!isApartmentsComListing(listing) && listing.skip_trace_status === 'not_found' && (
                                 <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20 shrink-0" onClick={() => handleRetrySkipTrace(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
                                   {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Retry
                                   </Button>
