@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveSupabaseUrl } from "@/integrations/supabase/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +59,7 @@ export function AIWeeklyDigest() {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-weekly-digest`,
+        `${resolveSupabaseUrl()}/functions/v1/generate-weekly-digest`,
         {
           method: "POST",
           headers: {

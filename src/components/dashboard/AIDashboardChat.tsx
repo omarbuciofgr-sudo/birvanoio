@@ -7,10 +7,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Bot, Send, X, MessageSquare, Loader2 } from "lucide-react";
+import { resolveSupabaseUrl } from "@/integrations/supabase/constants";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-dashboard-chat`;
+const CHAT_URL = `${resolveSupabaseUrl()}/functions/v1/ai-dashboard-chat`;
 
 const MODEL_OPTIONS = [
   { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },

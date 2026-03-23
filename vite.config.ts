@@ -1,5 +1,4 @@
 import { defineConfig, loadEnv } from "vite";
-import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
@@ -71,24 +70,6 @@ function resolveSupabaseForClient(mode: string) {
   return { url, key };
 }
 
-function warnIfSupabaseMissingAtBuild(): Plugin {
-  return {
-    name: "warn-supabase-env",
-    buildStart() {
-      if (process.env.npm_lifecycle_event !== "build" && !process.argv.includes("build")) return;
-      const { url, key } = resolveSupabaseForClient("production");
-      if (url && key) return;
-      console.warn(
-        "\n[vite] Supabase URL/key were empty when reading process.env during this build. " +
-          "Lovable Cloud → Secrets is often wired to Edge Functions only, not the Vite bundle. " +
-          "If brivano.io is built from GitHub, add repo secrets VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY " +
-          "(see https://docs.lovable.dev/tips-tricks/external-deployment-hosting ). " +
-          "Then redeploy / Publish again.\n"
-      );
-    },
-  };
-}
-
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const { url: supabaseUrl, key: supabaseAnon } = resolveSupabaseForClient(mode);
@@ -107,11 +88,7 @@ export default defineConfig(({ mode }) => {
       host: "::",
       port: 5173,
     },
-    plugins: [
-      react(),
-      warnIfSupabaseMissingAtBuild(),
-      mode === "development" && componentTagger(),
-    ].filter(Boolean),
+    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

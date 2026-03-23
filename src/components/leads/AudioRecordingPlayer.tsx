@@ -3,6 +3,7 @@ import { Play, Pause, Loader2, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveSupabaseUrl } from "@/integrations/supabase/constants";
 import { toast } from "sonner";
 
 interface AudioRecordingPlayerProps {
@@ -41,7 +42,7 @@ export function AudioRecordingPlayer({ recordingUrl, duration }: AudioRecordingP
 
       // The response is the audio blob
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-recording`,
+        `${resolveSupabaseUrl()}/functions/v1/get-recording`,
         {
           method: "POST",
           headers: {
