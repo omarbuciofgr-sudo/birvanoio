@@ -1,19 +1,54 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-/** Injected at build time from `.env` or your host’s env (Lovable, Vercel, etc.). Must use the `VITE_` prefix. */
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+/** Injected at build time (Vite `import.meta.env`). Must use `VITE_` prefix. `VITE_SUPABASE_PROJECT_ID` alone is not read — URL + anon key are required. */
+const rawUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const rawKey =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ||
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
 
-if (!SUPABASE_URL?.trim() || !SUPABASE_PUBLISHABLE_KEY?.trim()) {
+const SUPABASE_URL = rawUrl?.trim() ?? '';
+const SUPABASE_PUBLISHABLE_KEY = rawKey?.trim() ?? '';
+
+function projectRefFromSupabaseUrl(url: string): string | null {
+  const m = url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** `ref` claim inside the anon JWT must match the subdomain of VITE_SUPABASE_URL, or you get 401 / auth errors. */
+function projectRefFromAnonKey(anonKey: string): string | null {
+  try {
+    const parts = anonKey.split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { ref?: string };
+    return typeof payload.ref === 'string' ? payload.ref.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   const hint =
-    'Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (Project Settings → API: Project URL + anon public key), then rebuild/redeploy. ' +
-    'Lovable: Project → Environment variables. Local: copy .env.example to .env';
+    'Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (same names in Lovable Secrets / env), then Publish again so a NEW build runs. ' +
+    'VITE_SUPABASE_PROJECT_ID is ignored by this app. No quotes needed in Lovable. Remove spaces after URLs.';
   console.error('[Supabase]', hint, {
-    hasUrl: Boolean(SUPABASE_URL?.trim()),
-    hasKey: Boolean(SUPABASE_PUBLISHABLE_KEY?.trim()),
+    hasUrl: Boolean(SUPABASE_URL),
+    hasKey: Boolean(SUPABASE_PUBLISHABLE_KEY),
+    mode: import.meta.env.MODE,
   });
   throw new Error(`Supabase is not configured for this build. ${hint}`);
+}
+
+const urlRef = projectRefFromSupabaseUrl(SUPABASE_URL);
+const keyRef = projectRefFromAnonKey(SUPABASE_PUBLISHABLE_KEY);
+if (urlRef && keyRef && urlRef !== keyRef) {
+  console.error('[Supabase] URL and anon key are from different projects:', {
+    urlRef,
+    keyRef,
+    fix: `Use Project URL + anon key from the SAME Supabase project (e.g. https://${keyRef}.supabase.co with this key).`,
+  });
 }
 
 // Import the supabase client like this:
