@@ -26,6 +26,52 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import OnboardingTour from "@/components/dashboard/OnboardingTour";
+import { scrapedStatusToLeadStatus } from "@/lib/leadSourceFallback";
+
+/** 7-day pipeline chart from CRM or Scout-normalized rows. */
+function computeWeeklyActivityData(data: { created_at: string; status: string }[]) {
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const emptyWeek = dayLabels.map((day) => ({ day, leads: 0, contacted: 0, converted: 0 }));
+  if (!data.length) return emptyWeek;
+
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+  const hasRecentActivity = data.some((l) => new Date(l.created_at).getTime() >= sevenDaysAgo.getTime());
+
+  let endDate = new Date(now);
+  if (!hasRecentActivity && data.length > 0) {
+    const maxCreated = data.reduce((max, l) => (l.created_at > max ? l.created_at : max), data[0].created_at);
+    endDate = new Date(maxCreated);
+    endDate.setHours(23, 59, 59, 999);
+  }
+
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(endDate);
+    d.setDate(d.getDate() - (6 - i));
+    return d;
+  });
+
+  return last7Days.map((date) => {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+    const inDay = (created: string) => {
+      const t = new Date(created).getTime();
+      return t >= dayStart.getTime() && t <= dayEnd.getTime();
+    };
+    const dayLeads = data.filter((l) => inDay(l.created_at));
+    return {
+      day: dayLabels[date.getDay()],
+      leads: dayLeads.length,
+      contacted: dayLeads.filter((l) => l.status !== "new").length,
+      converted: dayLeads.filter((l) => l.status === "converted").length,
+    };
+  });
+}
 
 interface LeadStats {
   total: number;
@@ -71,6 +117,8 @@ const Dashboard = () => {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [scrapedLeadsCount, setScrapedLeadsCount] = useState<number | null>(null);
+  /** True when pipeline stats/chart use `scraped_leads` because CRM `leads` is empty. */
+  const [pipelineFromScout, setPipelineFromScout] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
@@ -88,21 +136,63 @@ const Dashboard = () => {
   }, [user]);
 
   const fetchStats = async () => {
-    const { data, error } = await supabase.from("leads").select("status");
-    if (!error && data) {
+    const { data: leadRows, error: leadErr } = await supabase.from("leads").select("status");
+    if (!leadErr && leadRows && leadRows.length > 0) {
+      setPipelineFromScout(false);
       setStats({
-        total: data.length,
-        new: data.filter((l) => l.status === "new").length,
-        contacted: data.filter((l) => l.status === "contacted").length,
-        converted: data.filter((l) => l.status === "converted").length,
-        qualified: data.filter((l) => l.status === "qualified").length,
+        total: leadRows.length,
+        new: leadRows.filter((l) => l.status === "new").length,
+        contacted: leadRows.filter((l) => l.status === "contacted").length,
+        converted: leadRows.filter((l) => l.status === "converted").length,
+        qualified: leadRows.filter((l) => l.status === "qualified").length,
       });
+      return;
     }
+    const { data: scraped, error: scErr } = await supabase.from("scraped_leads").select("status");
+    if (scErr || !scraped?.length) {
+      setPipelineFromScout(false);
+      if (!leadErr && leadRows) {
+        setStats({ total: 0, new: 0, contacted: 0, converted: 0, qualified: 0 });
+      }
+      return;
+    }
+    setPipelineFromScout(true);
+    const mapped = scraped.map((s) => scrapedStatusToLeadStatus(s.status));
+    setStats({
+      total: scraped.length,
+      new: mapped.filter((s) => s === "new").length,
+      contacted: mapped.filter((s) => s === "contacted").length,
+      converted: mapped.filter((s) => s === "converted").length,
+      qualified: mapped.filter((s) => s === "qualified").length,
+    });
   };
 
   const fetchRecentLeads = async () => {
-    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(5);
-    if (data) setRecentLeads(data);
+    const { data: leads } = await supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(5);
+    if (leads && leads.length > 0) {
+      setRecentLeads(leads);
+      return;
+    }
+    const { data: scraped } = await supabase
+      .from("scraped_leads")
+      .select("id, created_at, full_name, domain, best_email, status")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (!scraped?.length) {
+      setRecentLeads([]);
+      return;
+    }
+    setRecentLeads(
+      scraped.map((r) => ({
+        id: r.id,
+        business_name: r.full_name || r.domain || "Scout lead",
+        contact_name: r.full_name,
+        email: r.best_email,
+        website: r.domain,
+        status: scrapedStatusToLeadStatus(r.status),
+        created_at: r.created_at,
+      }))
+    );
   };
 
   const fetchNotifications = async () => {
@@ -150,56 +240,28 @@ const Dashboard = () => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     thirtyDaysAgo.setHours(0, 0, 0, 0);
-    const { data, error } = await supabase
+    const { data: leadData, error } = await supabase
       .from("leads")
       .select("created_at, status")
       .gte("created_at", thirtyDaysAgo.toISOString());
-    const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const emptyWeek = dayLabels.map((day) => ({ day, leads: 0, contacted: 0, converted: 0 }));
 
-    if (error || !data || data.length === 0) {
-      setWeeklyData(emptyWeek);
-      return;
+    let rows: { created_at: string; status: string }[] | null =
+      !error && leadData && leadData.length > 0 ? leadData : null;
+
+    if (!rows?.length) {
+      const { data: scraped } = await supabase
+        .from("scraped_leads")
+        .select("created_at, status")
+        .gte("created_at", thirtyDaysAgo.toISOString());
+      if (scraped?.length) {
+        rows = scraped.map((r) => ({
+          created_at: r.created_at,
+          status: scrapedStatusToLeadStatus(r.status),
+        }));
+      }
     }
 
-    const now = new Date();
-    now.setHours(23, 59, 59, 999);
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-    const hasRecentActivity = data.some((l) => new Date(l.created_at).getTime() >= sevenDaysAgo.getTime());
-
-    let endDate = new Date(now);
-    if (!hasRecentActivity && data.length > 0) {
-      const maxCreated = data.reduce((max, l) => (l.created_at > max ? l.created_at : max), data[0].created_at);
-      endDate = new Date(maxCreated);
-      endDate.setHours(23, 59, 59, 999);
-    }
-
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(endDate);
-      d.setDate(d.getDate() - (6 - i));
-      return d;
-    });
-
-    const weekly = last7Days.map((date) => {
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
-      const inDay = (created: string) => {
-        const t = new Date(created).getTime();
-        return t >= dayStart.getTime() && t <= dayEnd.getTime();
-      };
-      const dayLeads = data.filter((l) => inDay(l.created_at));
-      return {
-        day: dayLabels[date.getDay()],
-        leads: dayLeads.length,
-        contacted: dayLeads.filter((l) => l.status !== "new").length,
-        converted: dayLeads.filter((l) => l.status === "converted").length,
-      };
-    });
-    setWeeklyData(weekly);
+    setWeeklyData(computeWeeklyActivityData(rows ?? []));
   };
 
   const markNotificationRead = async (id: string) => {
@@ -300,6 +362,11 @@ const Dashboard = () => {
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Here's your pipeline summary for {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.
+              {pipelineFromScout && (
+                <span className="block text-xs text-amber-600 dark:text-amber-500/90 mt-1">
+                  Summary uses Brivano Scout leads — CRM Leads is empty. Import or add leads to track the sales pipeline separately.
+                </span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2">

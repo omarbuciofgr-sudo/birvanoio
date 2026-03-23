@@ -35,6 +35,7 @@ import {
 import { AINLReports } from "@/components/dashboard/AINLReports";
 import { AIAnomalyDetection } from "@/components/dashboard/AIAnomalyDetection";
 import type { Database } from "@/integrations/supabase/types";
+import { scrapedRowsToSyntheticLeads } from "@/lib/leadSourceFallback";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -119,8 +120,9 @@ export default function Reports() {
   const [saving, setSaving] = useState(false);
   const [loadingReports, setLoadingReports] = useState(true);
 
-  // Analytics data
+  // Analytics data (CRM `leads`, or synthetic rows from `scraped_leads` when CRM is empty)
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [overviewUsesScoutData, setOverviewUsesScoutData] = useState(false);
 
   const performanceData = buildPerformanceDataFromLeads(leads);
 
@@ -136,8 +138,27 @@ export default function Reports() {
   }, [user]);
 
   const fetchLeads = async () => {
-    const { data, error } = await supabase.from("leads").select("*");
-    if (!error && data) setLeads(data);
+    const { data: crm, error } = await supabase.from("leads").select("*");
+    if (!error && crm && crm.length > 0) {
+      setLeads(crm);
+      setOverviewUsesScoutData(false);
+      return;
+    }
+    if (!user?.id) {
+      setLeads(crm ?? []);
+      setOverviewUsesScoutData(false);
+      return;
+    }
+    const { data: scraped, error: scErr } = await supabase
+      .from("scraped_leads")
+      .select("id, created_at, status, full_name, domain, best_email");
+    if (!scErr && scraped && scraped.length > 0) {
+      setLeads(scrapedRowsToSyntheticLeads(scraped, user.id));
+      setOverviewUsesScoutData(true);
+    } else {
+      setLeads(crm ?? []);
+      setOverviewUsesScoutData(false);
+    }
   };
 
   const REPORTS_TABLE = "custom_reports";
@@ -252,7 +273,14 @@ export default function Reports() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Reports & Analytics</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Performance insights, analytics, and custom reports</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Performance insights, analytics, and custom reports
+              {overviewUsesScoutData && (
+                <span className="block text-amber-600 dark:text-amber-500/90 mt-1 text-xs">
+                  Overview metrics use Brivano Scout data — CRM Leads is empty. Add CRM leads or import to switch.
+                </span>
+              )}
+            </p>
           </div>
           <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> Build Report
