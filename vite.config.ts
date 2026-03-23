@@ -22,6 +22,7 @@ function resolveSupabaseForClient(mode: string) {
       "SUPABASE_URL",
       "vite_supabase_url",
       "supabase_url",
+      "sb_url", // Lovable Secrets UI sometimes rejects names containing "supabase"
     ])
   ).replace(/\/+$/, "");
 
@@ -33,6 +34,7 @@ function resolveSupabaseForClient(mode: string) {
       "vite_supabase_publishable_key",
       "vite_supabase_anon_key",
       "supabase_anon_key",
+      "sb_anon",
     ])
   );
 
