@@ -31,8 +31,8 @@ function projectRefFromAnonKey(anonKey: string): string | null {
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   const hint =
-    'Set VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY, or SUPABASE_URL + SUPABASE_ANON_KEY (Lovable), then Publish so a new build runs. ' +
-    'VITE_SUPABASE_PROJECT_ID is ignored. No quotes; trim URL. Never use SUPABASE_SERVICE_KEY in the frontend.';
+    'These values must exist when `npm run build` runs (embedded in JS). Lovable Cloud → Secrets often does NOT inject into the Vite build—add VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY on your real host (GitHub Actions, Vercel, Netlify, Cloudflare) if brivano.io deploys from Git. ' +
+    'Or use Lovable Publish env if offered. sb_url/sb_anon only work if the build sees them. No quotes; trim URL. Never use SUPABASE_SERVICE_KEY in the frontend.';
   console.error('[Supabase]', hint, {
     hasUrl: Boolean(SUPABASE_URL),
     hasKey: Boolean(SUPABASE_PUBLISHABLE_KEY),
