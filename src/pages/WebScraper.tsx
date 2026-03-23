@@ -445,16 +445,12 @@ export default function WebScraper() {
   const filteredUnsavedIndices = useMemo(() => reListingsFilteredForDisplay.filter(({ listing }) => !listing.saved_to_db).map(({ realIndex }) => realIndex), [reListingsFilteredForDisplay]);
   const toggleSelectAllListings = () => { if (selectedListings.size === filteredUnsavedIndices.length) setSelectedListings(new Set()); else setSelectedListings(new Set(filteredUnsavedIndices)); };
 
-  /** Changing platform must drop prior scraper rows so you only see the active source after Refresh / Find Listings. */
-  const handleRealEstatePlatformChange = (value: string) => {
-    setRePlatform(value);
-    setReListings([]);
-    setSelectedListings(new Set());
-    setReErrors([]);
-  };
-
-  const refreshListingsFromBackend = useCallback(async () => {
-    if (rePlatform === 'all') {
+  /**
+   * Load the latest Supabase-backed scrape for a single platform (used by Refresh and by platform dropdown).
+   * Pass explicit `platform` so switching dropdown works before React re-renders `rePlatform`.
+   */
+  const fetchLastResultForPlatform = useCallback(async (platform: string) => {
+    if (platform === 'all') {
       toast.info('Choose a single platform (not All), then refresh listings.');
       return;
     }
@@ -462,19 +458,19 @@ export default function WebScraper() {
     try {
       const opts = { includePm: reIncludePmListings };
       let result: { listings?: any[]; error?: string };
-      if (rePlatform === 'hotpads') result = await scraperBackendApi.getHotpadsLastResult(opts);
-      else if (rePlatform === 'trulia') result = await scraperBackendApi.getTruliaLastResult(opts);
-      else if (rePlatform === 'zillow') result = await scraperBackendApi.getZillowFsboLastResult(opts);
-      else if (rePlatform === 'zillow_frbo') result = await scraperBackendApi.getZillowFrboLastResult(opts);
-      else if (rePlatform === 'fsbo') result = await scraperBackendApi.getFsboLastResult(opts);
-      else if (rePlatform === 'apartments') result = await scraperBackendApi.getApartmentsLastResult(opts);
+      if (platform === 'hotpads') result = await scraperBackendApi.getHotpadsLastResult(opts);
+      else if (platform === 'trulia') result = await scraperBackendApi.getTruliaLastResult(opts);
+      else if (platform === 'zillow') result = await scraperBackendApi.getZillowFsboLastResult(opts);
+      else if (platform === 'zillow_frbo') result = await scraperBackendApi.getZillowFrboLastResult(opts);
+      else if (platform === 'fsbo') result = await scraperBackendApi.getFsboLastResult(opts);
+      else if (platform === 'apartments') result = await scraperBackendApi.getApartmentsLastResult(opts);
       else {
         toast.info('Refresh works for Hotpads, Trulia, Zillow FSBO/FRBO, FSBO.com, and Apartments.com.');
         return;
       }
       if (result.error) toast.error(result.error);
       const mapKey =
-        rePlatform === 'zillow' ? 'zillow' : rePlatform === 'zillow_frbo' ? 'zillow_frbo' : rePlatform;
+        platform === 'zillow' ? 'zillow' : platform === 'zillow_frbo' ? 'zillow_frbo' : platform;
       const mapped = mapBackendListingsForPlatform(mapKey, result.listings || []);
       setReListings(mapped);
       const n = mapped.length;
@@ -484,7 +480,23 @@ export default function WebScraper() {
     } finally {
       setReRefreshingListings(false);
     }
-  }, [rePlatform, reIncludePmListings]);
+  }, [reIncludePmListings]);
+
+  const refreshListingsFromBackend = useCallback(async () => {
+    await fetchLastResultForPlatform(rePlatform);
+  }, [fetchLastResultForPlatform, rePlatform]);
+
+  /** Switching platform loads that scraper’s last DB result immediately (avoids empty table when hopping FSBO → FRBO → Apartments). */
+  const handleRealEstatePlatformChange = (value: string) => {
+    setRePlatform(value);
+    setSelectedListings(new Set());
+    setReErrors([]);
+    if (value === 'all') {
+      setReListings([]);
+      return;
+    }
+    void fetchLastResultForPlatform(value);
+  };
 
   if (authLoading || adminLoading) {
     return (
