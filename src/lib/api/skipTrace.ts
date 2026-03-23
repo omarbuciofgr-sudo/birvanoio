@@ -146,6 +146,11 @@ export const skipTraceApi = {
     return Promise.all(addresses.map((addr) => this.lookupOwner(addr)));
   },
 
+  /**
+   * FSBO.com (and some scrapers) use a single line with no commas, e.g.
+   * "7313 North Oleander Avenue Chicago IL 60631" from the listing URL slug.
+   * BatchData needs street / city / state / zip — comma-only parsing leaves everything in `street`.
+   */
   parseAddress(fullAddress: string): SkipTraceInput {
     const parts = fullAddress.split(',').map((p) => p.trim());
 
@@ -160,6 +165,70 @@ export const skipTraceApi = {
       };
     }
 
+    const spaceParsed = tryParseSpaceSeparatedUsAddress(fullAddress);
+    if (spaceParsed) return spaceParsed;
+
     return { address: fullAddress, fullAddress };
   },
 };
+
+/** Match "... City ST 12345" at end (US), split street vs city heuristically for two-word cities. */
+function tryParseSpaceSeparatedUsAddress(full: string): SkipTraceInput | null {
+  const t = full.trim().replace(/\s+/g, ' ');
+  const m = t.match(/\s+([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$/i);
+  if (!m || m.index === undefined) return null;
+  const state = m[1].toUpperCase();
+  const zip = m[2];
+  const before = t.slice(0, m.index).trim();
+  const words = before.split(/\s+/);
+  if (words.length < 2) return null;
+
+  const multiWordCityEndings = new Set([
+    'antonio',
+    'angeles',
+    'diego',
+    'paul',
+    'worth',
+    'brook',
+    'island',
+    'beach',
+    'falls',
+    'hills',
+    'springs',
+    'city',
+    'plano',
+    'collins',
+    'wayne',
+    'orleans',
+  ]);
+  const twoWordCityPrefixes = new Set([
+    'new',
+    'fort',
+    'west',
+    'east',
+    'north',
+    'south',
+    'lake',
+    'little',
+    'el',
+    'st',
+    'san',
+    'los',
+    'las',
+    'des',
+    'la',
+  ]);
+
+  const lastW = words[words.length - 1].toLowerCase();
+  const secondLast = words.length >= 2 ? words[words.length - 2].toLowerCase().replace(/\.$/, '') : '';
+  let cityWords = 1;
+  if (words.length >= 3 && (multiWordCityEndings.has(lastW) || twoWordCityPrefixes.has(secondLast))) {
+    cityWords = 2;
+  }
+
+  const city = words.slice(-cityWords).join(' ');
+  const street = words.slice(0, -cityWords).join(' ');
+  if (!street) return null;
+
+  return { address: street, city, state, zip, fullAddress: full };
+}

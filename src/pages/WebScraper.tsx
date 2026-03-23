@@ -78,6 +78,22 @@ function addressFromFsboUrl(url: string | null | undefined): string | null {
   const match = url.match(/\/listing\/([^/]+)/);
   return match ? match[1].replace(/-/g, ' ').trim() : null;
 }
+
+/** Prefer listing.address; for FSBO.com fall back to URL slug when DB row has no address (skip trace needs a line BatchData can parse). */
+function addressForSkipTrace(listing: {
+  address?: string | null;
+  listing_url?: string | null;
+  source_url?: string | null;
+  source_platform?: string | null;
+}): string {
+  const raw = (listing.address || '').trim();
+  if (raw) return raw;
+  if ((listing.source_platform || '').toLowerCase() === 'fsbo') {
+    const url = (listing.listing_url || listing.source_url || '').trim();
+    return addressFromFsboUrl(url) || '';
+  }
+  return '';
+}
 /** Try to get city/state from Hotpads, Trulia, Apartments URL paths (e.g. .../chicago-il/... → "chicago il") for city filter when backend omits address. */
 function cityStateFromListingUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null;
@@ -1261,10 +1277,11 @@ export default function WebScraper() {
   };
 
   const handleSkipTraceListing = async (listing: any, index: number) => {
-    if (!listing.address) { toast.error('No address available for skip trace'); return; }
+    const addrLine = addressForSkipTrace(listing);
+    if (!addrLine) { toast.error('No address available for skip trace'); return; }
     setSkipTracingIndex(index);
     try {
-      const parsed = skipTraceApi.parseAddress(listing.address);
+      const parsed = skipTraceApi.parseAddress(addrLine);
       const result = await skipTraceApi.lookupOwner(parsed);
       if (result.success && result.data && skipTraceHasUsefulContact(result.data)) {
         const updated = { ...listing, owner_name: result.data!.fullName || listing.owner_name, owner_phone: result.data!.phones[0]?.number || listing.owner_phone, owner_email: result.data!.emails[0]?.address || listing.owner_email, all_phones: result.data!.phones, all_emails: result.data!.emails, skip_trace_confidence: result.data!.confidence, skip_trace_status: 'success' as const };
@@ -1302,11 +1319,12 @@ export default function WebScraper() {
   };
 
   const handleRetrySkipTrace = async (listing: any, index: number) => {
-    if (!listing.address) { toast.error('No address available for skip trace'); return; }
+    const addrLine = addressForSkipTrace(listing);
+    if (!addrLine) { toast.error('No address available for skip trace'); return; }
     setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: undefined }));
     setSkipTracingIndex(index);
     try {
-      const parsed = skipTraceApi.parseAddress(listing.address);
+      const parsed = skipTraceApi.parseAddress(addrLine);
       const result = await skipTraceApi.lookupOwner(parsed);
       if (result.success && result.data && skipTraceHasUsefulContact(result.data)) {
         const updated = { ...listing, owner_name: result.data!.fullName || listing.owner_name, owner_phone: result.data!.phones[0]?.number || listing.owner_phone, owner_email: result.data!.emails[0]?.address || listing.owner_email, all_phones: result.data!.phones, all_emails: result.data!.emails, skip_trace_confidence: result.data!.confidence, skip_trace_status: 'success' as const };
@@ -1367,14 +1385,19 @@ export default function WebScraper() {
   const handleBulkSkipTrace = async () => {
     const toProcess = Array.from(selectedListings).filter((i) => {
       const l = reListings[i];
-      return l && l.address && !listingHasSkippablePhone(l) && l.skip_trace_status !== 'success';
+      return l && !!addressForSkipTrace(l) && !listingHasSkippablePhone(l) && l.skip_trace_status !== 'success';
     });
-    if (toProcess.length === 0) { toast.error('No listings to skip trace (selected rows need an address and no verified phone yet).'); return; }
+    if (toProcess.length === 0) {
+      toast.error('No listings to skip trace (selected rows need an address or FSBO listing URL, and no verified phone yet).');
+      return;
+    }
     setBulkSkipTracing(true); let successCount = 0; let errorCount = 0; let savedCount = 0;
     for (const index of toProcess) {
-      const listing = reListings[index]; if (!listing.address) continue;
+      const listing = reListings[index];
+      const addrLine = addressForSkipTrace(listing);
+      if (!addrLine) continue;
       try {
-        const parsed = skipTraceApi.parseAddress(listing.address);
+        const parsed = skipTraceApi.parseAddress(addrLine);
         const result = await skipTraceApi.lookupOwner(parsed);
         if (result.success && result.data && skipTraceHasUsefulContact(result.data)) {
           const updated = { ...listing, owner_name: result.data!.fullName || listing.owner_name, owner_phone: result.data!.phones[0]?.number || listing.owner_phone, owner_email: result.data!.emails[0]?.address || listing.owner_email, all_phones: result.data!.phones, all_emails: result.data!.emails, skip_trace_confidence: result.data!.confidence, skip_trace_status: 'success' as const };
@@ -1995,7 +2018,7 @@ export default function WebScraper() {
                             ) : null}
 
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                {!listing.owner_phone && !listing.skip_trace_status && (
+                                {!listing.owner_phone && !listing.skip_trace_status && addressForSkipTrace(listing) && (
                                 <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
                                   {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
                                   </Button>
