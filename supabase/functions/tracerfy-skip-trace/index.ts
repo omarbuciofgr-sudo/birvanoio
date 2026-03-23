@@ -290,13 +290,25 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    if (!supabaseUrl) {
+      console.error('tracerfy-skip-trace: SUPABASE_URL is not set');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server misconfigured (SUPABASE_URL).' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!serviceKey) {
       console.error('tracerfy-skip-trace: SUPABASE_SERVICE_ROLE_KEY is not set');
       return new Response(
-        JSON.stringify({ success: false, error: 'Server misconfigured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error:
+            'Server misconfigured: Edge Function needs SUPABASE_SERVICE_ROLE_KEY (normally auto-injected on Supabase).',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -383,12 +395,14 @@ Deno.serve(async (req) => {
     // No providers configured or BatchData failed
     const hasAnyKey = Deno.env.get('BATCHDATA_API_KEY');
     if (!hasAnyKey) {
+      // Use 200 so supabase-js invoke() returns JSON instead of FunctionsHttpError (non-2xx).
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'No skip trace providers configured. Add BATCHDATA_API_KEY.' 
+        JSON.stringify({
+          success: false,
+          error:
+            'Skip trace is not configured: add secret BATCHDATA_API_KEY on this function (Supabase Dashboard → Project Settings → Edge Functions → Secrets, or `supabase secrets set BATCHDATA_API_KEY=...`).',
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

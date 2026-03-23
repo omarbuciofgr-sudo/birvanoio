@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface SkipTraceInput {
@@ -81,10 +82,17 @@ export const skipTraceApi = {
 
     if (error) {
       console.error('Skip trace invoke error:', error);
-      return {
-        success: false,
-        error: error.message || 'Skip trace failed',
-      };
+      let message = error instanceof Error ? error.message : 'Skip trace failed';
+      if (error instanceof FunctionsHttpError && error.context) {
+        try {
+          const body = (await error.context.json()) as { error?: string; message?: string };
+          if (typeof body?.error === 'string' && body.error.trim()) message = body.error;
+          else if (typeof body?.message === 'string' && body.message.trim()) message = body.message;
+        } catch {
+          /* response body not JSON */
+        }
+      }
+      return { success: false, error: message };
     }
 
     if (data && typeof data === 'object' && 'success' in data) {
