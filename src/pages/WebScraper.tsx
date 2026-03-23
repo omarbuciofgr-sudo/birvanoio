@@ -79,20 +79,61 @@ function addressFromFsboUrl(url: string | null | undefined): string | null {
   return match ? match[1].replace(/-/g, ' ').trim() : null;
 }
 
-/** Prefer listing.address; for FSBO.com fall back to URL slug when DB row has no address (skip trace needs a line BatchData can parse). */
+/** "chicago il" → "Chicago, IL" for appending to street-only lines. */
+function formatCityStateLineFromSlug(cs: string | null): string | null {
+  if (!cs?.trim()) return null;
+  const parts = cs.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  const st = parts[parts.length - 1].toUpperCase();
+  if (st.length !== 2) return null;
+  const city = parts
+    .slice(0, -1)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+  return `${city}, ${st}`;
+}
+
+/**
+ * Prefer listing.address; FSBO.com can use URL slug. For Apartments/Hotpads/Trulia, many rows are street-only;
+ * BatchData/skip trace works better with city + state (from listing URL path) appended.
+ */
 function addressForSkipTrace(listing: {
   address?: string | null;
   listing_url?: string | null;
   source_url?: string | null;
   source_platform?: string | null;
 }): string {
-  const raw = (listing.address || '').trim();
-  if (raw) return raw;
-  if ((listing.source_platform || '').toLowerCase() === 'fsbo') {
-    const url = (listing.listing_url || listing.source_url || '').trim();
+  const platform = (listing.source_platform || '').toLowerCase();
+  const url = (listing.listing_url || listing.source_url || '').trim();
+  let raw = (listing.address || '').trim();
+
+  if (!raw && platform === 'fsbo') {
     return addressFromFsboUrl(url) || '';
   }
-  return '';
+
+  const rentalSite =
+    platform.includes('apartments') || platform.includes('hotpads') || platform.includes('trulia');
+  if (raw && rentalSite) {
+    const hasZip = /\b\d{5}(-\d{4})?\b/.test(raw);
+    // "Street, City, ST" or "Street, City, ST 606xx"
+    const hasCityAndState = /,\s*[^,]{2,},\s*[A-Za-z]{2}\b/.test(raw);
+    if (!hasZip && !hasCityAndState) {
+      const tail = formatCityStateLineFromSlug(cityStateFromListingUrl(url));
+      if (tail) {
+        const [cityPart, stPart] = tail.split(',').map((s) => s.trim());
+        const hasState = stPart && new RegExp(`\\b${stPart}\\b`).test(raw);
+        const mentionsCity =
+          cityPart.length >= 3 && raw.toLowerCase().includes(cityPart.toLowerCase());
+        if (!hasState && mentionsCity) {
+          raw = `${raw}, ${stPart}`;
+        } else if (!mentionsCity) {
+          raw = `${raw}, ${tail}`;
+        }
+      }
+    }
+  }
+
+  return raw;
 }
 /** Try to get city/state from Hotpads, Trulia, Apartments URL paths (e.g. .../chicago-il/... → "chicago il") for city filter when backend omits address. */
 function cityStateFromListingUrl(url: string | null | undefined): string | null {
