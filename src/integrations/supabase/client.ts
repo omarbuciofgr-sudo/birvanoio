@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-/** Injected at build time (Vite `import.meta.env`). Must use `VITE_` prefix. `VITE_SUPABASE_PROJECT_ID` alone is not read — URL + anon key are required. */
+/** Injected at build time. `vite.config` maps `SUPABASE_URL` / `SUPABASE_ANON_KEY` into these `VITE_*` values so Lovable can use standard names. Service role must never be bundled. */
 const rawUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const rawKey =
   (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ||
@@ -31,8 +31,8 @@ function projectRefFromAnonKey(anonKey: string): string | null {
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   const hint =
-    'Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (same names in Lovable Secrets / env), then Publish again so a NEW build runs. ' +
-    'VITE_SUPABASE_PROJECT_ID is ignored by this app. No quotes needed in Lovable. Remove spaces after URLs.';
+    'Set VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY, or SUPABASE_URL + SUPABASE_ANON_KEY (Lovable), then Publish so a new build runs. ' +
+    'VITE_SUPABASE_PROJECT_ID is ignored. No quotes; trim URL. Never use SUPABASE_SERVICE_KEY in the frontend.';
   console.error('[Supabase]', hint, {
     hasUrl: Boolean(SUPABASE_URL),
     hasKey: Boolean(SUPABASE_PUBLISHABLE_KEY),
