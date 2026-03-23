@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { scraperBackendApi } from '@/lib/api/scraperBackend';
 
 export interface SkipTraceInput {
   address: string;
@@ -42,15 +43,39 @@ export interface SkipTraceResult {
   message?: string;
 }
 
+const SKIP_TRACE_BACKEND_TIMEOUT_MS = 35000;
+
 /**
- * Skip trace uses Supabase Edge Function (BatchData). The Flask scraper backend
- * does not expose /api/skip-trace in all deployments; the edge function is always available with secrets.
- *
- * Important: `supabase.functions.invoke` uses the shared fetch helper, which falls back to the
- * **anon key** as `Authorization: Bearer` when there is no session. The edge function only
- * accepts a **user** JWT, so we must pass the session access token explicitly and never invoke
- * with the anon key as Bearer (that always yields 401 from the function).
+ * Scraper backend (Railway Flask) runs BatchData with BATCHDATA_API_KEY on the server — no Supabase Edge Function required.
+ * Returns null if the route is missing, times out, or the response is not valid JSON with `success`.
  */
+async function lookupViaScraperBackend(input: SkipTraceInput): Promise<SkipTraceResult | null> {
+  const base = scraperBackendApi.getBaseUrl();
+  const url = `${base}/api/skip-trace`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SKIP_TRACE_BACKEND_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal,
+    });
+    if (res.status === 404) return null;
+    const data = (await res.json().catch(() => null)) as SkipTraceResult | null;
+    if (data && typeof data === 'object' && typeof data.success === 'boolean') {
+      return data;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function getUserAccessTokenForEdgeFunction(): Promise<string | null> {
   const {
     data: { session: first },
@@ -63,43 +88,58 @@ async function getUserAccessTokenForEdgeFunction(): Promise<string | null> {
   return refreshed?.access_token ?? null;
 }
 
+async function lookupViaSupabaseEdgeFunction(
+  input: SkipTraceInput,
+  accessToken: string
+): Promise<SkipTraceResult> {
+  const { data, error } = await supabase.functions.invoke('tracerfy-skip-trace', {
+    body: input,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (error) {
+    console.error('Skip trace invoke error:', error);
+    let message = error instanceof Error ? error.message : 'Skip trace failed';
+    if (error instanceof FunctionsHttpError && error.context) {
+      try {
+        const body = (await error.context.json()) as { error?: string; message?: string };
+        if (typeof body?.error === 'string' && body.error.trim()) message = body.error;
+        else if (typeof body?.message === 'string' && body.message.trim()) message = body.message;
+      } catch {
+        /* response body not JSON */
+      }
+    }
+    return { success: false, error: message };
+  }
+
+  if (data && typeof data === 'object' && 'success' in data) {
+    return data as SkipTraceResult;
+  }
+
+  return { success: false, error: 'Unexpected skip trace response' };
+}
+
+/**
+ * Order: (1) Flask/Railway `POST /api/skip-trace` with server-side BATCHDATA_API_KEY.
+ * (2) Supabase Edge Function `tracerfy-skip-trace` if the backend is unreachable or old (no route).
+ */
 export const skipTraceApi = {
   async lookupOwner(input: SkipTraceInput): Promise<SkipTraceResult> {
+    const fromBackend = await lookupViaScraperBackend(input);
+    if (fromBackend !== null) return fromBackend;
+
     const accessToken = await getUserAccessTokenForEdgeFunction();
     if (!accessToken) {
       return {
         success: false,
-        error: 'Please sign in to use skip trace. If you are signed in, refresh the page and try again.',
+        error:
+          'Skip trace could not reach the scraper backend (check it is running and has BATCHDATA_API_KEY). Sign in to fall back to cloud skip trace.',
       };
     }
 
-    const { data, error } = await supabase.functions.invoke('tracerfy-skip-trace', {
-      body: input,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (error) {
-      console.error('Skip trace invoke error:', error);
-      let message = error instanceof Error ? error.message : 'Skip trace failed';
-      if (error instanceof FunctionsHttpError && error.context) {
-        try {
-          const body = (await error.context.json()) as { error?: string; message?: string };
-          if (typeof body?.error === 'string' && body.error.trim()) message = body.error;
-          else if (typeof body?.message === 'string' && body.message.trim()) message = body.message;
-        } catch {
-          /* response body not JSON */
-        }
-      }
-      return { success: false, error: message };
-    }
-
-    if (data && typeof data === 'object' && 'success' in data) {
-      return data as SkipTraceResult;
-    }
-
-    return { success: false, error: 'Unexpected skip trace response' };
+    return lookupViaSupabaseEdgeFunction(input, accessToken);
   },
 
   async batchLookup(addresses: SkipTraceInput[]): Promise<SkipTraceResult[]> {
