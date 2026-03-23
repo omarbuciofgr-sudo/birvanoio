@@ -33,6 +33,15 @@ function resolveSupabaseForClient(mode: string) {
 export default defineConfig(({ mode }) => {
   const { url: supabaseUrl, key: supabaseAnon } = resolveSupabaseForClient(mode);
 
+  // Only map non-empty values. Always defining "" overwrites Vite/Lovable-injected `import.meta.env` and causes a blank production app.
+  const define: Record<string, string> = {};
+  if (supabaseUrl) {
+    define["import.meta.env.VITE_SUPABASE_URL"] = JSON.stringify(supabaseUrl);
+  }
+  if (supabaseAnon) {
+    define["import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY"] = JSON.stringify(supabaseAnon);
+  }
+
   return {
     server: {
       host: "::",
@@ -44,9 +53,6 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    define: {
-      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
-      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabaseAnon),
-    },
+    ...(Object.keys(define).length > 0 ? { define } : {}),
   };
 });
