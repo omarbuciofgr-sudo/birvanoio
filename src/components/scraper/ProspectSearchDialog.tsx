@@ -172,53 +172,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       // ΓöÇΓöÇ People Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       if (searchType === 'people') {
         const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
-        const industryStr = peopleFilters.industries.length > 0
-          ? (INDUSTRIES.find((i) => i.value === peopleFilters.industries[0])?.label || peopleFilters.industries[0])
-          : undefined;
-
-        const peopleKeywordParts = [
-          ...peopleFilters.skills,
-          ...peopleFilters.profileKeywords,
-          ...peopleFilters.certifications,
-        ].filter(Boolean);
-
-        // Try prospect-search first (Apollo + enrichment) for contact name/email/phone, then fallback to people-search
-        const prospectResp = await prospectSearchApi.search({
-          industry: industryStr,
-          keywords: peopleKeywordParts.length > 0 ? peopleKeywordParts : undefined,
-          location: locationParts.length > 0 ? { city: peopleFilters.cities[0], state: peopleFilters.states[0], country: peopleFilters.countries[0] } : undefined,
-          targetTitles: peopleFilters.jobTitles.length > 0 ? peopleFilters.jobTitles : undefined,
-          seniorityLevels: peopleFilters.seniority.length > 0 ? peopleFilters.seniority : undefined,
-          departments: peopleFilters.departments.length > 0 ? peopleFilters.departments : undefined,
-          searchType: 'apollo_search',
-          enrichWebResults: true,
-          limit: peopleFilters.limit || 25,
-        });
-
-        if (prospectResp.success && prospectResp.data && prospectResp.data.length > 0) {
-          const mapped: CompanyResult[] = prospectResp.data.map((p) => ({
-            name: p.full_name || p.company_name || '',
-            domain: p.company_domain || '',
-            website: p.company_website || (p.company_domain ? `https://${p.company_domain}` : null),
-            linkedin_url: p.linkedin_url,
-            industry: p.industry,
-            employee_count: p.employee_count,
-            employee_range: null,
-            annual_revenue: p.annual_revenue ?? null,
-            founded_year: p.founded_year ?? null,
-            description: [p.job_title, p.company_name].filter(Boolean).join(' at '),
-            headquarters_city: p.headquarters_city,
-            headquarters_state: p.headquarters_state,
-            headquarters_country: null,
-            technologies: [],
-            keywords: p.department ? [p.department] : [],
-            phone: p.phone || p.mobile_phone || p.direct_phone || null,
-            email: p.email || null,
-          }));
-          return { success: true, companies: mapped, prospectResults: prospectResp.data };
-        }
-
-        // Fallback: people-search (map includes email/phone when API returns them for scraped_leads)
+        // People Search: Apollo via scraper backend /api/people-search (all filters — funding, job postings, past roles, etc.)
         const allKeywords = [
           ...peopleFilters.skills,
           ...peopleFilters.profileKeywords,
@@ -258,7 +212,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           limit: peopleFilters.limit,
         });
 
-        if (response.success && response.people) {
+        if (response.success && Array.isArray(response.people) && response.people.length > 0) {
           const mapped: CompanyResult[] = response.people.map((p) => ({
             name: p.name,
             domain: p.organization_domain || '',
@@ -280,7 +234,13 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           }));
           return { success: true, companies: mapped, prospectResults: null };
         }
-        return { success: false, error: response.error || prospectResp.error || 'No results' };
+        return {
+          success: false,
+          error:
+            response.error ||
+            response.message ||
+            'No results — broaden filters or remove past company / past title / exclude keywords.',
+        };
       }
 
       // ΓöÇΓöÇ Job Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ

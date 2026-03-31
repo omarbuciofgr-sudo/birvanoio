@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -8,7 +8,11 @@ import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Mail, ExternalLink, MapPin } from 'lucide-react';
 import { getPlatformLogoFromUrl } from '@/lib/platformLogos';
-import { scraperBackendApi } from '@/lib/api/scraperBackend';
+import {
+  scraperBackendApi,
+  normalizeStateToAbbrev,
+  isZillowFrboUsCountryLocation,
+} from '@/lib/api/scraperBackend';
 
 // Fix default marker icons for leaflet + bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -45,43 +49,96 @@ const searchLocationIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-/** True if listing address matches the searched location (e.g. "chicago" or "Chicago, Illinois" matches "123 Main St, Chicago, IL"). Exported for use in list filtering. */
+/** Normalize city for comparison (lowercase, collapse spaces, strip periods in "St."). */
+function normalizeCityKey(city: string): string {
+  return city
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Search box synonyms → canonical city key (strict match against listing city only). */
+const SEARCH_CITY_CANONICAL: Record<string, string> = {
+  nyc: 'new york',
+  sf: 'san francisco',
+  la: 'los angeles',
+};
+
+function canonicalSearchCityKey(cityPart: string): string {
+  const k = normalizeCityKey(cityPart);
+  return SEARCH_CITY_CANONICAL[k] || k;
+}
+
+/** Parse "City, ST" / "City, State" / "City" from the search box. */
+function parseSearchLocation(search: string): { city: string; state: string | null } {
+  const t = search.trim().replace(/\s+/g, ' ');
+  if (!t) return { city: '', state: null };
+  const comma = t.match(/^(.+?),\s*(.+)$/);
+  if (comma) {
+    const city = comma[1].trim();
+    const stRaw = comma[2].trim();
+    const abbrev = normalizeStateToAbbrev(stRaw);
+    return { city, state: abbrev };
+  }
+  return { city: t, state: null };
+}
+
+/**
+ * Parse US "..., City, ST ZIP" or "City, ST ZIP" from a listing address line.
+ */
+function parseListingCityState(addr: string): { city: string; state: string } | null {
+  const t = addr.trim();
+  if (!t) return null;
+  const full = t.match(/,\s*([^,]+),\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*$/i);
+  if (full) return { city: full[1].trim(), state: full[2].toUpperCase() };
+  const short = t.match(/^([^,]+),\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*$/i);
+  if (short) return { city: short[1].trim(), state: short[2].toUpperCase() };
+  return null;
+}
+
+/** When comma-parse failed: require `, City, ST` in order (avoids "New York Ave" in another state). */
+function looseCommaCityStateMatch(address: string, cityKey: string, state: string): boolean {
+  const escCity = cityKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escSt = state.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`,\\s*${escCity}\\s*,\\s*${escSt}\\b`, 'i').test(address);
+}
+
+/**
+ * True when the listing's city + state match the searched city (and state if provided).
+ * Strict: "New York, NY" matches Manhattan-style "New York, NY" only — not Brooklyn, Queens, or NJ.
+ */
 export function addressMatchesSearch(address: string | undefined, searchLocation: string | undefined): boolean {
   if (!searchLocation?.trim()) return true;
-  if (!address?.trim()) return false; // can't verify city, so hide when a search is active
-  const q = searchLocation.toLowerCase().trim();
-  const addr = address.toLowerCase();
-  if (addr.includes(q)) return true;
-  const cityAliases: Record<string, string[]> = {
-    washington: ['washington', 'dc', 'district of columbia'],
-    chicago: ['chicago', ', il ', ' illinois'],
-    illinois: ['chicago', 'illinois', ', il '],
-    minneapolis: ['minneapolis', ', mn '],
-    minnesota: ['minneapolis', 'minnesota', ', mn '],
-    'new york': ['new york', 'nyc', 'manhattan', 'brooklyn', 'jamaica', 'bronx', 'queens', 'floral park', ', ny '],
-    'san francisco': ['san francisco', 'sf'],
-    'los angeles': ['los angeles', ', la '],
-  };
-  // When search is for one metro, exclude addresses that clearly belong to another
-  const excludeWhenSearching: Record<string, string[]> = {
-    chicago: [', ny ', 'brooklyn', 'bronx', 'queens', 'jamaica', 'floral park', 'manhattan', 'new york'],
-    illinois: [', ny ', 'brooklyn', 'bronx', 'queens', 'jamaica', 'floral park', 'manhattan', 'new york'],
-    'new york': [', il ', ' chicago ', ' illinois'],
-    minneapolis: [', ny ', 'brooklyn', 'bronx', 'queens', 'jamaica', 'floral park'],
-  };
-  const parts = q.split(',').map((p) => p.trim()).filter(Boolean);
-  for (const part of parts) {
-    const exclude = excludeWhenSearching[part];
-    if (exclude?.some((bad) => addr.includes(bad))) return false;
+  if (isZillowFrboUsCountryLocation(searchLocation)) return true;
+  if (!address?.trim()) return false;
+  const { city: rawCity, state: searchState } = parseSearchLocation(searchLocation);
+  const wantCity = canonicalSearchCityKey(rawCity);
+  if (!wantCity) return true;
+
+  const parsed = parseListingCityState(address);
+  if (parsed) {
+    if (searchState) {
+      if (parsed.state !== searchState) return false;
+      return normalizeCityKey(parsed.city) === wantCity;
+    }
+    return normalizeCityKey(parsed.city) === wantCity;
   }
-  const terms = [q, ...parts, ...(parts.flatMap((p) => cityAliases[p] || []))];
-  return terms.some((term) => term.length > 0 && addr.includes(term));
+
+  if (searchState) {
+    return looseCommaCityStateMatch(address, wantCity, searchState);
+  }
+  const a = address.toLowerCase();
+  return a.includes(wantCity) || a.includes(rawCity.toLowerCase().trim());
 }
 
 interface ListingsMapProps {
   listings: any[];
   onSelectListing?: (index: number) => void;
   searchLocation?: string;
+  /** Use same address string as the list view (e.g. URL-derived). Defaults to listing.address. */
+  resolveListingAddress?: (listing: any) => string | undefined;
 }
 
 // Geocode via backend proxy. Returns 'unavailable' on 404/502 so the component stops requesting.
@@ -130,7 +187,12 @@ function PlatformLogo({ sourceUrl }: { sourceUrl?: string }) {
   );
 }
 
-export default function ListingsMap({ listings, onSelectListing, searchLocation }: ListingsMapProps) {
+export default function ListingsMap({
+  listings,
+  onSelectListing,
+  searchLocation,
+  resolveListingAddress,
+}: ListingsMapProps) {
   const [geocoded, setGeocoded] = useState<Map<string, { lat: number; lng: number }>>(new Map());
   const [geocoding, setGeocoding] = useState(false);
   const [searchCenter, setSearchCenter] = useState<[number, number] | undefined>();
@@ -138,11 +200,16 @@ export default function ListingsMap({ listings, onSelectListing, searchLocation 
 
   const [geocodeUnavailable, setGeocodeUnavailable] = useState(false);
 
+  const rowAddress = useCallback(
+    (listing: any) => (resolveListingAddress?.(listing) || listing.address || '').trim(),
+    [resolveListingAddress],
+  );
+
   // When user searches e.g. "washington", only show listings that match that location on the map
   const filteredListings = useMemo(() => {
     if (!searchLocation?.trim()) return listings;
-    return listings.filter(l => addressMatchesSearch(l.address, searchLocation));
-  }, [listings, searchLocation]);
+    return listings.filter((l) => addressMatchesSearch(rowAddress(l), searchLocation));
+  }, [listings, searchLocation, rowAddress]);
 
   // Geocode the search location to center the map
   useEffect(() => {
@@ -158,7 +225,7 @@ export default function ListingsMap({ listings, onSelectListing, searchLocation 
     if (filteredListings.length === 0 || geocodeUnavailable) return;
 
     const toGeocode = filteredListings
-      .map(l => l.address)
+      .map((l) => rowAddress(l))
       .filter((address): address is string => !!address?.trim() && !geocodedRef.current.has(address));
     const unique = Array.from(new Set(toGeocode));
     if (unique.length === 0) return;
@@ -189,12 +256,13 @@ export default function ListingsMap({ listings, onSelectListing, searchLocation 
   const positions = useMemo(() => {
     return filteredListings
       .map((listing, index) => {
-        const pos = listing.address ? geocoded.get(listing.address) : undefined;
+        const key = rowAddress(listing);
+        const pos = key ? geocoded.get(key) : undefined;
         if (!pos) return null;
         return { index, position: [pos.lat, pos.lng] as [number, number], listing };
       })
       .filter((p): p is { index: number; position: [number, number]; listing: any } => p !== null);
-  }, [filteredListings, geocoded]);
+  }, [filteredListings, geocoded, rowAddress]);
 
   if (listings.length === 0) return null;
 

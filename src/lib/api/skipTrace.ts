@@ -8,6 +8,8 @@ export interface SkipTraceInput {
   state?: string;
   zip?: string;
   fullAddress?: string;
+  /** When `apartments`, backend strips unit/APT from street before BatchData (building-level match). */
+  source_platform?: string;
 }
 
 export interface SkipTraceResult {

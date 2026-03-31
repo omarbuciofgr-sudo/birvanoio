@@ -85,6 +85,14 @@ const SENIORITY_MAP: Record<string, string> = {
   'intern': 'intern',
 };
 
+/** Apollo expects org size like "1,10" not "1-10" (same as industry-search). */
+function mapApolloEmployeeRanges(ranges: string[]): string[] {
+  return ranges.map((r) => {
+    if (r === '5001+' || r === '10001+') return '10001,';
+    return r.replace('-', ',');
+  });
+}
+
 // Map department labels to Apollo codes
 const DEPARTMENT_MAP: Record<string, string> = {
   'engineering': 'engineering',
@@ -126,7 +134,7 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
     params.q_organization_keyword_tags = input.organization_industry_tag_ids;
   }
   if (input.organization_num_employees_ranges?.length) {
-    params.organization_num_employees_ranges = input.organization_num_employees_ranges;
+    params.organization_num_employees_ranges = mapApolloEmployeeRanges(input.organization_num_employees_ranges);
   }
   if (input.q_organization_name) params.q_organization_name = input.q_organization_name;
 
@@ -747,8 +755,12 @@ Deno.serve(async (req) => {
 
     if (providers.length === 0) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No search provider API keys configured.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error:
+            'No B2B search API keys configured. Add APOLLO_API_KEY (and optionally PDL, RocketReach, etc.) in Supabase → Edge Functions → Secrets.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

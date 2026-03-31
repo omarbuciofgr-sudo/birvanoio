@@ -4,7 +4,7 @@
  */
 
 /** Full state name → 2-letter abbreviation (for "Chicago, Illinois" etc.). */
-const stateNameToAbbrev: Record<string, string> = {
+export const stateNameToAbbrev: Record<string, string> = {
   alabama: "al", alaska: "ak", arizona: "az", arkansas: "ar", california: "ca", colorado: "co",
   connecticut: "ct", delaware: "de", florida: "fl", georgia: "ga", hawaii: "hi", idaho: "id",
   illinois: "il", indiana: "in", iowa: "ia", kansas: "ks", kentucky: "ky", louisiana: "la",
@@ -16,6 +16,15 @@ const stateNameToAbbrev: Record<string, string> = {
   tennessee: "tn", texas: "tx", utah: "ut", vermont: "vt", virginia: "va", washington: "wa",
   "west virginia": "wv", wisconsin: "wi", wyoming: "wy", "district of columbia": "dc", "d.c.": "dc",
 };
+
+/** Normalize "NY", "New York", "Illinois" → uppercase 2-letter abbrev for city/state filters. */
+export function normalizeStateToAbbrev(statePart: string): string | null {
+  const t = (statePart || "").trim();
+  if (!t) return null;
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+  const full = stateNameToAbbrev[t.toLowerCase()];
+  return full ? full.toUpperCase() : null;
+}
 
 /** Build Hotpads URL on the frontend so we don't depend on backend search-location (avoids 500/encoding issues). */
 export function buildHotpadsUrl(location: string, propertyType: string = "apartments"): string | null {
@@ -76,6 +85,68 @@ export function buildHotpadsUrl(location: string, propertyType: string = "apartm
   return `https://hotpads.com/${cityStateSlug}/${pathSegment}-for-rent`;
 }
 
+/**
+ * Plain Zillow city rentals URL (no searchQueryState). SSR includes listResults; the FRBO spider
+ * drops /apartments/ and /b/ SERP cards and pulls /homedetails/ from HTML. Building this on the
+ * frontend avoids stale backends that still append FRBO filter query (empty SSR + empty UI).
+ */
+export function buildZillowFrboRentalsUrl(location: string): string | null {
+  const loc = (location || "").trim();
+  if (!loc) return null;
+  const cityToState: Record<string, string> = {
+    minneapolis: "mn", "new york": "ny", "los angeles": "ca", chicago: "il",
+    houston: "tx", phoenix: "az", philadelphia: "pa", "san antonio": "tx",
+    "san diego": "ca", dallas: "tx", austin: "tx", seattle: "wa", denver: "co",
+    boston: "ma", miami: "fl", atlanta: "ga", detroit: "mi", portland: "or",
+    washington: "dc", "san francisco": "ca", "san fracisco": "ca", "los angles": "ca",
+  };
+  const slugOverrides: Record<string, string> = {
+    "san fracisco": "san-francisco", "los angles": "los-angeles",
+  };
+  const low = loc.toLowerCase();
+  let stateAbbrev: string | null = cityToState[low] ?? null;
+  let city = loc;
+  const commaMatch2 = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
+  if (commaMatch2) {
+    city = commaMatch2[1].trim();
+    stateAbbrev = commaMatch2[2].trim().toLowerCase();
+  }
+  if (!stateAbbrev) {
+    const commaMatchFull = loc.match(/^(.+?),\s*(.+)$/);
+    if (commaMatchFull) {
+      city = commaMatchFull[1].trim();
+      const statePart = commaMatchFull[2].trim().toLowerCase();
+      stateAbbrev = stateNameToAbbrev[statePart] ?? (statePart.length === 2 ? statePart : null);
+    }
+  }
+  if (!stateAbbrev) {
+    const spaceMatch = loc.match(/^(.+?)\s+([A-Za-z]{2})\s*$/);
+    if (spaceMatch) {
+      city = spaceMatch[1].trim();
+      stateAbbrev = spaceMatch[2].trim().toLowerCase();
+    }
+  }
+  if (!stateAbbrev || !city) return null;
+  let slug = city
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-|-$/g, "");
+  slug = slugOverrides[low] ?? slugOverrides[city.toLowerCase()] ?? slug;
+  if (!slug) return null;
+  const cityStateSlug = `${slug}-${stateAbbrev}`;
+  return `https://www.zillow.com/${cityStateSlug}/rentals/`;
+}
+
+/** True when location should run Zillow FRBO US-wide (many metro seeds), not a single city. */
+export function isZillowFrboUsCountryLocation(location: string): boolean {
+  const raw = (location || "").trim();
+  if (!raw) return false;
+  const t = raw.toLowerCase();
+  if (t === "us" || t === "usa" || t === "u.s." || t === "u.s.a.") return true;
+  return /\b(united states|us nationwide|usa nationwide|all us listings|countrywide|country.?wide)\b/i.test(raw);
+}
+
 /** Build Trulia FSBO URL (same cities as Hotpads). Used when scraping Trulia from Brivano Scout. */
 export function buildTruliaUrl(location: string): string | null {
   const loc = (location || "").trim();
@@ -129,13 +200,16 @@ function isProductionHost(): boolean {
 }
 
 const getBaseUrl = (): string => {
-  // When app is opened from localhost, always use local backend so both deployment and local work
+  const envUrl =
+    typeof import.meta.env.VITE_SCRAPER_BACKEND_URL === "string"
+      ? import.meta.env.VITE_SCRAPER_BACKEND_URL.trim().replace(/\/$/, "")
+      : "";
+  if (envUrl) return envUrl;
+  // When app is opened from localhost, use local backend (override port via VITE_SCRAPER_BACKEND_URL)
   if (typeof window !== "undefined") {
     const host = window.location.hostname.toLowerCase();
     if (host === "localhost" || host === "127.0.0.1") return "http://localhost:8080";
   }
-  const url = import.meta.env.VITE_SCRAPER_BACKEND_URL;
-  if (typeof url === "string" && url.trim()) return url.trim().replace(/\/$/, "");
   if (isProductionHost()) return PRODUCTION_BACKEND;
   return "http://localhost:8080";
 };
@@ -182,8 +256,9 @@ export type BackendHotpadsLastResultResponse = {
   /** API stripped PM/realtor rows (default true when filter is active) */
   by_owner_only?: boolean;
   include_pm?: boolean;
-  /** Row count in DB before PM/realtor filter (only when filter applied) */
+  /** Rows in Supabase for this platform table (always returned for /last-result) */
   total_stored?: number;
+  /** Omitted rows when include_pm=0 (PM/managed/corporate heuristics) */
   pm_rows_hidden?: number;
 };
 
@@ -197,6 +272,9 @@ function lastResultQuery(options?: LastResultFetchOptions): string {
   if (!options?.includePm) return "";
   return "?include_pm=1";
 }
+
+/** Avoid browser HTTP cache returning the wrong payload when toggling include_pm on the same path. */
+const lastResultFetchInit: RequestInit = { cache: "no-store" };
 
 const HEALTH_CHECK_TIMEOUT_MS = 20000; // 20s for Railway cold start
 const HEALTH_CHECK_RETRY_DELAY_MS = 2000; // wait 2s before retry
@@ -249,14 +327,37 @@ export const scraperBackendApi = {
     return data;
   },
 
-  async triggerFromUrl(url: string, options?: { force?: boolean }): Promise<BackendTriggerFromUrlResponse> {
+  async triggerFromUrl(
+    url: string,
+    options?: { force?: boolean; /** Zillow FRBO: save PM/managed contacts to Supabase (matches UI "Include PM") */ savePm?: boolean },
+  ): Promise<BackendTriggerFromUrlResponse> {
     const base = getBaseUrl();
     // Send URL in query string too so backend gets it even if JSON body is not parsed
-    const qs = `?url=${encodeURIComponent(url)}${options?.force ? "&force=1" : ""}`;
+    const savePm = options?.savePm === true ? "&save_pm=1" : "";
+    const qs = `?url=${encodeURIComponent(url)}${options?.force ? "&force=1" : ""}${savePm}`;
     const res = await fetch(`${base}/api/trigger-from-url${qs}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, force: options?.force === true }),
+      body: JSON.stringify({ url, force: options?.force === true, save_pm: options?.savePm === true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: data.error || `Request failed: ${res.status}` };
+    }
+    return data;
+  },
+
+  async triggerZillowFrboCountry(
+    options?: { country?: string; savePm?: boolean },
+  ): Promise<BackendTriggerFromUrlResponse> {
+    const base = getBaseUrl();
+    const country = (options?.country || "US").trim().toUpperCase() || "US";
+    const savePm = options?.savePm === true ? "&save_pm=1" : "";
+    const qs = `?country=${encodeURIComponent(country)}${savePm}`;
+    const res = await fetch(`${base}/api/trigger-zillow-frbo-country${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ country, save_pm: options?.savePm === true }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -292,7 +393,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/hotpads/last-result${q}`);
+        const res = await fetch(`${base}/api/hotpads/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -333,7 +434,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/trulia/last-result${q}`);
+        const res = await fetch(`${base}/api/trulia/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -374,7 +475,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/redfin/last-result${q}`);
+        const res = await fetch(`${base}/api/redfin/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -415,7 +516,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/zillow-frbo/last-result${q}`);
+        const res = await fetch(`${base}/api/zillow-frbo/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -456,7 +557,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/zillow-fsbo/last-result${q}`);
+        const res = await fetch(`${base}/api/zillow-fsbo/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -497,7 +598,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/fsbo/last-result${q}`);
+        const res = await fetch(`${base}/api/fsbo/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -538,7 +639,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/apartments/last-result${q}`);
+        const res = await fetch(`${base}/api/apartments/last-result${q}`, lastResultFetchInit);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;

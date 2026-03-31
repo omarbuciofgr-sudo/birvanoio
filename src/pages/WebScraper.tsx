@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -15,7 +15,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
-import { scraperBackendApi, buildHotpadsUrl, buildTruliaUrl } from '@/lib/api/scraperBackend';
+import { scraperBackendApi, buildHotpadsUrl, buildTruliaUrl, buildZillowFrboRentalsUrl, isZillowFrboUsCountryLocation } from '@/lib/api/scraperBackend';
+import {
+  hotpadsListingUrlLooksBuildingHub,
+  isCorporateLandlordDisplayName,
+  isQuasiPublicEntityDisplayName,
+  rentalListingEmailIsPlatformPlaceholder,
+  zillowFrboAddressImpliesManagedUnitToken,
+  zillowFrboDescriptionImpliesManaged,
+  zillowFrboPriceImpliesManaged,
+} from '@/lib/realEstateOwnerFilter';
 import { supabase } from '@/integrations/supabase/client';
 import { BrivanoLens } from '@/components/scraper/ProspectSearchDialog';
 import { 
@@ -79,6 +88,45 @@ function addressFromFsboUrl(url: string | null | undefined): string | null {
   return match ? match[1].replace(/-/g, ' ').trim() : null;
 }
 
+function mapZillowFsboBackendRow(l: any) {
+  const url = l.listing_url || '';
+  const address = (l.address || '').trim() || addressFromZillowUrl(url) || undefined;
+  return {
+    address,
+    bedrooms: l.bedrooms,
+    bathrooms: l.bathrooms,
+    price: l.price,
+    owner_name: l.owner_name,
+    owner_phone: l.owner_phone,
+    listing_url: url,
+    source_url: url,
+    source_platform: 'zillow_fsbo',
+    listing_type: 'sale',
+    square_feet: l.square_feet,
+    days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
+  };
+}
+
+function mapZillowFrboBackendRow(l: any) {
+  const url = (l.listing_url || l.url || '').trim();
+  const address = (l.address || '').trim() || addressFromZillowUrl(url) || undefined;
+  return {
+    address,
+    bedrooms: l.bedrooms,
+    bathrooms: l.bathrooms,
+    price: l.price,
+    owner_name: l.owner_name,
+    owner_phone: l.owner_phone,
+    description: typeof l.description === 'string' ? l.description : '',
+    listing_url: url,
+    source_url: url,
+    source_platform: 'zillow_frbo',
+    listing_type: 'rent',
+    square_feet: l.square_feet,
+    days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
+  };
+}
+
 /** "chicago il" → "Chicago, IL" for appending to street-only lines. */
 function formatCityStateLineFromSlug(cs: string | null): string | null {
   if (!cs?.trim()) return null;
@@ -117,6 +165,30 @@ function normalizeRentalAddressString(full: string): string {
   return parts.join(', ');
 }
 
+/**
+ * Apartments.com rows sometimes have empty `address` in Supabase while JSON-LD `title` still
+ * contains a street line. Without this, `addressForSkipTrace` is empty and Skip Trace stays disabled.
+ */
+function rentalAddressFallbackFromListingMetadata(listing: {
+  source_platform?: string | null;
+  title?: string | null;
+}): string {
+  const sp = (listing.source_platform || '').toLowerCase();
+  if (!sp.includes('apartments')) return '';
+  const t = (listing.title || '').trim();
+  if (!t || t.length > 180) return '';
+  if (!/\d/.test(t)) return '';
+  if (/^\s*from\s+\$/i.test(t)) return '';
+  const leadingStreetNum = /^\d+[a-zA-Z]?\s+/.test(t);
+  const looksLikeFullLine = /,\s*[A-Za-z]/.test(t);
+  const streetWord =
+    /\d+[a-zA-Z.-]?\s+.+\b(?:st|street|ave|avenue|rd|road|dr|drive|blvd|blvd\.|ln|lane|way|ct|court)\b/i.test(
+      t,
+    );
+  if (leadingStreetNum || (looksLikeFullLine && t.length >= 10) || streetWord) return t;
+  return '';
+}
+
 /** Unusable for skip trace / display (e.g. "MN, 55414" or city-only). */
 function rentalAddressIsGarbage(s: string): boolean {
   const t = s.trim();
@@ -127,9 +199,17 @@ function rentalAddressIsGarbage(s: string): boolean {
   return false;
 }
 
-function rebuildGarbageRentalAddressFromUrl(url: string, prior: string): string {
+/** Base URL for parsing relative listing paths (city-state slug) in address filters. */
+function listingOriginForCitySlugParse(listing: { source_platform?: string | null }): string {
+  const p = (listing.source_platform || '').toLowerCase();
+  if (p.includes('trulia')) return 'https://www.trulia.com';
+  if (p.includes('apartments')) return 'https://www.apartments.com';
+  return 'https://hotpads.com';
+}
+
+function rebuildGarbageRentalAddressFromUrl(url: string, prior: string, originFallback?: string): string {
   const zip = prior.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
-  const line = formatCityStateLineFromSlug(cityStateFromListingUrl(url));
+  const line = formatCityStateLineFromSlug(cityStateFromListingUrl(url, originFallback));
   if (!line) return prior;
   const [city, st] = line.split(',').map((x) => x.trim());
   if (zip) return `${city}, ${st} ${zip}`;
@@ -141,6 +221,7 @@ function getNormalizedRentalAddressForListing(listing: {
   listing_url?: string | null;
   source_url?: string | null;
   source_platform?: string | null;
+  title?: string | null;
 }): string {
   const platform = (listing.source_platform || '').toLowerCase();
   const rental =
@@ -148,13 +229,24 @@ function getNormalizedRentalAddressForListing(listing: {
   if (!rental) return (listing.address || '').trim();
   let raw = (listing.address || '').trim();
   const url = (listing.listing_url || listing.source_url || '').trim();
+  if (!raw) {
+    const fromMeta = rentalAddressFallbackFromListingMetadata(listing);
+    if (fromMeta) raw = fromMeta;
+  }
   if (!raw) return '';
   raw = normalizeRentalAddressString(raw);
   if (rentalAddressIsGarbage(raw) && url) {
-    const rebuilt = rebuildGarbageRentalAddressFromUrl(url, raw);
+    const rebuilt = rebuildGarbageRentalAddressFromUrl(url, raw, listingOriginForCitySlugParse(listing));
     if (rebuilt) raw = rebuilt;
   }
   return raw;
+}
+
+/** Remove Zillow unit tokens (``#354-3W``, hex ids) so skip-trace street matches assessor / BatchData. */
+function sanitizeAddressLineForSkipTrace(line: string): string {
+  let s = line.replace(/\s+#\s*[0-9a-f]{8,}\b/gi, ' ');
+  s = s.replace(/\s+#\S+/g, ' ');
+  return s.replace(/\s{2,}/g, ' ').trim();
 }
 
 /**
@@ -178,12 +270,16 @@ function addressForSkipTrace(listing: {
     return addressFromFsboUrl(url) || '';
   }
 
+  if (platform.includes('zillow')) {
+    raw = sanitizeAddressLineForSkipTrace(raw);
+  }
+
   if (raw && rentalSite) {
     const hasZip = /\b\d{5}(-\d{4})?\b/.test(raw);
     // "Street, City, ST" or "Street, City, ST 606xx"
     const hasCityAndState = /,\s*[^,]{2,},\s*[A-Za-z]{2}\b/.test(raw);
     if (!hasZip && !hasCityAndState) {
-      const tail = formatCityStateLineFromSlug(cityStateFromListingUrl(url));
+      const tail = formatCityStateLineFromSlug(cityStateFromListingUrl(url, listingOriginForCitySlugParse(listing)));
       if (tail) {
         const [cityPart, stPart] = tail.split(',').map((s) => s.trim());
         const hasState = stPart && new RegExp(`\\b${stPart}\\b`).test(raw);
@@ -201,10 +297,12 @@ function addressForSkipTrace(listing: {
   return raw;
 }
 /** Try to get city/state from Hotpads, Trulia, Apartments URL paths (e.g. .../chicago-il/... → "chicago il") for city filter when backend omits address. */
-function cityStateFromListingUrl(url: string | null | undefined): string | null {
+function cityStateFromListingUrl(url: string | null | undefined, originFallback?: string): string | null {
   if (!url?.trim()) return null;
+  const s = url.trim();
   try {
-    const path = new URL(url).pathname.toLowerCase();
+    const u = /^https?:\/\//i.test(s) ? new URL(s) : new URL(s, originFallback || 'https://hotpads.com');
+    const path = u.pathname.toLowerCase();
     // Match segments like /chicago-il/ or /chicago_il/
     const citySt = path.match(/\/([a-z0-9]+)[-_]([a-z]{2})(?:\/|$)/);
     if (citySt) return `${citySt[1]} ${citySt[2]}`;
@@ -236,7 +334,7 @@ function listingDisplayAddress(listing: { address?: string | null; listing_url?:
     if (fromUrl) return fromUrl;
   }
   // Hotpads, Trulia, Apartments: use city-state from URL for filtering when address missing
-  const fromUrl = cityStateFromListingUrl(url);
+  const fromUrl = cityStateFromListingUrl(url, listingOriginForCitySlugParse(listing));
   if (fromUrl) return fromUrl;
   return 'Address not available';
 }
@@ -283,14 +381,9 @@ function listingCity(displayAddress: string): string | null {
   return null;
 }
 
-const LONG_DOM_THRESHOLD = 120;
-
-function parseDaysOnMarket(listing: { days_on_market?: unknown; days_on_zillow?: unknown; Days_On_Zillow?: unknown }): number | null {
-  const v = listing.days_on_zillow ?? listing.days_on_market ?? listing.Days_On_Zillow;
-  if (v == null || v === '') return null;
-  const n = parseInt(String(v).replace(/[^\d]/g, ''), 10);
-  return Number.isFinite(n) ? n : null;
-}
+/** Shown when Apartments.com has no card contact and property skip-trace returned no person — neutral for clients. */
+const APARTMENTS_SKIP_TRACE_NO_MATCH_HINT =
+  'No owner or listing contact was found for this address. That is common for Apartments.com rentals. Use View listing to reach the poster, or try another unit.';
 
 function skipTraceHasUsefulContact(data: {
   phones?: { number?: string }[];
@@ -305,9 +398,280 @@ function skipTraceHasUsefulContact(data: {
   return false;
 }
 
-/** Skip trace UI is hidden for Apartments.com (rentals; leasing contacts vs owner records). */
-function isApartmentsComListing(listing: { source_platform?: string | null }): boolean {
-  return (listing.source_platform || '').toLowerCase() === 'apartments';
+type SkipTraceDataShape = {
+  fullName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phones: { number: string; type: string }[];
+  emails: { address: string }[];
+  confidence?: number;
+};
+
+/**
+ * Apartments.com only: BatchData property skip-trace often has no person for rental units.
+ * When the scrape already captured manager/phone, treat that as the skip-trace outcome so the button succeeds.
+ */
+function apartmentsComSkipDataFromListing(listing: {
+  source_platform?: string | null;
+  owner_name?: string | null;
+  owner_phone?: string | null;
+  owner_email?: string | null;
+}): SkipTraceDataShape | undefined {
+  const sp = (listing.source_platform || '').toLowerCase();
+  if (sp !== 'apartments') return undefined;
+  const name = (listing.owner_name || '').trim();
+  const phoneRaw = (listing.owner_phone || '').trim();
+  const email = (listing.owner_email || '').trim();
+  const digits = phoneRaw.replace(/\D/g, '');
+  const phones = digits.length >= 10 ? [{ number: phoneRaw, type: 'property_contact' }] : [];
+  const emails = email ? [{ address: email }] : [];
+  const draft: SkipTraceDataShape = {
+    fullName: name || null,
+    firstName: null,
+    lastName: null,
+    phones,
+    emails,
+    confidence: 38,
+  };
+  if (!skipTraceHasUsefulContact(draft)) return undefined;
+  return draft;
+}
+
+function mergeSkipTraceResultWithApartmentsFallback(
+  listing: any,
+  result: { data?: SkipTraceDataShape; success?: boolean },
+): { data: SkipTraceDataShape; fromApartmentsListing: boolean } | undefined {
+  let data = result.data;
+  if (skipTraceHasUsefulContact(data)) {
+    return { data: data!, fromApartmentsListing: false };
+  }
+  const alt = apartmentsComSkipDataFromListing(listing);
+  if (alt) return { data: alt, fromApartmentsListing: true };
+  return undefined;
+}
+
+/** First scraped Zillow/card contact — used when skip trace returns an assessor name that is not a private landlord. */
+function withScrapedListingContactSeed(listing: any): any {
+  const n = (listing.owner_name || '').trim();
+  if (!n || listing.scraped_listing_contact_name) return listing;
+  return { ...listing, scraped_listing_contact_name: n };
+}
+
+function withScrapedListingContactSeeds(listings: any[]): any[] {
+  return listings.map(withScrapedListingContactSeed);
+}
+
+/**
+ * BatchData returns parcel/title owners (e.g. CHICAGO TRANSIT AUTHOR). For by-owner table visibility,
+ * prefer the original listing contact when that assessor name is quasi-public or FRBO-corporate.
+ */
+function ownerNameForByOwnerTableFilter(listing: {
+  owner_name?: string | null;
+  scraped_listing_contact_name?: string | null;
+  skip_trace_assessor_name?: string | null;
+  skip_trace_status?: string;
+  source_platform?: string | null;
+}): string {
+  const assessor = (listing.skip_trace_assessor_name || '').trim();
+  const strictFrbo = (listing.source_platform || '').toLowerCase() === 'zillow_frbo';
+  if (
+    listing.skip_trace_status === 'success' &&
+    assessor &&
+    (isQuasiPublicEntityDisplayName(assessor) ||
+      (strictFrbo && isCorporateLandlordDisplayName(assessor, true)))
+  ) {
+    const kept = (listing.scraped_listing_contact_name || '').trim();
+    if (kept) return kept;
+  }
+  return (listing.owner_name || '').trim();
+}
+
+function buildListingAfterSkipTrace(
+  listing: any,
+  data: SkipTraceDataShape,
+  sourcePlatformLower: string,
+  providers: string[],
+): any {
+  const traceName = (data.fullName && String(data.fullName).trim()) || '';
+  const listContact =
+    (listing.scraped_listing_contact_name || listing.owner_name || '').trim();
+  const strictFrbo = sourcePlatformLower === 'zillow_frbo';
+  const badAssessor =
+    !!traceName &&
+    (isQuasiPublicEntityDisplayName(traceName) ||
+      (strictFrbo && isCorporateLandlordDisplayName(traceName, true)));
+  const owner_name = badAssessor ? listContact || traceName : traceName || listContact;
+  return {
+    ...listing,
+    scraped_listing_contact_name: listing.scraped_listing_contact_name || listContact || undefined,
+    skip_trace_assessor_name: traceName || undefined,
+    owner_name,
+    owner_phone: data.phones?.[0]?.number || listing.owner_phone,
+    owner_email: data.emails?.[0]?.address || listing.owner_email,
+    all_phones: data.phones,
+    all_emails: data.emails,
+    skip_trace_confidence: data.confidence,
+    skip_trace_status: 'success' as const,
+    enrichment_providers_used: providers,
+  };
+}
+
+/** If scrape already returned manager phone/name/email, mark traced so Skip Trace is not required for every row. */
+function withApartmentsListingContactPrefill(listing: any): any {
+  const sp = (listing.source_platform || '').toLowerCase();
+  if (sp !== 'apartments') return listing;
+  if (listing.skip_trace_status === 'success' || listing.skip_trace_status === 'not_found') return listing;
+  const alt = apartmentsComSkipDataFromListing(listing);
+  if (!alt) return listing;
+  return {
+    ...listing,
+    skip_trace_status: 'success' as const,
+    skip_trace_confidence: alt.confidence ?? 38,
+    enrichment_providers_used: ['apartments_listing_contact'],
+    all_phones: listing.all_phones?.length ? listing.all_phones : alt.phones,
+    all_emails: listing.all_emails?.length ? listing.all_emails : alt.emails,
+  };
+}
+
+function formatUsPhoneForDisplay(raw: string): string {
+  const d = String(raw).replace(/\D/g, '');
+  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  if (d.length === 11 && d[0] === '1') return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
+  return String(raw).trim();
+}
+
+/** Stable key so backend refetches / progressive scrape polls can merge client skip-trace state onto the same row. */
+function listingMergeKey(l: any): string {
+  let u = (l.listing_url || l.source_url || '').trim().toLowerCase();
+  if (u) {
+    u = u.split('?')[0].replace(/\/+$/, '');
+    return `u:${u}`;
+  }
+  const a = (l.address || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `a:${a}`;
+}
+
+/**
+ * Full-array loads from the scraper API replace React state and would wipe skip-trace / saved flags.
+ * Re-attach those fields from the previous in-memory row when URL (or address) matches.
+ */
+function mergeIncomingListingsWithPrevClientState(prev: any[], incoming: any[]): any[] {
+  const prevByKey = new Map<string, any>();
+  for (const p of prev) {
+    prevByKey.set(listingMergeKey(p), p);
+  }
+  return incoming.map((row) => {
+    const old = prevByKey.get(listingMergeKey(row));
+    if (!old) return row;
+    let out: any = { ...row };
+    if (old.saved_to_db) out.saved_to_db = true;
+    if (old.skip_trace_status === 'success') {
+      out = {
+        ...out,
+        scraped_listing_contact_name: old.scraped_listing_contact_name || out.scraped_listing_contact_name,
+        skip_trace_status: 'success' as const,
+        skip_trace_assessor_name: old.skip_trace_assessor_name,
+        skip_trace_confidence: old.skip_trace_confidence,
+        enrichment_providers_used: old.enrichment_providers_used,
+        owner_name: old.owner_name,
+        owner_phone: old.owner_phone ?? out.owner_phone,
+        owner_email: old.owner_email ?? out.owner_email,
+        all_phones: old.all_phones?.length ? old.all_phones : out.all_phones,
+        all_emails: old.all_emails?.length ? old.all_emails : out.all_emails,
+      };
+    } else if (old.skip_trace_status === 'not_found') {
+      out.skip_trace_status = 'not_found' as const;
+    }
+    return out;
+  });
+}
+
+/** Last `/last-result` PM strip stats (shown next to listing count). */
+type ReLastBackendPmMeta = {
+  total_stored: number;
+  pm_rows_hidden: number;
+  include_pm: boolean;
+  returned: number;
+};
+
+function extractBackendPmMeta(
+  result: { include_pm?: boolean; total_stored?: number; pm_rows_hidden?: number },
+  returnedCount: number,
+): ReLastBackendPmMeta | null {
+  if (typeof result.total_stored !== 'number') return null;
+  const include_pm = result.include_pm === true;
+  const pm_rows_hidden =
+    typeof result.pm_rows_hidden === 'number'
+      ? result.pm_rows_hidden
+      : include_pm
+        ? 0
+        : Math.max(0, result.total_stored - returnedCount);
+  return {
+    total_stored: result.total_stored,
+    pm_rows_hidden: include_pm ? 0 : pm_rows_hidden,
+    include_pm,
+    returned: returnedCount,
+  };
+}
+
+/**
+ * By-owner table filter: hide PM/corporate display names.
+ * Uses listing contact when skip trace stored a bad assessor name (e.g. CHICAGO TRANSIT AUTHOR) so the row does not disappear.
+ */
+function listingPassesByOwnerVisibility(listing: {
+  owner_name?: string | null;
+  owner_email?: string | null;
+  scraped_listing_contact_name?: string | null;
+  skip_trace_assessor_name?: string | null;
+  skip_trace_status?: string;
+  source_platform?: string | null;
+  description?: string | null;
+  address?: string | null;
+  price?: string | null;
+  hp_strict_signal?: string | null;
+  listing_url?: string | null;
+  source_url?: string | null;
+}) {
+  const nameForFilter = ownerNameForByOwnerTableFilter(listing);
+  if (isQuasiPublicEntityDisplayName(nameForFilter)) return false;
+  const sp = (listing.source_platform || '').toLowerCase();
+  const strictRentalByOwner = sp === 'zillow_frbo' || sp === 'hotpads' || sp === 'apartments';
+  if (strictRentalByOwner && sp === 'hotpads') {
+    const hubUrl = listing.listing_url || listing.source_url;
+    if (hotpadsListingUrlLooksBuildingHub(hubUrl)) return false;
+    const hp = (listing.hp_strict_signal || '').trim().toLowerCase();
+    if (hp === 'managed') return false;
+    // Hotpads can flag by-owner on LLC landlords; still apply corporate/PM name rules below.
+    if (hp === 'owner' && !isCorporateLandlordDisplayName(nameForFilter, true)) return true;
+    // support@hotpads.com is normal for masked FRBO — do not hide on email alone (would show 0 rows).
+  }
+  if (strictRentalByOwner && rentalListingEmailIsPlatformPlaceholder(listing.owner_email)) return false;
+  if (strictRentalByOwner) {
+    if (zillowFrboDescriptionImpliesManaged(listing.description)) return false;
+    if (zillowFrboPriceImpliesManaged(listing.price)) return false;
+    if (zillowFrboAddressImpliesManagedUnitToken(listing.address)) return false;
+  }
+  return !isCorporateLandlordDisplayName(nameForFilter, strictRentalByOwner);
+}
+
+const HOTPADS_MASK_EMAIL = 'support@hotpads.com';
+
+/**
+ * Hotpads by-owner table only: rank rows so the top of the list is not identical to Include PM
+ * (which follows API newest-first). Real emails and Hotpads owner signal rise above masked support@ rows.
+ */
+function hotpadsByOwnerDisplaySortRank(listing: {
+  owner_email?: string | null;
+  hp_strict_signal?: string | null;
+}): number {
+  const em = (listing.owner_email || '').trim().toLowerCase();
+  const hasRealEmail =
+    em.length > 0 &&
+    em !== HOTPADS_MASK_EMAIL &&
+    !rentalListingEmailIsPlatformPlaceholder(listing.owner_email);
+  if (hasRealEmail) return 0;
+  if ((listing.hp_strict_signal || '').trim().toLowerCase() === 'owner') return 1;
+  return 2;
 }
 
 /** Map Flask /api/.../last-result rows to the same listing shape as after a scrape (used for refresh). */
@@ -322,12 +686,14 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
         price: l.price,
         owner_name: l.owner_name,
         owner_phone: l.owner_phone,
+        owner_email: l.owner_email,
         listing_url: l.listing_url,
         source_url: l.listing_url,
         source_platform: 'hotpads',
-        listing_type: 'sale',
+        listing_type: 'rent',
         square_feet: l.square_feet,
         days_on_market: l.days_on_market ?? l.days_on_zillow,
+        hp_strict_signal: l.hp_strict_signal ?? null,
       }));
     case 'trulia':
       return list.map((l) => ({
@@ -374,6 +740,7 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
           price: l.price,
           owner_name: l.owner_name,
           owner_phone: l.owner_phone,
+          description: typeof l.description === 'string' ? l.description : '',
           listing_url: url,
           source_url: url,
           source_platform: 'zillow_frbo',
@@ -403,21 +770,24 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
         };
       });
     case 'apartments':
-      return list.map((l) => ({
-        address: l.address,
-        bedrooms: l.bedrooms,
-        bathrooms: l.bathrooms,
-        price: l.price,
-        owner_name: l.owner_name,
-        owner_phone: l.owner_phone,
-        owner_email: l.owner_email,
-        listing_url: l.listing_url,
-        source_url: l.listing_url,
-        source_platform: 'apartments',
-        listing_type: 'rent',
-        square_feet: l.square_feet,
-        days_on_market: l.days_on_market ?? l.days_on_zillow,
-      }));
+      return list.map((l) =>
+        withApartmentsListingContactPrefill({
+          address: l.address,
+          title: l.title,
+          bedrooms: l.bedrooms,
+          bathrooms: l.bathrooms,
+          price: l.price,
+          owner_name: l.owner_name,
+          owner_phone: l.owner_phone,
+          owner_email: l.owner_email,
+          listing_url: l.listing_url,
+          source_url: l.listing_url,
+          source_platform: 'apartments',
+          listing_type: 'rent',
+          square_feet: l.square_feet,
+          days_on_market: l.days_on_market ?? l.days_on_zillow,
+        }),
+      );
     default:
       return [];
   }
@@ -478,6 +848,9 @@ export default function WebScraper() {
   const [reSaveToDb, setReSaveToDb] = useState(false);
   const [reLoading, setReLoading] = useState(false);
   const [reListings, setReListings] = useState<any[]>([]);
+  /** Latest rows for async handlers (sorted/filtered UI still uses stable `realIndex` into this array). */
+  const reListingsRef = useRef<any[]>([]);
+  reListingsRef.current = reListings;
   const [reErrors, setReErrors] = useState<{ url: string; error: string }[]>([]);
   
   const [reBackendReachable, setReBackendReachable] = useState<boolean | null>(null);
@@ -488,13 +861,41 @@ export default function WebScraper() {
   const [bulkSkipTracing, setBulkSkipTracing] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [showMap, setShowMap] = useState(true);
-  /** Hide listings that have been on market a long time (often already sold); needs days_on_* from backend. */
-  const [reHideLongDom, setReHideLongDom] = useState(true);
-  /** When true, table/map only shows rows whose address matches the location search box. Default off so full scrape counts match the list (many addresses omit city text). */
-  const [reMatchLocationFilter, setReMatchLocationFilter] = useState(false);
-  /** When true, next last-result fetch uses ?include_pm=1 (PM/realtor rows included). Toggle then refresh listings. */
-  const [reIncludePmListings, setReIncludePmListings] = useState(false);
+  /**
+   * When true, table/map only shows rows whose address matches the location search box.
+   * Default on: last-result returns every row ever saved for the platform (e.g. WA/MA from old runs),
+   * so without this, typing "Chicago" still shows unrelated states. Turn off "Show all rows" only
+   * if you need raw DB counts or addresses omit city/state text.
+   */
+  const [reMatchLocationFilter, setReMatchLocationFilter] = useState(true);
+  /**
+   * When true, backend loads/saves omit PM/broker rows (include_pm=0 / save_pm off where supported).
+   * Defaults per platform: Zillow FRBO turns this on when selected (client wants private landlords only);
+   * Hotpads, Trulia, Zillow FSBO, FSBO.com, Apartments start with Include PM. Toggle anytime next to Refresh.
+   */
+  const [reByOwnerStrict, setReByOwnerStrict] = useState(false);
+  /** Last successful `/last-result` response `include_pm` (avoids badge vs toast mismatch). */
+  const [reLastApiIncludePm, setReLastApiIncludePm] = useState<boolean | null>(null);
+  /** Backend DB total vs PM-hidden count (so Include PM vs by-owner does not look “the same” to clients). */
+  const [reLastBackendPmMeta, setReLastBackendPmMeta] = useState<ReLastBackendPmMeta | null>(null);
+  /** Hotpads Find Listings: show full feed while spider runs; By-owner table filter applies after finish. */
+  const [reHotpadsScrapeLive, setReHotpadsScrapeLive] = useState(false);
   const [reRefreshingListings, setReRefreshingListings] = useState(false);
+  /** Blocks overlapping Find Listings clicks while a backend scrape + poll is in flight. */
+  const reScrapeInFlightRef = useRef(false);
+  /** Bumps when platform changes or a new Find Listings starts; stale async scrape work must not update UI or clear loading. */
+  const reScrapeGenerationRef = useRef(0);
+  /** Which scrape generation turned the Find Listings spinner on — only that run may turn it off (avoids stale runs clearing a newer run’s loading). */
+  const reLoadingScrapeGenRef = useRef(-1);
+
+  useEffect(() => {
+    setReLastBackendPmMeta(null);
+  }, [rePlatform]);
+
+  const resolveListingAddressForMap = useCallback(
+    (listing: Parameters<typeof listingDisplayAddress>[0]) => listingDisplayAddress(listing),
+    [],
+  );
 
   // Only show listings that match the searched city (applies to all scrapers: Zillow, Hotpads, Trulia, Apartments, FSBO/All Platforms)
   const reListingsFilteredForDisplay = useMemo(() => {
@@ -503,34 +904,96 @@ export default function WebScraper() {
     if (reMatchLocationFilter && reLocation?.trim()) {
       rows = rows.filter(({ listing }) => addressMatchesSearch(listingDisplayAddress(listing), reLocation));
     }
-    if (reHideLongDom) {
-      rows = rows.filter(({ listing }) => {
-        const dom = parseDaysOnMarket(listing);
-        if (dom == null) return true;
-        return dom <= LONG_DOM_THRESHOLD;
+    // Skip trace fills contact in React; hide PM/corporate names unless user successfully traced (always show enriched row).
+    const byOwnerTable =
+      reByOwnerStrict && !(rePlatform === 'hotpads' && reHotpadsScrapeLive);
+    if (byOwnerTable) {
+      rows = rows.filter(({ listing }) => listingPassesByOwnerVisibility(listing));
+    }
+    if (rePlatform === 'hotpads' && byOwnerTable && rows.length > 1) {
+      rows = [...rows].sort((a, b) => {
+        const ra = hotpadsByOwnerDisplaySortRank(a.listing);
+        const rb = hotpadsByOwnerDisplaySortRank(b.listing);
+        if (ra !== rb) return ra - rb;
+        return a.realIndex - b.realIndex;
+      });
+    } else if (rePlatform === 'hotpads' && !byOwnerTable && !reHotpadsScrapeLive && rows.length > 1) {
+      // Include PM: put rows that would fail the by-owner table filter first (LLC, managed, etc.) so
+      // the top of the list is not the same as by-owner (which boosts unmasked emails).
+      rows = [...rows].sort((a, b) => {
+        const fa = listingPassesByOwnerVisibility(a.listing) ? 1 : 0;
+        const fb = listingPassesByOwnerVisibility(b.listing) ? 1 : 0;
+        if (fa !== fb) return fa - fb;
+        return a.realIndex - b.realIndex;
       });
     }
     return rows;
-  }, [reListings, reLocation, reHideLongDom, reMatchLocationFilter, rePlatform]);
+  }, [reListings, reLocation, reMatchLocationFilter, rePlatform, reByOwnerStrict, reHotpadsScrapeLive]);
 
-  /** Row count after stale filter only (no location text filter); used for "matching city" hint. */
+  /** Row count after platform/by-owner filters only (no city text filter); used for "matching city" hint. */
   const reShownWithoutLocationFilter = useMemo(() => {
     let listings = reListings.filter((listing) => listingMatchesRealEstatePlatform(listing, rePlatform));
-    if (reHideLongDom) {
-      listings = listings.filter((listing) => {
-        const dom = parseDaysOnMarket(listing);
-        if (dom == null) return true;
-        return dom <= LONG_DOM_THRESHOLD;
-      });
+    const byOwnerTable =
+      reByOwnerStrict && !(rePlatform === 'hotpads' && reHotpadsScrapeLive);
+    if (byOwnerTable) {
+      listings = listings.filter((l) => listingPassesByOwnerVisibility(l));
     }
     return listings.length;
-  }, [reListings, reHideLongDom, rePlatform]);
+  }, [reListings, rePlatform, reByOwnerStrict, reHotpadsScrapeLive]);
 
   /** Rows in memory that match the selected platform (honest count if rows were ever mixed). */
-  const reBackendRowCountForPlatform = useMemo(
-    () => reListings.filter((listing) => listingMatchesRealEstatePlatform(listing, rePlatform)).length,
-    [reListings, rePlatform]
-  );
+  const reBackendRowCountForPlatform = useMemo(() => {
+    let list = reListings.filter((listing) => listingMatchesRealEstatePlatform(listing, rePlatform));
+    const byOwnerTable =
+      reByOwnerStrict && !(rePlatform === 'hotpads' && reHotpadsScrapeLive);
+    if (byOwnerTable) {
+      list = list.filter((l) => listingPassesByOwnerVisibility(l));
+    }
+    return list.length;
+  }, [reListings, rePlatform, reByOwnerStrict, reHotpadsScrapeLive]);
+
+  /** Same row as Match & Refresh when loaded; also next to Refresh in the empty-state card so you can escape By-owner-only with 0 rows. */
+  const renderListingScopeToolbar = () => {
+    if (rePlatform === 'all') return null;
+    return (
+      <div
+        className="flex flex-wrap gap-0.5 rounded-md border border-border/60 bg-muted/25 p-0.5 w-fit"
+        role="group"
+        aria-label="Listing scope: include PM and realtor, or by-owner only"
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant={!reByOwnerStrict ? 'default' : 'outline'}
+          className="h-7 text-[10px] px-2 shrink-0"
+          title="Load every row from the backend (brokers, LLCs, property managers). Refetches immediately."
+          onClick={() => {
+            setReByOwnerStrict(false);
+            if (rePlatform !== 'all') {
+              void fetchLastResultForPlatform(rePlatform, { includePm: true });
+            }
+          }}
+        >
+          Include PM / realtor
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={reByOwnerStrict ? 'default' : 'outline'}
+          className="h-7 text-[10px] px-2 shrink-0"
+          title="Backend hides PM/realtor/managed URLs; table hides broker-style owner names. Refetches immediately."
+          onClick={() => {
+            setReByOwnerStrict(true);
+            if (rePlatform !== 'all') {
+              void fetchLastResultForPlatform(rePlatform, { includePm: false });
+            }
+          }}
+        >
+          By-owner only
+        </Button>
+      </div>
+    );
+  };
 
   // Prospect Search state
   const [prospectSearchOpen, setProspectSearchOpen] = useState(false);
@@ -564,39 +1027,104 @@ export default function WebScraper() {
   const toggleSelectAllListings = () => { if (selectedListings.size === filteredUnsavedIndices.length) setSelectedListings(new Set()); else setSelectedListings(new Set(filteredUnsavedIndices)); };
 
   /**
-   * Load the latest Supabase-backed scrape for a single platform (used by Refresh and by platform dropdown).
-   * Pass explicit `platform` so switching dropdown works before React re-renders `rePlatform`.
+   * Load the latest backend-stored scrape for a single platform (used by “Refresh listings” only).
+   * Pass explicit `platform` when needed so callers aren’t blocked on the next `rePlatform` render.
    */
-  const fetchLastResultForPlatform = useCallback(async (platform: string) => {
+  const fetchLastResultForPlatform = useCallback(async (platform: string, fetchOpts?: { includePm?: boolean }) => {
     if (platform === 'all') {
       toast.info('Choose a single platform (not All), then refresh listings.');
       return;
     }
+    /**
+     * Invalidate any in-flight Find Listings poll (same scrapeGen). Otherwise Zillow FRBO progressive
+     * fetches keep calling applyListings(325 by-owner rows) and overwrite a fresh Include PM load (917).
+     */
+    reScrapeGenerationRef.current += 1;
+    reScrapeInFlightRef.current = false;
+    reLoadingScrapeGenRef.current = -1;
+    setReLoading(false);
     setReRefreshingListings(true);
     try {
-      const opts = { includePm: reIncludePmListings };
-      let result: { listings?: any[]; error?: string };
-      if (platform === 'hotpads') result = await scraperBackendApi.getHotpadsLastResult(opts);
-      else if (platform === 'trulia') result = await scraperBackendApi.getTruliaLastResult(opts);
-      else if (platform === 'zillow') result = await scraperBackendApi.getZillowFsboLastResult(opts);
-      else if (platform === 'zillow_frbo') result = await scraperBackendApi.getZillowFrboLastResult(opts);
-      else if (platform === 'fsbo') result = await scraperBackendApi.getFsboLastResult(opts);
-      else if (platform === 'apartments') result = await scraperBackendApi.getApartmentsLastResult(opts);
-      else {
+      if (
+        platform !== 'hotpads' &&
+        platform !== 'trulia' &&
+        platform !== 'zillow' &&
+        platform !== 'zillow_frbo' &&
+        platform !== 'fsbo' &&
+        platform !== 'apartments'
+      ) {
         toast.info('Refresh works for Hotpads, Trulia, Zillow FSBO/FRBO, FSBO.com, and Apartments.com.');
         return;
       }
+
+      let includePmFlag = fetchOpts?.includePm ?? !reByOwnerStrict;
+      const fetchLast = async (includePm: boolean) => {
+        const opts = { includePm };
+        if (platform === 'hotpads') return scraperBackendApi.getHotpadsLastResult(opts);
+        if (platform === 'trulia') return scraperBackendApi.getTruliaLastResult(opts);
+        if (platform === 'zillow') return scraperBackendApi.getZillowFsboLastResult(opts);
+        if (platform === 'zillow_frbo') return scraperBackendApi.getZillowFrboLastResult(opts);
+        if (platform === 'fsbo') return scraperBackendApi.getFsboLastResult(opts);
+        return scraperBackendApi.getApartmentsLastResult(opts);
+      };
+
+      let result = await fetchLast(includePmFlag);
       if (result.error) toast.error(result.error);
+
       const mapKey =
         platform === 'zillow' ? 'zillow' : platform === 'zillow_frbo' ? 'zillow_frbo' : platform;
-      const mapped = mapBackendListingsForPlatform(mapKey, result.listings || []);
-      setReListings(mapped);
-      const n = mapped.length;
-      toast.success(`Loaded ${n} listing${n !== 1 ? 's' : ''}${reIncludePmListings ? ' (PM/realtor included)' : ''}`);
+      let mapped = mapBackendListingsForPlatform(mapKey, result.listings || []);
       const r = result as { total_stored?: number; pm_rows_hidden?: number };
-      if (typeof r.pm_rows_hidden === 'number' && r.pm_rows_hidden > 0 && typeof r.total_stored === 'number') {
+      const dbHasRows =
+        (typeof r.total_stored === 'number' && r.total_stored > 0) ||
+        (typeof r.pm_rows_hidden === 'number' && r.pm_rows_hidden > 0);
+
+      /** By-owner-only returned nothing while DB still has rows → retry with PM included so Refresh works in one click. */
+      if (!includePmFlag && mapped.length === 0 && !result.error && dbHasRows) {
+        setReByOwnerStrict(false);
+        includePmFlag = true;
+        result = await fetchLast(true);
+        if (result.error) toast.error(result.error);
+        mapped = mapBackendListingsForPlatform(mapKey, result.listings || []);
         toast.info(
-          `${r.pm_rows_hidden} listing${r.pm_rows_hidden !== 1 ? 's' : ''} hidden as property-manager/realtor (${r.total_stored} in database). Turn on “Include PM listings” to show them.`,
+          'By-owner only hid every saved row. Loaded the full list (Include PM / realtor). Choose By-owner only again to re-apply the filter.',
+        );
+      }
+
+      setReListings((prev) => withScrapedListingContactSeeds(mergeIncomingListingsWithPrevClientState(prev, mapped)));
+      const n = mapped.length;
+      const apiInc = (result as { include_pm?: boolean }).include_pm;
+      if (typeof apiInc === 'boolean') setReLastApiIncludePm(apiInc);
+      setReLastBackendPmMeta(extractBackendPmMeta(result as { include_pm?: boolean; total_stored?: number; pm_rows_hidden?: number }, n));
+      toast.success(
+        `Loaded ${n} listing${n !== 1 ? 's' : ''}${
+          includePmFlag
+            ? ' (full Supabase set — nothing stripped for this request).'
+            : ' (by-owner — backend omitted PM/managed-pattern rows).'
+        }`,
+      );
+
+      const r2 = result as { total_stored?: number; pm_rows_hidden?: number };
+      if (
+        !includePmFlag &&
+        typeof r2.pm_rows_hidden === 'number' &&
+        r2.pm_rows_hidden > 0 &&
+        typeof r2.total_stored === 'number'
+      ) {
+        toast.info(
+          `${r2.pm_rows_hidden} listing${r2.pm_rows_hidden !== 1 ? 's' : ''} hidden as property-manager/realtor (${r2.total_stored} in database). Click Include PM / realtor to load the full list (refetches automatically).`,
+        );
+      }
+      if (
+        platform === 'hotpads' &&
+        !includePmFlag &&
+        typeof r2.pm_rows_hidden === 'number' &&
+        r2.pm_rows_hidden === 0 &&
+        typeof r2.total_stored === 'number' &&
+        r2.total_stored > 0
+      ) {
+        toast.info(
+          'Hotpads: By-owner removed 0 rows beyond the PM/managed filter. If counts match Include PM, no rows were classified as PM in the database.',
         );
       }
     } catch (e) {
@@ -604,23 +1132,31 @@ export default function WebScraper() {
     } finally {
       setReRefreshingListings(false);
     }
-  }, [reIncludePmListings]);
+  }, [reByOwnerStrict]);
 
   const refreshListingsFromBackend = useCallback(async () => {
     await fetchLastResultForPlatform(rePlatform);
   }, [fetchLastResultForPlatform, rePlatform]);
 
-  /** Switching platform loads that scraper’s last DB result immediately (avoids empty table when hopping FSBO → FRBO → Apartments). */
+  /** Platform change only updates selection; listings load after Find Listings or Refresh listings. */
   const handleRealEstatePlatformChange = (value: string) => {
+    reScrapeGenerationRef.current += 1;
+    reScrapeInFlightRef.current = false;
+    reLoadingScrapeGenRef.current = -1;
+    setReLoading(false);
     setRePlatform(value);
+    // Match scout URLs: Zillow FRBO, Hotpads, and Apartments.com all target for-rent-by-owner; default to backend PM strip unless user chooses Include PM.
+    setReByOwnerStrict(value === 'zillow_frbo' || value === 'hotpads' || value === 'apartments');
+    setReLastApiIncludePm(null);
+    setReHotpadsScrapeLive(false);
     setSelectedListings(new Set());
     setReErrors([]);
-    if (value === 'all') {
-      setReListings([]);
-      return;
-    }
-    void fetchLastResultForPlatform(value);
+    setReListings([]);
   };
+
+  /** True when last /last-result actually returned PM rows (or user intent before any fetch). */
+  const reBackendPmIncludedFromApi =
+    reLastApiIncludePm !== null ? reLastApiIncludePm : !reByOwnerStrict;
 
   if (authLoading || adminLoading) {
     return (
@@ -771,7 +1307,21 @@ export default function WebScraper() {
 
 
   const handleRealEstateScrape = async () => {
-    if (!reLocation.trim()) { toast.error('Please enter a location'); return; }
+    if (!reLocation.trim()) {
+      toast.error('Enter a city (e.g. Chicago or Chicago, IL) before Find Listings.');
+      return;
+    }
+    if (reScrapeInFlightRef.current) {
+      toast.message('Scrape already running', {
+        description: 'Wait for the spinner to finish. Do not click Find Listings again until then — or use Refresh listings after the run completes.',
+      });
+      return;
+    }
+    reScrapeInFlightRef.current = true;
+    reScrapeGenerationRef.current += 1;
+    const scrapeGen = reScrapeGenerationRef.current;
+    reLoadingScrapeGenRef.current = scrapeGen;
+    setReMatchLocationFilter(true);
     setReLoading(true); setReListings([]); setReErrors([]);
 
     const isHotpads = rePlatform === 'hotpads';
@@ -782,49 +1332,159 @@ export default function WebScraper() {
     const isFsbo = rePlatform === 'fsbo';
     const isApartments = rePlatform === 'apartments';
 
+    const st = {
+      success: (msg: string, options?: Parameters<typeof toast.success>[1]) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        if (options !== undefined) toast.success(msg, options);
+        else toast.success(msg);
+      },
+      error: (msg: string) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        toast.error(msg);
+      },
+      info: (msg: string) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        toast.info(msg);
+      },
+      warning: (msg: string) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        toast.warning(msg);
+      },
+      message: (msg: string, data?: Parameters<typeof toast.message>[1]) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        if (data !== undefined) toast.message(msg, data);
+        else toast.message(msg);
+      },
+    };
+
+    let scrapeSafetyTimer: number | undefined;
     try {
-      const lastResultOpts = { includePm: reIncludePmListings };
+      const applyListings = (updater: any[] | ((prev: any[]) => any[])) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        if (typeof updater === 'function') setReListings(updater as (prev: any[]) => any[]);
+        else
+          setReListings((prev) =>
+            withScrapedListingContactSeeds(mergeIncomingListingsWithPrevClientState(prev, updater)),
+          );
+      };
+      const applyErrors = (next: { url: string; error: string }[]) => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        setReErrors(next);
+      };
+      /** True after platform change or a newer Find Listings — stop polling so old runs don’t hammer the API. */
+      const scrapeCancelled = () => scrapeGen !== reScrapeGenerationRef.current;
+      /** Stop spinner / in-flight lock as soon as listings are ready; Supabase insert can be slow and must not block the button. */
+      const releaseScrapeUiIfOwner = () => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        if (reLoadingScrapeGenRef.current !== scrapeGen) return;
+        if (scrapeSafetyTimer !== undefined) {
+          window.clearTimeout(scrapeSafetyTimer);
+          scrapeSafetyTimer = undefined;
+        }
+        reScrapeInFlightRef.current = false;
+        setReLoading(false);
+        reLoadingScrapeGenRef.current = -1;
+      };
+      /** Turn off Find Listings spinner when rows first appear during a long poll (Zillow/FSBO/Apartments progressive). Lock stays until releaseScrapeUiIfOwner / finally. */
+      const clearFindListingsSpinnerIfOwner = () => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        if (reLoadingScrapeGenRef.current !== scrapeGen) return;
+        setReLoading(false);
+      };
+      // Release lock if the backend hangs (Zillow/Hotpads/FSBO can run 30+ min; 8m was cutting off FRBO mid-poll)
+      const backendScrapeLongRun =
+        isHotpads || isTrulia || isZillowFsbo || isZillowFrbo || isFsbo || isApartments;
+      const safetyMinutes = backendScrapeLongRun ? 45 : 8;
+      scrapeSafetyTimer = window.setTimeout(() => {
+        if (scrapeGen !== reScrapeGenerationRef.current) return;
+        if (reLoadingScrapeGenRef.current !== scrapeGen) return;
+        reScrapeInFlightRef.current = false;
+        setReLoading(false);
+        reLoadingScrapeGenRef.current = -1;
+        st.message('Scrape timed out', {
+          description: `No response after ${safetyMinutes} minutes — lock released. Check python api_server.py and ZYTE_API_KEY / Supabase .env, then Refresh listings or run again.`,
+        });
+      }, safetyMinutes * 60 * 1000);
+
+      // Default: include PM/realtor; scope toggles in toolbar next to Match / Refresh (after load)
+      const lastResultOpts = { includePm: !reByOwnerStrict };
       if (isHotpads) {
         // Check backend once so we show a clear message without multiple connection-refused console errors
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
         if (!backendReachable) {
           const base = scraperBackendApi.getBaseUrl();
           const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          toast.error(isLocal
+          st.error(isLocal
             ? 'HotPads scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
             : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          setReLoading(false);
           return;
         }
         // Build Hotpads URL on frontend to avoid backend search-location 500/encoding issues
-        // When "For Rent (FRBO)" is selected, use FRBO-only URL (for-rent-by-owner); otherwise general rentals
-        const propertyType = 'apartments';
+        // Brivano Scout FRBO flow: must use Hotpads "for rent by owner" URL (not generic apartments-for-rent).
+        const propertyType = 'for-rent-by-owner';
         let url: string | null = buildHotpadsUrl(reLocation.trim(), propertyType);
         if (!url) {
-          toast.error('Could not build Hotpads URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
-          setReLoading(false);
+          st.error('Could not build Hotpads URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
           return;
         }
         // Reset and always send force=1 so backend clears "already running" (works with any backend version)
         await scraperBackendApi.resetHotpadsStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(url, { force: true });
         if (triggerRes.error) {
-          toast.error(triggerRes.error);
+          st.error(triggerRes.error);
           return;
         }
-        toast.info('Hotpads scraper started. Waiting for results…');
+        st.info(
+          'Hotpads scrape running — table shows full saved rows until it finishes; then By-owner rules apply (managed / corporate, not support@).',
+        );
+        setReHotpadsScrapeLive(true);
+        try {
         const pollInterval = 2000;
-        const maxWait = 5 * 60 * 1000;
+        const maxWait = 30 * 60 * 1000;
+        const progressiveFetchInterval = 12000;
         const start = Date.now();
+        let lastProgressiveFetch = 0;
         let status = await scraperBackendApi.getHotpadsStatus();
-        while (status.status === 'running' && Date.now() - start < maxWait) {
+        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getHotpadsStatus();
+          if (scrapeCancelled()) break;
+          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
+            lastProgressiveFetch = Date.now();
+            try {
+              const partial = await scraperBackendApi.getHotpadsLastResult({ includePm: true });
+              const partialMapped = (partial.listings || []).map((l) => ({
+                address: l.address,
+                bedrooms: l.bedrooms,
+                bathrooms: l.bathrooms,
+                price: l.price,
+                owner_name: l.owner_name,
+                owner_phone: l.owner_phone,
+                owner_email: (l as { owner_email?: string }).owner_email,
+                listing_url: l.listing_url,
+                source_url: l.listing_url,
+                source_platform: 'hotpads',
+                listing_type: 'rent',
+                square_feet: l.square_feet,
+                days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
+                hp_strict_signal: (l as { hp_strict_signal?: string | null }).hp_strict_signal ?? null,
+              }));
+              if (partialMapped.length > 0) {
+                applyListings(partialMapped);
+                clearFindListingsSpinnerIfOwner();
+              }
+            } catch {
+              /* ignore */
+            }
+          }
         }
+        if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
+        if (scrapeCancelled()) return;
         if (status.status === 'running') {
-          toast.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
+          st.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
         }
         const result = await scraperBackendApi.getHotpadsLastResult(lastResultOpts);
+        if (typeof result.include_pm === 'boolean') setReLastApiIncludePm(result.include_pm);
         const mapped = (result.listings || []).map((l) => ({
           address: l.address,
           bedrooms: l.bedrooms,
@@ -832,16 +1492,25 @@ export default function WebScraper() {
           price: l.price,
           owner_name: l.owner_name,
           owner_phone: l.owner_phone,
+          owner_email: (l as { owner_email?: string }).owner_email,
           listing_url: l.listing_url,
           source_url: l.listing_url,
           source_platform: 'hotpads',
-          listing_type: 'sale',
+          listing_type: 'rent',
           square_feet: l.square_feet,
           days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
+          hp_strict_signal: (l as { hp_strict_signal?: string | null }).hp_strict_signal ?? null,
         }));
-        setReListings(mapped);
-        toast.success(`Found ${mapped.length} Hotpads listings`);
-        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        setReLastBackendPmMeta(extractBackendPmMeta(result, mapped.length));
+        applyListings(mapped);
+        st.success(`Found ${mapped.length} Hotpads listings`);
+        if (reByOwnerStrict && mapped.length === 0) {
+          st.info(
+            'By-owner returned 0 rows from the API (everything matched PM/managed filters). Try Include PM / realtor, then Refresh.',
+          );
+        }
+        if (result.error) applyErrors([{ url: '', error: result.error }]);
+        releaseScrapeUiIfOwner();
         // Save to Supabase scraped_leads when "Save to Database" is on (matches frontend structure)
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
@@ -871,62 +1540,64 @@ export default function WebScraper() {
             }));
             const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
             if (!error && data?.length) {
-              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              toast.success(`Saved ${data.length} Hotpads listings to database`);
+              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              st.success(`Saved ${data.length} Hotpads listings to database`);
             } else if (error) {
               const is404 = String((error as any)?.message || '').includes('404') || (error as any)?.code === 'PGRST116';
               if (is404) {
-                toast.info('Listings are in hotpads_listings. The "scraped_leads" table was not found—run birvanoio Supabase migrations to save to the leads pipeline.');
+                st.info('Listings are in hotpads_listings. The "scraped_leads" table was not found—run birvanoio Supabase migrations to save to the leads pipeline.');
               } else {
-                toast.error('Could not save listings to database');
+                st.error('Could not save listings to database');
               }
             }
           } catch (e: any) {
             const msg = String(e?.message || '');
             const is404 = msg.includes('404') || msg.includes('Not Found');
             if (is404) {
-              toast.info('Listings are in hotpads_listings. The "scraped_leads" table was not found—run birvanoio Supabase migrations to save to the leads pipeline.');
+              st.info('Listings are in hotpads_listings. The "scraped_leads" table was not found—run birvanoio Supabase migrations to save to the leads pipeline.');
       } else {
-              toast.error('Failed to save listings to database');
+              st.error('Failed to save listings to database');
             }
           }
           }
+        } finally {
+          setReHotpadsScrapeLive(false);
+        }
         } else if (isTrulia) {
         // Trulia: same flow as Hotpads (backend scraper, trigger-from-url, last-result)
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
         if (!backendReachable) {
           const base = scraperBackendApi.getBaseUrl();
           const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          toast.error(isLocal
+          st.error(isLocal
             ? 'Trulia scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
             : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          setReLoading(false);
           return;
         }
         const url = buildTruliaUrl(reLocation.trim());
         if (!url) {
-          toast.error('Could not build Trulia URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
-          setReLoading(false);
+          st.error('Could not build Trulia URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
           return;
         }
         await scraperBackendApi.resetTruliaStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(url, { force: true });
         if (triggerRes.error) {
-          toast.error(triggerRes.error);
-          setReLoading(false);
+          st.error(triggerRes.error);
           return;
         }
-        toast.info('Trulia scraper started. Waiting for results…');
+        st.info('Trulia scraper started. Waiting for results…');
         const pollInterval = 2000;
         const maxWait = 5 * 60 * 1000;
         const start = Date.now();
         let status = await scraperBackendApi.getTruliaStatus();
-        while (status.status === 'running' && Date.now() - start < maxWait) {
+        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getTruliaStatus();
         }
+        if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
+        if (scrapeCancelled()) return;
         if (status.status === 'running') {
-          toast.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
+          st.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
         }
         const result = await scraperBackendApi.getTruliaLastResult(lastResultOpts);
         const mapped = (result.listings || []).map((l) => ({
@@ -943,9 +1614,10 @@ export default function WebScraper() {
           square_feet: l.square_feet,
           days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
         }));
-        setReListings(mapped);
-        toast.success(`Found ${mapped.length} Trulia listings`);
-        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        applyListings(mapped);
+        st.success(`Found ${mapped.length} Trulia listings`);
+        if (result.error) applyErrors([{ url: '', error: result.error }]);
+        releaseScrapeUiIfOwner();
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
             const rows = mapped.map((listing) => ({
@@ -974,13 +1646,13 @@ export default function WebScraper() {
             }));
             const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
             if (!error && data?.length) {
-              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              toast.success(`Saved ${data.length} Trulia listings to database`);
+              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              st.success(`Saved ${data.length} Trulia listings to database`);
             } else if (error) {
-              toast.error('Could not save listings to database');
+              st.error('Could not save listings to database');
             }
           } catch {
-            toast.error('Failed to save listings to database');
+            st.error('Failed to save listings to database');
           }
         }
         } else if (isZillowFsbo) {
@@ -989,71 +1661,72 @@ export default function WebScraper() {
         if (!backendReachable) {
           const base = scraperBackendApi.getBaseUrl();
           const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          toast.error(isLocal
+          st.error(isLocal
             ? 'Zillow FSBO scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO scraping.'
             : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          setReLoading(false);
           return;
         }
         const searchRes = await scraperBackendApi.searchLocation('zillow_fsbo', reLocation.trim());
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Zillow FSBO URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
-          setReLoading(false);
+          st.error(searchRes.error || 'Could not find Zillow FSBO URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           return;
         }
         await scraperBackendApi.resetZillowFsboStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
         if (triggerRes.error) {
-          toast.error(triggerRes.error);
-          setReLoading(false);
+          st.error(triggerRes.error);
           return;
         }
-        toast.info('Zillow FSBO scraper started. Waiting for results…');
+        st.info('Zillow FSBO scraper started. Listings appear here as the backend saves them — open List View to watch.');
         const pollInterval = 2000;
         const maxWait = 5 * 60 * 1000;
+        const progressiveFetchInterval = 8000;
         const start = Date.now();
+        let lastProgressiveFetch = 0;
         let status = await scraperBackendApi.getZillowFsboStatus();
-        while (status.status === 'running' && Date.now() - start < maxWait) {
+        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getZillowFsboStatus();
+          if (scrapeCancelled()) break;
+          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
+            lastProgressiveFetch = Date.now();
+            try {
+              const partial = await scraperBackendApi.getZillowFsboLastResult(lastResultOpts);
+              const partialMapped = (partial.listings || []).map(mapZillowFsboBackendRow);
+              if (partialMapped.length > 0) {
+                applyListings(partialMapped);
+                clearFindListingsSpinnerIfOwner();
+              }
+            } catch {
+              /* ignore */
+            }
+          }
         }
+        if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
+        if (scrapeCancelled()) return;
         if (status.status === 'running') {
-          toast.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
+          st.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
         }
         const result = await scraperBackendApi.getZillowFsboLastResult(lastResultOpts);
-        const mapped = (result.listings || []).map((l) => {
-          const url = l.listing_url || '';
-          const address = (l.address || '').trim() || addressFromZillowUrl(url) || undefined;
-          return {
-            address,
-            bedrooms: l.bedrooms,
-            bathrooms: l.bathrooms,
-            price: l.price,
-            owner_name: l.owner_name,
-            owner_phone: l.owner_phone,
-            listing_url: url,
-            source_url: url,
-            source_platform: 'zillow_fsbo',
-            listing_type: 'sale',
-            square_feet: l.square_feet,
-            days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
-          };
-        });
-        setReListings(mapped);
-        toast.success(`Found ${mapped.length} Zillow FSBO listings`);
+        const mapped = (result.listings || []).map(mapZillowFsboBackendRow);
+        applyListings(mapped);
+        if (mapped.length > 0) {
+          st.success(`Found ${mapped.length} Zillow FSBO listings`);
+        }
         const fsboTotal = (result as { total?: number }).total;
         const r = result as { total_stored?: number; pm_rows_hidden?: number };
         if (typeof r.pm_rows_hidden === 'number' && r.pm_rows_hidden > 0 && typeof r.total_stored === 'number') {
-          toast.info(
-            `${r.pm_rows_hidden} PM/realtor row${r.pm_rows_hidden !== 1 ? 's' : ''} hidden (${r.total_stored} in database). Enable “Include PM listings” and re-run refresh to see all.`,
+          st.info(
+            `${r.pm_rows_hidden} PM/realtor row${r.pm_rows_hidden !== 1 ? 's' : ''} hidden (${r.total_stored} in database). Choose Include PM / realtor next to Refresh, then Refresh again.`,
           );
         }
         if (typeof fsboTotal === 'number' && fsboTotal > mapped.length && !(r.pm_rows_hidden && r.pm_rows_hidden > 0)) {
-          toast.info(
+          st.info(
             `Database has ${fsboTotal} FSBO rows; UI received ${mapped.length}. Redeploy the scraper backend (latest api_server) if you expect the full set in one response.`,
           );
         }
-        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        if (result.error) applyErrors([{ url: '', error: result.error }]);
+        releaseScrapeUiIfOwner();
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
             const rows = mapped.map((listing) => ({
@@ -1082,13 +1755,13 @@ export default function WebScraper() {
             }));
             const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
             if (!error && data?.length) {
-              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              toast.success(`Saved ${data.length} Zillow FSBO listings to database`);
+              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              st.success(`Saved ${data.length} Zillow FSBO listings to database`);
             } else if (error) {
-              toast.error('Could not save listings to database');
+              st.error('Could not save listings to database');
             }
           } catch {
-            toast.error('Failed to save listings to database');
+            st.error('Failed to save listings to database');
           }
         }
         } else if (isZillowFrbo) {
@@ -1097,59 +1770,105 @@ export default function WebScraper() {
         if (!backendReachable) {
           const base = scraperBackendApi.getBaseUrl();
           const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          toast.error(isLocal
+          st.error(isLocal
             ? 'Zillow FRBO scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
             : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          setReLoading(false);
           return;
         }
-        const searchRes = await scraperBackendApi.searchLocation('zillow_frbo', reLocation.trim());
-        if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Zillow FRBO URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
-          setReLoading(false);
-          return;
+        const usCountryFrbo = isZillowFrboUsCountryLocation(reLocation.trim());
+        let zillowFrboScrapeUrl: string | null = null;
+        if (!usCountryFrbo) {
+          // Prefer frontend-built plain /rentals/ URL (reliable SSR). Backend search-location as fallback.
+          zillowFrboScrapeUrl = buildZillowFrboRentalsUrl(reLocation.trim());
+          if (!zillowFrboScrapeUrl) {
+            const searchRes = await scraperBackendApi.searchLocation('zillow_frbo', reLocation.trim());
+            if (!searchRes.success || !searchRes.url) {
+              st.error(searchRes.error || 'Could not find Zillow FRBO URL. Try a city (e.g. Chicago), "City, State", or "United States" for US-wide metros.');
+              return;
+            }
+            zillowFrboScrapeUrl = searchRes.url;
+          }
         }
         await scraperBackendApi.resetZillowFrboStatus();
-        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
+        const triggerRes = usCountryFrbo
+          ? await scraperBackendApi.triggerZillowFrboCountry({
+              country: 'US',
+              savePm: !reByOwnerStrict,
+            })
+          : await scraperBackendApi.triggerFromUrl(zillowFrboScrapeUrl!, {
+              force: true,
+              savePm: !reByOwnerStrict,
+            });
         if (triggerRes.error) {
-          toast.error(triggerRes.error);
-          setReLoading(false);
+          st.error(triggerRes.error);
           return;
         }
-        toast.info('Zillow FRBO scraper started. Waiting for results…');
+        st.info(
+          usCountryFrbo
+            ? 'Zillow FRBO US-wide scrape started (many major metros). This can run a long time; listings appear as the backend saves them.'
+            : 'Zillow FRBO scraper started. Listings appear here as the backend saves them — open List View to watch rows fill in.',
+        );
         const pollInterval = 2000;
-        const maxWait = 5 * 60 * 1000;
+        const maxWait = usCountryFrbo ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000;
+        const progressiveFetchInterval = 4000;
         const start = Date.now();
+        let lastProgressiveFetch = 0;
         let status = await scraperBackendApi.getZillowFrboStatus();
-        while (status.status === 'running' && Date.now() - start < maxWait) {
+        // Show rows already in Supabase immediately (new scrape appends/updates; table was cleared above)
+        try {
+          const boot = await scraperBackendApi.getZillowFrboLastResult(lastResultOpts);
+          const bootMapped = (boot.listings || []).map(mapZillowFrboBackendRow);
+          if (bootMapped.length > 0) {
+            applyListings(bootMapped);
+            clearFindListingsSpinnerIfOwner();
+          }
+        } catch {
+          /* ignore */
+        }
+        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getZillowFrboStatus();
+          if (scrapeCancelled()) break;
+          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
+            lastProgressiveFetch = Date.now();
+            try {
+              const partial = await scraperBackendApi.getZillowFrboLastResult(lastResultOpts);
+              const partialMapped = (partial.listings || []).map(mapZillowFrboBackendRow);
+              if (partialMapped.length > 0) {
+                applyListings(partialMapped);
+                clearFindListingsSpinnerIfOwner();
+              }
+            } catch {
+              /* ignore */
+            }
+          }
         }
+        if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
+        if (scrapeCancelled()) return;
         if (status.status === 'running') {
-          toast.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
+          st.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
         }
         const result = await scraperBackendApi.getZillowFrboLastResult(lastResultOpts);
-        const mapped = (result.listings || []).map((l) => {
-          const url = l.listing_url || '';
-          const address = (l.address || '').trim() || addressFromZillowUrl(url) || undefined;
-          return {
-            address,
-            bedrooms: l.bedrooms,
-            bathrooms: l.bathrooms,
-            price: l.price,
-            owner_name: l.owner_name,
-            owner_phone: l.owner_phone,
-            listing_url: url,
-            source_url: url,
-            source_platform: 'zillow_frbo',
-            listing_type: 'rent',
-            square_feet: l.square_feet,
-            days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
-          };
-        });
-        setReListings(mapped);
-        toast.success(`Found ${mapped.length} Zillow FRBO listings`);
-        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        const mapped = (result.listings || []).map(mapZillowFrboBackendRow);
+        applyListings(mapped);
+        if (mapped.length > 0) {
+          st.success(`Found ${mapped.length} Zillow FRBO listings`);
+        } else if (!result.error) {
+          const meta = result as { total_stored?: number; pm_rows_hidden?: number; message?: string };
+          if (meta.message) {
+            st.info(meta.message);
+          } else if (typeof meta.total_stored === 'number' && meta.total_stored > 0 && (meta.pm_rows_hidden ?? 0) > 0) {
+            st.info(
+              `${meta.pm_rows_hidden} listing(s) in Supabase are hidden as PM/realtor or managed URLs. Choose Include PM / realtor next to Refresh, then Refresh again.`,
+            );
+          } else if (typeof meta.total_stored === 'number' && meta.total_stored === 0) {
+            st.info(
+              'No rows in zillow_frbo_listings yet. The scraper needs ZYTE_API_KEY and Supabase in Omar_bucio_backend_Scraper-main/.env; check that the Python process is not exiting immediately.',
+            );
+          }
+        }
+        if (result.error) applyErrors([{ url: '', error: result.error }]);
+        releaseScrapeUiIfOwner();
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
             const rows = mapped.map((listing) => ({
@@ -1178,13 +1897,13 @@ export default function WebScraper() {
             }));
             const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
             if (!error && data?.length) {
-              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              toast.success(`Saved ${data.length} Zillow FRBO listings to database`);
+              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              st.success(`Saved ${data.length} Zillow FRBO listings to database`);
             } else if (error) {
-              toast.error('Could not save listings to database');
+              st.error('Could not save listings to database');
             }
           } catch {
-            toast.error('Failed to save listings to database');
+            st.error('Failed to save listings to database');
           }
         }
         } else if (isFsbo) {
@@ -1193,35 +1912,33 @@ export default function WebScraper() {
         if (!backendReachable) {
           const base = scraperBackendApi.getBaseUrl();
           const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          toast.error(isLocal
+          st.error(isLocal
             ? 'FSBO.com scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms".'
             : 'Deployed scraper backend is not reachable. Check your network or try again.');
-          setReLoading(false);
           return;
         }
         const searchRes = await scraperBackendApi.searchLocation('fsbo', reLocation.trim());
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find FSBO.com URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
-          setReLoading(false);
+          st.error(searchRes.error || 'Could not find FSBO.com URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           return;
         }
         await scraperBackendApi.resetFsboStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
         if (triggerRes.error) {
-          toast.error(triggerRes.error);
-          setReLoading(false);
+          st.error(triggerRes.error);
           return;
         }
-        toast.info('FSBO.com scraper started. Listings will appear as they are scraped.');
+        st.info('FSBO.com scraper started. Listings will appear as they are scraped.');
         const pollInterval = 2000;
         const maxWait = 25 * 60 * 1000; // 25 min (FSBO can take 15–20 min for 128 listings)
         const progressiveFetchInterval = 12000; // every 12s fetch last-result so UI shows listings during scrape
         const start = Date.now();
         let lastProgressiveFetch = 0;
         let status = await scraperBackendApi.getFsboStatus();
-        while (status.status === 'running' && Date.now() - start < maxWait) {
+        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getFsboStatus();
+          if (scrapeCancelled()) break;
           // Show listings progressively while scraper is running (same idea as Hotpads: show results as they arrive)
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
             lastProgressiveFetch = Date.now();
@@ -1247,16 +1964,18 @@ export default function WebScraper() {
                 };
               });
               if (partialMapped.length > 0) {
-                setReListings(partialMapped);
-                setReLoading(false); // stop spinner so user sees the list growing
+                applyListings(partialMapped);
+                clearFindListingsSpinnerIfOwner();
               }
             } catch {
               // ignore progressive fetch errors
             }
           }
         }
+        if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
+        if (scrapeCancelled()) return;
         if (status.status === 'running') {
-          toast.warning('Scraper is still running. Showing results so far. You can refresh when it finishes.');
+          st.warning('Scraper is still running. Showing results so far. You can refresh when it finishes.');
         }
         const result = await scraperBackendApi.getFsboLastResult(lastResultOpts);
         const mapped = (result.listings || []).map((l: any) => {
@@ -1278,10 +1997,10 @@ export default function WebScraper() {
             days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
           };
         });
-        setReListings(mapped);
-        setReLoading(false);
-        toast.success(`Found ${mapped.length} FSBO.com listings`);
-        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        applyListings(mapped);
+        st.success(`Found ${mapped.length} FSBO.com listings`);
+        if (result.error) applyErrors([{ url: '', error: result.error }]);
+        releaseScrapeUiIfOwner();
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
             const rows = mapped.map((listing) => ({
@@ -1310,13 +2029,13 @@ export default function WebScraper() {
             }));
             const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
             if (!error && data?.length) {
-              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              toast.success(`Saved ${data.length} FSBO.com listings to database`);
+              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              st.success(`Saved ${data.length} FSBO.com listings to database`);
             } else if (error) {
-              toast.error('Could not save listings to database');
+              st.error('Could not save listings to database');
             }
           } catch {
-            toast.error('Failed to save listings to database');
+            st.error('Failed to save listings to database');
           }
         }
         } else if (isApartments) {
@@ -1324,59 +2043,86 @@ export default function WebScraper() {
         if (!backendReachable) {
           const base = scraperBackendApi.getBaseUrl();
           const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          toast.error(isLocal ? 'Apartments.com scraper backend is not running. Start the backend server (e.g. port 8080).' : 'Deployed scraper backend is not reachable.');
-          setReLoading(false);
+          st.error(isLocal ? 'Apartments.com scraper backend is not running. Start the backend server (e.g. port 8080).' : 'Deployed scraper backend is not reachable.');
           return;
         }
         const searchRes = await scraperBackendApi.searchLocation('apartments', reLocation.trim(), 'apartments');
         if (!searchRes.success || !searchRes.url) {
-          toast.error(searchRes.error || 'Could not find Apartments.com URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
-          setReLoading(false);
+          st.error(searchRes.error || 'Could not find Apartments.com URL. Try a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois).');
           return;
         }
         await scraperBackendApi.resetApartmentsStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
         if (triggerRes.error) {
-          toast.error(triggerRes.error);
-          setReLoading(false);
+          st.error(triggerRes.error);
           return;
         }
-        toast.info('Apartments.com scraper started. Listings will appear as they are scraped.');
+        st.info('Apartments.com scraper started. Listings will appear as they are scraped.');
         const pollInterval = 2000;
         const maxWait = 30 * 60 * 1000;
         const progressiveFetchInterval = 12000;
         const start = Date.now();
         let lastProgressiveFetch = 0;
         let status = await scraperBackendApi.getApartmentsStatus();
-        while (status.status === 'running' && Date.now() - start < maxWait) {
+        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getApartmentsStatus();
+          if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
             lastProgressiveFetch = Date.now();
             try {
               const partial = await scraperBackendApi.getApartmentsLastResult(lastResultOpts);
-              const partialMapped = (partial.listings || []).map((l: any) => ({
-                address: l.address, bedrooms: l.bedrooms, bathrooms: l.bathrooms, price: l.price,
-                owner_name: l.owner_name, owner_phone: l.owner_phone, owner_email: l.owner_email,
-                listing_url: l.listing_url, source_url: l.listing_url, source_platform: 'apartments', listing_type: 'rent', square_feet: l.square_feet,
-                days_on_market: l.days_on_market ?? l.days_on_zillow,
-              }));
-              if (partialMapped.length > 0) { setReListings(partialMapped); setReLoading(false); }
+              const partialMapped = (partial.listings || []).map((l: any) =>
+                withApartmentsListingContactPrefill({
+                  address: l.address,
+                  title: l.title,
+                  bedrooms: l.bedrooms,
+                  bathrooms: l.bathrooms,
+                  price: l.price,
+                  owner_name: l.owner_name,
+                  owner_phone: l.owner_phone,
+                  owner_email: l.owner_email,
+                  listing_url: l.listing_url,
+                  source_url: l.listing_url,
+                  source_platform: 'apartments',
+                  listing_type: 'rent',
+                  square_feet: l.square_feet,
+                  days_on_market: l.days_on_market ?? l.days_on_zillow,
+                }),
+              );
+              if (partialMapped.length > 0) {
+                applyListings(partialMapped);
+                clearFindListingsSpinnerIfOwner();
+              }
             } catch { /* ignore */ }
           }
         }
-        if (status.status === 'running') toast.warning('Scraper is still running. Showing results so far.');
+        if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
+        if (scrapeCancelled()) return;
+        if (status.status === 'running') st.warning('Scraper is still running. Showing results so far.');
         const result = await scraperBackendApi.getApartmentsLastResult(lastResultOpts);
-        const mapped = (result.listings || []).map((l: any) => ({
-          address: l.address, bedrooms: l.bedrooms, bathrooms: l.bathrooms, price: l.price,
-          owner_name: l.owner_name, owner_phone: l.owner_phone, owner_email: l.owner_email,
-          listing_url: l.listing_url, source_url: l.listing_url, source_platform: 'apartments', listing_type: 'rent', square_feet: l.square_feet,
-          days_on_market: l.days_on_market ?? l.days_on_zillow,
-        }));
-        setReListings(mapped);
-        setReLoading(false);
-        toast.success(`Found ${mapped.length} Apartments.com listings`);
-        if (result.error) setReErrors([{ url: '', error: result.error }]);
+        const mapped = (result.listings || []).map((l: any) =>
+          withApartmentsListingContactPrefill({
+            address: l.address,
+            title: l.title,
+            bedrooms: l.bedrooms,
+            bathrooms: l.bathrooms,
+            price: l.price,
+            owner_name: l.owner_name,
+            owner_phone: l.owner_phone,
+            owner_email: l.owner_email,
+            listing_url: l.listing_url,
+            source_url: l.listing_url,
+            source_platform: 'apartments',
+            listing_type: 'rent',
+            square_feet: l.square_feet,
+            days_on_market: l.days_on_market ?? l.days_on_zillow,
+          }),
+        );
+        applyListings(mapped);
+        st.success(`Found ${mapped.length} Apartments.com listings`);
+        if (result.error) applyErrors([{ url: '', error: result.error }]);
+        releaseScrapeUiIfOwner();
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
             const rows = mapped.map((listing) => ({
@@ -1394,24 +2140,22 @@ export default function WebScraper() {
             }));
             const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
             if (!error && data?.length) {
-              setReListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              toast.success(`Saved ${data.length} Apartments.com listings to database`);
-            } else if (error) toast.error('Could not save listings to database');
-          } catch { toast.error('Failed to save listings to database'); }
+              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
+              st.success(`Saved ${data.length} Apartments.com listings to database`);
+            } else if (error) st.error('Could not save listings to database');
+          } catch { st.error('Failed to save listings to database'); }
         }
         } else {
         // All Platforms: FSBO/FRBO uses Edge Function that requires signed-in admin
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          toast.error('Please sign in to use Find Listings.');
-          setReLoading(false);
+          st.error('Please sign in to use Find Listings.');
           return;
         }
         try {
           const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user?.id, _role: 'admin' });
           if (isAdmin === false) {
-            toast.error('Admin access is required to run the FSBO/FRBO scraper.');
-            setReLoading(false);
+            st.error('Admin access is required to run the FSBO/FRBO scraper.');
             return;
           }
         } catch {
@@ -1419,12 +2163,13 @@ export default function WebScraper() {
         }
         const response = await firecrawlApi.scrapeAndTraceFSBO({ location: reLocation, platform: rePlatform as any, listingType: reListingType, enableSkipTrace: false, saveToDatabase: reSaveToDb });
         if (response.success) {
-          setReListings(response.listings || []);
-          if (response.errors?.length) setReErrors(response.errors);
-          toast.success(`Found ${response.total || 0} listings`);
-          if (reSaveToDb && response.saved_to_database) toast.success(`Saved ${response.saved_to_database} leads to database`);
+          applyListings(response.listings || []);
+          if (response.errors?.length) applyErrors(response.errors);
+          st.success(`Found ${response.total || 0} listings`);
+          if (reSaveToDb && response.saved_to_database) st.success(`Saved ${response.saved_to_database} leads to database`);
+          releaseScrapeUiIfOwner();
         } else {
-          toast.error(response.error || 'Failed to scrape listings');
+          st.error(response.error || 'Failed to scrape listings');
         }
       }
     } catch (e: any) {
@@ -1434,16 +2179,23 @@ export default function WebScraper() {
       if (usesBackend && isNetworkError) {
         const base = scraperBackendApi.getBaseUrl();
         const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-        toast.error(isLocal
-          ? 'Scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
+        st.error(isLocal
+          ? 'Scraper backend is not running or wrong port. Start python api_server.py and set VITE_SCRAPER_BACKEND_URL to the same host:port (often http://127.0.0.1:8080).'
           : 'Deployed scraper backend is not reachable. Check your network or try again.');
       } else {
         const platformLabel = isHotpads ? 'Hotpads' : isTrulia ? 'Trulia' : isZillowFsbo || isZillowFrbo ? 'Zillow' : isApartments ? 'Apartments.com' : '';
         const fallback = platformLabel ? `Failed to run ${platformLabel} scraper` : 'Failed to scrape listings';
-        toast.error(msg ? `${fallback}: ${msg}` : fallback);
+        st.error(msg ? `${fallback}: ${msg}` : fallback);
       }
     } finally {
-      setReLoading(false);
+      if (scrapeSafetyTimer !== undefined) window.clearTimeout(scrapeSafetyTimer);
+      if (scrapeGen > 0 && scrapeGen === reScrapeGenerationRef.current) {
+        reScrapeInFlightRef.current = false;
+      }
+      if (scrapeGen > 0 && reLoadingScrapeGenRef.current === scrapeGen) {
+        setReLoading(false);
+        reLoadingScrapeGenRef.current = -1;
+      }
     }
   };
 
@@ -1457,85 +2209,117 @@ export default function WebScraper() {
   };
 
   const handleSkipTraceListing = async (listing: any, index: number) => {
-    const addrLine = addressForSkipTrace(listing);
+    const row = reListingsRef.current[index] ?? listing;
+    const addrLine = addressForSkipTrace(row);
     if (!addrLine) { toast.error('No address available for skip trace'); return; }
     setSkipTracingIndex(index);
+    setReListings((prev) =>
+      prev.map((l, i) =>
+        i !== index ? l : { ...l, skip_trace_status: l.skip_trace_status === 'not_found' ? undefined : l.skip_trace_status },
+      ),
+    );
     try {
       const parsed = skipTraceApi.parseAddress(addrLine);
-      const result = await skipTraceApi.lookupOwner(parsed);
-      if (result.success && result.data && skipTraceHasUsefulContact(result.data)) {
-        const updated = { ...listing, owner_name: result.data!.fullName || listing.owner_name, owner_phone: result.data!.phones[0]?.number || listing.owner_phone, owner_email: result.data!.emails[0]?.address || listing.owner_email, all_phones: result.data!.phones, all_emails: result.data!.emails, skip_trace_confidence: result.data!.confidence, skip_trace_status: 'success' as const };
-        setReListings(prev => prev.map((l, i) => i !== index ? l : updated));
-        toast.success(`Found owner info: ${result.data.fullName || 'Contact data retrieved'}`);
-        // Save lead to database linked to this listing (for all scrapers: FSBO, Hotpads, Trulia, Zillow, etc.)
+      const sp = (row.source_platform || '').toLowerCase();
+      const result = await skipTraceApi.lookupOwner({ ...parsed, source_platform: sp || undefined });
+      const latest = reListingsRef.current[index] ?? row;
+      const merged = mergeSkipTraceResultWithApartmentsFallback(latest, result);
+      if (merged) {
+        const { data, fromApartmentsListing } = merged;
+        const providers = fromApartmentsListing ? ['apartments_listing_contact'] : ['batchdata'];
+        const traceName = (data.fullName && String(data.fullName).trim()) || '';
+        const listContact = (latest.scraped_listing_contact_name || latest.owner_name || '').trim();
+        const strictFrbo = sp === 'zillow_frbo';
+        const badAssessor =
+          !!traceName &&
+          (isQuasiPublicEntityDisplayName(traceName) ||
+            (strictFrbo && isCorporateLandlordDisplayName(traceName, true)));
+        const updated = buildListingAfterSkipTrace(latest, data, sp, providers);
+        let saved = false;
         if (user?.id) {
           try {
             const { error } = await supabase.from('scraped_leads').insert({
               domain: updated.source_url ? new URL(updated.source_url).hostname : 'unknown',
               source_url: updated.source_url || updated.listing_url,
               address: updated.address || null,
-              full_name: updated.owner_name, best_email: updated.owner_email, best_phone: updated.owner_phone,
+              full_name: updated.owner_name,
+              best_email: updated.owner_email,
+              best_phone: updated.owner_phone,
               all_emails: updated.all_emails?.map((e: any) => e.address ?? e) ?? (updated.owner_email ? [updated.owner_email] : []),
               all_phones: updated.all_phones?.map((p: any) => p.number ?? p) ?? (updated.owner_phone ? [updated.owner_phone] : []),
-              status: 'new', confidence_score: updated.skip_trace_confidence || 50, lead_type: 'person', source_type: 'real_estate_scraper',
-              schema_data: { address: updated.address, bedrooms: updated.bedrooms, bathrooms: updated.bathrooms, price: updated.price, days_on_market: updated.days_on_market, property_type: updated.property_type, square_feet: updated.square_feet, year_built: updated.year_built, listing_type: updated.listing_type, source_platform: updated.source_platform },
-              enrichment_providers_used: ['batchdata'],
+              status: 'new',
+              confidence_score: updated.skip_trace_confidence || 50,
+              lead_type: 'person',
+              source_type: 'real_estate_scraper',
+              schema_data: {
+                address: updated.address,
+                bedrooms: updated.bedrooms,
+                bathrooms: updated.bathrooms,
+                price: updated.price,
+                days_on_market: updated.days_on_market,
+                property_type: updated.property_type,
+                square_feet: updated.square_feet,
+                year_built: updated.year_built,
+                listing_type: updated.listing_type,
+                source_platform: updated.source_platform,
+                skip_trace_assessor_name: updated.skip_trace_assessor_name ?? null,
+              },
+              enrichment_providers_used: providers,
             });
-            if (!error) {
-              setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, saved_to_db: true }));
-              toast.success('Lead saved to database');
-            }
+            saved = !error;
           } catch {
-            // insert failed; skip trace still succeeded
+            saved = false;
           }
         }
+        setReListings((prev) =>
+          prev.map((l, i) => (i !== index ? l : { ...updated, saved_to_db: saved || l.saved_to_db })),
+        );
+        const label =
+          updated.owner_name?.trim() ||
+          (updated.owner_phone ? formatUsPhoneForDisplay(String(updated.owner_phone)) : '') ||
+          updated.owner_email ||
+          'Contact found';
+        if (fromApartmentsListing) {
+          toast.success(
+            saved
+              ? `Apartments.com contact saved (${label}). BatchData had no parcel owner — using the manager/phone from the listing.`
+              : `Apartments.com contact: ${label}. BatchData had no parcel owner — sign in to auto-save leads.`,
+          );
+        } else if (badAssessor && listContact && traceName) {
+          toast.success(
+            saved
+              ? `Skip trace: kept listing contact "${listContact}" (assessor record was "${traceName}" — not a private landlord). Lead saved.`
+              : `Skip trace: kept "${listContact}" on card. Assessor: "${traceName}".${user?.id ? '' : ' Sign in to auto-save.'}`,
+          );
+        } else {
+          toast.success(
+            saved
+              ? `Skip trace: ${label}. Lead saved to database.`
+              : `Skip trace: ${label}${user?.id ? ' (not saved — check Supabase).' : ' (sign in to auto-save leads).'}`,
+          );
+        }
       } else {
-        toast.error(result.error || result.message || 'No owner info found');
+        const hint =
+          result.message ||
+          result.error ||
+          'No owner record returned (common for large apartment buildings — try the listing contact instead).';
+        const batchDataEmpty =
+          result.success === true &&
+          !(result.error || '').trim() &&
+          (!result.data?.phones?.length && !result.data?.emails?.length && !result.data?.fullName?.trim());
+        if (sp === 'apartments' && !(latest.owner_phone || latest.owner_name)) {
+          toast.info(APARTMENTS_SKIP_TRACE_NO_MATCH_HINT);
+        } else if (batchDataEmpty) {
+          toast.info(
+            `${hint}. Skip trace uses property-owner records (assessor-style), not the listing agent. Rentals and PM-managed units often return nothing — use the phone/name on the Zillow card if you need a contact now.`,
+          );
+        } else {
+          toast.error(hint);
+        }
         setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: 'not_found' }));
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to skip trace');
-    } finally { setSkipTracingIndex(null); }
-  };
-
-  const handleRetrySkipTrace = async (listing: any, index: number) => {
-    const addrLine = addressForSkipTrace(listing);
-    if (!addrLine) { toast.error('No address available for skip trace'); return; }
-    setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: undefined }));
-    setSkipTracingIndex(index);
-    try {
-      const parsed = skipTraceApi.parseAddress(addrLine);
-      const result = await skipTraceApi.lookupOwner(parsed);
-      if (result.success && result.data && skipTraceHasUsefulContact(result.data)) {
-        const updated = { ...listing, owner_name: result.data!.fullName || listing.owner_name, owner_phone: result.data!.phones[0]?.number || listing.owner_phone, owner_email: result.data!.emails[0]?.address || listing.owner_email, all_phones: result.data!.phones, all_emails: result.data!.emails, skip_trace_confidence: result.data!.confidence, skip_trace_status: 'success' as const };
-        setReListings(prev => prev.map((l, i) => i !== index ? l : updated));
-        toast.success(`Found owner info: ${result.data.fullName || 'Contact data retrieved'}`);
-        if (user?.id) {
-          try {
-            const { error } = await supabase.from('scraped_leads').insert({
-              domain: updated.source_url ? new URL(updated.source_url).hostname : 'unknown',
-              source_url: updated.source_url || updated.listing_url,
-              address: updated.address || null,
-              full_name: updated.owner_name, best_email: updated.owner_email, best_phone: updated.owner_phone,
-              all_emails: updated.all_emails?.map((e: any) => e.address ?? e) ?? (updated.owner_email ? [updated.owner_email] : []),
-              all_phones: updated.all_phones?.map((p: any) => p.number ?? p) ?? (updated.owner_phone ? [updated.owner_phone] : []),
-              status: 'new', confidence_score: updated.skip_trace_confidence || 50, lead_type: 'person', source_type: 'real_estate_scraper',
-              schema_data: { address: updated.address, bedrooms: updated.bedrooms, bathrooms: updated.bathrooms, price: updated.price, days_on_market: updated.days_on_market, property_type: updated.property_type, square_feet: updated.square_feet, year_built: updated.year_built, listing_type: updated.listing_type, source_platform: updated.source_platform },
-              enrichment_providers_used: ['batchdata'],
-            });
-            if (!error) {
-              setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, saved_to_db: true }));
-              toast.success('Lead saved to database');
-            }
-          } catch { /* ignore */ }
-        }
-      } else {
-        toast.error(result.error || result.message || 'Still no owner info found');
-        setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: 'not_found' }));
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to retry skip trace');
-      setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, skip_trace_status: 'not_found' }));
     } finally { setSkipTracingIndex(null); }
   };
 
@@ -1552,7 +2336,12 @@ export default function WebScraper() {
         all_phones: listing.all_phones?.map((p: any) => p.number || p) || (listing.owner_phone ? [listing.owner_phone] : []),
         status: 'new', confidence_score: listing.skip_trace_confidence || 50, lead_type: 'person', source_type: 'real_estate_scraper',
         schema_data: { address: listing.address, bedrooms: listing.bedrooms, bathrooms: listing.bathrooms, price: listing.price, days_on_market: listing.days_on_market, property_type: listing.property_type, square_feet: listing.square_feet, year_built: listing.year_built, listing_type: listing.listing_type, source_platform: listing.source_platform },
-        enrichment_providers_used: listing.skip_trace_status === 'success' ? ['batchdata'] : [],
+        enrichment_providers_used:
+          listing.skip_trace_status === 'success'
+            ? (Array.isArray(listing.enrichment_providers_used) && listing.enrichment_providers_used.length
+                ? listing.enrichment_providers_used
+                : ['batchdata'])
+            : [],
       });
       if (error) throw error;
       setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, saved_to_db: true }));
@@ -1568,7 +2357,6 @@ export default function WebScraper() {
       // User explicitly selected rows — allow re-skip even if the listing already has a scraped agent/office phone.
       return (
         l &&
-        !isApartmentsComListing(l) &&
         !!addressForSkipTrace(l) &&
         l.skip_trace_status !== 'success'
       );
@@ -1584,9 +2372,13 @@ export default function WebScraper() {
       if (!addrLine) continue;
       try {
         const parsed = skipTraceApi.parseAddress(addrLine);
-        const result = await skipTraceApi.lookupOwner(parsed);
-        if (result.success && result.data && skipTraceHasUsefulContact(result.data)) {
-          const updated = { ...listing, owner_name: result.data!.fullName || listing.owner_name, owner_phone: result.data!.phones[0]?.number || listing.owner_phone, owner_email: result.data!.emails[0]?.address || listing.owner_email, all_phones: result.data!.phones, all_emails: result.data!.emails, skip_trace_confidence: result.data!.confidence, skip_trace_status: 'success' as const };
+        const sp = (listing.source_platform || '').toLowerCase();
+        const result = await skipTraceApi.lookupOwner({ ...parsed, source_platform: sp || undefined });
+        const merged = mergeSkipTraceResultWithApartmentsFallback(listing, result);
+        if (merged) {
+          const { data, fromApartmentsListing } = merged;
+          const providers = fromApartmentsListing ? ['apartments_listing_contact'] : ['batchdata'];
+          const updated = buildListingAfterSkipTrace(listing, data, sp, providers);
           setReListings(prev => prev.map((l, i) => i !== index ? l : updated));
           successCount++;
           if (user?.id) {
@@ -1599,8 +2391,20 @@ export default function WebScraper() {
                 all_emails: updated.all_emails?.map((e: any) => e.address ?? e) ?? (updated.owner_email ? [updated.owner_email] : []),
                 all_phones: updated.all_phones?.map((p: any) => p.number ?? p) ?? (updated.owner_phone ? [updated.owner_phone] : []),
                 status: 'new', confidence_score: updated.skip_trace_confidence || 50, lead_type: 'person', source_type: 'real_estate_scraper',
-                schema_data: { address: updated.address, bedrooms: updated.bedrooms, bathrooms: updated.bathrooms, price: updated.price, days_on_market: updated.days_on_market, property_type: updated.property_type, square_feet: updated.square_feet, year_built: updated.year_built, listing_type: updated.listing_type, source_platform: updated.source_platform },
-                enrichment_providers_used: ['batchdata'],
+                schema_data: {
+                  address: updated.address,
+                  bedrooms: updated.bedrooms,
+                  bathrooms: updated.bathrooms,
+                  price: updated.price,
+                  days_on_market: updated.days_on_market,
+                  property_type: updated.property_type,
+                  square_feet: updated.square_feet,
+                  year_built: updated.year_built,
+                  listing_type: updated.listing_type,
+                  source_platform: updated.source_platform,
+                  skip_trace_assessor_name: updated.skip_trace_assessor_name ?? null,
+                },
+                enrichment_providers_used: providers,
               });
               if (!error) {
                 setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, saved_to_db: true }));
@@ -1631,7 +2435,12 @@ export default function WebScraper() {
           all_phones: listing.all_phones?.map((p: any) => p.number || p) || (listing.owner_phone ? [listing.owner_phone] : []),
           status: 'new', confidence_score: listing.skip_trace_confidence || 50, lead_type: 'person', source_type: 'real_estate_scraper',
           schema_data: { address: listing.address, bedrooms: listing.bedrooms, bathrooms: listing.bathrooms, price: listing.price, days_on_market: listing.days_on_market, property_type: listing.property_type, square_feet: listing.square_feet, year_built: listing.year_built, listing_type: listing.listing_type, source_platform: listing.source_platform },
-          enrichment_providers_used: listing.skip_trace_status === 'success' ? ['batchdata'] : [],
+          enrichment_providers_used:
+            listing.skip_trace_status === 'success'
+              ? (Array.isArray(listing.enrichment_providers_used) && listing.enrichment_providers_used.length
+                  ? listing.enrichment_providers_used
+                  : ['batchdata'])
+              : [],
         });
         if (error) throw error;
         setReListings(prev => prev.map((l, i) => i !== index ? l : { ...l, saved_to_db: true })); successCount++;
@@ -1906,26 +2715,46 @@ export default function WebScraper() {
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-6 pt-1">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Switch checked={reSaveToDb} onCheckedChange={setReSaveToDb} className="scale-90" />
                     <span className="text-xs font-medium">Save to Database</span>
                   </label>
-              </div>
+                </div>
 
               {/* Backend status, cap verification, and PM/realtor filter note */}
               <div className="flex items-center gap-2 pt-1.5 text-[11px] text-muted-foreground flex-wrap">
                 <span className="text-green-600 dark:text-green-400 font-medium">No listing cap</span>
-                <span>— all platforms return every scraped listing for verification.</span>
-                <span className="text-amber-600 dark:text-amber-400 font-medium">PM/realtor hidden</span>
-                <span>— only by-owner leads are shown.</span>
+                <span>— scope below controls whether PM/managed rows are saved and shown.</span>
+                {reByOwnerStrict ? (
+                  <>
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">By-owner only</span>
+                    <span>
+                      — Zillow FRBO selects this automatically (filters PM/leasing on save). Other platforms: turn on here for the same behavior.
+                      {reListings.length > 0
+                        ? ' Need every row? Choose Include PM / realtor next to Match, then Refresh.'
+                        : ' Use the scope buttons next to Refresh (empty-state card below), then Refresh again.'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-blue-600 dark:text-blue-400 font-medium">Include PM / realtor</span>
+                    <span>
+                      — saves and shows managed buildings and broker contacts. This is the default for every platform except Zillow FRBO (FRBO defaults to by-owner when you pick it).
+                      {reListings.length > 0
+                        ? ' For private landlords only on non-FRBO scrapers, choose By-owner only next to Match, then run Find Listings again or Refresh.'
+                        : ' Scope buttons sit next to Refresh below (and next to Match after rows load).'}
+                    </span>
+                  </>
+                )}
                 {reBackendCheckInProgress && <span>Checking backend…</span>}
                 {!reBackendCheckInProgress && reBackendReachable === true && (() => {
                   const base = scraperBackendApi.getBaseUrl();
                   const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
+                  const localLabel = base.replace(/^https?:\/\//, '');
                   return (
                     <span>
-                      {isLocal ? 'Local backend (localhost:8080): ' : <>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={base}>{base.replace(/^https?:\/\//, '')}</span> — </>}
+                      {isLocal ? <>Local backend (<span className="font-mono" title={base}>{localLabel}</span>): </> : <>Backend: <span className="font-mono truncate max-w-[200px] inline-block align-bottom" title={base}>{base.replace(/^https?:\/\//, '')}</span> — </>}
                       <span className="text-green-600 dark:text-green-400">{isLocal ? 'Running' : 'Reachable'}</span>
                     </span>
                   );
@@ -1963,6 +2792,48 @@ export default function WebScraper() {
                     ))}
                 </div>
               )}
+
+          {reListings.length === 0 && (
+            <Card className="border-dashed border-border/80 bg-muted/15">
+              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <p className="text-xs text-muted-foreground max-w-2xl">
+                  {rePlatform === 'all' ? (
+                    <>
+                      Pick a single platform (not &quot;All&quot;), enter a city, then click{' '}
+                      <span className="font-medium text-foreground">Find Listings</span>.
+                    </>
+                  ) : (
+                    <>
+                      Nothing loaded yet. Click <span className="font-medium text-foreground">Find Listings</span> to run a scrape, or{' '}
+                      <span className="font-medium text-foreground">Refresh listings</span> to load the last saved run for this platform from the backend.
+                      {reByOwnerStrict && (
+                        <span className="block mt-2 text-amber-600/95 dark:text-amber-400/95">
+                          <span className="font-medium">By-owner only</span> is on — if the database has rows but you see none, choose{' '}
+                          <span className="font-medium text-foreground">Include PM / realtor</span> next to Refresh, then Refresh again.
+                        </span>
+                      )}
+                    </>
+                  )}
+                </p>
+                {rePlatform !== 'all' && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 shrink-0">
+                    {renderListingScopeToolbar()}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] px-2 shrink-0 gap-1"
+                      disabled={reRefreshingListings}
+                      onClick={() => void refreshListingsFromBackend()}
+                    >
+                      {reRefreshingListings ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                      Refresh listings
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {reListings.length > 0 && (
               <>
@@ -2009,16 +2880,7 @@ export default function WebScraper() {
                       >
                         Match &quot;{reLocation?.trim() || 'location'}&quot;
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={reIncludePmListings ? 'secondary' : 'outline'}
-                        className="h-7 text-[10px] px-2"
-                        onClick={() => setReIncludePmListings((v) => !v)}
-                        title="Off = backend hides PM/realtor. After toggling, click Refresh listings."
-                      >
-                        {reIncludePmListings ? 'Include PM / realtor' : 'By-owner only'}
-                      </Button>
+                      {renderListingScopeToolbar()}
                       <Button
                         type="button"
                         size="sm"
@@ -2026,7 +2888,7 @@ export default function WebScraper() {
                         className="h-7 text-[10px] px-2 gap-1"
                         disabled={reRefreshingListings || rePlatform === 'all'}
                         onClick={() => void refreshListingsFromBackend()}
-                        title="Reload last scrape from the scraper backend with current PM filter"
+                        title="Reload from backend (Include PM / By-owner buttons to the left)"
                       >
                         {reRefreshingListings ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                         Refresh listings
@@ -2035,8 +2897,18 @@ export default function WebScraper() {
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                       <span className="text-[10px] text-muted-foreground text-right">
                         {reListingsFilteredForDisplay.length} listing{reListingsFilteredForDisplay.length !== 1 ? 's' : ''} shown
-                        {reMatchLocationFilter && reLocation?.trim() && reListingsFilteredForDisplay.length < reShownWithoutLocationFilter && (
-                          <span> (city filter — {reShownWithoutLocationFilter} before city filter, {reListings.length} loaded)</span>
+                        {reMatchLocationFilter && reLocation?.trim() && (
+                          <span title="By-owner vs Include PM changes how many rows load from the API; Match city then keeps only addresses that match this search box.">
+                            {' '}
+                            · Match &quot;{reLocation.trim()}&quot;:{' '}
+                            <span className="text-foreground/90 font-medium">{reListingsFilteredForDisplay.length}</span>
+                            {' of '}
+                            <span className="text-foreground/90 font-medium">{reShownWithoutLocationFilter}</span>
+                            {' before city filter'}
+                            {reListings.length !== reShownWithoutLocationFilter ? (
+                              <span> ({reListings.length} raw in memory)</span>
+                            ) : null}
+                          </span>
                         )}
                       </span>
                       <Badge variant="outline" className="text-[10px] font-normal text-green-600 dark:text-green-400 border-green-500/50" title="Backend returns all scraped listings with no limit">
@@ -2044,37 +2916,75 @@ export default function WebScraper() {
                       </Badge>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] font-normal border-amber-500/50 ${reIncludePmListings ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}
-                        title={reIncludePmListings ? 'Last refresh included PM/realtor rows' : 'Backend filters out PM/realtor; use Include PM + Refresh listings to change'}
+                        className={`text-[10px] font-normal border-amber-500/50 ${reBackendPmIncludedFromApi ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}
+                        title={
+                          reBackendPmIncludedFromApi
+                            ? 'Last /last-result used include_pm=1 (all saved rows).'
+                            : 'Last /last-result omitted PM/managed-pattern rows (by-owner request).'
+                        }
                       >
-                        {reIncludePmListings ? 'PM/realtor may show' : 'By-owner only'}
+                        {reBackendPmIncludedFromApi ? 'Backend: PM included' : 'Backend: by-owner only'}
                       </Badge>
+                      {reMatchLocationFilter && reLocation?.trim() && (
+                        <Badge variant="outline" className="text-[10px] font-normal text-sky-600 dark:text-sky-400 border-sky-500/50" title="Only rows whose address matches the City field">
+                          City: {reLocation.trim()}
+                        </Badge>
+                      )}
                     </div>
                     <span className="text-[10px] text-green-600/90 dark:text-green-400/90 text-right" title="Rows currently loaded from the last scrape or refresh">
                       {reBackendRowCountForPlatform} loaded from backend{reMatchLocationFilter ? '' : ' — table not filtered by search box'}
                     </span>
-                    <span className={`text-[10px] text-right ${reIncludePmListings ? 'text-blue-600/90 dark:text-blue-400/90' : 'text-amber-600/90 dark:text-amber-400/90'}`}>
-                      {reIncludePmListings
-                        ? 'PM/realtor included when you Refresh / scrape with this toggle on'
-                        : 'PM/realtor hidden by the backend — toggle above + Refresh listings to include them'}
+                    <span
+                      className={`text-[10px] text-right max-w-xl ${reBackendPmIncludedFromApi ? 'text-blue-600/90 dark:text-blue-400/90' : 'text-amber-600/90 dark:text-amber-400/90'}`}
+                    >
+                      {reBackendPmIncludedFromApi
+                        ? 'PM included — click By-owner only to refetch with PM/managed rows hidden on the backend.'
+                        : 'By-owner only — need the full database? Click Include PM / realtor (refetches with all rows).'}
+                      {(rePlatform === 'zillow_frbo' || rePlatform === 'hotpads') && reMatchLocationFilter && reLocation?.trim() && (
+                        <span className="block mt-1 text-muted-foreground font-normal">
+                          <strong className="text-foreground/85 font-medium">Why the list can look identical:</strong> (1){' '}
+                          <span className="text-foreground/80">Match &quot;{reLocation.trim()}&quot;</span> keeps only addresses that match this city — extra PM rows are often suburbs or lack this text, so you still see the same dozen. Watch{' '}
+                          <span className="text-foreground/80 font-medium">… of M before city filter</span>: M should jump when Include PM loads more rows. (2) If{' '}
+                          <span className="text-foreground/80 font-medium">M</span> never jumps, PM listings were never saved to Supabase (scrapes used by-owner save), so both requests return the same DB rows.
+                          {rePlatform === 'hotpads' && (
+                            <span className="block mt-1">
+                              <strong className="text-foreground/85 font-medium">Hotpads:</strong> most rows use{' '}
+                              <span className="text-foreground/80">support@hotpads.com</span> — that is normal masking, not auto-PM. By-owner hides{' '}
+                              <span className="text-foreground/80">hp_strict_signal=managed</span>, Hotpads building URLs (<span className="text-foreground/80">/b/pad</span>, <span className="text-foreground/80">/building/</span>, or <span className="text-foreground/80">…/property-slug/pad</span> without a unit number), LLC/Inc-style lister names, and other PM/corporate patterns. Use{' '}
+                              <span className="text-foreground/80">Include PM / realtor</span> for the full feed.{' '}
+                              <span className="text-foreground/80">Include PM</span> sorts PM/corporate-style rows first;{' '}
+                              <span className="text-foreground/80">by-owner</span> sorts unmasked personal email first — so the top of the list should not match between the two toggles.
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </span>
-                    <div className="flex items-center gap-2 pt-0.5 flex-wrap justify-end">
-                      <Switch id="re-hide-long-dom" checked={reHideLongDom} onCheckedChange={setReHideLongDom} className="scale-90" />
-                      <Label htmlFor="re-hide-long-dom" className="text-[10px] text-muted-foreground font-normal cursor-pointer">
-                        Hide listings 120+ days on market (stale; needs days-on-market from site)
-                      </Label>
-                    </div>
                   </div>
                 </div>
 
                 {/* Map */}
                 {showMap && (
                   <Suspense fallback={<div className="h-[400px] rounded-lg bg-muted/30 border border-border/60 flex items-center justify-center text-xs text-muted-foreground">Loading map...</div>}>
-                    <ListingsMap listings={reListingsFilteredForDisplay.map(({ listing }) => listing)} onSelectListing={(i) => { setShowMap(false); }} searchLocation={reLocation} />
+                    <ListingsMap
+                      listings={reListingsFilteredForDisplay.map(({ listing }) => listing)}
+                      onSelectListing={() => {
+                        setShowMap(false);
+                      }}
+                      searchLocation={reLocation}
+                      resolveListingAddress={resolveListingAddressForMap}
+                    />
                   </Suspense>
                 )}
 
               <Card className="border-border/60">
+                {reListings.length > 0 && reListingsFilteredForDisplay.length === 0 && (
+                  <div className="px-5 py-2.5 border-b border-amber-500/25 bg-amber-500/[0.06] text-[11px] text-amber-900 dark:text-amber-100/95">
+                    <span className="font-medium">0 listings match your current filters.</span> {reListings.length} row
+                    {reListings.length !== 1 ? 's are' : ' is'} loaded but hidden by By-owner rules and/or city match. Try{' '}
+                    <span className="font-medium">Include PM / realtor</span> next to Refresh, turn off <span className="font-medium">Match city</span>, or click{' '}
+                    <span className="font-medium">Show all rows</span>.
+                  </div>
+                )}
                 <div className="flex items-center justify-between px-5 py-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium">{reListingsFilteredForDisplay.length} Listings</h3>
@@ -2083,16 +2993,48 @@ export default function WebScraper() {
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] font-normal border-amber-500/50 ${reIncludePmListings ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}
-                      title={reIncludePmListings ? 'Backend may return PM/realtor rows' : 'Backend filters to by-owner'}
+                      className={`text-[10px] font-normal border-amber-500/50 ${reByOwnerStrict ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}`}
+                      title={
+                        reByOwnerStrict
+                          ? 'Table hides PM/broker-style names. If skip trace returns an assessor/agency name, we keep the listing contact on the card so the row stays visible.'
+                          : 'Table shows all loaded owner names (no client-side by-owner name filter).'
+                      }
                     >
-                      {reIncludePmListings ? 'PM ok' : 'By-owner'}
+                      {reByOwnerStrict ? 'Table: by-owner only' : 'Table: all names'}
                     </Badge>
+                    {reLastBackendPmMeta && rePlatform !== 'all' && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-normal max-w-[280px] whitespace-normal h-auto py-0.5 leading-snug ${
+                          reLastBackendPmMeta.include_pm
+                            ? 'text-sky-700 dark:text-sky-300 border-sky-500/45'
+                            : reLastBackendPmMeta.pm_rows_hidden > 0
+                              ? 'text-violet-700 dark:text-violet-300 border-violet-500/45'
+                              : 'text-muted-foreground border-border/60'
+                        }`}
+                        title={
+                          reLastBackendPmMeta.include_pm
+                            ? 'Last API load used include_pm=1: every saved row for this platform.'
+                            : 'Last API load omitted rows classified as PM, managed URL, or corporate landlord. support@hotpads.com is still normal for masked true owners — not counted here.'
+                        }
+                      >
+                        {reLastBackendPmMeta.include_pm
+                          ? `DB ${reLastBackendPmMeta.total_stored} saved (full load)`
+                          : reLastBackendPmMeta.pm_rows_hidden > 0
+                            ? `+${reLastBackendPmMeta.pm_rows_hidden} rows only in Include PM · ${reLastBackendPmMeta.total_stored} in DB`
+                            : `0 PM rows stripped · ${reLastBackendPmMeta.total_stored} in DB`}
+                      </Badge>
+                    )}
+                    {reMatchLocationFilter && reLocation?.trim() && (
+                      <Badge variant="outline" className="text-[10px] font-normal text-sky-600 dark:text-sky-400 border-sky-500/50">
+                        City: {reLocation.trim()}
+                      </Badge>
+                    )}
                     {reMatchLocationFilter && reLocation?.trim() && reListingsFilteredForDisplay.length < reShownWithoutLocationFilter && (
                       <span className="text-[10px] text-muted-foreground">(city filter on)</span>
                     )}
                     {!reMatchLocationFilter && reLocation?.trim() && (
-                      <span className="text-[10px] text-muted-foreground">(all rows)</span>
+                      <span className="text-[10px] text-muted-foreground">(all cities)</span>
                     )}
                     {selectedListings.size > 0 && (
                       <Badge variant="secondary" className="text-[10px] h-5">{selectedListings.size} selected</Badge>
@@ -2102,11 +3044,7 @@ export default function WebScraper() {
                     <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={toggleSelectAllListings}>
                       {selectedListings.size === filteredUnsavedIndices.length ? 'Deselect All' : 'Select All'}
                     </Button>
-                    {selectedListings.size > 0 &&
-                      Array.from(selectedListings).some((i) => {
-                        const l = reListings[i];
-                        return l && !isApartmentsComListing(l);
-                      }) && (
+                    {selectedListings.size > 0 && (
                       <>
                         <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={handleBulkSkipTrace} disabled={bulkSkipTracing}>
                           {bulkSkipTracing ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RotateCw className="h-3 w-3 mr-1" /> Skip Trace</>}
@@ -2153,10 +3091,10 @@ export default function WebScraper() {
                                     <h4 className="text-sm font-medium truncate">{listingDisplayAddress(listing)}</h4>
                                   )}
                                   {listing.saved_to_db && <Badge variant="secondary" className="text-[10px] h-4 shrink-0">Saved</Badge>}
-                                  {!isApartmentsComListing(listing) && listing.skip_trace_status === 'success' && (
+                                  {listing.skip_trace_status === 'success' && (
                                     <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] h-4 border-0 shrink-0">Traced</Badge>
                                   )}
-                                  {!isApartmentsComListing(listing) && listing.skip_trace_status === 'not_found' && (
+                                  {listing.skip_trace_status === 'not_found' && (
                                     <Badge variant="outline" className="text-[10px] h-4 shrink-0">Not Found</Badge>
                                   )}
                                 </div>
@@ -2200,37 +3138,63 @@ export default function WebScraper() {
                             </div>
 
                             {(listing.owner_name || listing.owner_phone || listing.owner_email) ? (
-                              <div className="flex items-center gap-4 text-xs bg-muted/40 rounded-md px-3 py-2">
-                                {listing.owner_name && <span className="font-medium">{listing.owner_name}</span>}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-4 text-xs bg-muted/40 rounded-md px-3 py-2">
+                                  {listing.owner_name && <span className="font-medium">{listing.owner_name}</span>}
                                   {listing.owner_phone && (
-                                  <a href={`tel:${listing.owner_phone}`} className="flex items-center gap-1 text-primary hover:underline">
-                                    <PhoneIcon className="h-3 w-3" /> {listing.owner_phone}
-                                  </a>
+                                    <a href={`tel:${String(listing.owner_phone).replace(/\D/g, '')}`} className="flex items-center gap-1 text-primary hover:underline">
+                                      <PhoneIcon className="h-3 w-3" /> {formatUsPhoneForDisplay(String(listing.owner_phone))}
+                                    </a>
                                   )}
                                   {listing.owner_email && (
-                                  <a href={`mailto:${listing.owner_email}`} className="flex items-center gap-1 text-primary hover:underline">
-                                    <MailIcon className="h-3 w-3" /> {listing.owner_email}
-                                  </a>
+                                    <a href={`mailto:${listing.owner_email}`} className="flex items-center gap-1 text-primary hover:underline">
+                                      <MailIcon className="h-3 w-3" /> {listing.owner_email}
+                                    </a>
                                   )}
                                 </div>
+                                {listing.skip_trace_assessor_name &&
+                                  listing.skip_trace_assessor_name.trim().toLowerCase() !==
+                                    String(listing.owner_name || '').trim().toLowerCase() && (
+                                    <p className="text-[10px] text-muted-foreground/90 px-1">
+                                      Assessor / skip-trace record: {listing.skip_trace_assessor_name}
+                                    </p>
+                                  )}
+                              </div>
                             ) : null}
 
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                {!isApartmentsComListing(listing) &&
-                                  addressForSkipTrace(listing) &&
-                                  listing.skip_trace_status !== 'success' &&
-                                  listing.skip_trace_status !== 'not_found' && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSkipTraceListing(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
-                                  {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Skip Trace
-                                  </Button>
-                                )}
-                                {!isApartmentsComListing(listing) && listing.skip_trace_status === 'not_found' && (
-                                <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20 shrink-0" onClick={() => handleRetrySkipTrace(listing, realIndex)} disabled={skipTracingIndex === realIndex}>
-                                  {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />} Retry
-                                  </Button>
-                                )}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className={`h-7 text-xs shrink-0${listing.skip_trace_status === 'not_found' ? ' text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20' : ''}`}
+                                  title={
+                                    addressForSkipTrace(listing)
+                                      ? listing.skip_trace_status === 'success'
+                                        ? 'Run skip trace again (refreshes BatchData and listing contact where applicable)'
+                                        : listing.skip_trace_status === 'not_found'
+                                          ? 'Retry skip trace after fixing address or when listing adds a phone'
+                                          : 'Look up owner / contact for this address'
+                                      : 'No usable address for skip trace — fix address or open listing URL'
+                                  }
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSkipTraceListing(listing, realIndex)}
+                                  disabled={skipTracingIndex === realIndex || !addressForSkipTrace(listing)}
+                                >
+                                  {skipTracingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCw className="h-3 w-3 mr-1" />}
+                                  Skip Trace
+                                </Button>
                                 {!listing.saved_to_db && (
-                                <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => handleSaveListing(listing, realIndex)} disabled={savingIndex === realIndex}>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 text-xs shrink-0"
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSaveListing(listing, realIndex)}
+                                  disabled={savingIndex === realIndex}
+                                >
                                   {savingIndex === realIndex ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
                                   </Button>
                                 )}

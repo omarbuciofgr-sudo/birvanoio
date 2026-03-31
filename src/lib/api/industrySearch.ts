@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { scraperBackendApi } from '@/lib/api/scraperBackend';
 
 export interface CompanySearchInput {
   industry?: string;
@@ -104,6 +105,8 @@ export interface PeopleSearchResponse {
   people?: PersonResult[];
   total?: number;
   error?: string;
+  /** Hint when results are empty (e.g. after relaxed retry) */
+  message?: string;
 }
 
 export interface JobSearchResponse {
@@ -162,7 +165,11 @@ export const industrySearchApi = {
       return { success: false, error: error.message };
     }
 
-    return data as IndustrySearchResponse;
+    const raw = data as IndustrySearchResponse;
+    if (raw?.success === false && raw.error) {
+      return { success: false, error: raw.error, companies: [] };
+    }
+    return raw;
   },
 
   /**
@@ -195,16 +202,37 @@ export const industrySearchApi = {
     years_experience_max?: number;
     limit?: number;
   }): Promise<PeopleSearchResponse> {
-    const { data, error } = await supabase.functions.invoke('people-search', {
-      body: input,
-    });
-
-    if (error) {
-      console.error('People search error:', error);
-      return { success: false, error: error.message };
+    const base = scraperBackendApi.getBaseUrl();
+    try {
+      const res = await fetch(`${base}/api/people-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        cache: 'no-store',
+      });
+      const raw = (await res.json().catch(() => ({}))) as PeopleSearchResponse;
+      if (!res.ok) {
+        return {
+          success: false,
+          error: raw.error || `People search failed (${res.status})`,
+          people: [],
+        };
+      }
+      if (raw?.success === false && raw.error) {
+        return { success: false, error: raw.error, people: [] };
+      }
+      return raw;
+    } catch (e) {
+      console.error('People search error:', e);
+      return {
+        success: false,
+        error:
+          e instanceof Error
+            ? e.message
+            : 'Scraper backend unreachable — start api_server.py and set APOLLO_API_KEY in backend .env',
+        people: [],
+      };
     }
-
-    return data as PeopleSearchResponse;
   },
 
   /**

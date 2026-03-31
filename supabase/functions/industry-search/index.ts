@@ -876,8 +876,12 @@ Deno.serve(async (req) => {
 
     if (providers.length === 0) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No search provider API keys configured.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error:
+            'No company search API keys configured. Add APOLLO_API_KEY (and optionally PDL, Clay, etc.) in Supabase → Edge Functions → Secrets.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
