@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-hidden="true">
+  <circle cx="16" cy="16" r="16" fill="#6FBF44"/>
+  <!-- Building cluster (Apartments.com favicon feel) -->
+  <path
+    fill="#fff"
+    d="M8.5 22.5V11.8h3.2v10.7h-3.2zm5.2-8.3h3.6v8.3h-3.6v-8.3zm5.4-3.4h3.4v11.7h-3.4V10.8z"
+  />
+</svg>

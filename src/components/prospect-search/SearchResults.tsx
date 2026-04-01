@@ -34,8 +34,6 @@ import {
 } from '@/components/ui/tooltip';
 
 function CompanyLogo({ domain, name }: { domain: string | null | undefined; name: string }) {
-  const [errored, setErrored] = useState(false);
-
   const cleanDomain = (() => {
     if (!domain) return null;
     try {
@@ -46,23 +44,16 @@ function CompanyLogo({ domain, name }: { domain: string | null | undefined; name
     }
   })();
 
-  if (!cleanDomain || errored) {
-    return (
-      <div className="h-6 w-6 rounded bg-muted flex items-center justify-center flex-shrink-0">
-        <span className="text-[10px] font-bold text-muted-foreground">
-          {name.charAt(0).toUpperCase()}
-        </span>
-      </div>
-    );
-  }
+  const initial =
+    (cleanDomain && /^[a-z0-9]/i.test(cleanDomain) ? cleanDomain.charAt(0) : name.charAt(0)).toUpperCase();
 
   return (
-    <img
-      src={`https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=64`}
-      alt=""
-      className="h-6 w-6 rounded flex-shrink-0 object-contain"
-      onError={() => setErrored(true)}
-    />
+    <div
+      className="h-6 w-6 rounded bg-muted flex items-center justify-center flex-shrink-0"
+      title={cleanDomain || name}
+    >
+      <span className="text-[10px] font-bold text-muted-foreground">{initial}</span>
+    </div>
   );
 }
 

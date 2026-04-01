@@ -1,18 +1,41 @@
 import { scraperBackendApi } from '@/lib/api/scraperBackend';
 
 /**
+ * Strip mistaken path suffixes from VITE_SCRAPER_BACKEND_URL (e.g. …/waterfall-enrich → root)
+ * so we always POST to Flask `POST /api/waterfall-enrich` on Railway/local.
+ */
+function normalizeScraperRootForWaterfall(baseRaw: string): string {
+  let base = baseRaw.trim().replace(/\/+$/, '');
+  // Strip mistaken path suffixes (repeat until stable — handles …/api/waterfall-enrich/waterfall-enrich etc.)
+  for (let i = 0; i < 4; i++) {
+    const prev = base;
+    base = base.replace(/\/api\/waterfall-enrich$/i, '');
+    base = base.replace(/\/waterfall-enrich$/i, '');
+    base = base.replace(/\/api$/i, '');
+    base = base.replace(/\/+$/, '');
+    if (base === prev) break;
+  }
+  return base;
+}
+
+/**
  * Scout must call the Flask route `POST /api/waterfall-enrich` (person + company, org→domain).
  * If `VITE_SCRAPER_BACKEND_URL` points at `*.supabase.co/functions/...`, the Edge function
  * `data-waterfall-enrich` returns 400 "Domain is required" for people rows without a domain.
  */
 function resolveWaterfallEnrichPostUrl(): string {
-  let base = scraperBackendApi.getBaseUrl().replace(/\/$/, '');
+  let base = normalizeScraperRootForWaterfall(scraperBackendApi.getBaseUrl());
   const host =
     typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
   const isLocalDev = host === 'localhost' || host === '127.0.0.1';
 
   if (isLocalDev && /supabase\.co/i.test(base) && /\/functions\//i.test(base)) {
-    base = 'http://localhost:8080';
+    base = normalizeScraperRootForWaterfall('http://localhost:8080');
+  }
+
+  // Common typo: …/functions/v1/waterfall-enrich (404) — real slug is data-waterfall-enrich
+  if (/supabase\.co\/functions\/v1\/waterfall-enrich$/i.test(base)) {
+    base = base.replace(/\/waterfall-enrich$/i, '/data-waterfall-enrich');
   }
 
   if (/\/functions\/v1\/[\w-]+$/i.test(base)) {

@@ -121,6 +121,41 @@ export function zillowFrboDescriptionImpliesManaged(description: string | null |
   return true;
 }
 
+/**
+ * Trulia FSBO sale pages: MLS / agent copy in description (sync with pm_realtor_filter strict block).
+ * Used so Scout “Table: by-owner only” actually hides broker rows when the backend returned full DB rows.
+ */
+export function truliaDescriptionImpliesAgentOrMls(description: string | null | undefined): boolean {
+  if (!description || typeof description !== "string") return false;
+  const low = description.toLowerCase().replace(/\s+/g, " ");
+  if (/\b(brokered|presented)\s+by\b/.test(low)) return true;
+  if (/\blisting\s+courtesy\s+of\b/.test(low)) return true;
+  if (/\bco-?listing\s+agent\b/.test(low)) return true;
+  if (/\bcontact\s+(?:the\s+)?listing\s+agent\b/.test(low)) return true;
+  if (low.includes("multiple listing") || low.includes("mls listing")) return true;
+  if (/\bmls\s*#?\s*\d/.test(low)) return true;
+  if (low.includes("non-owner listing") && (low.includes("agent") || low.includes("brokerage"))) return true;
+  if (low.includes("not for sale by owner")) return true;
+  if (/\blisted\s+by\s+.+\s+(?:realty|properties|group|brokerage|realtors?)\b/.test(low)) return true;
+  if (low.includes("broker reciprocity")) return true;
+  if (low.includes("internet data exchange") || /\bidx\s+program\b/.test(low)) return true;
+  if (
+    low.includes("information is deemed reliable") ||
+    low.includes("deemed reliable but not guaranteed")
+  )
+    return true;
+  if (/\b(data|listings?)\s+from\s+(the\s+)?mls\b/.test(low)) return true;
+  if (/\bmls\s+(?:id|number|listing|data)\b/.test(low)) return true;
+  if (/\blisting\s+agent\s*[:|]/.test(low)) return true;
+  if (/\bproperty\s+is\s+listed\s+by\b/.test(low)) return true;
+  if (
+    low.includes("each office is independently owned") &&
+    (low.includes("realtor") || low.includes("mls"))
+  )
+    return true;
+  return false;
+}
+
 /** Match Python _zillow_frbo_managed_price_cue — Zillow managed tiers use +/mo or “fees may apply”. */
 export function zillowFrboPriceImpliesManaged(price: string | null | undefined): boolean {
   if (!price || typeof price !== "string") return false;

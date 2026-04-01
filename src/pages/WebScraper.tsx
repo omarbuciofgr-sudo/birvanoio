@@ -22,6 +22,7 @@ import {
   isQuasiPublicEntityDisplayName,
   rentalListingEmailIsPlatformPlaceholder,
   zillowFrboAddressImpliesManagedUnitToken,
+  truliaDescriptionImpliesAgentOrMls,
   zillowFrboDescriptionImpliesManaged,
   zillowFrboPriceImpliesManaged,
 } from '@/lib/realEstateOwnerFilter';
@@ -73,7 +74,26 @@ import { DomainResolver } from '@/components/scout/DomainResolver';
 import { DynamicLists } from '@/components/scout/DynamicLists';
 import { BulkEmailFinder } from '@/components/scout/BulkEmailFinder';
 import { addressMatchesSearch } from '@/components/scraper/ListingsMap';
-import { getPlatformLogo, PLATFORM_CONFIG } from '@/lib/platformLogos';
+import { PLATFORM_CONFIG, resolveListingPlatformMark } from '@/lib/platformLogos';
+import { PlatformMark } from '@/components/scraper/PlatformMark';
+
+function ListingSourcePlatformMark({
+  sourcePlatform,
+  sourceUrl,
+}: {
+  sourcePlatform: string;
+  sourceUrl?: string | null;
+}) {
+  const mark = resolveListingPlatformMark(sourcePlatform, sourceUrl);
+  return (
+    <PlatformMark
+      logoSrc={mark.logo}
+      fallbackLetter={mark.fallback}
+      title={mark.title || sourcePlatform}
+      size="sm"
+    />
+  );
+}
 
 /** Parse address from Zillow homedetails URL slug (e.g. .../homedetails/623-Russell-Ave-N-Minneapolis-MN-55411/1887741_zpid/ → "623 Russell Ave N Minneapolis MN 55411"). Works for any city. */
 function addressFromZillowUrl(url: string | null | undefined): string | null {
@@ -644,11 +664,47 @@ function listingPassesByOwnerVisibility(listing: {
   hp_strict_signal?: string | null;
   listing_url?: string | null;
   source_url?: string | null;
+  trulia_strict_signal?: string | null;
 }) {
   const nameForFilter = ownerNameForByOwnerTableFilter(listing);
   if (isQuasiPublicEntityDisplayName(nameForFilter)) return false;
   const sp = (listing.source_platform || '').toLowerCase();
-  const strictRentalByOwner = sp === 'zillow_frbo' || sp === 'hotpads' || sp === 'apartments';
+  // Trulia FSBO: same strict table rules as rental by-owner scrapers (description / price / corporate names).
+  const strictRentalByOwner =
+    sp === 'zillow_frbo' || sp === 'hotpads' || sp === 'apartments' || sp === 'trulia';
+  if (strictRentalByOwner && sp === 'trulia') {
+    const ts = (listing.trulia_strict_signal || '').trim().toLowerCase();
+    if (ts === 'managed') return false;
+    if (ts === 'owner') {
+      if (isCorporateLandlordDisplayName(nameForFilter, true)) return false;
+      if (truliaDescriptionImpliesAgentOrMls(listing.description)) return false;
+      if (nameForFilter.includes(' | ')) {
+        const right = nameForFilter.split('|').pop()!.trim();
+        if (
+          right.length > 2 &&
+          /\b(llc|inc\.?|corp\.?|ltd\.?|realty|real\s+estate|properties|group|brokerage|realtors?|associates)\b/i.test(
+            right,
+          )
+        ) {
+          return false;
+        }
+      }
+      return true;
+    }
+    // unknown / missing: "Name | Brokerage" from scraper merge
+    if (nameForFilter.includes(' | ')) {
+      const right = nameForFilter.split('|').pop()!.trim();
+      if (
+        right.length > 2 &&
+        /\b(llc|inc\.?|corp\.?|ltd\.?|realty|real\s+estate|properties|group|brokerage|realtors?|associates)\b/i.test(
+          right,
+        )
+      ) {
+        return false;
+      }
+    }
+    // fall through to description & corporate heuristics
+  }
   if (strictRentalByOwner && sp === 'hotpads') {
     const hubUrl = listing.listing_url || listing.source_url;
     if (hotpadsListingUrlLooksBuildingHub(hubUrl)) return false;
@@ -661,6 +717,7 @@ function listingPassesByOwnerVisibility(listing: {
   if (strictRentalByOwner && rentalListingEmailIsPlatformPlaceholder(listing.owner_email)) return false;
   if (strictRentalByOwner) {
     if (zillowFrboDescriptionImpliesManaged(listing.description)) return false;
+    if (sp === 'trulia' && truliaDescriptionImpliesAgentOrMls(listing.description)) return false;
     if (zillowFrboPriceImpliesManaged(listing.price)) return false;
     if (zillowFrboAddressImpliesManagedUnitToken(listing.address)) return false;
   }
@@ -724,6 +781,7 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
         listing_type: 'sale',
         square_feet: l.square_feet,
         days_on_market: l.days_on_market ?? l.days_on_zillow,
+        trulia_strict_signal: l.trulia_strict_signal ?? null,
       }));
     case 'zillow':
       return list.map((l) => {
@@ -942,6 +1000,20 @@ export default function WebScraper() {
         if (fa !== fb) return fa - fb;
         return a.realIndex - b.realIndex;
       });
+    } else if (rePlatform === 'trulia' && byOwnerTable && rows.length > 1) {
+      rows = [...rows].sort((a, b) => {
+        const ra = isCorporateLandlordDisplayName(ownerNameForByOwnerTableFilter(a.listing), true) ? 1 : 0;
+        const rb = isCorporateLandlordDisplayName(ownerNameForByOwnerTableFilter(b.listing), true) ? 1 : 0;
+        if (ra !== rb) return ra - rb;
+        return a.realIndex - b.realIndex;
+      });
+    } else if (rePlatform === 'trulia' && !byOwnerTable && rows.length > 1) {
+      rows = [...rows].sort((a, b) => {
+        const fa = listingPassesByOwnerVisibility(a.listing) ? 1 : 0;
+        const fb = listingPassesByOwnerVisibility(b.listing) ? 1 : 0;
+        if (fa !== fb) return fa - fb;
+        return a.realIndex - b.realIndex;
+      });
     }
     return rows;
   }, [reListings, reLocation, reMatchLocationFilter, rePlatform, reByOwnerStrict, reHotpadsScrapeLive]);
@@ -1123,7 +1195,7 @@ export default function WebScraper() {
       } else if (hidden === 0 && (totalDb ?? 0) > 0) {
         loadSuffix =
           platform === 'trulia'
-            ? ' (by-owner: 0 rows matched PM rules in DB — same list as Include PM until a fresh scrape saves description + agent text).'
+            ? ' (by-owner: 0 rows matched PM rules in DB — same list as Include PM until Supabase has `trulia_strict_signal` + a fresh scrape).'
             : ' (by-owner: 0 rows matched PM rules in saved data — same count as Include PM when nothing in DB is classified as PM/broker).';
       } else {
         loadSuffix = ' (by-owner — backend applied PM/managed heuristics).';
@@ -1151,7 +1223,7 @@ export default function WebScraper() {
       ) {
         toast.info(
           platform === 'trulia'
-            ? 'Trulia: By-owner only strips rows when saved data includes description or agent/broker text. Yours matched 0 — so you see the same 132 as Include PM. Run Find Listings again after pulling the latest Trulia scraper (saves description + merged agent name).'
+            ? 'Trulia: Run the Supabase migration adding `trulia_strict_signal`, deploy the latest backend scraper, then Find Listings again (by-owner uses owner/managed/unknown from Trulia JSON + contact heuristics).'
             : 'Hotpads: By-owner removed 0 rows beyond the PM/managed filter. If counts match Include PM, no rows were classified as PM in the database.',
         );
       }
@@ -1174,7 +1246,9 @@ export default function WebScraper() {
     setReLoading(false);
     setRePlatform(value);
     // Match scout URLs: Zillow FRBO, Hotpads, and Apartments.com all target for-rent-by-owner; default to backend PM strip unless user chooses Include PM.
-    setReByOwnerStrict(value === 'zillow_frbo' || value === 'hotpads' || value === 'apartments');
+    setReByOwnerStrict(
+      value === 'zillow_frbo' || value === 'hotpads' || value === 'apartments' || value === 'trulia',
+    );
     setReLastApiIncludePm(null);
     setReHotpadsScrapeLive(false);
     setSelectedListings(new Set());
@@ -1619,6 +1693,34 @@ export default function WebScraper() {
         st.info(
           'Trulia scrape running — table fills as rows save to Supabase (include PM while running); when it finishes, By-owner rules apply on the final load.',
         );
+        const mapTruliaPartialRow = (l: Record<string, unknown>) => ({
+          address: l.address,
+          bedrooms: l.bedrooms,
+          bathrooms: l.bathrooms,
+          price: l.price,
+          owner_name: l.owner_name,
+          owner_phone: l.owner_phone,
+          description: typeof l.description === 'string' ? l.description : '',
+          listing_url: l.listing_url,
+          source_url: l.listing_url,
+          source_platform: 'trulia',
+          listing_type: 'sale',
+          square_feet: l.square_feet,
+          days_on_market:
+            (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ??
+            (l as { days_on_zillow?: string }).days_on_zillow,
+          trulia_strict_signal: (l as { trulia_strict_signal?: string }).trulia_strict_signal ?? null,
+        });
+        try {
+          const boot = await scraperBackendApi.getTruliaLastResult({ includePm: true });
+          const bootMapped = (boot.listings || []).map((x) => mapTruliaPartialRow(x as Record<string, unknown>));
+          if (bootMapped.length > 0) {
+            applyListings(bootMapped);
+            clearFindListingsSpinnerIfOwner();
+          }
+        } catch {
+          /* wrong backend URL / CORS — user should fix VITE_SCRAPER_BACKEND_URL to Flask :8080 */
+        }
         const pollInterval = 2000;
         const maxWait = 30 * 60 * 1000;
         const progressiveFetchInterval = 12000;
@@ -1633,20 +1735,9 @@ export default function WebScraper() {
             lastProgressiveFetch = Date.now();
             try {
               const partial = await scraperBackendApi.getTruliaLastResult({ includePm: true });
-              const partialMapped = (partial.listings || []).map((l) => ({
-                address: l.address,
-                bedrooms: l.bedrooms,
-                bathrooms: l.bathrooms,
-                price: l.price,
-                owner_name: l.owner_name,
-                owner_phone: l.owner_phone,
-                listing_url: l.listing_url,
-                source_url: l.listing_url,
-                source_platform: 'trulia',
-                listing_type: 'sale',
-                square_feet: l.square_feet,
-                days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
-              }));
+              const partialMapped = (partial.listings || []).map((x) =>
+                mapTruliaPartialRow(x as Record<string, unknown>),
+              );
               if (partialMapped.length > 0) {
                 applyListings(partialMapped);
                 clearFindListingsSpinnerIfOwner();
@@ -1661,21 +1752,42 @@ export default function WebScraper() {
         if (status.status === 'running') {
           st.warning('Scraper is still running. Results may appear later. You can refresh or run again.');
         }
-        const result = await scraperBackendApi.getTruliaLastResult(lastResultOpts);
-        const mapped = (result.listings || []).map((l) => ({
+        const mapTruliaRow = (l: Record<string, unknown>) => ({
           address: l.address,
           bedrooms: l.bedrooms,
           bathrooms: l.bathrooms,
           price: l.price,
           owner_name: l.owner_name,
           owner_phone: l.owner_phone,
+          description: typeof l.description === 'string' ? l.description : '',
           listing_url: l.listing_url,
           source_url: l.listing_url,
           source_platform: 'trulia',
           listing_type: 'sale',
           square_feet: l.square_feet,
-          days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
-        }));
+          days_on_market:
+            (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ??
+            (l as { days_on_zillow?: string }).days_on_zillow,
+          trulia_strict_signal: (l as { trulia_strict_signal?: string }).trulia_strict_signal ?? null,
+        });
+        let result = await scraperBackendApi.getTruliaLastResult(lastResultOpts);
+        let mapped = (result.listings || []).map(mapTruliaRow);
+        const trTotal = (result as { total_stored?: number }).total_stored;
+        if (
+          mapped.length === 0 &&
+          !lastResultOpts.includePm &&
+          typeof trTotal === 'number' &&
+          trTotal > 0
+        ) {
+          const full = await scraperBackendApi.getTruliaLastResult({ includePm: true });
+          const fullMapped = (full.listings || []).map(mapTruliaRow);
+          if (fullMapped.length > 0) {
+            mapped = fullMapped;
+            st.warning(
+              'By-owner returned 0 rows from the API but your database has listings — showing the full set. Use Include PM / realtor or Refresh after backend update; PM rows are still filtered in by-owner mode when the API strips them.',
+            );
+          }
+        }
         applyListings(mapped);
         st.success(`Found ${mapped.length} Trulia listings`);
         if (result.error) applyErrors([{ url: '', error: result.error }]);
@@ -2751,7 +2863,10 @@ export default function WebScraper() {
                   <div className="w-40 space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Platform</Label>
                     <Select value={rePlatform} onValueChange={handleRealEstatePlatformChange}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Platform" /></SelectTrigger>
+                      {/* Only SelectValue in trigger: Radix clones ItemText (icon + label). A second PlatformMark here duplicated icons and could desync. */}
+                      <SelectTrigger className="h-9 text-sm [&>span]:line-clamp-none">
+                        <SelectValue placeholder="Platform" className="min-w-0 flex-1 text-left" />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">
                           <span className="flex items-center gap-2">All Platforms</span>
@@ -2759,11 +2874,10 @@ export default function WebScraper() {
                         {Object.entries(PLATFORM_CONFIG).map(([key, config]) => (
                           <SelectItem key={key} value={key}>
                             <span className="flex items-center gap-2">
-                              <img
-                                src={`https://www.google.com/s2/favicons?domain=${config.domain}&sz=16`}
-                                alt=""
-                                className="h-4 w-4 rounded-sm"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              <PlatformMark
+                                logoSrc={config.logo}
+                                fallbackLetter={config.domain}
+                                title={config.label}
                               />
                               {config.label}
                             </span>
@@ -3002,12 +3116,14 @@ export default function WebScraper() {
                       {reBackendPmIncludedFromApi
                         ? 'PM included — click By-owner only to refetch with PM/managed rows hidden on the backend.'
                         : 'By-owner only — need the full database? Click Include PM / realtor (refetches with all rows).'}
-                      {(rePlatform === 'zillow_frbo' || rePlatform === 'hotpads') && reMatchLocationFilter && reLocation?.trim() && (
+                      {(rePlatform === 'zillow_frbo' || rePlatform === 'hotpads' || rePlatform === 'trulia') &&
+                        reMatchLocationFilter &&
+                        reLocation?.trim() && (
                         <span className="block mt-1 text-muted-foreground font-normal">
                           <strong className="text-foreground/85 font-medium">Why the list can look identical:</strong> (1){' '}
-                          <span className="text-foreground/80">Match &quot;{reLocation.trim()}&quot;</span> keeps only addresses that match this city — extra PM rows are often suburbs or lack this text, so you still see the same dozen. Watch{' '}
-                          <span className="text-foreground/80 font-medium">… of M before city filter</span>: M should jump when Include PM loads more rows. (2) If{' '}
-                          <span className="text-foreground/80 font-medium">M</span> never jumps, PM listings were never saved to Supabase (scrapes used by-owner save), so both requests return the same DB rows.
+                          <span className="text-foreground/80">Match &quot;{reLocation.trim()}&quot;</span> keeps only addresses that match this city — most saved rows may be other metros, so both Include PM and By-owner can show the same small subset (e.g. 11 of 136). Compare{' '}
+                          <span className="text-foreground/80 font-medium">… of M before city filter</span>: M should drop when By-owner strips MLS/PM rows. (2) If{' '}
+                          <span className="text-foreground/80 font-medium">M</span> never changes, the backend did not classify those rows as PM, or both API loads returned the same set.
                           {rePlatform === 'hotpads' && (
                             <span className="block mt-1">
                               <strong className="text-foreground/85 font-medium">Hotpads:</strong> most rows use{' '}
@@ -3016,6 +3132,16 @@ export default function WebScraper() {
                               <span className="text-foreground/80">Include PM / realtor</span> for the full feed.{' '}
                               <span className="text-foreground/80">Include PM</span> sorts PM/corporate-style rows first;{' '}
                               <span className="text-foreground/80">by-owner</span> sorts unmasked personal email first — so the top of the list should not match between the two toggles.
+                            </span>
+                          )}
+                          {rePlatform === 'trulia' && (
+                            <span className="block mt-1">
+                              <strong className="text-foreground/85 font-medium">Trulia:</strong> each row shows an{' '}
+                              <span className="text-foreground/80">Owner / Managed / Unknown</span> badge from{' '}
+                              <span className="text-foreground/80">trulia_strict_signal</span> (saved after scrape or inferred on refresh).{' '}
+                              <span className="text-foreground/80">Managed</span> or MLS-style copy means not client FSBO;{' '}
+                              <span className="text-foreground/80">Owner</span> is the FSBO-style signal.{' '}
+                              <span className="text-foreground/80">Unknown</span> with By-owner still visible means the row passed text heuristics — open the Trulia link to confirm.
                             </span>
                           )}
                         </span>
@@ -3187,18 +3313,42 @@ export default function WebScraper() {
                               {listing.views_count !== undefined && <span>👁 {listing.views_count}</span>}
                               {listing.source_platform && (
                                 <span className="flex items-center gap-1">
-                                  {listing.source_url && (
-                                    <img
-                                      src={`https://www.google.com/s2/favicons?domain=${(() => { try { return new URL(listing.source_url).hostname; } catch { return ''; } })()}&sz=16`}
-                                      alt=""
-                                      className="h-3.5 w-3.5 rounded-sm"
-                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                    />
-                                  )}
+                                  <ListingSourcePlatformMark
+                                    sourcePlatform={listing.source_platform}
+                                    sourceUrl={listing.source_url}
+                                  />
                                   <Badge variant="outline" className="text-[10px] h-4 font-normal">{listing.source_platform}</Badge>
                                 </span>
                               )}
                               {listing.listing_type && <Badge variant="secondary" className="text-[10px] h-4 font-normal uppercase">{listing.listing_type}</Badge>}
+                              {listing.source_platform === 'trulia' && (() => {
+                                const sig = String((listing as { trulia_strict_signal?: string | null }).trulia_strict_signal || '')
+                                  .trim()
+                                  .toLowerCase();
+                                const label =
+                                  sig === 'owner'
+                                    ? 'Owner'
+                                    : sig === 'managed'
+                                      ? 'Managed'
+                                      : 'Unknown';
+                                const title =
+                                  sig === 'owner'
+                                    ? 'Trulia strict signal: owner / FSBO-style (from scrape or API inference)'
+                                    : sig === 'managed'
+                                      ? 'Trulia strict signal: MLS or agent-marketed'
+                                      : 'No trulia_strict_signal in DB — API may still infer on refresh; confirm on Trulia';
+                                const cls =
+                                  sig === 'owner'
+                                    ? 'text-emerald-700 dark:text-emerald-400 border-emerald-500/50'
+                                    : sig === 'managed'
+                                      ? 'text-orange-700 dark:text-orange-400 border-orange-500/50'
+                                      : 'text-muted-foreground border-border';
+                                return (
+                                  <Badge variant="outline" className={`text-[10px] h-4 font-normal ${cls}`} title={title}>
+                                    Trulia: {label}
+                                  </Badge>
+                                );
+                              })()}
                             </div>
 
                             {(listing.owner_name || listing.owner_phone || listing.owner_email) ? (
@@ -3413,7 +3563,8 @@ export default function WebScraper() {
                         {searchResults.map((result, i) => {
                           let domain = '';
                           try { domain = new URL(result.url).hostname.replace('www.', ''); } catch {}
-                          const favicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null;
+                          const domainInitial =
+                            domain && /^[a-z0-9]/i.test(domain) ? domain.charAt(0).toUpperCase() : (result.title || '?').charAt(0).toUpperCase();
                           return (
                             <tr
                               key={i}
@@ -3431,9 +3582,12 @@ export default function WebScraper() {
                               <td className="px-3 py-3 text-muted-foreground">{i + 1}</td>
                               <td className="px-3 py-3 max-w-[300px]">
                                 <div className="flex items-center gap-2.5">
-                                  {favicon && (
-                                    <img src={favicon} alt="" className="h-5 w-5 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                  )}
+                                  <div
+                                    className="h-5 w-5 rounded-sm shrink-0 bg-muted flex items-center justify-center"
+                                    title={domain || undefined}
+                                  >
+                                    <span className="text-[9px] font-bold text-muted-foreground">{domainInitial}</span>
+                                  </div>
                                   <div className="min-w-0">
                                     <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:text-primary hover:underline truncate block">
                                 {result.title}

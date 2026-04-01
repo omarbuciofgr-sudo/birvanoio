@@ -199,19 +199,70 @@ function isProductionHost(): boolean {
   return true;
 }
 
-const getBaseUrl = (): string => {
-  const envUrl =
+function envScraperUrlIgnoresMisconfiguredSelfReference(envUrl: string): string | null {
+  if (!envUrl || typeof window === "undefined") return envUrl || null;
+  try {
+    const envOrigin = new URL(envUrl).origin;
+    if (envOrigin === window.location.origin) {
+      // Common mistake: VITE_SCRAPER_BACKEND_URL set to the SPA host (Vercel/Lovable preview).
+      // That makes POST /api/waterfall-enrich 404 on the static frontend. Fall back to defaults below.
+      return null;
+    }
+  } catch {
+    return envUrl;
+  }
+  return envUrl;
+}
+
+/** From env / defaults only — no auto-discovered port (see `resolvedScraperBaseUrl`). */
+function getConfiguredScraperBaseUrl(): string {
+  const rawEnv =
     typeof import.meta.env.VITE_SCRAPER_BACKEND_URL === "string"
       ? import.meta.env.VITE_SCRAPER_BACKEND_URL.trim().replace(/\/$/, "")
       : "";
+  const envUrl = rawEnv ? envScraperUrlIgnoresMisconfiguredSelfReference(rawEnv) : null;
   if (envUrl) return envUrl;
-  // When app is opened from localhost, use local backend (override port via VITE_SCRAPER_BACKEND_URL)
   if (typeof window !== "undefined") {
     const host = window.location.hostname.toLowerCase();
     if (host === "localhost" || host === "127.0.0.1") return "http://localhost:8080";
   }
   if (isProductionHost()) return PRODUCTION_BACKEND;
   return "http://localhost:8080";
+}
+
+/** First localhost:port that passed /api/health (fixes VITE on 8081 while Flask runs on 8080). */
+let resolvedScraperBaseUrl: string | null = null;
+
+function isLocalhostScraperUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+/** Prefer configured URL, then common Flask ports so wrong VITE port still finds api_server.py */
+function buildLocalHealthCandidates(preferred: string): string[] {
+  const extras = [
+    preferred,
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+    "http://127.0.0.1:8081",
+    "http://localhost:8081",
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const b of extras) {
+    if (!b || seen.has(b)) continue;
+    seen.add(b);
+    out.push(b);
+  }
+  return out;
+}
+
+const getBaseUrl = (): string => {
+  return resolvedScraperBaseUrl ?? getConfiguredScraperBaseUrl();
 };
 
 export type BackendSearchLocationResponse = {
@@ -269,8 +320,8 @@ export type LastResultFetchOptions = {
 };
 
 function lastResultQuery(options?: LastResultFetchOptions): string {
-  if (!options?.includePm) return "";
-  return "?include_pm=1";
+  // Explicit 0 vs 1 so toggling by-owner vs Include PM never relies on a missing param (clearer for caches and logs).
+  return options?.includePm === true ? '?include_pm=1' : '?include_pm=0';
 }
 
 /** Avoid browser HTTP cache returning the wrong payload when toggling include_pm on the same path. */
@@ -286,26 +337,46 @@ async function pingHealthOnce(base: string, signal: AbortSignal): Promise<boolea
     credentials: "omit",
     signal,
   });
-  return res.ok;
+  if (!res.ok) return false;
+  const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  // Reject other apps that return 200 on /api/health (e.g. wrong VITE_SCRAPER_BACKEND_URL port).
+  if (data && data.service === "brivano_scraper_api") return true;
+  if (data && data.message === "Backend running" && typeof data.waterfall_enrich_url === "string") return true;
+  return false;
 }
 
 /** Returns true if the backend is reachable (e.g. GET /api/health). Retries once after delay for Railway cold start. */
 export async function isScraperBackendReachable(): Promise<boolean> {
-  const base = getBaseUrl();
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
-      const ok = await pingHealthOnce(base, controller.signal);
-      clearTimeout(timeoutId);
-      if (ok) return true;
-    } catch {
-      // timeout or network error
-    }
-    if (attempt === 0) {
-      await new Promise((r) => setTimeout(r, HEALTH_CHECK_RETRY_DELAY_MS));
+  const preferred = getConfiguredScraperBaseUrl();
+  const candidates = isLocalhostScraperUrl(preferred)
+    ? buildLocalHealthCandidates(preferred)
+    : [preferred];
+
+  for (const base of candidates) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+        const ok = await pingHealthOnce(base, controller.signal);
+        clearTimeout(timeoutId);
+        if (ok) {
+          if (base !== preferred && isLocalhostScraperUrl(preferred)) {
+            console.warn(
+              `[Brivano Scout] Flask scraper is on ${base} but VITE_SCRAPER_BACKEND_URL is ${preferred}. Using ${base} for this session — set env to match or run: set PORT=8081 (Windows) if you want Flask on 8081.`,
+            );
+          }
+          resolvedScraperBaseUrl = base;
+          return true;
+        }
+      } catch {
+        // timeout or network error
+      }
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, HEALTH_CHECK_RETRY_DELAY_MS));
+      }
     }
   }
+  resolvedScraperBaseUrl = null;
   return false;
 }
 

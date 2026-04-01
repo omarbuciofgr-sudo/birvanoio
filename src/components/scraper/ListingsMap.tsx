@@ -7,7 +7,6 @@ import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Mail, ExternalLink, MapPin } from 'lucide-react';
-import { getPlatformLogoFromUrl } from '@/lib/platformLogos';
 import {
   scraperBackendApi,
   normalizeStateToAbbrev,
@@ -174,16 +173,20 @@ function FitBounds({ positions, searchCenter }: { positions: [number, number][];
 
 function PlatformLogo({ sourceUrl }: { sourceUrl?: string }) {
   if (!sourceUrl) return null;
-  const logoUrl = getPlatformLogoFromUrl(sourceUrl);
-  if (!logoUrl) return null;
+  let host = '';
+  try {
+    host = new URL(sourceUrl).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+  const ch = host && /^[a-z0-9]/i.test(host) ? host.charAt(0).toUpperCase() : '?';
   return (
-    <img
-      src={logoUrl}
-      alt=""
-      className="h-4 w-4 rounded-sm"
-      style={{ imageRendering: 'auto' }}
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-    />
+    <div
+      className="h-4 w-4 rounded-sm bg-white/90 flex items-center justify-center shadow-sm border border-black/10"
+      title={host}
+    >
+      <span className="text-[9px] font-bold text-neutral-700">{ch}</span>
+    </div>
   );
 }
 
