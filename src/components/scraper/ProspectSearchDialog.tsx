@@ -216,6 +216,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           const mapped: CompanyResult[] = response.people.map((p) => ({
             name: p.name,
             domain: p.organization_domain || '',
+            organization_name: p.organization_name ?? null,
             website: p.organization_domain ? `https://${p.organization_domain}` : null,
             linkedin_url: p.linkedin_url,
             industry: p.organization_industry,
@@ -585,6 +586,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             isLoadingMore={isLoadingMore}
             hasMoreResults={currentPage < totalPages}
             totalResults={totalResults}
+            enrichmentTarget={searchType === 'people' ? 'person' : 'company'}
           />
         </div>
       </div>

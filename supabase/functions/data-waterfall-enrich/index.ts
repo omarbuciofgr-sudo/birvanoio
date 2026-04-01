@@ -791,11 +791,40 @@ Deno.serve(async (req) => {
     }
     
     const body = await req.json();
+
+    // Prefer Flask (person match + org→domain). Set secret SCRAPER_BACKEND_URL or BRIVANO_SCRAPER_URL to your api_server base, e.g. https://your-app.up.railway.app
+    const scraperBase = (Deno.env.get('SCRAPER_BACKEND_URL') || Deno.env.get('BRIVANO_SCRAPER_URL') || '')
+      .trim()
+      .replace(/\/$/, '');
+    if (scraperBase) {
+      try {
+        const fr = await fetch(`${scraperBase}/api/waterfall-enrich`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const text = await fr.text();
+        return new Response(text, {
+          status: fr.status,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': fr.headers.get('content-type') || 'application/json',
+          },
+        });
+      } catch (e) {
+        console.error('SCRAPER_BACKEND_URL forward failed:', e);
+      }
+    }
+
     const input: EnrichmentInput = body;
     
     if (!input.domain) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Domain is required' }),
+        JSON.stringify({
+          success: false,
+          error:
+            'Domain is required for this Edge handler. Run Flask api_server.py locally and leave VITE_SCRAPER_BACKEND_URL unset (uses http://localhost:8080), or set Supabase secret SCRAPER_BACKEND_URL to your Flask base URL so this function can forward requests.',
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

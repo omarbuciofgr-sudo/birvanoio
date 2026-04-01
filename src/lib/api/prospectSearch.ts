@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
 
 // Scored lead with AI insights
 export interface ScoredProspect extends ProspectResult {
@@ -375,12 +376,9 @@ export const prospectSearchApi = {
       };
     }
 
-    // Call waterfall enrichment
-    const { data, error } = await supabase.functions.invoke('data-waterfall-enrich', {
-      body: { 
-        domain, 
-        target_titles: targetTitles || ['owner', 'ceo', 'founder', 'president'],
-      },
+    const { data, error } = await invokeWaterfallEnrich({
+      domain,
+      target_titles: targetTitles || ['owner', 'ceo', 'founder', 'president'],
     });
 
     if (error || !data?.success) {

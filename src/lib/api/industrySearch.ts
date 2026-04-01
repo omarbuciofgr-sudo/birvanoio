@@ -29,6 +29,8 @@ export interface CompanySearchInput {
 export interface CompanyResult {
   name: string;
   domain: string;
+  /** People search: employer name when the row is a person (used to resolve domain for Enrich). */
+  organization_name?: string | null;
   website: string | null;
   linkedin_url: string | null;
   industry: string | null;

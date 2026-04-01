@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Loader2, Sparkles, User, Mail, Globe, BarChart3, DollarSign, Cpu, TrendingUp, Briefcase, Search, ChevronDown, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeWaterfallEnrich, type WaterfallEnrichBody } from '@/lib/api/waterfallEnrich';
 import { toast } from 'sonner';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { CompanyResult } from '@/lib/api/industrySearch';
@@ -36,9 +37,15 @@ interface EnrichmentActionsPanelProps {
   selectedCompany: CompanyResult | null;
   selectedRows: Set<number>;
   results: CompanyResult[];
+  enrichmentTarget?: 'company' | 'person';
 }
 
-export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results }: EnrichmentActionsPanelProps) {
+export function EnrichmentActionsPanel({
+  selectedCompany,
+  selectedRows,
+  results,
+  enrichmentTarget = 'company',
+}: EnrichmentActionsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'enrichments' | 'signals'>('enrichments');
   const [runningAction, setRunningAction] = useState<string | null>(null);
@@ -76,28 +83,65 @@ export function EnrichmentActionsPanel({ selectedCompany, selectedRows, results 
         : selectedCompany ? [selectedCompany] : [];
 
       for (const company of targets) {
-        const domain = company.domain?.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-        if (!domain) continue;
+        const domain =
+          company.domain?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '';
+        const orgName = (company.organization_name || '').trim();
+        const li = (company.linkedin_url || '').trim();
+        if (enrichmentTarget === 'person') {
+          if (!domain && !orgName && !li && !company.name?.trim()) continue;
+        } else if (!domain && !orgName) {
+          continue;
+        }
 
-        await spendCredits('enrich', 1, `${action.id}_${domain}`);
+        await spendCredits('enrich', 1, `${action.id}_${domain || orgName.slice(0, 48) || li.slice(0, 32)}`);
 
-        const enrichBody: any = { domain, intent_goals: intent.goals, custom_goal: intent.customGoal };
+        const enrichBody: WaterfallEnrichBody = {
+          enrichment_target: enrichmentTarget,
+          ...(domain ? { domain } : {}),
+          ...(orgName ? { company_name: orgName } : {}),
+          ...(enrichmentTarget === 'person' && company.name?.trim()
+            ? { person_display_name: company.name.trim() }
+            : {}),
+          ...(enrichmentTarget === 'person' && li ? { linkedin_url: li } : {}),
+          intent_goals: intent.goals,
+          custom_goal: intent.customGoal,
+        };
+
+        const runWaterfall = async (extra: Partial<WaterfallEnrichBody>) => {
+          const { error } = await invokeWaterfallEnrich({ ...enrichBody, ...extra });
+          if (error) throw error;
+        };
 
         if (action.id === 'ai_summary') {
-          await supabase.functions.invoke('ai-company-summary', { body: { ...enrichBody, company_name: company.name } });
+          await supabase.functions.invoke('ai-company-summary', {
+            body: {
+              ...(domain ? { domain } : {}),
+              ...(orgName ? { company_name: orgName } : {}),
+              company_name: company.name,
+              intent_goals: intent.goals,
+              custom_goal: intent.customGoal,
+            },
+          });
         } else if (action.id === 'enrich_person') {
-          await supabase.functions.invoke('data-waterfall-enrich', { body: { ...enrichBody, target_titles: ['owner', 'ceo', 'founder'] } });
+          await runWaterfall({ target_titles: ['owner', 'ceo', 'founder'] });
         } else if (action.id === 'work_email') {
-          await supabase.functions.invoke('data-waterfall-enrich', { body: { ...enrichBody, enrich_fields: ['email'] } });
+          await runWaterfall({ enrich_fields: ['email'] });
         } else if (action.id === 'website_techstack') {
-          await supabase.functions.invoke('technographics-enrichment', { body: enrichBody });
+          await supabase.functions.invoke('technographics-enrichment', {
+            body: {
+              ...(domain ? { domain } : {}),
+              ...(orgName ? { company_name: orgName } : {}),
+              intent_goals: intent.goals,
+              custom_goal: intent.customGoal,
+            },
+          });
         } else {
-          await supabase.functions.invoke('data-waterfall-enrich', { body: { ...enrichBody, enrich_fields: [action.id] } });
+          await runWaterfall({ enrich_fields: [action.id] });
         }
       }
       toast.success(`${action.label} completed for ${targets.length} ${targets.length === 1 ? 'company' : 'companies'}`);
-    } catch {
-      toast.error(`${action.label} failed`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `${action.label} failed`);
     } finally {
       setRunningAction(null);
     }

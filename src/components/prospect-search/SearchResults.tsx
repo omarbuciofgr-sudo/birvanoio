@@ -22,8 +22,8 @@ import {
   Github,
 } from 'lucide-react';
 import { CompanyResult } from '@/lib/api/industrySearch';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { EnrichmentActionsPanel } from './EnrichmentActionsPanel';
 import {
@@ -79,6 +79,8 @@ interface SearchResultsProps {
   isLoadingMore?: boolean;
   hasMoreResults?: boolean;
   totalResults?: number;
+  /** People Search rows need Apollo people/match + person context */
+  enrichmentTarget?: 'company' | 'person';
 }
 
 function getTypeBadge(types: string[], industry: string | null): string {
@@ -124,6 +126,7 @@ export function SearchResults({
   isLoadingMore,
   hasMoreResults,
   totalResults,
+  enrichmentTarget = 'company',
 }: SearchResultsProps) {
   const { canAfford, spendCredits } = useCredits();
   const [enrichmentStatus, setEnrichmentStatus] = useState<Record<number, EnrichmentStatus>>({});
@@ -161,32 +164,47 @@ export function SearchResults({
     setEnrichmentStatus(prev => ({ ...prev, [index]: 'loading' }));
 
     try {
-      const domain = company.domain?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null;
-      if (!domain) {
-        toast.error(`No domain found for ${company.name}`);
+      const domain =
+        company.domain?.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim() || '';
+      const orgName = (company.organization_name || '').trim();
+      const li = (company.linkedin_url || '').trim();
+      if (enrichmentTarget === 'person') {
+        if (!domain && !orgName && !li && !company.name?.trim()) {
+          toast.error(`Nothing to match for ${company.name} — add LinkedIn or organization if possible.`);
+          setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
+          return;
+        }
+      } else if (!domain && !orgName) {
+        toast.error(`No company domain or organization for ${company.name}`);
         setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
         return;
       }
 
-      // Spend credits
-      const spent = await spendCredits('enrich', 1, `enrich_${domain}`);
+      const spent = await spendCredits('enrich', 1, `enrich_${domain || orgName.slice(0, 48) || li.slice(0, 32) || 'row'}`);
       if (!spent) {
         toast.error('Failed to charge credits');
         setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
         return;
       }
 
-      // Call waterfall enrichment
-      const { data, error } = await supabase.functions.invoke('data-waterfall-enrich', {
-        body: {
-          domain,
-          target_titles: ['owner', 'ceo', 'founder', 'president'],
-        },
+      const { data, error } = await invokeWaterfallEnrich({
+        enrichment_target: enrichmentTarget,
+        ...(domain ? { domain } : {}),
+        ...(orgName ? { company_name: orgName } : {}),
+        ...(enrichmentTarget === 'person' && company.name?.trim()
+          ? { person_display_name: company.name.trim() }
+          : {}),
+        ...(enrichmentTarget === 'person' && li ? { linkedin_url: li } : {}),
+        target_titles: ['owner', 'ceo', 'founder', 'president'],
       });
 
       if (error || !data?.success) {
         setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
-        toast.error(`Enrichment failed for ${company.name}`);
+        toast.error(
+          error?.message ||
+            (typeof data?.error === 'string' ? data.error : null) ||
+            `Enrichment failed for ${company.name}`
+        );
         return;
       }
 
@@ -206,7 +224,7 @@ export function SearchResults({
       setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
       toast.error(`Enrichment failed for ${company.name}`);
     }
-  }, [enrichmentStatus, canAfford, spendCredits]);
+  }, [enrichmentStatus, canAfford, spendCredits, enrichmentTarget]);
 
   const handleEnrichSelected = useCallback(async () => {
     if (bulkEnriching) return;
@@ -599,6 +617,7 @@ export function SearchResults({
           selectedCompany={selectedCompany}
           selectedRows={selectedRows}
           results={results}
+          enrichmentTarget={enrichmentTarget}
         />
       )}
     </div>
