@@ -242,8 +242,8 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
   console.log('[Apollo] Searching with params:', JSON.stringify(searchParams));
 
   try {
-    // Use organizations/search for richer company data (description, employee count, location)
-    const response = await fetch('https://api.apollo.io/api/v1/organizations/search', {
+    // Primary: organizations/search (richer fields). Fallback: mixed_companies/search for some Apollo tiers.
+    let response = await fetch('https://api.apollo.io/api/v1/organizations/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -253,11 +253,24 @@ async function searchApollo(input: CompanySearchInput, apiKey: string): Promise<
       body: JSON.stringify(searchParams),
     });
 
-    const data = await response.json();
+    let data = await response.json();
 
     if (!response.ok) {
-      console.error(`[Apollo] API error ${response.status}:`, data?.error || data);
-      return null;
+      console.error(`[Apollo] organizations/search error ${response.status}:`, data?.error || data);
+      response = await fetch('https://api.apollo.io/api/v1/mixed_companies/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Api-Key': apiKey,
+        },
+        body: JSON.stringify(searchParams),
+      });
+      data = await response.json();
+      if (!response.ok) {
+        console.error(`[Apollo] mixed_companies/search error ${response.status}:`, data?.error || data);
+        return null;
+      }
     }
 
     const orgs = data.organizations || data.accounts || [];
@@ -782,6 +795,10 @@ async function scrapeSocialProfiles(domain: string): Promise<Record<string, stri
 
 // ── Merge helper: fill blanks from secondary into primary ───────────
 function mergeCompany(primary: CompanyResult, secondary: CompanyResult): CompanyResult {
+  const pTech = primary.technologies ?? [];
+  const sTech = secondary.technologies ?? [];
+  const pKw = primary.keywords ?? [];
+  const sKw = secondary.keywords ?? [];
   return {
     name: primary.name || secondary.name,
     domain: primary.domain || secondary.domain,
@@ -796,8 +813,8 @@ function mergeCompany(primary: CompanyResult, secondary: CompanyResult): Company
     headquarters_city: primary.headquarters_city || secondary.headquarters_city,
     headquarters_state: primary.headquarters_state || secondary.headquarters_state,
     headquarters_country: primary.headquarters_country || secondary.headquarters_country,
-    technologies: primary.technologies.length > 0 ? primary.technologies : secondary.technologies,
-    keywords: primary.keywords.length > 0 ? primary.keywords : secondary.keywords,
+    technologies: pTech.length > 0 ? pTech : sTech,
+    keywords: pKw.length > 0 ? pKw : sKw,
     source_provider: primary.source_provider,
     social_profiles: { ...(secondary.social_profiles || {}), ...(primary.social_profiles || {}) },
     phone: primary.phone || secondary.phone,
@@ -920,7 +937,8 @@ Deno.serve(async (req) => {
       }
 
       for (const company of companies) {
-        const key = normalizedDomain(company.domain) || company.name.toLowerCase();
+        const key =
+          normalizedDomain(company.domain) || (company.name || '').toLowerCase().trim();
         if (!key) continue;
         const existing = mergedMap.get(key);
         if (existing) {

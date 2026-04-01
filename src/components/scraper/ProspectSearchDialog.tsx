@@ -173,13 +173,13 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       if (searchType === 'people') {
         const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
         // People Search: Apollo via scraper backend /api/people-search (all filters — funding, job postings, past roles, etc.)
+        // Only skills / free-form profile / certifications → Apollo q_keywords.
+        // Do NOT merge languages, education level, or schools: Apollo treats q_keywords as
+        // narrow profile text — bundling e.g. MIT + english + bachelor wipes results.
         const allKeywords = [
           ...peopleFilters.skills,
           ...peopleFilters.profileKeywords,
           ...peopleFilters.certifications,
-          ...peopleFilters.languages,
-          ...peopleFilters.educationLevel,
-          ...peopleFilters.schools,
         ].filter(Boolean);
 
         const response = await industrySearchApi.searchPeople({

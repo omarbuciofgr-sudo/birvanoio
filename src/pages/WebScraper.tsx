@@ -222,6 +222,7 @@ function getNormalizedRentalAddressForListing(listing: {
   source_url?: string | null;
   source_platform?: string | null;
   title?: string | null;
+  description?: string | null;
 }): string {
   const platform = (listing.source_platform || '').toLowerCase();
   const rental =
@@ -232,6 +233,18 @@ function getNormalizedRentalAddressForListing(listing: {
   if (!raw) {
     const fromMeta = rentalAddressFallbackFromListingMetadata(listing);
     if (fromMeta) raw = fromMeta;
+  }
+  if (!raw && platform.includes('apartments')) {
+    const d = typeof listing.description === 'string' ? listing.description.trim() : '';
+    if (d && d.length <= 400 && /\d/.test(d)) {
+      const first = d.split(/\n|\.(?:\s|$)/)[0].trim();
+      if (
+        first.length >= 8 &&
+        (/,/.test(first) || /\b(?:st|street|ave|avenue|rd|road|dr|drive|blvd|ln|lane|way|ct|court)\b/i.test(first))
+      ) {
+        raw = first;
+      }
+    }
   }
   if (!raw) return '';
   raw = normalizeRentalAddressString(raw);
@@ -703,6 +716,8 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
         price: l.price,
         owner_name: l.owner_name,
         owner_phone: l.owner_phone,
+        owner_email: l.owner_email,
+        description: typeof l.description === 'string' ? l.description : '',
         listing_url: l.listing_url,
         source_url: l.listing_url,
         source_platform: 'trulia',
@@ -774,6 +789,7 @@ function mapBackendListingsForPlatform(platform: string, listings: any[]): any[]
         withApartmentsListingContactPrefill({
           address: l.address,
           title: l.title,
+          description: typeof l.description === 'string' ? l.description : '',
           bedrooms: l.bedrooms,
           bathrooms: l.bathrooms,
           price: l.price,
@@ -1096,13 +1112,23 @@ export default function WebScraper() {
       const apiInc = (result as { include_pm?: boolean }).include_pm;
       if (typeof apiInc === 'boolean') setReLastApiIncludePm(apiInc);
       setReLastBackendPmMeta(extractBackendPmMeta(result as { include_pm?: boolean; total_stored?: number; pm_rows_hidden?: number }, n));
-      toast.success(
-        `Loaded ${n} listing${n !== 1 ? 's' : ''}${
-          includePmFlag
-            ? ' (full Supabase set — nothing stripped for this request).'
-            : ' (by-owner — backend omitted PM/managed-pattern rows).'
-        }`,
-      );
+      const rLoaded = result as { pm_rows_hidden?: number; total_stored?: number };
+      const hidden = typeof rLoaded.pm_rows_hidden === 'number' ? rLoaded.pm_rows_hidden : undefined;
+      const totalDb = typeof rLoaded.total_stored === 'number' ? rLoaded.total_stored : undefined;
+      let loadSuffix: string;
+      if (includePmFlag) {
+        loadSuffix = ' (full Supabase set — nothing stripped for this request).';
+      } else if (hidden !== undefined && hidden > 0 && totalDb !== undefined) {
+        loadSuffix = ` (by-owner: ${hidden} PM/broker row${hidden !== 1 ? 's' : ''} hidden · ${totalDb} in DB).`;
+      } else if (hidden === 0 && (totalDb ?? 0) > 0) {
+        loadSuffix =
+          platform === 'trulia'
+            ? ' (by-owner: 0 rows matched PM rules in DB — same list as Include PM until a fresh scrape saves description + agent text).'
+            : ' (by-owner: 0 rows matched PM rules in saved data — same count as Include PM when nothing in DB is classified as PM/broker).';
+      } else {
+        loadSuffix = ' (by-owner — backend applied PM/managed heuristics).';
+      }
+      toast.success(`Loaded ${n} listing${n !== 1 ? 's' : ''}${loadSuffix}`);
 
       const r2 = result as { total_stored?: number; pm_rows_hidden?: number };
       if (
@@ -1116,7 +1142,7 @@ export default function WebScraper() {
         );
       }
       if (
-        platform === 'hotpads' &&
+        (platform === 'hotpads' || platform === 'trulia') &&
         !includePmFlag &&
         typeof r2.pm_rows_hidden === 'number' &&
         r2.pm_rows_hidden === 0 &&
@@ -1124,7 +1150,9 @@ export default function WebScraper() {
         r2.total_stored > 0
       ) {
         toast.info(
-          'Hotpads: By-owner removed 0 rows beyond the PM/managed filter. If counts match Include PM, no rows were classified as PM in the database.',
+          platform === 'trulia'
+            ? 'Trulia: By-owner only strips rows when saved data includes description or agent/broker text. Yours matched 0 — so you see the same 132 as Include PM. Run Find Listings again after pulling the latest Trulia scraper (saves description + merged agent name).'
+            : 'Hotpads: By-owner removed 0 rows beyond the PM/managed filter. If counts match Include PM, no rows were classified as PM in the database.',
         );
       }
     } catch (e) {
@@ -1580,19 +1608,53 @@ export default function WebScraper() {
           return;
         }
         await scraperBackendApi.resetTruliaStatus();
-        const triggerRes = await scraperBackendApi.triggerFromUrl(url, { force: true });
+        const triggerRes = await scraperBackendApi.triggerFromUrl(url, {
+          force: true,
+          savePm: !reByOwnerStrict,
+        });
         if (triggerRes.error) {
           st.error(triggerRes.error);
           return;
         }
-        st.info('Trulia scraper started. Waiting for results…');
+        st.info(
+          'Trulia scrape running — table fills as rows save to Supabase (include PM while running); when it finishes, By-owner rules apply on the final load.',
+        );
         const pollInterval = 2000;
-        const maxWait = 5 * 60 * 1000;
+        const maxWait = 30 * 60 * 1000;
+        const progressiveFetchInterval = 12000;
         const start = Date.now();
+        let lastProgressiveFetch = Date.now() - progressiveFetchInterval;
         let status = await scraperBackendApi.getTruliaStatus();
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
           status = await scraperBackendApi.getTruliaStatus();
+          if (scrapeCancelled()) break;
+          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
+            lastProgressiveFetch = Date.now();
+            try {
+              const partial = await scraperBackendApi.getTruliaLastResult({ includePm: true });
+              const partialMapped = (partial.listings || []).map((l) => ({
+                address: l.address,
+                bedrooms: l.bedrooms,
+                bathrooms: l.bathrooms,
+                price: l.price,
+                owner_name: l.owner_name,
+                owner_phone: l.owner_phone,
+                listing_url: l.listing_url,
+                source_url: l.listing_url,
+                source_platform: 'trulia',
+                listing_type: 'sale',
+                square_feet: l.square_feet,
+                days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
+              }));
+              if (partialMapped.length > 0) {
+                applyListings(partialMapped);
+                clearFindListingsSpinnerIfOwner();
+              }
+            } catch {
+              /* ignore */
+            }
+          }
         }
         if (status.status !== 'running') clearFindListingsSpinnerIfOwner();
         if (scrapeCancelled()) return;
@@ -3015,14 +3077,16 @@ export default function WebScraper() {
                         title={
                           reLastBackendPmMeta.include_pm
                             ? 'Last API load used include_pm=1: every saved row for this platform.'
-                            : 'Last API load omitted rows classified as PM, managed URL, or corporate landlord. support@hotpads.com is still normal for masked true owners — not counted here.'
+                            : reLastBackendPmMeta.pm_rows_hidden > 0
+                              ? 'Backend removed rows classified as PM/realtor/managed before sending to the app.'
+                              : 'No saved rows matched PM/broker patterns (common on Trulia when description/agent fields are empty). Re-scrape with an updated spider; until then By-owner and Include PM show the same set.'
                         }
                       >
                         {reLastBackendPmMeta.include_pm
                           ? `DB ${reLastBackendPmMeta.total_stored} saved (full load)`
                           : reLastBackendPmMeta.pm_rows_hidden > 0
                             ? `+${reLastBackendPmMeta.pm_rows_hidden} rows only in Include PM · ${reLastBackendPmMeta.total_stored} in DB`
-                            : `0 PM rows stripped · ${reLastBackendPmMeta.total_stored} in DB`}
+                            : `No PM match in DB · ${reLastBackendPmMeta.total_stored} rows`}
                       </Badge>
                     )}
                     {reMatchLocationFilter && reLocation?.trim() && (

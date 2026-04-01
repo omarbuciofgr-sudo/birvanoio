@@ -153,23 +153,47 @@ export const EMPLOYEE_RANGES = [
 
 export const industrySearchApi = {
   /**
-   * Search for companies by industry, size, and location
+   * Company search: Apollo via Flask `POST /api/company-search` (alias: `/api/industry-search`).
+   * Does not use Supabase Edge — if you see "Edge Function non-2xx", deploy this frontend or hard-refresh.
    */
   async searchCompanies(input: CompanySearchInput): Promise<IndustrySearchResponse> {
-    const { data, error } = await supabase.functions.invoke('industry-search', {
-      body: input,
-    });
-
-    if (error) {
-      console.error('Industry search error:', error);
-      return { success: false, error: error.message };
+    const base = scraperBackendApi.getBaseUrl();
+    const post = (path: string) =>
+      fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        cache: 'no-store',
+      });
+    try {
+      // Prefer /api/company-search; fall back to /api/industry-search (older Flask builds / no restart).
+      let res = await post('/api/company-search');
+      if (res.status === 404) {
+        res = await post('/api/industry-search');
+      }
+      const raw = (await res.json().catch(() => ({}))) as IndustrySearchResponse;
+      if (!res.ok) {
+        return {
+          success: false,
+          error: raw.error || `Company search failed (${res.status})`,
+          companies: [],
+        };
+      }
+      if (raw?.success === false && raw.error) {
+        return { success: false, error: raw.error, companies: [] };
+      }
+      return raw;
+    } catch (e) {
+      console.error('Industry search error:', e);
+      return {
+        success: false,
+        error:
+          e instanceof Error
+            ? e.message
+            : 'Scraper backend unreachable — start api_server.py and set APOLLO_API_KEY in backend .env',
+        companies: [],
+      };
     }
-
-    const raw = data as IndustrySearchResponse;
-    if (raw?.success === false && raw.error) {
-      return { success: false, error: raw.error, companies: [] };
-    }
-    return raw;
   },
 
   /**

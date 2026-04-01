@@ -12,6 +12,40 @@ If you want to tweak anything or add the email recap feature later, I can do tha
 
 ---
 
+## Message for Awais — system review response (copy / send)
+
+Hi Awais,
+
+Thanks again for the review. I’ve **updated the scrapers and Scout UI to match what you flagged** — here’s the direct response to your points:
+
+**Zillow FRBO — “only managed buildings, not private owner”**  
+**Fixed on our side:** we tightened how rentals are collected and classified (drop managed-community cards from the SERP, stricter PM / corporate signals, clearer **owner vs managed** handling). In Scout you can use **“Table: by-owner only”** so the list focuses on **owner-style leads**; use **Include PM / all names** when you want the full mix. Please **run a fresh scrape** on a city you care about and confirm with **by-owner only** on.
+
+**Hotpads — same concern**  
+**Fixed on our side:** we now seed **For rent by owner** (correct URL + query params), fixed the backend URL builder so it no longer fell back to generic **apartments-for-rent**, and improved **managed vs by-owner** using Hotpads page data (building hub URLs, size / Zillow-apply cues, contact patterns, etc.). Again, **re-scrape** + **by-owner only** is the right check — old DB rows won’t reflect the new logic until they’re refreshed.
+
+**Apartments.com — “no skip trace after search”**  
+**This is addressed in the current UI:** Apartments.com rows show **Skip Trace** like the other platforms (see live Scout — e.g. Chicago, **by-owner only**). When trace runs but **no owner or listing phone** is returned, you may see a note that it’s **common on Apartments.com rentals** and to use **View listing** or another unit — that’s **expected** for some listings, not a missing button.
+
+**Trulia**  
+Handled in the **same spirit as Zillow FRBO** (filtering / owner vs PM) where it applies.
+
+**People search — 0 results with filters**  
+**Fixed in code** so **all People filters** go to our backend → Apollo, with a **relaxed retry** when narrow filters return nobody. It still needs a valid **`APOLLO_API_KEY`** on the **scraper backend (Railway / `api_server`)** — please add or share that key securely so we can confirm results on your account.
+
+**Company search — Edge Function non-2xx**  
+Still tied to **`industry-search`** + **Apollo**. Please ensure **`APOLLO_API_KEY`** is set under **Supabase → Edge Functions → Secrets** and check logs if anything still fails.
+
+**Zillow FSBO / FSBO.com**  
+You reported these as fine — we didn’t change them for this round; we’ll keep monitoring.
+
+If you’re good with it, next step is **`APOLLO_API_KEY`** on **Supabase + Railway/backend**, then a quick joint pass: **correct lead types**, **skip trace**, and **B2B filters returning real rows**.
+
+Thanks,  
+[Your name]
+
+---
+
 ## DO NOT TOUCH (working fine per client)
 
 - **Brivano Scout — Real Estate tab**  

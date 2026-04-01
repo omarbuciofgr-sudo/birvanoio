@@ -205,16 +205,24 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
   }
 
   const orgTags = params.q_organization_keyword_tags as string[] | undefined;
+  // Include every filter that narrows the Apollo query — missing any of these caused
+  // false "no signal" and we injected default US + titles on top of user filters → 0 results.
   const hasPeopleSignal = !!(
-    params.person_titles ||
-    params.person_locations ||
+    (Array.isArray(params.person_titles) && params.person_titles.length > 0) ||
+    (Array.isArray(params.person_seniorities) && params.person_seniorities.length > 0) ||
+    (Array.isArray(params.person_departments) && params.person_departments.length > 0) ||
+    (Array.isArray(params.person_locations) && params.person_locations.length > 0) ||
     params.q_organization_name ||
     (orgTags && orgTags.length > 0) ||
     params.q_keywords ||
-    params.person_past_titles ||
+    (Array.isArray(params.person_past_titles) && params.person_past_titles.length > 0) ||
     params.q_person_past_organization_name ||
-    params.person_not_names ||
-    params.currently_using_any_of_technology_uids ||
+    (Array.isArray(params.person_not_names) && params.person_not_names.length > 0) ||
+    (Array.isArray(params.currently_using_any_of_technology_uids) &&
+      params.currently_using_any_of_technology_uids.length > 0) ||
+    (Array.isArray(params.organization_num_employees_ranges) &&
+      params.organization_num_employees_ranges.length > 0) ||
+    (Array.isArray(params.contact_email_status) && params.contact_email_status.length > 0) ||
     params.organization_revenue_ranges ||
     params.organization_latest_funding_stage_cd ||
     params.organization_sic_codes ||
