@@ -199,15 +199,15 @@ export function SearchResults({
         return;
       }
 
-      const enriched = data.data || {};
+      const enriched = (data.data || {}) as Record<string, any>;
       setEnrichmentData(prev => ({
         ...prev,
         [index]: {
-          email: enriched.email || null,
-          phone: enriched.phone || enriched.mobile_phone || null,
-          contact_name: enriched.full_name || null,
-          linkedin_url: enriched.linkedin_url || null,
-        },
+          email: String(enriched.email || '') || '',
+          phone: String(enriched.phone || enriched.mobile_phone || '') || '',
+          contact_name: String(enriched.full_name || '') || '',
+          linkedin_url: String(enriched.linkedin_url || '') || '',
+        } as EnrichmentResult,
       }));
       setEnrichmentStatus(prev => ({ ...prev, [index]: 'done' }));
       toast.success(`Enriched ${company.name}`);

@@ -1794,13 +1794,13 @@ export default function WebScraper() {
         releaseScrapeUiIfOwner();
         if (reSaveToDb && mapped.length > 0 && user?.id) {
           try {
-            const rows = mapped.map((listing) => ({
+            const rows = mapped.map((listing: Record<string, any>) => ({
               domain: 'trulia.com',
-              source_url: listing.source_url || listing.listing_url || null,
-              address: listing.address || null,
-              full_name: listing.owner_name || null,
-              best_email: null,
-              best_phone: listing.owner_phone || null,
+              source_url: String(listing.source_url || listing.listing_url || ''),
+              address: String(listing.address || ''),
+              full_name: String(listing.owner_name || ''),
+              best_email: null as string | null,
+              best_phone: listing.owner_phone ? String(listing.owner_phone) : null,
               all_emails: [],
               all_phones: listing.owner_phone ? [listing.owner_phone] : [],
               status: 'new' as const,
