@@ -2644,29 +2644,11 @@ export default function WebScraper() {
               <TabsTrigger value="prospect-search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Target className="h-3.5 w-3.5" /> Brivano Lens
               </TabsTrigger>
-              <TabsTrigger value="tech-search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <Cpu className="h-3.5 w-3.5" /> Tech Stack
-              </TabsTrigger>
-              <TabsTrigger value="lookalike" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <Target className="h-3.5 w-3.5" /> Lookalikes
-              </TabsTrigger>
-              <TabsTrigger value="domain-resolve" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <Globe className="h-3.5 w-3.5" /> Domains
-              </TabsTrigger>
-              <TabsTrigger value="email-finder" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <MailIcon className="h-3.5 w-3.5" /> Email Finder
-              </TabsTrigger>
               <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Home className="h-3.5 w-3.5" /> Real Estate
               </TabsTrigger>
               <TabsTrigger value="search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Search className="h-3.5 w-3.5" /> Search
-              </TabsTrigger>
-              <TabsTrigger value="csv-enrichment" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <FileSpreadsheet className="h-3.5 w-3.5" /> CSV Enrichment
-              </TabsTrigger>
-              <TabsTrigger value="lists" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <ListFilter className="h-3.5 w-3.5" /> Lists
               </TabsTrigger>
             </TabsList>
           )}
