@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   LayoutDashboard,
   Users,
+  Kanban,
   Settings,
   LogOut,
   Menu,
@@ -49,6 +50,7 @@ const navSections = [
     items: [
       { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "Leads", href: "/dashboard/leads", icon: Users },
+      { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
       { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
     ],
   },
