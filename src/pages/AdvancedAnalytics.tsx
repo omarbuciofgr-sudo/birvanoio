@@ -34,7 +34,7 @@ export default function AdvancedAnalytics() {
     queryFn: async () => {
       const { data: leads, error } = await supabase
         .from("leads")
-        .select("id, status, created_at, lead_score, source")
+        .select("id, status, created_at, lead_score, industry")
         .gte("created_at", since);
       if (error) throw error;
 
@@ -46,7 +46,8 @@ export default function AdvancedAnalytics() {
 
       (leads || []).forEach(l => {
         byStatus[l.status || "unknown"] = (byStatus[l.status || "unknown"] || 0) + 1;
-        bySource[l.source || "unknown"] = (bySource[l.source || "unknown"] || 0) + 1;
+        const src = l.industry || "unknown";
+        bySource[src] = (bySource[src] || 0) + 1;
         const day = format(new Date(l.created_at), "MMM dd");
         byDay[day] = (byDay[day] || 0) + 1;
         totalScore += l.lead_score || 0;
