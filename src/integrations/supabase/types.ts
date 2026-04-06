@@ -2909,6 +2909,137 @@ export type Database = {
         }
         Relationships: []
       }
+      sequence_enrollments: {
+        Row: {
+          completed_at: string | null
+          current_step: number
+          enrolled_at: string
+          id: string
+          last_step_at: string | null
+          lead_id: string
+          next_step_at: string | null
+          sequence_id: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          current_step?: number
+          enrolled_at?: string
+          id?: string
+          last_step_at?: string | null
+          lead_id: string
+          next_step_at?: string | null
+          sequence_id: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          current_step?: number
+          enrolled_at?: string
+          id?: string
+          last_step_at?: string | null
+          lead_id?: string
+          next_step_at?: string | null
+          sequence_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_enrollments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sequence_enrollments_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequence_steps: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string
+          delay_days: number
+          id: string
+          sequence_id: string
+          step_order: number
+          subject: string | null
+        }
+        Insert: {
+          body?: string
+          channel?: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          sequence_id: string
+          step_order?: number
+          subject?: string | null
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          sequence_id?: string
+          step_order?: number
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequence_steps_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequences: {
+        Row: {
+          channels: string[] | null
+          created_at: string
+          description: string | null
+          goal: string | null
+          id: string
+          name: string
+          status: string
+          tone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channels?: string[] | null
+          created_at?: string
+          description?: string | null
+          goal?: string | null
+          id?: string
+          name: string
+          status?: string
+          tone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channels?: string[] | null
+          created_at?: string
+          description?: string | null
+          goal?: string | null
+          id?: string
+          name?: string
+          status?: string
+          tone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       signal_subscriptions: {
         Row: {
           config: Json | null
