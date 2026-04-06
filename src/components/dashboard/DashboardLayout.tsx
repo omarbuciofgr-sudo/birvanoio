@@ -30,6 +30,7 @@ import {
   Sparkles,
   Calculator,
   CreditCard,
+  Wrench,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -55,6 +56,7 @@ const navSections = [
     label: "Tools",
     items: [
       { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
+      { name: "Enrichment Tools", href: "/dashboard/tools", icon: Wrench },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
       { name: "Signals", href: "/dashboard/signals", icon: Zap },
       { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
