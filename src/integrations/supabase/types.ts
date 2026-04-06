@@ -908,6 +908,60 @@ export type Database = {
         }
         Relationships: []
       }
+      deals: {
+        Row: {
+          close_date: string | null
+          created_at: string
+          deal_value: number | null
+          id: string
+          lead_id: string
+          notes: string | null
+          position: number
+          stage_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          close_date?: string | null
+          created_at?: string
+          deal_value?: number | null
+          id?: string
+          lead_id: string
+          notes?: string | null
+          position?: number
+          stage_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          close_date?: string | null
+          created_at?: string
+          deal_value?: number | null
+          id?: string
+          lead_id?: string
+          notes?: string | null
+          position?: number
+          stage_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deals_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       digest_subscriptions: {
         Row: {
           created_at: string
@@ -1969,6 +2023,42 @@ export type Database = {
           recorded_at?: string
           value_json?: Json | null
           value_numeric?: number | null
+        }
+        Relationships: []
+      }
+      pipeline_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_loss: boolean
+          is_win: boolean
+          name: string
+          position: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_loss?: boolean
+          is_win?: boolean
+          name: string
+          position?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_loss?: boolean
+          is_win?: boolean
+          name?: string
+          position?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
