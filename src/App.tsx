@@ -37,6 +37,9 @@ import Signals from "./pages/Signals";
 import Billing from "./pages/Billing";
 import Tools from "./pages/Tools";
 import Pipeline from "./pages/Pipeline";
+import Sequences from "./pages/Sequences";
+import Team from "./pages/Team";
+import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -81,6 +84,9 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
               <Route path="/dashboard/tools" element={<ProtectedRoute><Tools /></ProtectedRoute>} />
               <Route path="/dashboard/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
+              <Route path="/dashboard/sequences" element={<ProtectedRoute><Sequences /></ProtectedRoute>} />
+              <Route path="/dashboard/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
+              <Route path="/dashboard/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>
           </BrowserRouter>
