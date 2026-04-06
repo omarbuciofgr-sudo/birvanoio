@@ -1,16 +1,19 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu, Target, Globe, Mail, FileSpreadsheet, ListFilter } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Cpu, Target, Globe, Mail, FileSpreadsheet, ListFilter, ExternalLink } from 'lucide-react';
 import { TechnographicsSearch } from '@/components/scout/TechnographicsSearch';
 import { LookalikeSearch } from '@/components/scout/LookalikeSearch';
 import { DomainResolver } from '@/components/scout/DomainResolver';
 import { BulkEmailFinder } from '@/components/scout/BulkEmailFinder';
 import { DynamicLists } from '@/components/scout/DynamicLists';
-import CSVEnrichment from '@/pages/CSVEnrichment';
 
 const Tools = () => {
   const [activeTab, setActiveTab] = useState('tech-search');
+  const navigate = useNavigate();
 
   return (
     <DashboardLayout fullWidth>
@@ -55,7 +58,18 @@ const Tools = () => {
             <BulkEmailFinder />
           </TabsContent>
           <TabsContent value="csv-enrichment" className="mt-0">
-            <CSVEnrichment embedded />
+            <Card className="border-border/40">
+              <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+                <FileSpreadsheet className="h-10 w-10 text-muted-foreground" />
+                <div className="text-center">
+                  <h3 className="text-sm font-semibold mb-1">CSV Enrichment</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm">Upload a CSV file and enrich your contacts with company data, emails, and more</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/csv-enrichment')}>
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open CSV Enrichment
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
           <TabsContent value="lists" className="mt-0">
             <DynamicLists />
