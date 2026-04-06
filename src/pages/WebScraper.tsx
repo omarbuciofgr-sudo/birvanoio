@@ -2710,7 +2710,7 @@ export default function WebScraper() {
                         {/* Source grid */}
                         <div className="w-full max-w-xl">
                           <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider">Start from a source</p>
-                          <div className="grid grid-cols-5 gap-3">
+                          <div className="grid grid-cols-4 gap-3">
                             {sourceCards.map((card) => {
                               const iconMap: Record<string, any> = { UserSearch, Building2, MapPin, Home, FileUp, Sparkles, Cpu, Target, Globe, MailIcon, ListFilter };
                               const IconComp = iconMap[card.icon] || Sparkles;
