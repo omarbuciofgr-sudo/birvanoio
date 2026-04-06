@@ -246,8 +246,8 @@ export default function AdvancedAnalytics() {
 
               <Card className="md:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-base">Top Lead Sources</CardTitle>
-                  <CardDescription>Where your leads are coming from</CardDescription>
+                  <CardTitle className="text-base">Top Industries</CardTitle>
+                  <CardDescription>Lead distribution by industry</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="h-64">
