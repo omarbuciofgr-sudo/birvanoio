@@ -2625,45 +2625,47 @@ export default function WebScraper() {
 
   return (
     <DashboardLayout fullWidth>
-      <div className={lensSearchTypeActive && activeTab === 'prospect-search' ? '' : 'space-y-4'}>
+      <div className={lensSearchTypeActive && activeTab === 'prospect-search' ? '' : 'space-y-5'}>
         {!(lensSearchTypeActive && activeTab === 'prospect-search') && (
-        <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Brivano Scout</h1>
-            <p className="text-sm text-muted-foreground mt-1">Find prospects, scrape listings, and enrich your pipeline</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Brivano Scout</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Find prospects, scrape listings, and enrich your pipeline</p>
+          </div>
         </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className={lensSearchTypeActive && activeTab === 'prospect-search' ? '' : 'space-y-4'}>
           {!(lensSearchTypeActive && activeTab === 'prospect-search') && (
-            <TabsList className="h-9 p-0.5 bg-muted/60 flex-wrap">
-              <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsList className="h-10 p-1 bg-muted/40 border border-border/30 gap-0.5">
+              <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Sparkles className="h-3.5 w-3.5" /> AI Assistant
               </TabsTrigger>
-              <TabsTrigger value="prospect-search" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="prospect-search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Target className="h-3.5 w-3.5" /> Brivano Lens
               </TabsTrigger>
-              <TabsTrigger value="tech-search" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="tech-search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Cpu className="h-3.5 w-3.5" /> Tech Stack
               </TabsTrigger>
-              <TabsTrigger value="lookalike" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="lookalike" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Target className="h-3.5 w-3.5" /> Lookalikes
               </TabsTrigger>
-              <TabsTrigger value="domain-resolve" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="domain-resolve" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Globe className="h-3.5 w-3.5" /> Domains
               </TabsTrigger>
-              <TabsTrigger value="email-finder" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="email-finder" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <MailIcon className="h-3.5 w-3.5" /> Email Finder
               </TabsTrigger>
-              <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Home className="h-3.5 w-3.5" /> Real Estate
               </TabsTrigger>
-              <TabsTrigger value="search" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Search className="h-3.5 w-3.5" /> Search
               </TabsTrigger>
-              <TabsTrigger value="csv-enrichment" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="csv-enrichment" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <FileSpreadsheet className="h-3.5 w-3.5" /> CSV Enrichment
               </TabsTrigger>
-              <TabsTrigger value="lists" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <TabsTrigger value="lists" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <ListFilter className="h-3.5 w-3.5" /> Lists
               </TabsTrigger>
             </TabsList>
