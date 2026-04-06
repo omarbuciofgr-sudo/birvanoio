@@ -1328,14 +1328,8 @@ export default function WebScraper() {
   const sourceCards = [
     { label: 'Find people', icon: 'UserSearch', tab: 'prospect-search' },
     { label: 'Find companies', icon: 'Building2', tab: 'prospect-search' },
-    { label: 'Tech stack', icon: 'Cpu', tab: 'tech-search' },
-    { label: 'Lookalikes', icon: 'Target', tab: 'lookalike' },
-    { label: 'Domains', icon: 'Globe', tab: 'domain-resolve' },
-    { label: 'Email finder', icon: 'MailIcon', tab: 'email-finder' },
-    { label: 'Local businesses', icon: 'MapPin', tab: 'search' },
     { label: 'Real estate', icon: 'Home', tab: 'real-estate' },
-    { label: 'Import CSV', icon: 'FileUp', tab: 'csv-enrichment' },
-    { label: 'Dynamic lists', icon: 'ListFilter', tab: 'lists' },
+    { label: 'Local businesses', icon: 'MapPin', tab: 'search' },
   ];
 
   const chatSuggestions = [
