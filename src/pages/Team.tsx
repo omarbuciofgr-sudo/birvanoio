@@ -90,10 +90,22 @@ export default function Team() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("workspace_memberships")
-        .select("user_id, role, profiles(email, first_name, last_name)")
+        .select("user_id, role")
         .limit(50);
       if (error) throw error;
-      return (data || []) as TeamMember[];
+      // Fetch profiles separately
+      const userIds = (data || []).map(d => d.user_id);
+      if (userIds.length === 0) return [] as TeamMember[];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, email, first_name, last_name")
+        .in("user_id", userIds);
+      const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+      return (data || []).map(d => ({
+        user_id: d.user_id,
+        role: d.role,
+        profiles: profileMap.get(d.user_id) || null,
+      })) as TeamMember[];
     },
     enabled: !!user,
   });
