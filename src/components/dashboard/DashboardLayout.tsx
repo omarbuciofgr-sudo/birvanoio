@@ -32,6 +32,7 @@ import {
   Calculator,
   CreditCard,
   Wrench,
+  Workflow,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -51,6 +52,7 @@ const navSections = [
       { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "Leads", href: "/dashboard/leads", icon: Users },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
+      { name: "Sequences", href: "/dashboard/sequences", icon: Workflow },
       { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
     ],
   },
