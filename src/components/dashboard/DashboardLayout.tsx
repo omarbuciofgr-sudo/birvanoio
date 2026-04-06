@@ -33,6 +33,8 @@ import {
   CreditCard,
   Wrench,
   Workflow,
+  UsersRound,
+  BarChart3,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -68,8 +70,10 @@ const navSections = [
     ],
   },
   {
-    label: "Insights",
+    label: "Workspace",
     items: [
+      { name: "Team", href: "/dashboard/team", icon: UsersRound },
+      { name: "Analytics", href: "/dashboard/advanced-analytics", icon: BarChart3 },
       { name: "Reports", href: "/dashboard/reports", icon: ClipboardList },
       { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
       { name: "Settings", href: "/dashboard/settings", icon: Settings },
