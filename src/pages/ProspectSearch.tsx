@@ -32,6 +32,7 @@ export default function ProspectSearch() {
   const [searchName, setSearchName] = useState('');
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   const companiesValidation = useMemo(() => validateScraper('companies', filters), [filters]);
 
