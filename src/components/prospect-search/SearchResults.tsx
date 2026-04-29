@@ -144,6 +144,7 @@ export function SearchResults({
 
   const [bulkEnriching, setBulkEnriching] = useState(false);
   const [showActionsPanel, setShowActionsPanel] = useState(true);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   const handleEnrich = useCallback(async (index: number, company: CompanyResult) => {
     if (enrichmentStatus[index] === 'loading' || enrichmentStatus[index] === 'done') return;
