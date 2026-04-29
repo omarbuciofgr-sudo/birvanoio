@@ -619,6 +619,17 @@ export function SearchResults({
           enrichmentTarget={enrichmentTarget}
         />
       )}
+
+      {/* Detail Sheet (double-click) */}
+      <CompanyDetailSheet
+        open={detailIndex !== null}
+        onOpenChange={(o) => !o && setDetailIndex(null)}
+        company={detailIndex !== null ? results[detailIndex] : null}
+        enrichmentTarget={enrichmentTarget}
+        enrichment={detailIndex !== null ? enrichmentData[detailIndex] : undefined}
+        enrichmentStatus={detailIndex !== null ? (enrichmentStatus[detailIndex] || 'idle') : 'idle'}
+        onEnrich={detailIndex !== null ? () => handleEnrich(detailIndex, results[detailIndex]) : undefined}
+      />
     </div>
   );
 }
