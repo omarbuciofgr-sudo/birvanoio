@@ -103,10 +103,13 @@ const Leads = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+  const [viewMode, setViewMode] = useState<"table" | "kanban" | "companies">("table");
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [companyFilter, setCompanyFilter] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState({
@@ -163,6 +166,7 @@ const Leads = () => {
     if (statusFilter !== "all") filtered = filtered.filter(l => l.status === statusFilter);
     if (industryFilter !== "all") filtered = filtered.filter(l => l.industry === industryFilter);
     if (stateFilter !== "all") filtered = filtered.filter(l => l.state === stateFilter);
+    if (companyFilter) filtered = filtered.filter(l => l.business_name === companyFilter);
     if (scoreFilter !== "all") {
       if (scoreFilter === "hot") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 70);
       else if (scoreFilter === "warm") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 40 && (l.lead_score ?? 0) < 70);
@@ -184,7 +188,36 @@ const Leads = () => {
     });
 
     return filtered;
-  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir]);
+  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir, companyFilter]);
+
+  // Companies aggregation
+  const companies = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; industries: Set<string>; locations: Set<string>; statuses: Record<string, number>; topScore: number; lastActivity: string; }>();
+    for (const l of leads) {
+      const key = l.business_name || "—";
+      const existing = map.get(key) ?? { name: key, count: 0, industries: new Set<string>(), locations: new Set<string>(), statuses: {}, topScore: 0, lastActivity: l.created_at };
+      existing.count += 1;
+      if (l.industry) existing.industries.add(l.industry);
+      const loc = [l.city, l.state].filter(Boolean).join(", ");
+      if (loc) existing.locations.add(loc);
+      existing.statuses[l.status] = (existing.statuses[l.status] || 0) + 1;
+      existing.topScore = Math.max(existing.topScore, l.lead_score ?? 0);
+      if (new Date(l.created_at) > new Date(existing.lastActivity)) existing.lastActivity = l.created_at;
+      map.set(key, existing);
+    }
+    let arr = Array.from(map.values());
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      arr = arr.filter(c => c.name.toLowerCase().includes(q));
+    }
+    return arr.sort((a, b) => b.count - a.count);
+  }, [leads, searchQuery]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, companyFilter, viewMode]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / PAGE_SIZE));
+  const pagedLeads = useMemo(() => filteredLeads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filteredLeads, page]);
 
   const activeFilterCount = [statusFilter, industryFilter, stateFilter, scoreFilter].filter(f => f !== "all").length;
 
@@ -194,8 +227,21 @@ const Leads = () => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedLeads.size === filteredLeads.length) setSelectedLeads(new Set());
-    else setSelectedLeads(new Set(filteredLeads.map(l => l.id)));
+    const visible = pagedLeads.length > 0 ? pagedLeads : filteredLeads;
+    const allSelected = visible.every(l => selectedLeads.has(l.id));
+    if (allSelected) {
+      setSelectedLeads(prev => {
+        const next = new Set(prev);
+        visible.forEach(l => next.delete(l.id));
+        return next;
+      });
+    } else {
+      setSelectedLeads(prev => {
+        const next = new Set(prev);
+        visible.forEach(l => next.add(l.id));
+        return next;
+      });
+    }
   };
 
   const toggleSelectLead = (id: string) => {
@@ -301,9 +347,12 @@ const Leads = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban")}>
-              <ToggleGroupItem value="table" aria-label="Table view" className="gap-1 h-8 text-xs px-2.5">
-                <List className="w-3.5 h-3.5" />
+            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban" | "companies")}>
+              <ToggleGroupItem value="table" aria-label="All prospects" className="gap-1 h-8 text-xs px-2.5">
+                <List className="w-3.5 h-3.5" /> All
+              </ToggleGroupItem>
+              <ToggleGroupItem value="companies" aria-label="By company" className="gap-1 h-8 text-xs px-2.5">
+                <Building2 className="w-3.5 h-3.5" /> Companies
               </ToggleGroupItem>
               <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1 h-8 text-xs px-2.5">
                 <LayoutGrid className="w-3.5 h-3.5" />
@@ -455,6 +504,20 @@ const Leads = () => {
           </div>
         )}
 
+        {/* Active company filter banner */}
+        {companyFilter && (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-primary/20 bg-primary/[0.04]">
+            <div className="flex items-center gap-2 text-xs">
+              <Building2 className="w-3.5 h-3.5 text-primary" />
+              <span>Showing prospects at <span className="font-semibold">{companyFilter}</span></span>
+              <Badge variant="outline" className="text-[10px]">{filteredLeads.length}</Badge>
+            </div>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCompanyFilter(null)}>
+              <X className="w-3 h-3 mr-1" /> Clear company
+            </Button>
+          </div>
+        )}
+
         {/* View Content */}
         {viewMode === "kanban" ? (
           <LeadKanbanBoard
@@ -462,15 +525,72 @@ const Leads = () => {
             onLeadClick={(lead) => setSelectedLead(lead)}
             onLeadsUpdate={fetchLeads}
           />
+        ) : viewMode === "companies" ? (
+          <div className="space-y-3">
+            {companies.length === 0 ? (
+              <div className="rounded-lg border border-border/60 p-16 text-center text-muted-foreground">
+                <Building2 className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+                <p className="text-sm font-medium">No companies found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {companies.map((c) => (
+                  <Card
+                    key={c.name}
+                    className="cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+                    onClick={() => { setCompanyFilter(c.name); setViewMode("table"); }}
+                  >
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <p className="font-medium text-sm truncate" title={c.name}>{c.name}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] flex-shrink-0">{c.count}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(c.industries).slice(0, 2).map(i => (
+                          <Badge key={i} variant="outline" className="text-[9px] font-normal">{i}</Badge>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span className="truncate">
+                          {Array.from(c.locations)[0] || "—"}
+                        </span>
+                        {c.topScore > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" /> {c.topScore}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1 pt-1 border-t border-border/40">
+                        {Object.entries(c.statuses).map(([s, n]) => (
+                          <span key={s} className={`text-[9px] px-1.5 py-0.5 rounded-full ${statusConfig[s]?.color || ''}`}>
+                            {n} {s}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground text-center pt-2">
+              {companies.length} compan{companies.length === 1 ? 'y' : 'ies'} · click a card to view its prospects
+            </p>
+          </div>
         ) : (
+          <>
           <div className="rounded-lg border border-border/60 overflow-hidden">
-            <ScrollArea className="max-h-[calc(100vh-280px)]">
+            <div className="overflow-auto max-h-[calc(100vh-320px)]">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedLeads.size === filteredLeads.length && filteredLeads.length > 0}
+                        checked={pagedLeads.length > 0 && pagedLeads.every(l => selectedLeads.has(l.id))}
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
@@ -513,7 +633,7 @@ const Leads = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLeads.length === 0 ? (
+                  {pagedLeads.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={12} className="text-center py-16 text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
@@ -524,7 +644,7 @@ const Leads = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredLeads.map((lead) => {
+                    pagedLeads.map((lead) => {
                       const sc = statusConfig[lead.status] || statusConfig.new;
                       const location = [lead.city, lead.state].filter(Boolean).join(", ") || "—";
                       return (
@@ -615,8 +735,26 @@ const Leads = () => {
                   )}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </div>
+          {/* Pagination */}
+          {filteredLeads.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs text-muted-foreground">
+                Showing <span className="font-medium text-foreground">{(page - 1) * PAGE_SIZE + 1}</span>–
+                <span className="font-medium text-foreground">{Math.min(page * PAGE_SIZE, filteredLeads.length)}</span> of
+                <span className="font-medium text-foreground"> {filteredLeads.length}</span>
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(1)}>First</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
+                <span className="text-xs px-2">Page {page} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* Lead Detail Sheet (slide-out panel) */}
