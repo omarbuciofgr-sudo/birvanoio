@@ -199,6 +199,18 @@ export default function ProspectSearch() {
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => navigate('/dashboard/scraper')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
+          {hasSearched && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5 border-border/60"
+              onClick={() => setShowFilters((s) => !s)}
+              title={showFilters ? 'Hide filters' : 'Show filters'}
+            >
+              {showFilters ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+              {showFilters ? 'Hide filters' : 'Show filters'}
+            </Button>
+          )}
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-primary" />
             <h1 className="text-sm font-semibold tracking-tight">Find companies</h1>
