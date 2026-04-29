@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { EnrichmentActionsPanel } from './EnrichmentActionsPanel';
+import { CompanyDetailSheet } from './CompanyDetailSheet';
 import {
   Tooltip,
   TooltipContent,
