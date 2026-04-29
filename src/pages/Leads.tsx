@@ -188,7 +188,36 @@ const Leads = () => {
     });
 
     return filtered;
-  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir]);
+  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir, companyFilter]);
+
+  // Companies aggregation
+  const companies = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; industries: Set<string>; locations: Set<string>; statuses: Record<string, number>; topScore: number; lastActivity: string; }>();
+    for (const l of leads) {
+      const key = l.business_name || "—";
+      const existing = map.get(key) ?? { name: key, count: 0, industries: new Set<string>(), locations: new Set<string>(), statuses: {}, topScore: 0, lastActivity: l.created_at };
+      existing.count += 1;
+      if (l.industry) existing.industries.add(l.industry);
+      const loc = [l.city, l.state].filter(Boolean).join(", ");
+      if (loc) existing.locations.add(loc);
+      existing.statuses[l.status] = (existing.statuses[l.status] || 0) + 1;
+      existing.topScore = Math.max(existing.topScore, l.lead_score ?? 0);
+      if (new Date(l.created_at) > new Date(existing.lastActivity)) existing.lastActivity = l.created_at;
+      map.set(key, existing);
+    }
+    let arr = Array.from(map.values());
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      arr = arr.filter(c => c.name.toLowerCase().includes(q));
+    }
+    return arr.sort((a, b) => b.count - a.count);
+  }, [leads, searchQuery]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, companyFilter, viewMode]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / PAGE_SIZE));
+  const pagedLeads = useMemo(() => filteredLeads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filteredLeads, page]);
 
   const activeFilterCount = [statusFilter, industryFilter, stateFilter, scoreFilter].filter(f => f !== "all").length;
 
