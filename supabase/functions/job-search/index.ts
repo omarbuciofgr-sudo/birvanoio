@@ -50,36 +50,38 @@ async function searchApollo(input: JobSearchInput, apiKey: string): Promise<JobR
   if (input.seniority?.length) params.person_seniorities = input.seniority;
   if (input.industries?.length) params.q_organization_keyword_tags = input.industries;
   if (input.locations?.length) params.person_locations = input.locations;
-  if (input.companies?.length) {
-    params.q_organization_name = input.companies.join(' ');
-    // Tighten fuzzy org-name search (mixed_people is loose without this)
-    const extra = input.companies.join(' ');
-    params.q_keywords = [params.q_keywords as string | undefined, extra].filter(Boolean).join(' ').trim();
-  }
 
   const keywordParts: string[] = [];
   if (input.job_description_keywords?.length) keywordParts.push(...input.job_description_keywords);
   if (input.recruiter_keywords?.length) keywordParts.push(...input.recruiter_keywords);
   if (input.employment_types?.length) {
-    const typeKeywords = input.employment_types.map(t => {
+    const typeKeywords = input.employment_types.map((raw) => {
+      const t = String(raw).trim().replace(/-/g, '_').toLowerCase();
       const map: Record<string, string> = {
-        'part_time': 'Part-Time', 'contract': 'Contract',
-        'internship': 'Intern', 'freelance': 'Freelance', 'temporary': 'Temporary',
+        full_time: 'Full-Time',
+        part_time: 'Part-Time',
+        contract: 'Contract',
+        internship: 'Intern',
+        freelance: 'Freelance',
+        temporary: 'Temporary',
       };
       return map[t] || '';
     }).filter(Boolean);
     keywordParts.push(...typeKeywords);
   }
-  if (keywordParts.length > 0) params.q_keywords = keywordParts.join(' ');
-
-  const pw = input.posted_within?.trim();
-  if (pw && pw !== 'any') {
-    const postedMap: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 };
-    const days = postedMap[pw] ?? (parseInt(pw, 10) || 30);
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    params.person_title_changed_at_date_range = { min: since.toISOString().split('T')[0] };
+  if (input.companies?.length) {
+    params.q_organization_name = input.companies.join(' ');
+    // Tighten fuzzy org-name search: merge with description/recruiter/employment tokens (do not overwrite q_keywords).
+    keywordParts.push(input.companies.join(' '));
   }
+  if (keywordParts.length > 0) {
+    params.q_keywords = keywordParts.join(' ').trim();
+  }
+
+  // Apollo `/people/search` is a people index, not a job-posting feed. `person_title_changed_at_date_range`
+  // applies to *title change* dates, not job post dates, and typically zeroes result sets. We intentionally
+  // omit it here; `posted_within` is still required for form validation but has no Apollo equivalent in
+  // this path (tradeoff: broader people matches vs. empty results).
 
   console.log('[Job Apollo] Params:', JSON.stringify(params));
 
@@ -421,7 +423,12 @@ Deno.serve(async (req) => {
     let mergedJobs = Array.from(mergedMap.values());
     if (body.companies?.length) {
       const before = mergedJobs.length;
-      mergedJobs = filterByCompanyNames(mergedJobs, body.companies);
+      const filtered = filterByCompanyNames(mergedJobs, body.companies);
+      // If strict substring matching removes every row, keep unfiltered provider results (Apollo is fuzzy).
+      mergedJobs = filtered.length > 0 ? filtered : before > 0 ? mergedJobs : filtered;
+      if (filtered.length === 0 && before > 0) {
+        console.log('[Merge] Company-name filter removed all rows; keeping unfiltered merged results');
+      }
       console.log(`[Merge] Company-name filter: ${before} -> ${mergedJobs.length}`);
     }
     mergedJobs = mergedJobs.slice(0, limit);
