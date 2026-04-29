@@ -103,10 +103,13 @@ const Leads = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+  const [viewMode, setViewMode] = useState<"table" | "kanban" | "companies">("table");
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [companyFilter, setCompanyFilter] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState({
