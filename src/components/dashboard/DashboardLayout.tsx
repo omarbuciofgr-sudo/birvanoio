@@ -113,6 +113,47 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Collapsible group state — persisted in localStorage, auto-open the group
+  // containing the active route
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = window.localStorage.getItem("brivano:sidebarGroups");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      /* ignore */
+    }
+    return {};
+  });
+
+  // Auto-expand the group that contains the active route
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const section of navSections) {
+        if (!section.collapsible) continue;
+        const containsActive = section.items.some((i) => location.pathname === i.href);
+        if (containsActive && !next[section.label]) {
+          next[section.label] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("brivano:sidebarGroups", JSON.stringify(openGroups));
+    } catch {
+      /* ignore */
+    }
+  }, [openGroups]);
+
+  const toggleGroup = (label: string) =>
+    setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+
   useEffect(() => {
     const checkUserRoles = async () => {
       if (!user?.id) return;
