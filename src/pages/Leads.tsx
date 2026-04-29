@@ -227,8 +227,21 @@ const Leads = () => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedLeads.size === filteredLeads.length) setSelectedLeads(new Set());
-    else setSelectedLeads(new Set(filteredLeads.map(l => l.id)));
+    const visible = pagedLeads.length > 0 ? pagedLeads : filteredLeads;
+    const allSelected = visible.every(l => selectedLeads.has(l.id));
+    if (allSelected) {
+      setSelectedLeads(prev => {
+        const next = new Set(prev);
+        visible.forEach(l => next.delete(l.id));
+        return next;
+      });
+    } else {
+      setSelectedLeads(prev => {
+        const next = new Set(prev);
+        visible.forEach(l => next.add(l.id));
+        return next;
+      });
+    }
   };
 
   const toggleSelectLead = (id: string) => {
