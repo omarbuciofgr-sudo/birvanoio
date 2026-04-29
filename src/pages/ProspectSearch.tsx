@@ -254,7 +254,8 @@ export default function ProspectSearch() {
       {/* 2-panel layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Filters */}
-        <div className="w-[420px] flex-shrink-0 overflow-hidden border-r border-border/60">
+        {showFilters && (
+        <div className="w-[420px] flex-shrink-0 overflow-hidden border-r border-border/60 flex flex-col">
           <SearchFilters
             filters={filters}
             onFiltersChange={setFilters}
