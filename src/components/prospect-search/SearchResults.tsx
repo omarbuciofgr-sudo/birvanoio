@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { EnrichmentActionsPanel } from './EnrichmentActionsPanel';
+import { CompanyDetailSheet } from './CompanyDetailSheet';
 import {
   Tooltip,
   TooltipContent,
@@ -143,6 +144,7 @@ export function SearchResults({
 
   const [bulkEnriching, setBulkEnriching] = useState(false);
   const [showActionsPanel, setShowActionsPanel] = useState(true);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   const handleEnrich = useCallback(async (index: number, company: CompanyResult) => {
     if (enrichmentStatus[index] === 'loading' || enrichmentStatus[index] === 'done') return;
@@ -400,6 +402,12 @@ export function SearchResults({
                       isSelected ? 'bg-primary/5' : ''
                     }`}
                     onClick={() => toggleRow(index)}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      window.getSelection()?.removeAllRanges();
+                      setDetailIndex(index);
+                    }}
+                    title="Double-click to view details"
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -611,6 +619,17 @@ export function SearchResults({
           enrichmentTarget={enrichmentTarget}
         />
       )}
+
+      {/* Detail Sheet (double-click) */}
+      <CompanyDetailSheet
+        open={detailIndex !== null}
+        onOpenChange={(o) => !o && setDetailIndex(null)}
+        company={detailIndex !== null ? results[detailIndex] : null}
+        enrichmentTarget={enrichmentTarget}
+        enrichment={detailIndex !== null ? enrichmentData[detailIndex] : undefined}
+        enrichmentStatus={detailIndex !== null ? (enrichmentStatus[detailIndex] || 'idle') : 'idle'}
+        onEnrich={detailIndex !== null ? () => handleEnrich(detailIndex, results[detailIndex]) : undefined}
+      />
     </div>
   );
 }

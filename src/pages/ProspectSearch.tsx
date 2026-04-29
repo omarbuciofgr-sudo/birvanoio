@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ArrowLeft, Building2, Bookmark, BookmarkCheck, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -32,6 +32,7 @@ export default function ProspectSearch() {
   const [searchName, setSearchName] = useState('');
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   const companiesValidation = useMemo(() => validateScraper('companies', filters), [filters]);
 
@@ -118,6 +119,7 @@ export default function ProspectSearch() {
         setResults(response.companies);
         setSelectedRows(new Set());
         setHasSearched(true);
+        setShowFilters(false);
         toast.success(`Found ${response.companies.length} companies`);
       } else {
         toast.error(response.error || 'Search failed');
@@ -197,6 +199,18 @@ export default function ProspectSearch() {
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => navigate('/dashboard/scraper')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
+          {hasSearched && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5 border-border/60"
+              onClick={() => setShowFilters((s) => !s)}
+              title={showFilters ? 'Hide filters' : 'Show filters'}
+            >
+              {showFilters ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+              {showFilters ? 'Hide filters' : 'Show filters'}
+            </Button>
+          )}
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-primary" />
             <h1 className="text-sm font-semibold tracking-tight">Find companies</h1>
@@ -240,7 +254,8 @@ export default function ProspectSearch() {
       {/* 2-panel layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Filters */}
-        <div className="w-[420px] flex-shrink-0 overflow-hidden border-r border-border/60">
+        {showFilters && (
+        <div className="w-[420px] flex-shrink-0 overflow-hidden border-r border-border/60 flex flex-col">
           <SearchFilters
             filters={filters}
             onFiltersChange={setFilters}
@@ -285,6 +300,7 @@ export default function ProspectSearch() {
             </Button>
           </div>
         </div>
+        )}
 
         {/* Right: Results */}
         <div className="flex-1 overflow-hidden">
