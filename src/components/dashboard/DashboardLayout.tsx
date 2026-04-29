@@ -51,30 +51,49 @@ interface DashboardLayoutProps {
   fullWidth?: boolean;
 }
 
-const navSections = [
+type NavItem = { name: string; href: string; icon: any };
+type NavSection = {
+  label: string;
+  collapsible?: boolean;
+  groupIcon?: any;
+  items: NavItem[];
+};
+
+const navSections: NavSection[] = [
   {
     label: "Core",
     items: [
       { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "Leads", href: "/dashboard/leads", icon: Users },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
+    ],
+  },
+  {
+    label: "Content",
+    collapsible: true,
+    groupIcon: Send,
+    items: [
       { name: "Sequences", href: "/dashboard/sequences", icon: Workflow },
       { name: "Campaigns", href: "/dashboard/campaigns", icon: Mail },
+      { name: "Templates", href: "/dashboard/templates", icon: FileText },
     ],
   },
   {
     label: "Tools",
+    collapsible: true,
+    groupIcon: Wand2,
     items: [
       { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
       { name: "Enrichment Tools", href: "/dashboard/tools", icon: Wrench },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
       { name: "Signals", href: "/dashboard/signals", icon: Zap },
       { name: "Voice Agent", href: "/dashboard/voice-agent", icon: Bot },
-      { name: "Templates", href: "/dashboard/templates", icon: FileText },
     ],
   },
   {
     label: "Workspace",
+    collapsible: true,
+    groupIcon: BarChart3,
     items: [
       { name: "Team", href: "/dashboard/team", icon: UsersRound },
       { name: "Analytics", href: "/dashboard/advanced-analytics", icon: BarChart3 },
