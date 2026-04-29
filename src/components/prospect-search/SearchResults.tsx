@@ -402,6 +402,12 @@ export function SearchResults({
                       isSelected ? 'bg-primary/5' : ''
                     }`}
                     onClick={() => toggleRow(index)}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      window.getSelection()?.removeAllRanges();
+                      setDetailIndex(index);
+                    }}
+                    title="Double-click to view details"
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
