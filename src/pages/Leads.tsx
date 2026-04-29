@@ -334,9 +334,12 @@ const Leads = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban")}>
-              <ToggleGroupItem value="table" aria-label="Table view" className="gap-1 h-8 text-xs px-2.5">
-                <List className="w-3.5 h-3.5" />
+            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban" | "companies")}>
+              <ToggleGroupItem value="table" aria-label="All prospects" className="gap-1 h-8 text-xs px-2.5">
+                <List className="w-3.5 h-3.5" /> All
+              </ToggleGroupItem>
+              <ToggleGroupItem value="companies" aria-label="By company" className="gap-1 h-8 text-xs px-2.5">
+                <Building2 className="w-3.5 h-3.5" /> Companies
               </ToggleGroupItem>
               <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1 h-8 text-xs px-2.5">
                 <LayoutGrid className="w-3.5 h-3.5" />
