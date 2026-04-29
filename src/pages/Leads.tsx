@@ -491,6 +491,20 @@ const Leads = () => {
           </div>
         )}
 
+        {/* Active company filter banner */}
+        {companyFilter && (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-primary/20 bg-primary/[0.04]">
+            <div className="flex items-center gap-2 text-xs">
+              <Building2 className="w-3.5 h-3.5 text-primary" />
+              <span>Showing prospects at <span className="font-semibold">{companyFilter}</span></span>
+              <Badge variant="outline" className="text-[10px]">{filteredLeads.length}</Badge>
+            </div>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCompanyFilter(null)}>
+              <X className="w-3 h-3 mr-1" /> Clear company
+            </Button>
+          </div>
+        )}
+
         {/* View Content */}
         {viewMode === "kanban" ? (
           <LeadKanbanBoard
@@ -498,15 +512,72 @@ const Leads = () => {
             onLeadClick={(lead) => setSelectedLead(lead)}
             onLeadsUpdate={fetchLeads}
           />
+        ) : viewMode === "companies" ? (
+          <div className="space-y-3">
+            {companies.length === 0 ? (
+              <div className="rounded-lg border border-border/60 p-16 text-center text-muted-foreground">
+                <Building2 className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+                <p className="text-sm font-medium">No companies found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {companies.map((c) => (
+                  <Card
+                    key={c.name}
+                    className="cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+                    onClick={() => { setCompanyFilter(c.name); setViewMode("table"); }}
+                  >
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <p className="font-medium text-sm truncate" title={c.name}>{c.name}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] flex-shrink-0">{c.count}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(c.industries).slice(0, 2).map(i => (
+                          <Badge key={i} variant="outline" className="text-[9px] font-normal">{i}</Badge>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span className="truncate">
+                          {Array.from(c.locations)[0] || "—"}
+                        </span>
+                        {c.topScore > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" /> {c.topScore}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1 pt-1 border-t border-border/40">
+                        {Object.entries(c.statuses).map(([s, n]) => (
+                          <span key={s} className={`text-[9px] px-1.5 py-0.5 rounded-full ${statusConfig[s]?.color || ''}`}>
+                            {n} {s}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground text-center pt-2">
+              {companies.length} compan{companies.length === 1 ? 'y' : 'ies'} · click a card to view its prospects
+            </p>
+          </div>
         ) : (
+          <>
           <div className="rounded-lg border border-border/60 overflow-hidden">
-            <ScrollArea className="max-h-[calc(100vh-280px)]">
+            <div className="overflow-auto max-h-[calc(100vh-320px)]">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedLeads.size === filteredLeads.length && filteredLeads.length > 0}
+                        checked={pagedLeads.length > 0 && pagedLeads.every(l => selectedLeads.has(l.id))}
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
@@ -549,7 +620,7 @@ const Leads = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLeads.length === 0 ? (
+                  {pagedLeads.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={12} className="text-center py-16 text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
@@ -560,7 +631,7 @@ const Leads = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredLeads.map((lead) => {
+                    pagedLeads.map((lead) => {
                       const sc = statusConfig[lead.status] || statusConfig.new;
                       const location = [lead.city, lead.state].filter(Boolean).join(", ") || "—";
                       return (
@@ -651,8 +722,26 @@ const Leads = () => {
                   )}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </div>
+          {/* Pagination */}
+          {filteredLeads.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs text-muted-foreground">
+                Showing <span className="font-medium text-foreground">{(page - 1) * PAGE_SIZE + 1}</span>–
+                <span className="font-medium text-foreground">{Math.min(page * PAGE_SIZE, filteredLeads.length)}</span> of
+                <span className="font-medium text-foreground"> {filteredLeads.length}</span>
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(1)}>First</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
+                <span className="text-xs px-2">Page {page} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* Lead Detail Sheet (slide-out panel) */}
