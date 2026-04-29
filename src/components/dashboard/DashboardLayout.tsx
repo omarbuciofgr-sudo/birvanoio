@@ -260,42 +260,82 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
           </div>
 
           {/* Navigation - min-h-0 lets flex child shrink so overflow-y-auto works */}
-          <nav className="flex-1 min-h-0 px-3 py-4 space-y-5 overflow-y-auto overflow-x-hidden">
-            {navSections.map((section) => (
-              <div key={section.label}>
-                {!sidebarCollapsed && (
-                  <p className="px-3 mb-2 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-[0.12em]">
-                    {section.label}
-                  </p>
-                )}
-                <div className="space-y-0.5">
-                  {section.items.filter((item: any) => !item.adminOnly || isAdmin).map((item) => {
-                    const isActive = location.pathname === item.href;
-                    return (
-                      <Link
-                        key={item.name}
-                        to={item.href}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group relative ${
-                          isActive
-                            ? "bg-primary/[0.08] text-primary font-medium"
-                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                        } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-                        onClick={() => setSidebarOpen(false)}
-                        title={sidebarCollapsed ? item.name : undefined}
+          <nav className="flex-1 min-h-0 px-3 py-4 space-y-4 overflow-y-auto overflow-x-hidden">
+            {navSections.map((section) => {
+              const filteredItems = section.items.filter(
+                (item: any) => !item.adminOnly || isAdmin
+              );
+              if (filteredItems.length === 0) return null;
+
+              const isCollapsibleGroup = !!section.collapsible && !sidebarCollapsed;
+              const isOpen = !isCollapsibleGroup || openGroups[section.label] !== false;
+              // Default-open if user has never toggled
+              const effectiveOpen = isCollapsibleGroup
+                ? (openGroups[section.label] ?? false) ||
+                  filteredItems.some((i) => location.pathname === i.href)
+                : true;
+              const GroupIcon = section.groupIcon;
+
+              return (
+                <div key={section.label}>
+                  {!sidebarCollapsed && (
+                    isCollapsibleGroup ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(section.label)}
+                        className="w-full flex items-center justify-between px-3 py-1.5 mb-1 rounded-md text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-[0.12em] hover:bg-muted/40 hover:text-foreground transition-colors"
                       >
-                        {isActive && (
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary" />
-                        )}
-                        <item.icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? '' : 'group-hover:text-foreground'}`} />
-                        {!sidebarCollapsed && (
-                          <span className="text-[13px]">{item.name}</span>
-                        )}
-                      </Link>
-                    );
-                  })}
+                        <span className="flex items-center gap-2">
+                          {GroupIcon && <GroupIcon className="w-3.5 h-3.5" />}
+                          {section.label}
+                        </span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                            effectiveOpen ? "" : "-rotate-90"
+                          }`}
+                        />
+                      </button>
+                    ) : (
+                      <p className="px-3 mb-2 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-[0.12em]">
+                        {section.label}
+                      </p>
+                    )
+                  )}
+                  {(!isCollapsibleGroup || effectiveOpen) && (
+                    <div className={`space-y-0.5 ${isCollapsibleGroup ? "pl-2" : ""}`}>
+                      {filteredItems.map((item) => {
+                        const isActive = location.pathname === item.href;
+                        return (
+                          <Link
+                            key={item.name}
+                            to={item.href}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group relative ${
+                              isActive
+                                ? "bg-primary/[0.08] text-primary font-medium"
+                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            } ${sidebarCollapsed ? "justify-center px-0" : ""}`}
+                            onClick={() => setSidebarOpen(false)}
+                            title={sidebarCollapsed ? item.name : undefined}
+                          >
+                            {isActive && (
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary" />
+                            )}
+                            <item.icon
+                              className={`w-[18px] h-[18px] shrink-0 ${
+                                isActive ? "" : "group-hover:text-foreground"
+                              }`}
+                            />
+                            {!sidebarCollapsed && (
+                              <span className="text-[13px]">{item.name}</span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Admin items */}
             {isAdmin && (
