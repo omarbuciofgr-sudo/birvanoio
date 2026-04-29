@@ -119,6 +119,7 @@ export default function ProspectSearch() {
         setResults(response.companies);
         setSelectedRows(new Set());
         setHasSearched(true);
+        setShowFilters(false);
         toast.success(`Found ${response.companies.length} companies`);
       } else {
         toast.error(response.error || 'Search failed');
