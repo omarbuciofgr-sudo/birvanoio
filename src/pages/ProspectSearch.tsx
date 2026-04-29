@@ -300,6 +300,7 @@ export default function ProspectSearch() {
             </Button>
           </div>
         </div>
+        )}
 
         {/* Right: Results */}
         <div className="flex-1 overflow-hidden">
