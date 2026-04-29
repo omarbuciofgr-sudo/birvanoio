@@ -166,6 +166,7 @@ const Leads = () => {
     if (statusFilter !== "all") filtered = filtered.filter(l => l.status === statusFilter);
     if (industryFilter !== "all") filtered = filtered.filter(l => l.industry === industryFilter);
     if (stateFilter !== "all") filtered = filtered.filter(l => l.state === stateFilter);
+    if (companyFilter) filtered = filtered.filter(l => l.business_name === companyFilter);
     if (scoreFilter !== "all") {
       if (scoreFilter === "hot") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 70);
       else if (scoreFilter === "warm") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 40 && (l.lead_score ?? 0) < 70);
