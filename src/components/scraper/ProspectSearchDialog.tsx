@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -15,7 +15,11 @@ import {
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
 import { PeopleFilters, defaultPeopleFilters, PeopleSearchFilters } from '@/components/prospect-search/PeopleFilters';
 import { JobFilters, defaultJobFilters, JobSearchFilters } from '@/components/prospect-search/JobFilters';
-import { LocalBusinessSearch } from '@/components/prospect-search/LocalBusinessSearch';
+import {
+  LocalBusinessSearch,
+  DEFAULT_LOCAL_LENS_SYNC,
+  type LocalBusinessLensSync,
+} from '@/components/prospect-search/LocalBusinessSearch';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
 import { SearchTypeSelector, SearchTypeHeader, SearchType } from '@/components/prospect-search/SearchTypeSelector';
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
@@ -23,10 +27,26 @@ import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
 import { prospectSearchApi, type ProspectResult } from '@/lib/api/prospectSearch';
 import { supabase } from '@/integrations/supabase/client';
+import { validateScraper } from '@/config/scraperValidation';
+
+export type ExternalLensFilters = Partial<ProspectSearchFilters> & {
+  plannerSearchType?: SearchType;
+  /** Planner host-driven merge into People filters */
+  peopleFiltersPatch?: Partial<PeopleSearchFilters>;
+  /** Planner host-driven merge into Job posting filters */
+  jobFiltersPatch?: Partial<JobSearchFilters>;
+  /** Planner-driven local business search prefill */
+  localBusinessPatch?: {
+    locationQuery: string;
+    radiusMiles: number;
+    searchType: string;
+    keyword: string;
+  };
+};
 
 interface BrivanoLensProps {
   onSaveProspects?: (prospects: any[]) => void;
-  externalFilters?: Partial<ProspectSearchFilters> | null;
+  externalFilters?: ExternalLensFilters | null;
   onSwitchTab?: (tab: string) => void;
   onSearchTypeChange?: (hasSearchType: boolean) => void;
 }
@@ -52,39 +72,112 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
+  const [localPlannerPrefill, setLocalPlannerPrefill] = useState<ExternalLensFilters['localBusinessPatch'] | null>(null);
+  /** After a failed submit, show red rings until the search succeeds or the mode changes */
+  const [lensHighlightInvalid, setLensHighlightInvalid] = useState(false);
 
-  // When external filters arrive, auto-select companies mode
+  /** Mirrors LocalBusinessSearch fields — validateScraper('local', …) on change via sync callback */
+  const [localLensForm, setLocalLensForm] = useState<LocalBusinessLensSync>(() => ({ ...DEFAULT_LOCAL_LENS_SYNC }));
+
+  const handleLocalLensShapeChange = useCallback((shape: LocalBusinessLensSync) => {
+    setLocalLensForm(shape);
+  }, []);
+
+  const localLensValidation = useMemo(() => validateScraper('local', localLensForm), [localLensForm]);
+
+  const localInvalidFields =
+    searchType === 'local' && !localLensValidation.valid ? localLensValidation.missingFields : [];
+
+  const lensValidation = useMemo(() => {
+    if (!searchType || searchType === 'local') {
+      return { valid: true as const, missingFields: [] as string[], message: '' };
+    }
+    if (searchType === 'jobs') return validateScraper('jobs', jobFilters);
+    if (searchType === 'people') return validateScraper('people', peopleFilters);
+    return validateScraper('companies', filters);
+  }, [searchType, jobFilters, peopleFilters, filters]);
+
+  /** Jobs: show required-field highlights as soon as the filter UI loads (validateScraper on each jobFilters change). */
+  const jobFiltersInvalidFields =
+    searchType === 'jobs' && !lensValidation.valid ? lensValidation.missingFields : [];
+
+  /** Companies: same — validateScraper('companies', filters) via lensValidation whenever filters change. */
+  const companyFiltersInvalidFields =
+    searchType === 'companies' && !lensValidation.valid ? lensValidation.missingFields : [];
+
+  /** People: validateScraper('people', peopleFilters) — highlights before first search */
+  const peopleFiltersInvalidFields =
+    searchType === 'people' && !lensValidation.valid ? lensValidation.missingFields : [];
+
+  const invalidFieldsLens =
+    searchType &&
+    searchType !== 'local' &&
+    searchType !== 'jobs' &&
+    searchType !== 'companies' &&
+    searchType !== 'people' &&
+    lensHighlightInvalid &&
+    !lensValidation.valid
+      ? lensValidation.missingFields
+      : [];
+
+  // When external filters arrive: merge company filters when appropriate; honor Planner lens mode.
   useEffect(() => {
     if (!externalFilters) return;
     const key = JSON.stringify(externalFilters);
     if (key === lastAppliedRef.current) return;
     lastAppliedRef.current = key;
 
-    const merged = { ...defaultFilters };
-    if (externalFilters.industries) merged.industries = externalFilters.industries;
-    if (externalFilters.companySizes) merged.companySizes = externalFilters.companySizes;
-    if (externalFilters.annualRevenue) merged.annualRevenue = externalFilters.annualRevenue;
-    if (externalFilters.countries) merged.countries = externalFilters.countries;
-    if (externalFilters.citiesOrStates) merged.citiesOrStates = externalFilters.citiesOrStates;
-    if (externalFilters.cities) merged.cities = externalFilters.cities;
-    if (externalFilters.states) merged.states = externalFilters.states;
-    if (externalFilters.keywordsInclude) merged.keywordsInclude = externalFilters.keywordsInclude;
-    if (externalFilters.limit) merged.limit = externalFilters.limit;
-    setFilters(merged);
-    setSearchType('companies');
-    setShouldAutoSearch(true);
-  }, [externalFilters]);
+    const ext = externalFilters as ExternalLensFilters;
 
-  useEffect(() => {
-    if (shouldAutoSearch && !searchMutation.isPending) {
-      setShouldAutoSearch(false);
-      const timer = setTimeout(() => searchMutation.mutate({}), 100);
-      return () => clearTimeout(timer);
+    if (ext.plannerSearchType) {
+      setSearchType(ext.plannerSearchType);
     }
-  }, [shouldAutoSearch, filters]);
+
+    if (ext.plannerSearchType === 'local' && ext.localBusinessPatch) {
+      setLocalPlannerPrefill(ext.localBusinessPatch);
+      setShouldAutoSearch(false);
+      return;
+    }
+
+    const mergeCompanies =
+      ext.plannerSearchType === undefined || ext.plannerSearchType === 'companies';
+
+    if (mergeCompanies) {
+      const {
+        plannerSearchType: _pst,
+        peopleFiltersPatch: _pe,
+        jobFiltersPatch: _jf,
+        localBusinessPatch: _lb,
+        ...companyRest
+      } = ext;
+      setFilters((prev) => ({ ...defaultFilters, ...prev, ...companyRest }));
+      setShouldAutoSearch(true);
+    } else if (ext.plannerSearchType === 'people' && ext.peopleFiltersPatch) {
+      setPeopleFilters((prev) => ({
+        ...defaultPeopleFilters,
+        ...prev,
+        ...ext.peopleFiltersPatch,
+      }));
+      setShouldAutoSearch(true);
+    } else if (ext.plannerSearchType === 'jobs' && ext.jobFiltersPatch) {
+      setJobFilters((prev) => ({
+        ...defaultJobFilters,
+        ...prev,
+        ...ext.jobFiltersPatch,
+      }));
+      setShouldAutoSearch(true);
+    } else {
+      setShouldAutoSearch(false);
+    }
+  }, [externalFilters]);
 
   const handleSelectSearchType = (type: SearchType) => {
     setSearchType(type);
+    setLocalPlannerPrefill(null);
+    setLensHighlightInvalid(false);
+    if (type === 'local') {
+      setLocalLensForm({ ...DEFAULT_LOCAL_LENS_SYNC });
+    }
     setResults([]);
     setProspectResults(null);
     setHasSearched(false);
@@ -108,12 +201,15 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
     }
   }, [user]);
 
-  const handleLocalSearch = useCallback(async (params: { lat: number; lng: number; radiusMiles: number; searchType: string; keyword: string }) => {
-    localSearchMutation.mutate(params);
-  }, []);
-
   const localSearchMutation = useMutation({
-    mutationFn: async (params: { lat: number; lng: number; radiusMiles: number; searchType: string; keyword: string }) => {
+    mutationFn: async (params: {
+      lat: number;
+      lng: number;
+      radiusMiles: number;
+      searchType: string;
+      keyword: string;
+      locationQuery?: string;
+    }) => {
       const query = [params.keyword, params.searchType.replace(/_/g, ' ')].filter(Boolean).join(' ');
       const { data, error } = await supabase.functions.invoke('google-places-search', {
         body: {
@@ -126,6 +222,9 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
         },
       });
       if (error) throw error;
+      if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
+        throw new Error((data as { error?: string }).error || 'Search failed');
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -165,6 +264,35 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       toast.error(error instanceof Error ? error.message : 'Search failed');
     },
   });
+
+  const handleLocalSearch = useCallback(
+    (params: {
+      lat: number;
+      lng: number;
+      radiusMiles: number;
+      searchType: string;
+      keyword: string;
+      locationQuery: string;
+    }) => {
+      const r = validateScraper('local', {
+        locationQuery: params.locationQuery,
+        lat: params.lat,
+        lng: params.lng,
+        radiusMiles: params.radiusMiles,
+        searchType: params.searchType,
+        keyword: params.keyword,
+      });
+      if (!r.valid) {
+        toast.error(r.message);
+        requestAnimationFrame(() => {
+          document.querySelector('[data-invalid-field]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+        return;
+      }
+      localSearchMutation.mutate(params);
+    },
+    [localSearchMutation],
+  );
 
   const searchMutation = useMutation({
     mutationFn: async (opts?: { page?: number; append?: boolean }) => {
@@ -334,6 +462,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       });
     },
     onSuccess: (response, variables) => {
+      setLensHighlightInvalid(false);
       setProspectResults((response as { prospectResults?: ProspectResult[] | null }).prospectResults ?? null);
       if (response.success && response.companies) {
         const append = variables?.append;
@@ -359,6 +488,52 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       toast.error(error instanceof Error ? error.message : 'Search failed');
     },
   });
+
+  useEffect(() => {
+    if (!shouldAutoSearch || searchMutation.isPending || !searchType || searchType === 'local') return;
+
+    const snap =
+      searchType === 'jobs'
+        ? validateScraper('jobs', jobFilters)
+        : searchType === 'people'
+          ? validateScraper('people', peopleFilters)
+          : validateScraper('companies', filters);
+
+    if (!snap.valid) {
+      setShouldAutoSearch(false);
+      setLensHighlightInvalid(true);
+      toast.error(snap.message);
+      return;
+    }
+
+    setShouldAutoSearch(false);
+    setLensHighlightInvalid(false);
+    const timer = setTimeout(() => searchMutation.mutate({}), 100);
+    return () => clearTimeout(timer);
+  }, [shouldAutoSearch, searchMutation, searchType, jobFilters, peopleFilters, filters]);
+
+  const runLensSearch = useCallback(
+    (opts?: { page?: number; append?: boolean }) => {
+      if (!searchType || searchType === 'local') return;
+      const snap =
+        searchType === 'jobs'
+          ? validateScraper('jobs', jobFilters)
+          : searchType === 'people'
+            ? validateScraper('people', peopleFilters)
+            : validateScraper('companies', filters);
+      if (!snap.valid) {
+        setLensHighlightInvalid(true);
+        toast.error(snap.message);
+        requestAnimationFrame(() => {
+          document.querySelector('[data-invalid-field]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+        return;
+      }
+      setLensHighlightInvalid(false);
+      searchMutation.mutate(opts);
+    },
+    [searchType, jobFilters, peopleFilters, filters, searchMutation],
+  );
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -425,15 +600,6 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
     toast.success('Filters loaded');
   };
 
-  const canSearch = () => {
-    if (searchType === 'local') return true;
-    // Edge function applies broad Apollo defaults when the body is sparse (same idea as job search).
-    if (searchType === 'people') return true;
-    // job-search Edge Function applies defaults when body is sparse; allow Run/Next without filters
-    if (searchType === 'jobs') return true;
-    return filters.industries.length > 0;
-  };
-
   // Show search type selector if no type chosen
   if (!searchType) {
     return (
@@ -493,6 +659,10 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             <LocalBusinessSearch
               onSearch={handleLocalSearch}
               isSearching={localSearchMutation.isPending}
+              invalidFields={localInvalidFields}
+              onValidationShapeChange={handleLocalLensShapeChange}
+              plannerPrefill={localPlannerPrefill}
+              onPlannerPrefillConsumed={() => setLocalPlannerPrefill(null)}
             />
           )}
           {searchType === 'people' && (
@@ -500,9 +670,10 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               <PeopleFilters
                 filters={peopleFilters}
                 onFiltersChange={setPeopleFilters}
-                onSearch={() => searchMutation.mutate({})}
+                onSearch={() => runLensSearch({})}
                 isSearching={searchMutation.isPending}
                 resultCount={results.length}
+                invalidFields={peopleFiltersInvalidFields}
               />
             </>
           )}
@@ -511,9 +682,10 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               <JobFilters
                 filters={jobFilters}
                 onFiltersChange={setJobFilters}
-                onSearch={() => searchMutation.mutate({})}
+                onSearch={() => runLensSearch({})}
                 isSearching={searchMutation.isPending}
                 resultCount={results.length}
+                invalidFields={jobFiltersInvalidFields}
               />
             </>
           )}
@@ -522,9 +694,10 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               <SearchFilters
                 filters={filters}
                 onFiltersChange={setFilters}
-                onSearch={() => searchMutation.mutate({})}
+                onSearch={() => runLensSearch({})}
                 isSearching={searchMutation.isPending}
                 resultCount={results.length}
+                invalidFields={companyFiltersInvalidFields}
               />
             </>
           )}
@@ -556,12 +729,12 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
                 </DialogContent>
               </Dialog>
               <Button
-                onClick={() => searchMutation.mutate({})}
-                disabled={searchMutation.isPending || !canSearch()}
+                onClick={() => runLensSearch({})}
+                disabled={searchMutation.isPending || !lensValidation.valid}
                 size="sm"
                 className="h-7 px-5 text-xs font-semibold"
               >
-                {searchMutation.isPending ? 'SearchingΓÇª' : 'Next'}
+                {searchMutation.isPending ? 'Searching…' : 'Next'}
               </Button>
             </div>
           )}
@@ -581,7 +754,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             onLoadMore={() => {
               const nextPage = currentPage + 1;
               setIsLoadingMore(true);
-              searchMutation.mutate({ page: nextPage, append: true });
+              runLensSearch({ page: nextPage, append: true });
             }}
             isLoadingMore={isLoadingMore}
             hasMoreResults={currentPage < totalPages}

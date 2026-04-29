@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { validateCompanySearchRequest } from '../_shared/scraperValidation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -865,6 +866,18 @@ Deno.serve(async (req) => {
 
   try {
     const body: CompanySearchInput = await req.json();
+    const v = validateCompanySearchRequest(body as unknown as Record<string, unknown>);
+    if (!v.valid) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing required fields',
+          missing: v.missingFields,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const limit = body.limit ?? 50;
     const page = body.page || 1;
 

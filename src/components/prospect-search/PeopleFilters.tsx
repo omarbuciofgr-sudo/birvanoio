@@ -254,14 +254,34 @@ function TagInput({ label, placeholder, tags, onChange }: { label: string; place
 /* ── Section wrapper ─────────────────────────────────────────── */
 
 function FilterSection({
-  icon: Icon, label, badge, open, onOpenChange, children,
+  icon: Icon,
+  label,
+  badge,
+  open,
+  onOpenChange,
+  highlightInvalid,
+  sectionDataField,
+  children,
 }: {
-  icon: React.ElementType; label: string; badge?: React.ReactNode;
-  open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode;
+  icon: React.ElementType;
+  label: string;
+  badge?: React.ReactNode;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  highlightInvalid?: boolean;
+  sectionDataField?: string;
+  children: React.ReactNode;
 }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full py-3 px-1 text-sm font-semibold border-b border-border/40 hover:bg-muted/30 rounded-sm transition-colors">
+      <CollapsibleTrigger
+        data-invalid-field={sectionDataField}
+        className={`flex items-center justify-between w-full py-3 px-1 text-sm font-semibold hover:bg-muted/30 rounded-sm transition-colors ${
+          highlightInvalid
+            ? 'border-2 border-destructive ring-2 ring-destructive/35 rounded-md border-b-2'
+            : 'border-b border-border/40'
+        }`}
+      >
         <span className="flex items-center gap-2.5">
           <Icon className="h-4 w-4 text-muted-foreground" />
           {label}
@@ -288,9 +308,11 @@ interface PeopleFiltersProps {
   onSearch: () => void;
   isSearching: boolean;
   resultCount: number;
+  /** camelCase keys from `validateScraper('people', …).missingFields` */
+  invalidFields?: string[];
 }
 
-export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) {
+export function PeopleFilters({ filters, onFiltersChange, invalidFields }: PeopleFiltersProps) {
   const [sections, setSections] = useState<Record<string, boolean>>({
     companyAttributes: false,
     jobTitle: false,
@@ -316,6 +338,15 @@ export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) 
   const toggle = (key: string) => setSections((s) => ({ ...s, [key]: !s[key] }));
   const update = (partial: Partial<PeopleSearchFilters>) => onFiltersChange({ ...filters, ...partial });
 
+  const inv = invalidFields ?? [];
+  const badJobTitles = inv.includes('jobTitles');
+  const badLoc = inv.some((x) => ['countries', 'states', 'cities'].includes(x));
+  const badCoAttr = inv.some((x) => ['industries', 'companySizes'].includes(x));
+  const badSeniority = inv.includes('seniority');
+  const badDepartments = inv.includes('departments');
+  const badCompanies = inv.includes('companies');
+  const badJobSection = badJobTitles || badSeniority || badDepartments;
+
   return (
     <div className="h-[calc(100%-56px)] flex flex-col">
       <div className="flex-shrink-0 px-5 pt-5 pb-4">
@@ -327,16 +358,39 @@ export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) 
         <div className="space-y-0 pb-4">
 
           {/* Company attributes */}
-          <FilterSection icon={Building2} label="Company attributes" open={sections.companyAttributes} onOpenChange={() => toggle('companyAttributes')}>
+          <FilterSection
+            icon={Building2}
+            label="Company attributes"
+            open={sections.companyAttributes}
+            onOpenChange={() => toggle('companyAttributes')}
+            highlightInvalid={badCoAttr}
+            sectionDataField="industries"
+          >
             <FilterDropdown label="Industries" placeholder="e.g. Software Development" options={INDUSTRIES} selected={filters.industries} onChange={(v) => update({ industries: v })} />
             <FilterDropdown label="Company sizes" placeholder="e.g. 11-50 employees" options={COMPANY_SIZES} selected={filters.companySizes} onChange={(v) => update({ companySizes: v })} />
+            {badCoAttr && (
+              <p className="text-[11px] text-destructive">Select at least one industry or company size.</p>
+            )}
           </FilterSection>
 
           {/* Job title */}
-          <FilterSection icon={Briefcase} label="Job title" open={sections.jobTitle} onOpenChange={() => toggle('jobTitle')}>
+          <FilterSection
+            icon={Briefcase}
+            label="Job title"
+            open={sections.jobTitle}
+            onOpenChange={() => toggle('jobTitle')}
+            highlightInvalid={badJobSection}
+            sectionDataField="jobTitles"
+          >
             <TagInput label="Job titles" placeholder="e.g. CEO, VP of Sales" tags={filters.jobTitles} onChange={(v) => update({ jobTitles: v })} />
             <FilterDropdown label="Seniority" placeholder="e.g. C-Level, VP" options={SENIORITY_OPTIONS} selected={filters.seniority} onChange={(v) => update({ seniority: v })} />
             <FilterDropdown label="Department" placeholder="e.g. Sales, Engineering" options={DEPARTMENT_OPTIONS} selected={filters.departments} onChange={(v) => update({ departments: v })} />
+            {badJobTitles && <p className="text-[11px] text-destructive">Add at least one job title.</p>}
+            {!badJobTitles && (badSeniority || badDepartments) && (
+              <p className="text-[11px] text-destructive">
+                Add seniority or department selections, or use two other qualifiers (location, industry, size, or company).
+              </p>
+            )}
           </FilterSection>
 
           {/* Experience */}
@@ -355,10 +409,18 @@ export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) 
           </FilterSection>
 
           {/* Location */}
-          <FilterSection icon={Globe} label="Location" open={sections.location} onOpenChange={() => toggle('location')}>
+          <FilterSection
+            icon={Globe}
+            label="Location"
+            open={sections.location}
+            onOpenChange={() => toggle('location')}
+            highlightInvalid={badLoc}
+            sectionDataField="countries"
+          >
             <FilterDropdown label="Countries" placeholder="e.g. United States" options={COUNTRIES} selected={filters.countries} onChange={(v) => update({ countries: v })} />
             <FilterDropdown label="States" placeholder="e.g. California" options={stateOptions} selected={filters.states} onChange={(v) => update({ states: v })} />
             <FilterDropdown label="Cities" placeholder="e.g. San Francisco" options={MAJOR_CITIES} selected={filters.cities} onChange={(v) => update({ cities: v })} />
+            {badLoc && <p className="text-[11px] text-destructive">Choose at least one country, state, or city.</p>}
           </FilterSection>
 
           {/* Profile */}
@@ -383,8 +445,16 @@ export function PeopleFilters({ filters, onFiltersChange }: PeopleFiltersProps) 
           </FilterSection>
 
           {/* Companies */}
-          <FilterSection icon={Building2} label="Companies" open={sections.companies} onOpenChange={() => toggle('companies')}>
+          <FilterSection
+            icon={Building2}
+            label="Companies"
+            open={sections.companies}
+            onOpenChange={() => toggle('companies')}
+            highlightInvalid={badCompanies}
+            sectionDataField="companies"
+          >
             <TagInput label="Current companies" placeholder="e.g. Google, Salesforce" tags={filters.companies} onChange={(v) => update({ companies: v })} />
+            {badCompanies && <p className="text-[11px] text-destructive">Add at least one company name.</p>}
           </FilterSection>
 
           {/* Email Status */}

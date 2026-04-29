@@ -76,6 +76,34 @@ function metersToFeet(meters: number) {
 
 /* ── Main Component ──────────────────────────────────────────── */
 
+export type LocalBusinessPlannerPrefill = {
+  locationQuery: string;
+  radiusMiles: number;
+  searchType: string;
+  keyword: string;
+};
+
+/** Shape passed to `validateScraper('local', …)` — synced so parent can derive `missingFields` without duplicating rules. */
+export type LocalBusinessLensSync = {
+  locationQuery: string;
+  lat: number;
+  lng: number;
+  radiusMiles: number;
+  searchType: string;
+  /** Optional for API only — never required by validateScraper local rules */
+  keyword: string;
+};
+
+/** Keep in sync with initial state below — parent uses this for `validateScraper` before first child sync. */
+export const DEFAULT_LOCAL_LENS_SYNC: LocalBusinessLensSync = {
+  locationQuery: '',
+  lat: 40.7413,
+  lng: -73.9897,
+  radiusMiles: 5,
+  searchType: 'restaurant',
+  keyword: '',
+};
+
 interface LocalBusinessSearchProps {
   onSearch: (params: {
     lat: number;
@@ -83,21 +111,53 @@ interface LocalBusinessSearchProps {
     radiusMiles: number;
     searchType: string;
     keyword: string;
+    /** Location text box (for validation — geo group with lat/lng) */
+    locationQuery: string;
   }) => void;
   isSearching: boolean;
+  /** camelCase keys from `validateScraper('local', …).missingFields` */
+  invalidFields?: string[];
+  /** Apply planner answers: geocode location and optionally run search once */
+  plannerPrefill?: LocalBusinessPlannerPrefill | null;
+  onPlannerPrefillConsumed?: () => void;
+  /** Fires on mount and whenever synced fields change — parent runs `validateScraper('local', shape)`. */
+  onValidationShapeChange?: (shape: LocalBusinessLensSync) => void;
 }
 
-export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSearchProps) {
-  const [center, setCenter] = useState<[number, number]>([40.7413, -73.9897]); // NYC Flatiron
-  const [radiusMiles, setRadiusMiles] = useState(5);
-  const [searchType, setSearchType] = useState('restaurant');
-  const [keyword, setKeyword] = useState('');
-  const [locationQuery, setLocationQuery] = useState('');
+export function LocalBusinessSearch({
+  onSearch,
+  isSearching,
+  invalidFields,
+  plannerPrefill,
+  onPlannerPrefillConsumed,
+  onValidationShapeChange,
+}: LocalBusinessSearchProps) {
+  const [center, setCenter] = useState<[number, number]>([DEFAULT_LOCAL_LENS_SYNC.lat, DEFAULT_LOCAL_LENS_SYNC.lng]);
+  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_LOCAL_LENS_SYNC.radiusMiles);
+  const [searchType, setSearchType] = useState(DEFAULT_LOCAL_LENS_SYNC.searchType);
+  const [keyword, setKeyword] = useState(DEFAULT_LOCAL_LENS_SYNC.keyword);
+  const [locationQuery, setLocationQuery] = useState(DEFAULT_LOCAL_LENS_SYNC.locationQuery);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [zoom, setZoom] = useState(12);
 
   const radiusMeters = milesToMeters(radiusMiles);
   const radiusFeet = metersToFeet(radiusMeters);
+
+  const inv = invalidFields ?? [];
+  const badLoc = inv.some((x) => ['locationQuery', 'lat', 'lng'].includes(x));
+  const badRadius = inv.includes('radiusMiles');
+  const badType = inv.includes('searchType');
+
+  useEffect(() => {
+    onValidationShapeChange?.({
+      locationQuery,
+      lat: center[0],
+      lng: center[1],
+      radiusMiles,
+      searchType,
+      keyword,
+    });
+  }, [center, locationQuery, radiusMiles, searchType, keyword, onValidationShapeChange]);
 
   // Geocode location search
   const handleLocationSearch = useCallback(async () => {
@@ -120,6 +180,62 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
     }
   }, [locationQuery]);
 
+  const plannerPrefillKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!plannerPrefill) {
+      plannerPrefillKeyRef.current = null;
+      return;
+    }
+    const key = JSON.stringify(plannerPrefill);
+    if (plannerPrefillKeyRef.current === key) return;
+    plannerPrefillKeyRef.current = key;
+
+    const r = Math.min(50, Math.max(0.1, plannerPrefill.radiusMiles));
+    setRadiusMiles(r);
+    setSearchType(plannerPrefill.searchType);
+    setKeyword(plannerPrefill.keyword ?? '');
+    const q = plannerPrefill.locationQuery?.trim() ?? '';
+    setLocationQuery(q);
+
+    let cancelled = false;
+    (async () => {
+      if (!q) {
+        onPlannerPrefillConsumed?.();
+        return;
+      }
+      setIsGeocoding(true);
+      try {
+        const resp = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+        );
+        const data = await resp.json();
+        if (cancelled || !data.length) return;
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        setCenter([lat, lng]);
+        setZoom(13);
+        onSearch({
+          lat,
+          lng,
+          radiusMiles: r,
+          searchType: plannerPrefill.searchType,
+          keyword: plannerPrefill.keyword ?? '',
+          locationQuery: q,
+        });
+      } catch {
+        /* noop */
+      } finally {
+        if (!cancelled) setIsGeocoding(false);
+        onPlannerPrefillConsumed?.();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [plannerPrefill, onSearch, onPlannerPrefillConsumed]);
+
   // Dynamically adjust zoom based on radius
   useEffect(() => {
     if (radiusMiles <= 1) setZoom(15);
@@ -136,6 +252,7 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
       radiusMiles,
       searchType,
       keyword,
+      locationQuery,
     });
   };
 
@@ -157,20 +274,31 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
           </p>
 
           {/* Location search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search for a location..."
-              value={locationQuery}
-              onChange={(e) => setLocationQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLocationSearch()}
-              className="pl-10 h-9 text-sm"
-            />
-            {isGeocoding && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
+          <div className="space-y-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search for a location..."
+                value={locationQuery}
+                onChange={(e) => setLocationQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLocationSearch()}
+                data-invalid-field="locationQuery"
+                className={`pl-10 h-9 text-sm ${badLoc ? 'border-2 border-destructive ring-2 ring-destructive/35' : ''}`}
+              />
+              {isGeocoding && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {badLoc && (
+              <p className="text-[11px] text-destructive">Enter a location or use the map to set coordinates.</p>
+            )}
           </div>
 
           {/* Map */}
-          <div className="rounded-lg overflow-hidden border border-border/60 h-[300px] relative">
+          <div
+            data-invalid-field={badLoc ? 'lat' : undefined}
+            className={`rounded-lg overflow-hidden h-[300px] relative ${
+              badLoc ? 'border-2 border-destructive ring-2 ring-destructive/35' : 'border border-border/60'
+            }`}
+          >
             <MapContainer
               center={center}
               zoom={zoom}
@@ -197,7 +325,10 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
           </div>
 
           {/* Proximity Radius */}
-          <div className="space-y-2">
+          <div
+            data-invalid-field={badRadius ? 'radiusMiles' : undefined}
+            className={`space-y-2 rounded-md ${badRadius ? 'border-2 border-destructive ring-2 ring-destructive/35 p-2 -m-0.5' : ''}`}
+          >
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold">Proximity Radius</Label>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -217,6 +348,9 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
               <span>48 feet</span>
               <span>1179 miles</span>
             </div>
+            {badRadius && (
+              <p className="text-[11px] text-destructive">Set a radius greater than zero.</p>
+            )}
           </div>
 
           {/* Search Type */}
@@ -225,7 +359,10 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
               Search Type <span className="text-destructive">*</span>
             </Label>
             <Select value={searchType} onValueChange={setSearchType}>
-              <SelectTrigger className="h-9 text-sm">
+              <SelectTrigger
+                data-invalid-field="searchType"
+                className={`h-9 text-sm ${badType ? 'border-2 border-destructive ring-2 ring-destructive/35' : ''}`}
+              >
                 <SelectValue placeholder="Select a type" />
               </SelectTrigger>
               <SelectContent className="z-[9999] bg-popover border border-border shadow-xl" position="popper" sideOffset={4}>
@@ -236,6 +373,7 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
                 ))}
               </SelectContent>
             </Select>
+            {badType && <p className="text-[11px] text-destructive">Select a search type.</p>}
           </div>
 
           {/* Additional keyword */}
@@ -255,7 +393,7 @@ export function LocalBusinessSearch({ onSearch, isSearching }: LocalBusinessSear
       <div className="flex-shrink-0 h-12 border-t border-border/60 px-4 flex items-center justify-end bg-muted/30">
         <Button
           onClick={handleContinue}
-          disabled={isSearching}
+          disabled={isSearching || (invalidFields?.length ?? 0) > 0}
           size="sm"
           className="h-7 px-5 text-xs font-semibold"
         >

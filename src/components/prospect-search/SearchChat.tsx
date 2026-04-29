@@ -58,7 +58,7 @@ export function SearchChat({ onApplyFilters }: SearchChatProps) {
       }
 
       const { data: respData, error: invokeError } = await supabase.functions.invoke(
-        'prospect-search-chat',
+        'planner',
         {
           body: {
             messages: [...messages, userMsg].map((m) => ({

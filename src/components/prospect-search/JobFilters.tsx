@@ -154,8 +154,21 @@ function FilterDropdown({
   );
 }
 
-function SingleDropdown({ label, placeholder, options, value, onChange }: {
-  label: string; placeholder: string; options: { value: string; label: string }[]; value: string; onChange: (v: string) => void;
+function SingleDropdown({
+  label,
+  placeholder,
+  options,
+  value,
+  onChange,
+  optionalClear,
+}: {
+  label: string;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  /** e.g. Posted date “Any time” → sentinel value `any` */
+  optionalClear?: { label: string; value: string };
 }) {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -170,9 +183,20 @@ function SingleDropdown({ label, placeholder, options, value, onChange }: {
           <div className="absolute z-50 w-full mt-1 bg-popover border border-border/60 rounded-md shadow-xl">
             <ScrollArea className="max-h-[200px]">
               <div className="p-1">
-                <button className="w-full text-left px-2.5 py-1.5 text-xs rounded-sm hover:bg-accent/50 text-muted-foreground" onClick={() => { onChange(''); setIsOpen(false); }}>Any</button>
+                {optionalClear && (
+                  <button
+                    type="button"
+                    className="w-full text-left px-2.5 py-1.5 text-xs rounded-sm hover:bg-accent/50 text-muted-foreground"
+                    onClick={() => {
+                      onChange(optionalClear.value);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {optionalClear.label}
+                  </button>
+                )}
                 {options.map((opt) => (
-                  <button key={opt.value} className={`w-full text-left px-2.5 py-1.5 text-xs rounded-sm hover:bg-accent/50 ${value === opt.value ? 'bg-accent/60 font-medium' : ''}`} onClick={() => { onChange(opt.value); setIsOpen(false); }}>{opt.label}</button>
+                  <button key={opt.value} type="button" className={`w-full text-left px-2.5 py-1.5 text-xs rounded-sm hover:bg-accent/50 ${value === opt.value ? 'bg-accent/60 font-medium' : ''}`} onClick={() => { onChange(opt.value); setIsOpen(false); }}>{opt.label}</button>
                 ))}
               </div>
             </ScrollArea>
@@ -207,15 +231,47 @@ function TagInput({ label, placeholder, tags, onChange }: { label: string; place
 
 /* ── Section wrapper matching screenshot style ───────────────── */
 
+const stateOptions = US_STATES.map((s) => ({ value: s, label: s }));
+
+interface JobFiltersProps {
+  filters: JobSearchFilters;
+  onFiltersChange: (filters: JobSearchFilters) => void;
+  onSearch: () => void;
+  isSearching: boolean;
+  resultCount: number;
+  /** camelCase keys from `validateScraper('jobs', …).missingFields` */
+  invalidFields?: string[];
+}
+
 function FilterSection({
-  icon: Icon, label, badge, open, onOpenChange, children,
+  icon: Icon,
+  label,
+  badge,
+  open,
+  onOpenChange,
+  highlightInvalid,
+  sectionDataField,
+  children,
 }: {
-  icon: React.ElementType; label: string; badge?: React.ReactNode;
-  open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode;
+  icon: React.ElementType;
+  label: string;
+  badge?: React.ReactNode;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  highlightInvalid?: boolean;
+  sectionDataField?: string;
+  children: React.ReactNode;
 }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full py-3 px-1 text-sm font-semibold border-b border-border/40 hover:bg-muted/30 rounded-sm transition-colors">
+      <CollapsibleTrigger
+        data-invalid-field={sectionDataField}
+        className={`flex items-center justify-between w-full py-3 px-1 text-sm font-semibold hover:bg-muted/30 rounded-sm transition-colors ${
+          highlightInvalid
+            ? 'border-2 border-destructive ring-2 ring-destructive/35 rounded-md border-b-2'
+            : 'border-b border-border/40'
+        }`}
+      >
         <span className="flex items-center gap-2.5">
           <Icon className="h-4 w-4 text-muted-foreground" />
           {label}
@@ -232,19 +288,7 @@ function FilterSection({
   );
 }
 
-/* ── Main component ──────────────────────────────────────────── */
-
-const stateOptions = US_STATES.map((s) => ({ value: s, label: s }));
-
-interface JobFiltersProps {
-  filters: JobSearchFilters;
-  onFiltersChange: (filters: JobSearchFilters) => void;
-  onSearch: () => void;
-  isSearching: boolean;
-  resultCount: number;
-}
-
-export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
+export function JobFilters({ filters, onFiltersChange, invalidFields }: JobFiltersProps) {
   const [sections, setSections] = useState<Record<string, boolean>>({
     exclude: false,
     title: false,
@@ -261,6 +305,12 @@ export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
   const toggle = (key: string) => setSections((s) => ({ ...s, [key]: !s[key] }));
   const update = (partial: Partial<JobSearchFilters>) => onFiltersChange({ ...filters, ...partial });
 
+  const inv = invalidFields ?? [];
+  const badJobTitles = inv.includes('jobTitles');
+  const badGeo = inv.some((x) => ['countries', 'states', 'cities'].includes(x));
+  const badEmp = inv.includes('employmentType');
+  const badPosted = inv.includes('postedWithin');
+
   return (
     <div className="h-[calc(100%-56px)] flex flex-col">
       <div className="flex-shrink-0 px-5 pt-5 pb-4">
@@ -272,13 +322,27 @@ export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
         <div className="space-y-0 pb-4">
 
           {/* Exclude jobs */}
-          <FilterSection icon={Ban} label="Exclude jobs" badge={<Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-accent text-accent-foreground border-border gap-1"><Sparkles className="h-3 w-3" />Upgrade</Badge>} open={sections.exclude} onOpenChange={() => toggle('exclude')}>
+          <FilterSection
+            icon={Ban}
+            label="Exclude jobs"
+            badge={<Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-accent text-accent-foreground border-border gap-1"><Sparkles className="h-3 w-3" />Upgrade</Badge>}
+            open={sections.exclude}
+            onOpenChange={() => toggle('exclude')}
+          >
             <TagInput label="Exclude job titles" placeholder="e.g. Intern, Junior" tags={filters.excludeJobTitles} onChange={(v) => update({ excludeJobTitles: v })} />
           </FilterSection>
 
           {/* Job title */}
-          <FilterSection icon={Briefcase} label="Job title" open={sections.title} onOpenChange={() => toggle('title')}>
+          <FilterSection
+            icon={Briefcase}
+            label="Job title"
+            open={sections.title}
+            onOpenChange={() => toggle('title')}
+            highlightInvalid={badJobTitles}
+            sectionDataField="jobTitles"
+          >
             <TagInput label="Job titles" placeholder="e.g. Account Executive, SDR" tags={filters.jobTitles} onChange={(v) => update({ jobTitles: v })} />
+            {badJobTitles && <p className="text-[11px] text-destructive">Add at least one job title.</p>}
           </FilterSection>
 
           {/* Job description */}
@@ -287,15 +351,31 @@ export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
           </FilterSection>
 
           {/* Location */}
-          <FilterSection icon={Globe} label="Location" open={sections.location} onOpenChange={() => toggle('location')}>
+          <FilterSection
+            icon={Globe}
+            label="Location"
+            open={sections.location}
+            onOpenChange={() => toggle('location')}
+            highlightInvalid={badGeo}
+            sectionDataField="countries"
+          >
             <FilterDropdown label="Countries" placeholder="e.g. United States" options={COUNTRIES} selected={filters.countries} onChange={(v) => update({ countries: v })} />
             <FilterDropdown label="States" placeholder="e.g. California" options={stateOptions} selected={filters.states} onChange={(v) => update({ states: v })} />
             <FilterDropdown label="Cities" placeholder="e.g. San Francisco" options={MAJOR_CITIES} selected={filters.cities} onChange={(v) => update({ cities: v })} />
+            {badGeo && <p className="text-[11px] text-destructive">Choose at least one country, state, or city.</p>}
           </FilterSection>
 
           {/* Employment type */}
-          <FilterSection icon={CircleDot} label="Employment type" open={sections.employment} onOpenChange={() => toggle('employment')}>
+          <FilterSection
+            icon={CircleDot}
+            label="Employment type"
+            open={sections.employment}
+            onOpenChange={() => toggle('employment')}
+            highlightInvalid={badEmp}
+            sectionDataField="employmentType"
+          >
             <FilterDropdown label="Type" placeholder="e.g. Full-time" options={EMPLOYMENT_TYPE_OPTIONS} selected={filters.employmentType} onChange={(v) => update({ employmentType: v })} />
+            {badEmp && <p className="text-[11px] text-destructive">Select at least one employment type.</p>}
           </FilterSection>
 
           {/* Seniority */}
@@ -309,8 +389,23 @@ export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
           </FilterSection>
 
           {/* Posting date */}
-          <FilterSection icon={CalendarDays} label="Posting date" open={sections.posting} onOpenChange={() => toggle('posting')}>
-            <SingleDropdown label="Posted within" placeholder="Any time" options={POSTED_WITHIN_OPTIONS} value={filters.postedWithin} onChange={(v) => update({ postedWithin: v })} />
+          <FilterSection
+            icon={CalendarDays}
+            label="Posting date"
+            open={sections.posting}
+            onOpenChange={() => toggle('posting')}
+            highlightInvalid={badPosted}
+            sectionDataField="postedWithin"
+          >
+            <SingleDropdown
+              label="Posted within"
+              placeholder="Select date range"
+              options={POSTED_WITHIN_OPTIONS}
+              value={filters.postedWithin}
+              onChange={(v) => update({ postedWithin: v })}
+              optionalClear={{ label: 'Any time', value: 'any' }}
+            />
+            {badPosted && <p className="text-[11px] text-destructive">Select a posted date range or &quot;Any time&quot;.</p>}
           </FilterSection>
 
           {/* Companies */}

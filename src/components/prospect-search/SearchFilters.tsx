@@ -50,6 +50,8 @@ interface SearchFiltersProps {
   onSearch: () => void;
   isSearching: boolean;
   resultCount: number;
+  /** camelCase keys from `validateScraper('companies', …).missingFields` */
+  invalidFields?: string[];
 }
 
 /* ── Reusable sub-components ─────────────────────────────────── */
@@ -168,14 +170,34 @@ function TagInput({ label, placeholder, tags, onChange }: { label: string; place
 /* ── Section wrapper ─────────────────────────────────────────── */
 
 function FilterSection({
-  icon: Icon, label, badge, open, onOpenChange, children,
+  icon: Icon,
+  label,
+  badge,
+  open,
+  onOpenChange,
+  highlightInvalid,
+  sectionDataField,
+  children,
 }: {
-  icon: React.ElementType; label: string; badge?: React.ReactNode;
-  open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode;
+  icon: React.ElementType;
+  label: string;
+  badge?: React.ReactNode;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  highlightInvalid?: boolean;
+  sectionDataField?: string;
+  children: React.ReactNode;
 }) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full py-3 px-1 text-sm font-semibold border-b border-border/40 hover:bg-muted/30 rounded-sm transition-colors">
+      <CollapsibleTrigger
+        data-invalid-field={sectionDataField}
+        className={`flex items-center justify-between w-full py-3 px-1 text-sm font-semibold hover:bg-muted/30 rounded-sm transition-colors ${
+          highlightInvalid
+            ? 'border-2 border-destructive ring-2 ring-destructive/35 rounded-md border-b-2'
+            : 'border-b border-border/40'
+        }`}
+      >
         <span className="flex items-center gap-2.5">
           <Icon className="h-4 w-4 text-muted-foreground" />
           {label}
@@ -199,6 +221,7 @@ const stateOptions = US_STATES.map((s) => ({ value: s, label: s }));
 export function SearchFilters({
   filters,
   onFiltersChange,
+  invalidFields,
 }: SearchFiltersProps) {
   const [sections, setSections] = useState<Record<string, boolean>>({
     companyAttributes: false,
@@ -218,6 +241,14 @@ export function SearchFilters({
   const toggle = (key: string) => setSections((s) => ({ ...s, [key]: !s[key] }));
   const update = (partial: Partial<ProspectSearchFilters>) => onFiltersChange({ ...filters, ...partial });
 
+  const inv = invalidFields ?? [];
+  const badCompanyAttrs = inv.some((x) =>
+    ['industries', 'keywordsInclude', 'companySizes', 'companyTypes'].includes(x),
+  );
+  const badGeo = inv.some((x) => ['countries', 'states', 'cities', 'citiesOrStates'].includes(x));
+  const badTech = inv.includes('technologies');
+  const badSeg = inv.includes('marketSegments');
+
   return (
     <div className="h-[calc(100%-56px)] flex flex-col">
       <div className="flex-shrink-0 px-5 pt-5 pb-4">
@@ -229,7 +260,14 @@ export function SearchFilters({
         <div className="space-y-0 pb-4">
 
           {/* Company attributes */}
-          <FilterSection icon={Building2} label="Company attributes" open={sections.companyAttributes} onOpenChange={() => toggle('companyAttributes')}>
+          <FilterSection
+            icon={Building2}
+            label="Company attributes"
+            open={sections.companyAttributes}
+            onOpenChange={() => toggle('companyAttributes')}
+            highlightInvalid={badCompanyAttrs}
+            sectionDataField="industries"
+          >
             <FilterDropdown label="Industries" placeholder="e.g. Software Development" options={INDUSTRIES} selected={filters.industries} onChange={(v) => update({ industries: v })} />
             <FilterDropdown label="Company sizes" placeholder="e.g. 11-50 employees" options={COMPANY_SIZES} selected={filters.companySizes} onChange={(v) => update({ companySizes: v })} />
             <FilterDropdown label="Company types" placeholder="e.g. Privately held" options={COMPANY_TYPES} selected={filters.companyTypes} onChange={(v) => update({ companyTypes: v })} />
@@ -237,19 +275,46 @@ export function SearchFilters({
             <SingleDropdown label="Annual revenue" placeholder="e.g. $1M - $5M" options={REVENUE_RANGES} value={filters.annualRevenue} onChange={(v) => update({ annualRevenue: v })} />
             <SingleDropdown label="Funding raised" placeholder="e.g. $5M - $10M" options={FUNDING_RANGES} value={filters.fundingRaised} onChange={(v) => update({ fundingRaised: v })} />
             <SingleDropdown label="Funding stage" placeholder="e.g. Series A" options={FUNDING_STAGES} value={filters.fundingStage} onChange={(v) => update({ fundingStage: v })} />
+            {badCompanyAttrs && (
+              <p className="text-[11px] text-destructive">
+                Add stronger filters here or in other sections — search needs any three of: industry, keyword, location,
+                size, type, technology, or segment.
+              </p>
+            )}
           </FilterSection>
 
           {/* Location */}
-          <FilterSection icon={Globe} label="Location" open={sections.location} onOpenChange={() => toggle('location')}>
+          <FilterSection
+            icon={Globe}
+            label="Location"
+            open={sections.location}
+            onOpenChange={() => toggle('location')}
+            highlightInvalid={badGeo}
+            sectionDataField="countries"
+          >
             <FilterDropdown label="Countries" placeholder="e.g. United States" options={COUNTRIES} selected={filters.countries} onChange={(v) => update({ countries: v })} />
             <FilterDropdown label="States" placeholder="e.g. California" options={stateOptions} selected={filters.states} onChange={(v) => update({ states: v })} />
             <FilterDropdown label="Cities" placeholder="e.g. San Francisco" options={MAJOR_CITIES} selected={filters.cities} onChange={(v) => update({ cities: v })} />
+            {badGeo && (
+              <p className="text-[11px] text-destructive">Choose at least one country, state, or city.</p>
+            )}
           </FilterSection>
 
           {/* Technologies */}
-          <FilterSection icon={Cpu} label="Technologies" open={sections.technologies} onOpenChange={() => toggle('technologies')}>
+          <FilterSection
+            icon={Cpu}
+            label="Technologies"
+            open={sections.technologies}
+            onOpenChange={() => toggle('technologies')}
+            highlightInvalid={badTech}
+            sectionDataField="technologies"
+          >
             <FilterDropdown label="Technologies used" placeholder="e.g. Salesforce, HubSpot" options={TECHNOLOGIES} selected={filters.technologies} onChange={(v) => update({ technologies: v })} />
-            <p className="text-[11px] text-muted-foreground">Filter companies by the tools and platforms they use.</p>
+            {badTech ? (
+              <p className="text-[11px] text-destructive">Select at least one technology.</p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">Filter companies by the tools and platforms they use.</p>
+            )}
           </FilterSection>
 
           {/* SIC and NAICS */}
@@ -266,8 +331,16 @@ export function SearchFilters({
           </FilterSection>
 
           {/* Market Segments */}
-          <FilterSection icon={BarChart3} label="Market Segments" open={sections.marketSegments} onOpenChange={() => toggle('marketSegments')}>
+          <FilterSection
+            icon={BarChart3}
+            label="Market Segments"
+            open={sections.marketSegments}
+            onOpenChange={() => toggle('marketSegments')}
+            highlightInvalid={badSeg}
+            sectionDataField="marketSegments"
+          >
             <FilterDropdown label="Segments" placeholder="e.g. Enterprise, SMB" options={MARKET_SEGMENTS} selected={filters.marketSegments} onChange={(v) => update({ marketSegments: v })} />
+            {badSeg && <p className="text-[11px] text-destructive">Select at least one market segment.</p>}
           </FilterSection>
 
           {/* Job Postings */}
@@ -294,7 +367,7 @@ export function SearchFilters({
 
           {/* Lookalike companies */}
           <FilterSection icon={Copy} label="Lookalike companies" open={sections.lookalike} onOpenChange={() => toggle('lookalike')}>
-            <TagInput label="Similar to these companies" placeholder="e.g. Salesforce, HubSpot" tags={filters.keywordsInclude.length > 0 ? [] : []} onChange={() => {}} />
+            <TagInput label="Similar to these companies" placeholder="e.g. Salesforce, HubSpot" tags={filters.lookalikeCompanies} onChange={(v) => update({ lookalikeCompanies: v })} />
             <p className="text-[11px] text-muted-foreground">Enter company names or domains to find similar companies.</p>
           </FilterSection>
 
@@ -318,8 +391,8 @@ export function SearchFilters({
               <textarea
                 className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-xs min-h-[60px] resize-y focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 hover:border-border transition-colors"
                 placeholder="Describe your ideal company in natural language, e.g. 'B2B SaaS companies with 50-200 employees that recently raised Series A'"
-                value={filters.productsDescription}
-                onChange={(e) => update({ productsDescription: e.target.value })}
+                value={filters.aiSearchQuery}
+                onChange={(e) => update({ aiSearchQuery: e.target.value })}
               />
             </div>
           </FilterSection>

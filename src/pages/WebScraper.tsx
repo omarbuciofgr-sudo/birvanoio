@@ -57,8 +57,12 @@ import {
   Cpu,
   Globe,
   ListFilter,
+  ClipboardList,
+  Briefcase,
+  type LucideIcon,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -76,6 +80,41 @@ import { BulkEmailFinder } from '@/components/scout/BulkEmailFinder';
 import { addressMatchesSearch } from '@/components/scraper/ListingsMap';
 import { PLATFORM_CONFIG, resolveListingPlatformMark } from '@/lib/platformLogos';
 import { PlatformMark } from '@/components/scraper/PlatformMark';
+import {
+  PLANNER_FILTER_CATALOG,
+} from '@/lib/planner/catalog';
+import {
+  buildApplyPayloadFromAnswers,
+  buildCollectPlannerUiPayload,
+  buildOptionalPromptPlannerUiPayload,
+  buildReviewPlannerUiPayload,
+  commitAnswer,
+  createInitialPlannerHostState,
+  getCurrentFieldId,
+  getNextPlannerQuestion,
+  getPlannerField,
+  goBackOneStep,
+  goToFieldForEdit,
+  looksLikeOffTopicAnswer,
+  normalizeAnswerForField,
+  runPlannerValidation,
+  skipOptionalField,
+  startPlannerFlow,
+  transitionOptionalPromptToCollectingOptional,
+  transitionOptionalPromptToReview,
+  transitionReviewToOptionalPrompt,
+  validatePlannerAnswerForPhase,
+  type PlannerHostState,
+} from '@/lib/planner/plannerFlow';
+import {
+  parsePlannerUiBlock,
+  stripPlannerUiFence,
+  type PlannerUiPayload,
+} from '@/lib/planner/plannerUi';
+import { validateScraper } from '@/config/scraperValidation';
+import { defaultFilters as defaultProspectFilters } from '@/components/prospect-search/constants';
+import { defaultPeopleFilters } from '@/components/prospect-search/PeopleFilters';
+import { defaultJobFilters } from '@/components/prospect-search/JobFilters';
 
 function ListingSourcePlatformMark({
   sourcePlatform,
@@ -890,7 +929,131 @@ function listingMatchesRealEstatePlatform(listing: { source_platform?: string | 
   }
 }
 
-type ChatMsg = { role: 'user' | 'assistant'; content: string; appliedFilters?: Record<string, any> };
+function plannerCatalogIconHint(hint?: string): LucideIcon {
+  switch (hint) {
+    case 'users':
+      return Users;
+    case 'building2':
+      return Building2;
+    case 'briefcase':
+      return Briefcase;
+    case 'map-pin':
+      return MapPin;
+    case 'home':
+      return Home;
+    default:
+      return Target;
+  }
+}
+
+const PLANNER_WELCOME_GREETING = "Hi! I'm your AI Planner. What would you like to do today?";
+
+/** Icon tile accents — tuned for light and dark surfaces */
+const PLANNER_CARD_ICON_ACCENT = [
+  'bg-violet-500/15 text-violet-700 ring-violet-500/25 dark:text-violet-300',
+  'bg-teal-500/15 text-teal-700 ring-teal-500/25 dark:text-teal-300',
+  'bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300',
+  'bg-amber-500/15 text-amber-800 ring-amber-500/25 dark:text-amber-200',
+  'bg-purple-500/15 text-purple-700 ring-purple-500/25 dark:text-purple-300',
+];
+
+function formatPlannerTimestamp(ts?: number) {
+  if (ts == null) return '';
+  try {
+    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(ts));
+  } catch {
+    return '';
+  }
+}
+
+type PlannerCardOption = {
+  id: string;
+  label: string;
+  description?: string;
+  iconHint?: string;
+  group?: string;
+};
+
+function PlannerFilterCards({
+  options,
+  onPick,
+  disabled,
+}: {
+  options: PlannerCardOption[];
+  onPick: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const byGroup = new Map<string, PlannerCardOption[]>();
+  for (const o of options) {
+    const g = o.group ?? '';
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g)!.push(o);
+  }
+  const entries = [...byGroup.entries()];
+  return (
+    <div className="space-y-4 w-full">
+      {entries.map(([group, opts]) => (
+        <div key={group || 'default'}>
+          {group ? (
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-0.5">
+              {group}
+            </p>
+          ) : null}
+          <div className="overflow-x-auto pb-1 -mx-1 px-1 scroll-smooth [scrollbar-width:thin]">
+            <div className="flex gap-3 min-w-min">
+              {opts.map((o, idx) => {
+                const Icon = plannerCatalogIconHint(o.iconHint);
+                const accent = PLANNER_CARD_ICON_ACCENT[idx % PLANNER_CARD_ICON_ACCENT.length];
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onPick(o.id)}
+                    className={cn(
+                      'flex shrink-0 flex-col rounded-xl border border-border/60 bg-card p-3 text-left shadow-sm transition-all',
+                      'min-w-[148px] max-w-[220px] hover:border-primary/35 hover:bg-accent/35 hover:shadow-md',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                      'disabled:pointer-events-none disabled:opacity-50',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'mb-2 flex h-10 w-10 items-center justify-center rounded-lg ring-1 ring-inset',
+                        accent,
+                      )}
+                    >
+                      <Icon className="h-5 w-5" aria-hidden />
+                    </div>
+                    <span className="text-sm font-semibold leading-tight text-foreground">{o.label}</span>
+                    {o.description ? (
+                      <span className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{o.description}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ChatMsg = {
+  role: 'user' | 'assistant';
+  content: string;
+  /** Epoch ms for subtle timestamps */
+  createdAt?: number;
+  appliedFilters?: Record<string, any>;
+  planComplete?: boolean;
+  suggestedTab?: string;
+  /** Structured UI contract (or parse from content fenced `planner_ui`) */
+  plannerUi?: PlannerUiPayload | null;
+  plannerSuggestions?: string[];
+  plannerFieldId?: string | null;
+  fieldSummary?: Record<string, unknown>;
+};
 
 type SearchResult = {
   url: string;
@@ -1096,6 +1259,18 @@ export default function WebScraper() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
+  // Planner (schema-driven, filter-first) state
+  const [plannerMessages, setPlannerMessages] = useState<ChatMsg[]>([]);
+  const [plannerInput, setPlannerInput] = useState('');
+  const [plannerLoading, setPlannerLoading] = useState(false);
+  const [plannerSelectedFilterId, setPlannerSelectedFilterId] = useState<string | null>(null);
+  /** Deterministic schema-driven planner (no LLM during collection). */
+  const [plannerHostState, setPlannerHostState] = useState<PlannerHostState>(createInitialPlannerHostState());
+  const [plannerUseHostFlow, setPlannerUseHostFlow] = useState(false);
+  const [plannerCatalogError, setPlannerCatalogError] = useState<string | null>(null);
+  /** Stable “welcome” clock for the empty-state greeting only */
+  const plannerWelcomeTsRef = useRef(Date.now());
+
   const checkReBackendReachable = useCallback(async () => {
     setReBackendCheckInProgress(true);
     setReBackendReachable(null);
@@ -1274,7 +1449,7 @@ export default function WebScraper() {
   }
 
 
-  // ── AI Chat Handler (uses prospect-search-chat with tool calling) ──
+  // ── AI Chat Handler (uses `planner` edge function: assistant + planner modes) ──
   const handleChatSend = async () => {
     if (!chatInput.trim() || chatLoading) return;
     const userMsg: ChatMsg = { role: 'user', content: chatInput.trim() };
@@ -1288,7 +1463,7 @@ export default function WebScraper() {
       return;
     }
 
-      const { data, error: invokeError } = await supabase.functions.invoke('prospect-search-chat', {
+      const { data, error: invokeError } = await supabase.functions.invoke('planner', {
         body: {
           messages: [...chatMessages, userMsg].map((m) => ({ role: m.role, content: m.content })),
         },
@@ -1316,6 +1491,381 @@ export default function WebScraper() {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const applyPlannerResult = (data: {
+    planComplete?: boolean;
+    suggestedTab?: string | null;
+    filters?: Record<string, unknown> | null;
+  }) => {
+    if (!data.planComplete) return;
+    const f = data.filters;
+    if (f && typeof f === 'object' && Object.keys(f as object).length > 0) {
+      const raw = f as Record<string, unknown>;
+      const city = raw.realEstateCity;
+      if (typeof city === 'string' && city.trim()) {
+        setReLocation(city.trim());
+      }
+      const { realEstateCity: _, ...payload } = raw;
+      setExternalFilters(payload as Record<string, any>);
+    }
+    const tab = data.suggestedTab;
+    if (tab) setActiveTab(tab);
+    if (tab === 'prospect-search' && f && typeof f === 'object' && Object.keys(f as object).length > 0) {
+      toast.success('Plan ready — filters applied in Brivano Lens');
+    } else if (tab === 'prospect-search') {
+      toast.success('Plan ready — Brivano Lens is open. Adjust filters if you need to.');
+    } else if (tab === 'real-estate') {
+      toast.success('Plan ready — set city and platform in Real Estate, then find listings');
+    } else if (tab === 'search') {
+      toast.success('Plan ready — run your web search in the Search tab');
+    } else {
+      toast.success('Plan ready');
+    }
+  };
+
+  const handlePlannerSend = () => {
+    if (plannerLoading) return;
+    if (plannerMessages.length === 0) return;
+    if (!plannerUseHostFlow) return;
+    const ph = plannerHostState.phase;
+    if (ph !== 'collecting_required' && ph !== 'collecting_optional') return;
+
+    const fieldId = getCurrentFieldId(plannerHostState);
+    const sel = plannerHostState.selectedType;
+    if (!fieldId || !sel) return;
+
+    const schemaField = getPlannerField(sel, fieldId);
+    const rawInput = plannerInput.trim();
+
+    if (!rawInput && ph === 'collecting_optional' && !schemaField?.required) {
+      const skipped = skipOptionalField(plannerHostState, schemaField);
+      setPlannerHostState(skipped);
+      setPlannerInput('');
+      const userMsg: ChatMsg = { role: 'user', content: '(skipped)', createdAt: Date.now() };
+      if (skipped.phase === 'review') {
+        const reviewUi = buildReviewPlannerUiPayload(skipped);
+        const assistantMsg: ChatMsg = {
+          role: 'assistant',
+          content: 'Here’s what we’ll apply. Review and confirm, or edit an answer.',
+          createdAt: Date.now(),
+          plannerUi: reviewUi ?? undefined,
+          planComplete: true,
+          fieldSummary: skipped.answers,
+        };
+        setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+      } else {
+        const collectUi = buildCollectPlannerUiPayload(skipped);
+        const assistantMsg: ChatMsg = {
+          role: 'assistant',
+          content: collectUi?.collect_field?.prompt ?? '',
+          createdAt: Date.now(),
+          plannerUi: collectUi ?? undefined,
+        };
+        setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+      }
+      return;
+    }
+
+    if (!rawInput && (ph === 'collecting_required' || schemaField?.required)) {
+      toast.error('Please answer this question or pick a shortcut.');
+      return;
+    }
+
+    if (looksLikeOffTopicAnswer(rawInput) && ph === 'collecting_required') {
+      const stay = buildCollectPlannerUiPayload(plannerHostState);
+      const redirect =
+        'Let’s stick to your filters — answer the question above. Pick a shortcut or type in the box.';
+      const userMsg: ChatMsg = { role: 'user', content: rawInput, createdAt: Date.now() };
+      const assistantMsg: ChatMsg = {
+        role: 'assistant',
+        content: redirect,
+        createdAt: Date.now(),
+        plannerUi: stay ?? undefined,
+      };
+      setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setPlannerInput('');
+      return;
+    }
+
+    const value: unknown = normalizeAnswerForField(sel, fieldId, rawInput, schemaField);
+
+    if (!validatePlannerAnswerForPhase(ph, schemaField, value)) {
+      toast.error('This answer is required to apply your plan.');
+      return;
+    }
+
+    const next = commitAnswer(plannerHostState, fieldId, value);
+    setPlannerHostState(next);
+    setPlannerInput('');
+    const userMsg: ChatMsg = { role: 'user', content: rawInput, createdAt: Date.now() };
+
+    if (next.phase === 'optional_prompt') {
+      const optUi = buildOptionalPromptPlannerUiPayload(next);
+      const assistantMsg: ChatMsg = {
+        role: 'assistant',
+        content: optUi?.optional_prompt?.body ?? '',
+        createdAt: Date.now(),
+        plannerUi: optUi ?? undefined,
+      };
+      setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+      return;
+    }
+
+    if (next.phase === 'review') {
+      const reviewUi = buildReviewPlannerUiPayload(next);
+      const assistantMsg: ChatMsg = {
+        role: 'assistant',
+        content: 'Here’s what we’ll apply. Review and confirm, or edit an answer.',
+        createdAt: Date.now(),
+        plannerUi: reviewUi ?? undefined,
+        planComplete: true,
+        fieldSummary: next.answers,
+      };
+      setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+      return;
+    }
+
+    const collectUi = buildCollectPlannerUiPayload(next);
+    const assistantMsg: ChatMsg = {
+      role: 'assistant',
+      content: collectUi?.collect_field?.prompt ?? '',
+      createdAt: Date.now(),
+      plannerUi: collectUi ?? undefined,
+    };
+    setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+  };
+
+  const handlePlannerOptionalRunNow = () => {
+    if (!plannerUseHostFlow || plannerHostState.phase !== 'optional_prompt') return;
+    const next = transitionOptionalPromptToReview(plannerHostState);
+    setPlannerHostState(next);
+    const reviewUi = buildReviewPlannerUiPayload(next);
+    const assistantMsg: ChatMsg = {
+      role: 'assistant',
+      content: 'Here’s what we’ll apply. Review and confirm, or edit an answer.',
+      createdAt: Date.now(),
+      plannerUi: reviewUi ?? undefined,
+      planComplete: true,
+      fieldSummary: next.answers,
+    };
+    setPlannerMessages((prev) => [...prev, assistantMsg]);
+  };
+
+  const handlePlannerOptionalAddFilters = () => {
+    if (!plannerUseHostFlow || plannerHostState.phase !== 'optional_prompt') return;
+    const next = transitionOptionalPromptToCollectingOptional(plannerHostState);
+    setPlannerHostState(next);
+    const collectUi = buildCollectPlannerUiPayload(next);
+    if (!collectUi) return;
+    const assistantMsg: ChatMsg = {
+      role: 'assistant',
+      content: collectUi.collect_field?.prompt ?? '',
+      createdAt: Date.now(),
+      plannerUi: collectUi,
+    };
+    setPlannerMessages((prev) => [...prev, assistantMsg]);
+  };
+
+  const handlePlannerReviewBack = () => {
+    if (!plannerUseHostFlow || plannerHostState.phase !== 'review') return;
+    const next = transitionReviewToOptionalPrompt(plannerHostState);
+    setPlannerHostState(next);
+    const optUi = buildOptionalPromptPlannerUiPayload(next);
+    const assistantMsg: ChatMsg = {
+      role: 'assistant',
+      content: optUi?.optional_prompt?.body ?? '',
+      createdAt: Date.now(),
+      plannerUi: optUi ?? undefined,
+    };
+    setPlannerMessages((prev) => [...prev, assistantMsg]);
+  };
+
+  const handlePlannerCatalogPick = (filterId: string) => {
+    if (plannerLoading) return;
+    setPlannerCatalogError(null);
+
+    const flow = startPlannerFlow(filterId);
+    if (flow.phase !== 'collecting_required') {
+      toast.error('Unknown planner filter.');
+      return;
+    }
+
+    setPlannerHostState(flow);
+    setPlannerSelectedFilterId(filterId);
+    setPlannerUseHostFlow(true);
+
+    const userMsg: ChatMsg = { role: 'user', content: `Configure filter: ${filterId}`, createdAt: Date.now() };
+    const ui = buildCollectPlannerUiPayload(flow);
+    const assistantMsg: ChatMsg = {
+      role: 'assistant',
+      content: ui?.collect_field?.prompt ?? 'Let’s continue.',
+      createdAt: Date.now(),
+      plannerUi: ui ?? undefined,
+    };
+    setPlannerMessages((prev) => [...prev, userMsg, assistantMsg]);
+  };
+
+  const handlePlannerSkipOptional = () => {
+    if (!plannerUseHostFlow || plannerHostState.phase !== 'collecting_optional') return;
+    const fieldId = getCurrentFieldId(plannerHostState);
+    const sel = plannerHostState.selectedType;
+    if (!fieldId || !sel) return;
+    const schemaField = getPlannerField(sel, fieldId);
+    if (!schemaField || schemaField.required) return;
+    const next = skipOptionalField(plannerHostState, schemaField);
+    setPlannerHostState(next);
+    setPlannerInput('');
+    const userMsg: ChatMsg = { role: 'user', content: '(skipped)', createdAt: Date.now() };
+    if (next.phase === 'review') {
+      const reviewUi = buildReviewPlannerUiPayload(next);
+      setPlannerMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          role: 'assistant',
+          content: 'Here’s what we’ll apply. Review and confirm, or edit an answer.',
+          createdAt: Date.now(),
+          plannerUi: reviewUi ?? undefined,
+          planComplete: true,
+          fieldSummary: next.answers,
+        },
+      ]);
+    } else {
+      const collectUi = buildCollectPlannerUiPayload(next);
+      setPlannerMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          role: 'assistant',
+          content: collectUi?.collect_field?.prompt ?? '',
+          createdAt: Date.now(),
+          plannerUi: collectUi ?? undefined,
+        },
+      ]);
+    }
+  };
+
+  const handlePlannerBack = () => {
+    if (
+      !plannerUseHostFlow ||
+      (plannerHostState.phase !== 'collecting_required' && plannerHostState.phase !== 'collecting_optional') ||
+      plannerHostState.committedKeys.length === 0
+    ) {
+      return;
+    }
+    const prev = goBackOneStep(plannerHostState);
+    setPlannerHostState(prev);
+    setPlannerInput('');
+    const ui = buildCollectPlannerUiPayload(prev);
+    setPlannerMessages((p) => [
+      ...p.slice(0, -2),
+      {
+        role: 'assistant',
+        content: ui?.collect_field?.prompt ?? '',
+        createdAt: Date.now(),
+        plannerUi: ui ?? undefined,
+      },
+    ]);
+  };
+
+  const handlePlannerEditField = (fieldId: string) => {
+    if (!plannerUseHostFlow) return;
+    const next = goToFieldForEdit(plannerHostState, fieldId);
+    setPlannerHostState(next);
+    const ui = buildCollectPlannerUiPayload(next);
+    setPlannerMessages((prev) => [
+      ...prev,
+      {
+        role: 'assistant',
+        content: ui?.collect_field?.prompt ?? 'Update your answer below.',
+        createdAt: Date.now(),
+        plannerUi: ui ?? undefined,
+      },
+    ]);
+  };
+
+  const handlePlannerApplyPlan = () => {
+    if (!plannerUseHostFlow || plannerHostState.phase !== 'review' || !plannerHostState.selectedType) return;
+    const sel = plannerHostState.selectedType;
+    const vr = runPlannerValidation(sel, plannerHostState.answers);
+    if (!vr.valid) {
+      const nextKey = getNextPlannerQuestion(sel, 'collecting_required', plannerHostState.answers, vr);
+      const recover: PlannerHostState = {
+        ...plannerHostState,
+        phase: 'collecting_required',
+        currentQuestionKey: nextKey ?? plannerHostState.currentQuestionKey,
+        missingFields: vr.missingFields,
+      };
+      setPlannerHostState(recover);
+      toast.error(vr.message, { description: 'Complete the missing items below, then try again.' });
+      const collectUi = buildCollectPlannerUiPayload(recover);
+      if (collectUi) {
+        setPlannerMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: collectUi.collect_field?.prompt ?? 'Please complete the required filters.',
+            createdAt: Date.now(),
+            plannerUi: collectUi,
+          },
+        ]);
+      }
+      return;
+    }
+
+    const { suggestedTab, filters } = buildApplyPayloadFromAnswers(sel, plannerHostState.answers);
+    const f = filters as Record<string, unknown>;
+    const pst = f.plannerSearchType as string | undefined;
+    if (pst === 'jobs') {
+      const merged = { ...defaultJobFilters, ...(f.jobFiltersPatch as object) };
+      const r = validateScraper('jobs', merged);
+      if (!r.valid) {
+        toast.error(r.message, { description: 'Adjust filters in Brivano Lens, then search.' });
+        return;
+      }
+    } else if (pst === 'people') {
+      const merged = { ...defaultPeopleFilters, ...(f.peopleFiltersPatch as object) };
+      const r = validateScraper('people', merged);
+      if (!r.valid) {
+        toast.error(r.message, { description: 'Adjust filters in Brivano Lens, then search.' });
+        return;
+      }
+    } else if (pst === 'companies') {
+      const {
+        plannerSearchType: _ps,
+        peopleFiltersPatch: _pf,
+        jobFiltersPatch: _jf,
+        localBusinessPatch: _lb,
+        ...rest
+      } = f;
+      const merged = { ...defaultProspectFilters, ...rest };
+      const r = validateScraper('companies', merged);
+      if (!r.valid) {
+        toast.error(r.message, { description: 'Adjust filters in Brivano Lens, then search.' });
+        return;
+      }
+    } else if (pst === 'local' && f.localBusinessPatch) {
+      const lb = f.localBusinessPatch as Record<string, unknown>;
+      const r = validateScraper('local', {
+        locationQuery: String(lb.locationQuery ?? ''),
+        radiusMiles: typeof lb.radiusMiles === 'number' ? lb.radiusMiles : Number(lb.radiusMiles),
+        searchType: String(lb.searchType ?? ''),
+        keyword: String(lb.keyword ?? ''),
+      });
+      if (!r.valid) {
+        toast.error(r.message, { description: 'Complete location, radius, and search type in Brivano Lens.' });
+        return;
+      }
+    }
+
+    setPlannerHostState((s) => ({ ...s, phase: 'running' }));
+    applyPlannerResult({
+      planComplete: true,
+      suggestedTab,
+      filters,
+    });
+    toast.success('Plan applied');
   };
 
   const useCaseChips = [
@@ -2635,6 +3185,9 @@ export default function WebScraper() {
               <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Sparkles className="h-3.5 w-3.5" /> AI Assistant
               </TabsTrigger>
+              <TabsTrigger value="planner" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <ClipboardList className="h-3.5 w-3.5" /> Planner
+              </TabsTrigger>
               <TabsTrigger value="prospect-search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Target className="h-3.5 w-3.5" /> Brivano Lens
               </TabsTrigger>
@@ -2676,6 +3229,7 @@ export default function WebScraper() {
           <TabsContent value="lists" className="mt-0">
             <DynamicLists />
           </TabsContent>
+
           <TabsContent value="ai-chat" className="mt-0">
             <Card className="border-border/40 bg-card/50">
               <CardContent className="p-0">
@@ -2794,6 +3348,482 @@ export default function WebScraper() {
                       I'll automatically configure filters and search in Brivano Lens for you.
                     </p>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="planner" className="mt-0">
+            <Card className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+              <CardContent className="p-0">
+                <div className="flex flex-col h-[min(640px,72vh)]">
+                  <div className="px-5 pt-4 pb-3 flex items-start justify-between gap-3 border-b border-border/50 bg-muted/20">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold tracking-tight flex items-center gap-2 text-foreground">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary ring-1 ring-primary/15">
+                          <ClipboardList className="h-4 w-4" />
+                        </span>
+                        Planner
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-1.5 max-w-lg leading-relaxed">
+                        Ask anything or pick a category to get started.
+                      </p>
+                    </div>
+                    {plannerMessages.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 shrink-0 text-xs"
+                        disabled={plannerLoading}
+                        onClick={() => {
+                          setPlannerMessages([]);
+                          setPlannerInput('');
+                          setPlannerHostState(createInitialPlannerHostState());
+                          setPlannerSelectedFilterId(null);
+                          setPlannerUseHostFlow(false);
+                          setPlannerCatalogError(null);
+                        }}
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                        Start over
+                      </Button>
+                    )}
+                  </div>
+                  <ScrollArea className="flex-1 px-5 py-4">
+                    {plannerMessages.length === 0 ? (
+                      <div className="space-y-4 max-w-3xl mx-auto pb-2">
+                        {plannerCatalogError ? (
+                          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                            {plannerCatalogError}
+                          </div>
+                        ) : null}
+                        <div className="flex gap-3 items-start">
+                          <div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary ring-1 ring-border/60"
+                            aria-hidden
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <div className="rounded-2xl rounded-tl-md border border-border/50 bg-muted/30 px-4 py-3 text-sm shadow-sm">
+                              <p className="text-foreground leading-relaxed">{PLANNER_WELCOME_GREETING}</p>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground px-0.5">
+                              {formatPlannerTimestamp(plannerWelcomeTsRef.current)}
+                            </p>
+                            <PlannerFilterCards
+                              options={[...PLANNER_FILTER_CATALOG]
+                                .sort((a, b) => a.order - b.order)
+                                .map((e) => ({
+                                  id: e.id,
+                                  label: e.label,
+                                  description: e.description,
+                                  iconHint: e.iconHint,
+                                  group: e.group,
+                                }))}
+                              onPick={(id) => void handlePlannerCatalogPick(id)}
+                              disabled={plannerLoading}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-5 max-w-3xl mx-auto pb-2">
+                        {plannerCatalogError && (
+                          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                            {plannerCatalogError}
+                          </div>
+                        )}
+                        {plannerMessages.map((msg, i) => {
+                          const ui = msg.role === 'assistant' ? msg.plannerUi ?? parsePlannerUiBlock(msg.content) : null;
+                          const prose =
+                            msg.role === 'assistant'
+                              ? ui?.phase === 'pick_filter' && ui.pick_filter?.prompt
+                                ? ui.pick_filter.prompt
+                                : ui?.phase === 'optional_prompt' && ui.optional_prompt?.body
+                                  ? ui.optional_prompt.body
+                                  : ui?.phase === 'collect_field' && ui.collect_field?.prompt
+                                    ? ui.collect_field.prompt
+                                    : stripPlannerUiFence(msg.content)
+                              : msg.content;
+                          const phaseLabel =
+                            msg.role === 'assistant'
+                              ? ui?.phase === 'pick_filter'
+                                ? 'Filter catalog'
+                                : ui?.phase === 'optional_prompt'
+                                  ? 'Optional filters'
+                                  : ui?.phase === 'collect_field'
+                                    ? 'Question'
+                                    : ui?.phase === 'review' || msg.planComplete
+                                      ? 'Review'
+                                      : !msg.planComplete
+                                        ? 'Question'
+                                        : null
+                              : null;
+
+                          return (
+                            <div key={i} className="w-full">
+                              {msg.role === 'user' ? (
+                                <div className="flex flex-col items-end gap-1 max-w-[92%] ml-auto">
+                                  <div className="rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">
+                                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                  </div>
+                                  {msg.createdAt ? (
+                                    <span className="text-[10px] text-muted-foreground pr-1">
+                                      {formatPlannerTimestamp(msg.createdAt)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-1.5 w-full">
+                                  {phaseLabel ? (
+                                    <div className="flex flex-wrap items-center gap-2 px-1">
+                                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                                        {phaseLabel}
+                                      </span>
+                                      {ui?.phase === 'collect_field' && ui.collect_field ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[9px] h-5 px-1.5 font-medium border-border/80 text-muted-foreground"
+                                        >
+                                          {ui.collect_field.required_for_apply === false
+                                            ? 'Optional'
+                                            : 'Required for search'}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                  <div className="flex gap-3 items-start">
+                                    <div
+                                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary ring-1 ring-border/60"
+                                      aria-hidden
+                                    >
+                                      <Sparkles className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                      <div className="rounded-2xl rounded-tl-md border border-border/50 bg-muted/30 px-4 py-3 text-sm shadow-sm">
+                                        <p className="whitespace-pre-wrap text-foreground leading-relaxed">{prose}</p>
+                                        {msg.role === 'assistant' &&
+                                        ui?.phase === 'collect_field' &&
+                                        ui.collect_field ? (
+                                          <div className="mt-3 pt-3 border-t border-border/40 space-y-2">
+                                            {ui.collect_field.input_kind === 'single_choice' &&
+                                            ui.collect_field.options.length > 0 ? (
+                                              <div
+                                                className="flex flex-wrap gap-1.5"
+                                                role="radiogroup"
+                                                aria-label="Pick one option"
+                                              >
+                                                {ui.collect_field.options.map((o) => {
+                                                  const selected = plannerInput.trim() === o.id;
+                                                  return (
+                                                    <button
+                                                      key={o.id}
+                                                      type="button"
+                                                      disabled={
+                                                    plannerLoading ||
+                                                    plannerHostState.phase === 'review' ||
+                                                    plannerHostState.phase === 'running' ||
+                                                    plannerHostState.phase === 'optional_prompt'
+                                                  }
+                                                      onClick={() => setPlannerInput(o.id)}
+                                                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors disabled:opacity-50 ${
+                                                        selected
+                                                          ? 'border-primary bg-primary/15 text-foreground font-medium'
+                                                          : 'border-border/60 bg-background/60 hover:bg-muted/60 text-muted-foreground'
+                                                      }`}
+                                                    >
+                                                      {o.label}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : ui.collect_field.input_kind === 'multi_choice' &&
+                                              ui.collect_field.options.length > 0 ? (
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {ui.collect_field.options.map((o) => (
+                                                  <button
+                                                    key={o.id}
+                                                    type="button"
+                                                    disabled={
+                                                    plannerLoading ||
+                                                    plannerHostState.phase === 'review' ||
+                                                    plannerHostState.phase === 'running' ||
+                                                    plannerHostState.phase === 'optional_prompt'
+                                                  }
+                                                    onClick={() =>
+                                                      setPlannerInput((prev) => {
+                                                        const parts = prev
+                                                          .split(',')
+                                                          .map((s) => s.trim())
+                                                          .filter(Boolean);
+                                                        if (parts.includes(o.id)) return prev;
+                                                        return prev.trim() ? `${prev}, ${o.id}` : o.id;
+                                                      })
+                                                    }
+                                                    className="rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] hover:bg-muted/60 disabled:opacity-50"
+                                                  >
+                                                    {o.label}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            ) : null}
+                                            {ui.collect_field.allow_custom_text ? (
+                                              <p className="text-[10px] text-muted-foreground pt-1">
+                                                {ui.collect_field.required_for_apply === false
+                                                  ? 'Optional — leave blank and send to skip, or pick a shortcut / type below.'
+                                                  : 'Pick a shortcut or type your answer below (needed to apply this plan).'}
+                                              </p>
+                                            ) : null}
+                                          </div>
+                                        ) : null}
+                                        {msg.role === 'assistant' &&
+                                        ui?.phase === 'review' &&
+                                        ui.review?.summary?.length ? (
+                                          <div className="mt-3 pt-3 border-t border-border/40 space-y-1">
+                                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                              Summary (field → value)
+                                            </p>
+                                            <ul className="text-xs space-y-1">
+                                              {ui.review.summary.map((row) => (
+                                                <li key={row.field_id} className="flex items-start justify-between gap-2">
+                                                  <span className="min-w-0">
+                                                    <span className="font-mono text-[10px] text-muted-foreground">
+                                                      {row.field_id}
+                                                    </span>
+                                                    {' → '}
+                                                    <span>{row.display}</span>
+                                                  </span>
+                                                  {plannerUseHostFlow ? (
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-6 text-[10px] shrink-0 px-1.5"
+                                                      onClick={() => handlePlannerEditField(row.field_id)}
+                                                    >
+                                                      Edit
+                                                    </Button>
+                                                  ) : null}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        ) : msg.role === 'assistant' &&
+                                          msg.planComplete &&
+                                          msg.fieldSummary &&
+                                          !ui?.review ? (
+                                          <div className="mt-3 pt-3 border-t border-border/40 space-y-1">
+                                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                              Summary (field → value)
+                                            </p>
+                                            <ul className="text-xs space-y-1">
+                                              {Object.entries(msg.fieldSummary).map(([k, v]) => (
+                                                <li key={k}>
+                                                  <span className="font-mono text-[10px] text-muted-foreground">{k}</span>
+                                                  {' → '}
+                                                  <span>
+                                                    {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                                                  </span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      {msg.createdAt ? (
+                                        <p className="text-[10px] text-muted-foreground px-0.5">
+                                          {formatPlannerTimestamp(msg.createdAt)}
+                                        </p>
+                                      ) : null}
+                                      {msg.role === 'assistant' &&
+                                      ui?.phase === 'pick_filter' &&
+                                      ui.pick_filter?.options?.length ? (
+                                        <PlannerFilterCards
+                                          options={ui.pick_filter.options.map((o) => ({
+                                            id: o.id,
+                                            label: o.label,
+                                            description: o.description,
+                                            iconHint: o.iconHint,
+                                            group: o.group,
+                                          }))}
+                                          onPick={(id) => void handlePlannerCatalogPick(id)}
+                                          disabled={
+                                            plannerLoading ||
+                                            plannerHostState.phase === 'review' ||
+                                            plannerHostState.phase === 'running' ||
+                                            plannerHostState.phase === 'optional_prompt'
+                                          }
+                                        />
+                                      ) : null}
+                                      {msg.role === 'assistant' && msg.planComplete && (
+                                        <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-0.5">
+                                          <Badge variant="secondary" className="text-[10px] h-5">
+                                            Review
+                                          </Badge>
+                                          {msg.suggestedTab && (
+                                            <span className="text-[10px] text-muted-foreground">
+                                              Suggested tab:{' '}
+                                              {msg.suggestedTab === 'prospect-search'
+                                                ? 'Brivano Lens'
+                                                : msg.suggestedTab === 'search'
+                                                  ? 'Search'
+                                                  : msg.suggestedTab === 'real-estate'
+                                                    ? 'Real Estate'
+                                                    : 'AI Assistant'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                      {msg.role === 'assistant' && msg.appliedFilters && (
+                                        <div className="flex items-center gap-1.5 flex-wrap px-0.5">
+                                          <Target className="h-3 w-3 text-primary flex-shrink-0" />
+                                          <span className="text-[10px] text-primary font-medium">Lens filters in plan</span>
+                                          {Object.entries(msg.appliedFilters)
+                                            .filter(([_, v]) =>
+                                              Array.isArray(v) ? v.length > 0 : v != null && v !== '',
+                                            )
+                                            .map(([k]) => (
+                                              <Badge key={k} variant="secondary" className="text-[9px] px-1.5 py-0">
+                                                {k.replace(/([A-Z])/g, ' $1').trim()}
+                                              </Badge>
+                                            ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {plannerLoading && (
+                          <div className="flex gap-3 items-start max-w-3xl mx-auto pt-1">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted ring-1 ring-border/50">
+                              <Sparkles className="h-4 w-4 text-muted-foreground animate-pulse" />
+                            </div>
+                            <div className="rounded-2xl rounded-tl-md border border-border/50 bg-muted/40 px-4 py-3">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </ScrollArea>
+
+                  {plannerMessages.length > 0 && (
+                    <div className="border-t border-border/50 bg-muted/10 p-4 space-y-2">
+                      {plannerUseHostFlow && plannerHostState.phase === 'review' ? (
+                        <div className="max-w-3xl mx-auto space-y-3">
+                          <p className="text-xs text-muted-foreground text-center">
+                            Review the summary above. Search runs only after you confirm—not automatically.
+                          </p>
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={handlePlannerReviewBack}>
+                              Back
+                            </Button>
+                            <Button type="button" size="sm" onClick={handlePlannerApplyPlan} className="gap-1.5">
+                              <Check className="h-3.5 w-3.5" />
+                              Run Search
+                            </Button>
+                          </div>
+                        </div>
+                      ) : plannerUseHostFlow && plannerHostState.phase === 'optional_prompt' ? (
+                        <div className="flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
+                          <Button type="button" variant="outline" size="sm" onClick={handlePlannerOptionalRunNow}>
+                            Run Search Now
+                          </Button>
+                          <Button type="button" size="sm" onClick={handlePlannerOptionalAddFilters}>
+                            Add Optional Filters
+                          </Button>
+                        </div>
+                      ) : plannerUseHostFlow &&
+                        (plannerHostState.phase === 'collecting_required' ||
+                          plannerHostState.phase === 'collecting_optional') ? (
+                        <>
+                          <div className="flex flex-wrap justify-center gap-2 max-w-3xl mx-auto pb-1">
+                            {(() => {
+                              const cid = getCurrentFieldId(plannerHostState);
+                              const sf =
+                                cid && plannerHostState.selectedType
+                                  ? getPlannerField(plannerHostState.selectedType, cid)
+                                  : undefined;
+                              return (
+                                <>
+                                  {plannerHostState.phase === 'collecting_optional' && sf?.required === false ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-xs h-8"
+                                      onClick={handlePlannerSkipOptional}
+                                    >
+                                      Skip (optional)
+                                    </Button>
+                                  ) : null}
+                                  {plannerHostState.committedKeys.length > 0 ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-xs h-8"
+                                      onClick={handlePlannerBack}
+                                    >
+                                      Back
+                                    </Button>
+                                  ) : null}
+                                </>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex gap-2 max-w-3xl mx-auto items-stretch">
+                            <Textarea
+                              placeholder="Type your answer..."
+                              value={plannerInput}
+                              onChange={(e) => setPlannerInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handlePlannerSend();
+                                }
+                              }}
+                              className="min-h-[48px] max-h-[120px] resize-none text-sm rounded-xl border-border/60 bg-background"
+                              rows={2}
+                              disabled={plannerLoading}
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => handlePlannerSend()}
+                              disabled={
+                                plannerLoading ||
+                                (() => {
+                                  const cid = getCurrentFieldId(plannerHostState);
+                                  const sf =
+                                    cid && plannerHostState.selectedType
+                                      ? getPlannerField(plannerHostState.selectedType, cid)
+                                      : undefined;
+                                  const empty = !plannerInput.trim();
+                                  const ph = plannerHostState.phase;
+                                  const needInput =
+                                    ph === 'collecting_required' || sf?.required === true;
+                                  return empty && needInput;
+                                })()
+                              }
+                              size="sm"
+                              className="h-auto min-h-[48px] px-5 shrink-0 rounded-xl gap-2"
+                            >
+                              <Send className="h-4 w-4" />
+                              Send
+                            </Button>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground text-center max-w-3xl mx-auto pt-0.5">
+                            You can always type a custom answer; quick picks are shortcuts.
+                          </p>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

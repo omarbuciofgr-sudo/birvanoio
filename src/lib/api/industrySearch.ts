@@ -286,6 +286,11 @@ export const industrySearchApi = {
       return { success: false, error: error.message };
     }
 
+    const raw = data as JobSearchResponse & { success?: boolean; error?: string };
+    if (raw && raw.success === false) {
+      return { success: false, error: raw.error || 'Job search rejected', jobs: [] };
+    }
+
     return data as JobSearchResponse;
   },
 

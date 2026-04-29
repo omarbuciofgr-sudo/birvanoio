@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { validateGooglePlacesSearchRequest } from '../_shared/scraperValidation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -254,13 +255,18 @@ Deno.serve(async (req) => {
     const { action = 'search', ...params } = body;
     
     if (action === 'search') {
-      if (!params.query) {
+      const vr = validateGooglePlacesSearchRequest(params as unknown as Record<string, unknown>);
+      if (!vr.valid) {
         return new Response(
-          JSON.stringify({ success: false, error: 'Query is required' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            error: 'Missing required fields',
+            missing: vr.missingFields,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
-      
+
       const results = await searchPlaces(params as PlacesSearchParams, googleApiKey);
       
       return new Response(

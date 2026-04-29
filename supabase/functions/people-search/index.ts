@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { validatePeopleSearchRequest } from '../_shared/scraperValidation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -202,41 +203,6 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
     params.organization_department_or_subdepartment_counts = input.job_categories.map(cat => ({
       department_or_subdepartment: cat, min: 1,
     }));
-  }
-
-  const orgTags = params.q_organization_keyword_tags as string[] | undefined;
-  // Include every filter that narrows the Apollo query — missing any of these caused
-  // false "no signal" and we injected default US + titles on top of user filters → 0 results.
-  const hasPeopleSignal = !!(
-    (Array.isArray(params.person_titles) && params.person_titles.length > 0) ||
-    (Array.isArray(params.person_seniorities) && params.person_seniorities.length > 0) ||
-    (Array.isArray(params.person_departments) && params.person_departments.length > 0) ||
-    (Array.isArray(params.person_locations) && params.person_locations.length > 0) ||
-    params.q_organization_name ||
-    (orgTags && orgTags.length > 0) ||
-    params.q_keywords ||
-    (Array.isArray(params.person_past_titles) && params.person_past_titles.length > 0) ||
-    params.q_person_past_organization_name ||
-    (Array.isArray(params.person_not_names) && params.person_not_names.length > 0) ||
-    (Array.isArray(params.currently_using_any_of_technology_uids) &&
-      params.currently_using_any_of_technology_uids.length > 0) ||
-    (Array.isArray(params.organization_num_employees_ranges) &&
-      params.organization_num_employees_ranges.length > 0) ||
-    (Array.isArray(params.contact_email_status) && params.contact_email_status.length > 0) ||
-    params.organization_revenue_ranges ||
-    params.organization_latest_funding_stage_cd ||
-    params.organization_sic_codes ||
-    params.organization_naics_codes ||
-    params.organization_department_or_subdepartment_counts ||
-    params.organization_job_locations
-  );
-  if (!hasPeopleSignal) {
-    params.person_locations = ['United States'];
-    params.person_titles = [
-      'Chief Executive Officer', 'Founder', 'Owner', 'President', 'Director', 'Manager',
-      'VP Sales', 'Head of Operations', 'Sales Director',
-    ];
-    params.q_keywords = 'business';
   }
 
   console.log('[People Apollo] Params:', JSON.stringify(params));
@@ -737,6 +703,18 @@ Deno.serve(async (req) => {
 
   try {
     const body: PeopleSearchInput = await req.json();
+    const v = validatePeopleSearchRequest(body as unknown as Record<string, unknown>);
+    if (!v.valid) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing required fields',
+          missing: v.missingFields,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const limit = body.limit || 25;
     console.log('People search request:', JSON.stringify(body));
 

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { validateJobSearchRequest } from '../_shared/scraperValidation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -71,30 +72,13 @@ async function searchApollo(input: JobSearchInput, apiKey: string): Promise<JobR
   }
   if (keywordParts.length > 0) params.q_keywords = keywordParts.join(' ');
 
-  if (input.posted_within) {
-    const days = parseInt(input.posted_within) || 30;
+  const pw = input.posted_within?.trim();
+  if (pw && pw !== 'any') {
+    const postedMap: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 };
+    const days = postedMap[pw] ?? (parseInt(pw, 10) || 30);
     const since = new Date();
     since.setDate(since.getDate() - days);
     params.person_title_changed_at_date_range = { min: since.toISOString().split('T')[0] };
-  }
-
-  const hasSignal = !!(
-    input.job_titles?.length ||
-    input.industries?.length ||
-    input.locations?.length ||
-    input.companies?.length ||
-    input.job_description_keywords?.length ||
-    input.recruiter_keywords?.length
-  );
-  if (!hasSignal) {
-    params.q_keywords = 'hiring recruiting talent careers';
-    params.person_titles = ['Recruiter', 'Talent Acquisition', 'Human Resources', 'HR Manager', 'People Operations'];
-    params.person_locations = ['United States'];
-  } else if (!input.job_titles?.length) {
-    params.person_titles = [
-      'Manager', 'Director', 'Engineer', 'Sales', 'Marketing', 'Operations',
-      'Specialist', 'Analyst', 'Representative', 'Consultant', 'Developer',
-    ];
   }
 
   console.log('[Job Apollo] Params:', JSON.stringify(params));
@@ -364,6 +348,19 @@ Deno.serve(async (req) => {
 
   try {
     const body: JobSearchInput = await req.json();
+    const bodyRecord = body as unknown as Record<string, unknown>;
+    const v = validateJobSearchRequest(bodyRecord);
+    if (!v.valid) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing required fields',
+          missing: v.missingFields,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const limit = body.limit || 25;
     console.log('Job search request:', JSON.stringify(body));
 

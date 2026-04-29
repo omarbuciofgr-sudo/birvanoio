@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
@@ -16,6 +16,7 @@ import {
 import { SearchFilters } from '@/components/prospect-search/SearchFilters';
 import { SearchResults } from '@/components/prospect-search/SearchResults';
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES, COUNTRIES } from '@/components/prospect-search/constants';
+import { validateScraper } from '@/config/scraperValidation';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +32,8 @@ export default function ProspectSearch() {
   const [searchName, setSearchName] = useState('');
   const [savedSearches, setSavedSearches] = useState<{ id: string; name: string; filters: ProspectSearchFilters }[]>([]);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+
+  const companiesValidation = useMemo(() => validateScraper('companies', filters), [filters]);
 
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;
@@ -50,6 +53,11 @@ export default function ProspectSearch() {
 
   const searchMutation = useMutation({
     mutationFn: async () => {
+      const v = validateScraper('companies', filters);
+      if (!v.valid) {
+        throw new Error(v.message);
+      }
+
       const industry = filters.industries
         .map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
         .join(', ');
@@ -239,6 +247,7 @@ export default function ProspectSearch() {
             onSearch={() => searchMutation.mutate()}
             isSearching={searchMutation.isPending}
             resultCount={results.length}
+            invalidFields={companiesValidation.valid ? [] : companiesValidation.missingFields}
           />
           {/* Bottom bar for Save/Next */}
           <div className="h-14 border-t border-border/60 px-4 flex items-center justify-between bg-muted/30">
@@ -268,7 +277,7 @@ export default function ProspectSearch() {
             </Dialog>
             <Button
               onClick={() => searchMutation.mutate()}
-              disabled={searchMutation.isPending || filters.industries.length === 0}
+              disabled={searchMutation.isPending || !companiesValidation.valid}
               size="sm"
               className="h-8 px-6 text-xs font-semibold"
             >

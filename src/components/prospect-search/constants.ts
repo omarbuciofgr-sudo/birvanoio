@@ -503,6 +503,12 @@ export interface ProspectSearchFilters {
   
   // Products & services
   productsDescription: string;
+
+  /** Natural-language / AI lens query (separate from products copy). */
+  aiSearchQuery: string;
+
+  /** Examples to find similar companies (distinct from keyword include list). */
+  lookalikeCompanies: string[];
   
   // Technologies
   technologies: string[];
@@ -549,6 +555,8 @@ export const defaultFilters: ProspectSearchFilters = {
   cities: [],
   citiesToExclude: [],
   productsDescription: '',
+  aiSearchQuery: '',
+  lookalikeCompanies: [],
   technologies: [],
   sicCodes: [],
   naicsCodes: [],
