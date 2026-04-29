@@ -24,6 +24,8 @@ import {
   ClipboardList,
   Upload,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   Bell,
   Search,
   Command,
@@ -35,6 +37,8 @@ import {
   Workflow,
   UsersRound,
   BarChart3,
+  Send,
+  Wand2,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
