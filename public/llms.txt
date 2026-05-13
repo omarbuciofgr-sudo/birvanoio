@@ -1,0 +1,15 @@
+# Brivano
+
+> AI-powered B2B lead generation platform delivering fresh, verified leads weekly with a built-in CRM, calling, texting, email, and AI agents.
+
+Brivano helps sales teams replace stitched-together tools (ZoomInfo + Apollo + Outreach + a CRM) with a single platform: scrape and enrich verified leads, organize them in a pipeline, and run multi-channel outreach (email, SMS, LinkedIn, voice) with AI assistance.
+
+## Pages
+
+- [Home](/): Overview of Brivano, features, pricing, and how it works.
+- [Sign in / Start free](/auth): Create an account or sign in to the workspace.
+
+## Optional
+
+- [Privacy](/#privacy): Privacy policy.
+- [Terms](/#terms): Terms of service.

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Helmet } from "react-helmet-async";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 
@@ -21,6 +22,14 @@ import ExitIntentPopup from "@/components/landing/ExitIntentPopup";
 const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
   return (
     <div ref={ref} className="min-h-screen bg-background">
+      <Helmet>
+        <title>Brivano | AI-Powered B2B Lead Generation Platform</title>
+        <meta name="description" content="Fresh, verified B2B leads delivered weekly. All-in-one CRM with calling, texting, email, and AI agents — built for modern sales teams." />
+        <link rel="canonical" href="https://www.brivano.io/" />
+        <meta property="og:title" content="Brivano | AI-Powered B2B Lead Generation Platform" />
+        <meta property="og:description" content="Fresh, verified B2B leads delivered weekly. All-in-one CRM with built-in calling, texting, email, and AI." />
+        <meta property="og:url" content="https://www.brivano.io/" />
+      </Helmet>
       <Navbar />
       <Hero />
       

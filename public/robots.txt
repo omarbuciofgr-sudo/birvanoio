@@ -12,3 +12,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /client
+Disallow: /checkout
+
+Sitemap: https://www.brivano.io/sitemap.xml
