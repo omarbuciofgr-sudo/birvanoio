@@ -161,6 +161,11 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      <Helmet>
+        <title>Sign in or Start Free | Brivano</title>
+        <meta name="description" content="Sign in to your Brivano workspace or start free in seconds. Access verified B2B leads, CRM, and AI-powered outreach tools." />
+        <link rel="canonical" href="https://www.brivano.io/auth" />
+      </Helmet>
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-card">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-secondary/20" />
