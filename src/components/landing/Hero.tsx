@@ -28,11 +28,8 @@ const Hero = React.forwardRef<HTMLElement>(function Hero(_props, ref) {
             AI-Powered Lead Generation
           </div>
 
-          {/* Headline */}
-          <h1 
-            className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 animate-fade-in text-foreground"
-            style={{ animationDelay: "0.1s" }}
-          >
+          {/* Headline — no fade-in to keep LCP fast */}
+          <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-foreground">
             Find, enrich & close
             <br />
             <span className="gradient-text">leads with AI.</span>
