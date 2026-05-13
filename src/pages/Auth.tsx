@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import { z } from "zod";
 
 const emailSchema = z.string().trim().email("Please enter a valid email address").max(255);
