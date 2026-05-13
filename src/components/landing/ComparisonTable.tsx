@@ -18,7 +18,7 @@ const features = [
 const FeatureCell = React.forwardRef<HTMLSpanElement, { value: boolean | string }>(
   function FeatureCell({ value }, ref) {
     if (value === true) return <span ref={ref}><Check className="w-4 h-4 text-primary mx-auto" /></span>;
-    if (value === false) return <span ref={ref}><X className="w-4 h-4 text-muted-foreground/40 mx-auto" /></span>;
+    if (value === false) return <span ref={ref} aria-label="Not included"><X className="w-4 h-4 text-muted-foreground mx-auto" /></span>;
     if (value === "partial") return <span ref={ref}><Minus className="w-4 h-4 text-muted-foreground mx-auto" /></span>;
     return <span ref={ref} className="text-sm text-foreground font-medium">{value}</span>;
   }
