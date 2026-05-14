@@ -75,10 +75,6 @@ export function isEmptyArray(v: unknown): boolean {
   return v.length === 0;
 }
 
-export function jobsGeoSatisfied(f: Pick<JobSearchValidationInput, 'countries' | 'states' | 'cities'>): boolean {
-  return isNonEmptyStringArray(f.countries) || isNonEmptyStringArray(f.states) || isNonEmptyStringArray(f.cities);
-}
-
 export function peopleGeoSatisfied(f: Pick<PeopleSearchValidationInput, 'countries' | 'states' | 'cities'>): boolean {
   return isNonEmptyStringArray(f.countries) || isNonEmptyStringArray(f.states) || isNonEmptyStringArray(f.cities);
 }
@@ -94,16 +90,6 @@ export function companiesGeoSatisfied(
   );
 }
 
-export function localLocationSatisfied(input: LocalBusinessValidationInput): boolean {
-  const q = typeof input.locationQuery === 'string' ? input.locationQuery.trim() : '';
-  if (q.length > 0) return true;
-  const { lat, lng } = input;
-  if (typeof lat === 'number' && typeof lng === 'number' && Number.isFinite(lat) && Number.isFinite(lng)) {
-    return true;
-  }
-  return false;
-}
-
 export function normalizeCompanyLimit(limit: unknown, fallback = 50): number {
   if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) return limit;
   return fallback;
@@ -115,55 +101,17 @@ export type ValidationResult = {
   message: string;
 };
 
-const MSG_JOBS =
-  'Please complete Job Title, Location, Employment Type, and Posted Date.';
-const MSG_LOCAL = 'Please complete Location, Radius, and Search Type.';
 const MSG_PEOPLE =
   'Please add Job Title and any two of Location, Industry, Company Size, Seniority, Department, or Company.';
 const MSG_COMPANIES =
   'Please add at least three filters such as Industry, Keyword, Location, Size, Type, Technology, or Segment.';
 
-function validateJobs(formData: JobSearchValidationInput): ValidationResult {
-  const missing: string[] = [];
-
-  if (!isNonEmptyStringArray(formData.jobTitles)) {
-    missing.push('jobTitles');
-  }
-  if (!jobsGeoSatisfied(formData)) {
-    missing.push('countries', 'states', 'cities');
-  }
-  if (!isNonEmptyStringArray(formData.employmentType)) {
-    missing.push('employmentType');
-  }
-  if (isEmptyString(formData.postedWithin)) {
-    missing.push('postedWithin');
-  }
-
-  return {
-    valid: missing.length === 0,
-    missingFields: missing,
-    message: MSG_JOBS,
-  };
+function validateJobs(_formData: JobSearchValidationInput): ValidationResult {
+  return { valid: true, missingFields: [], message: '' };
 }
 
-function validateLocal(formData: LocalBusinessValidationInput): ValidationResult {
-  const missing: string[] = [];
-  if (!localLocationSatisfied(formData)) {
-    missing.push('locationQuery', 'lat', 'lng');
-  }
-  const r = formData.radiusMiles;
-  if (typeof r !== 'number' || !Number.isFinite(r) || r <= 0) {
-    missing.push('radiusMiles');
-  }
-  if (isEmptyString(formData.searchType)) {
-    missing.push('searchType');
-  }
-
-  return {
-    valid: missing.length === 0,
-    missingFields: missing,
-    message: MSG_LOCAL,
-  };
+function validateLocal(_formData: LocalBusinessValidationInput): ValidationResult {
+  return { valid: true, missingFields: [], message: '' };
 }
 
 function peopleQualifierCount(f: PeopleSearchValidationInput): number {

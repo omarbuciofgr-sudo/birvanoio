@@ -28,6 +28,7 @@ import {
 } from '@/lib/realEstateOwnerFilter';
 import { supabase } from '@/integrations/supabase/client';
 import { BrivanoLens } from '@/components/scraper/ProspectSearchDialog';
+import { GoogleJobsScraper } from '@/components/scraper/GoogleJobsScraper';
 import { 
   Search, 
   Loader2, 
@@ -3194,6 +3195,9 @@ export default function WebScraper() {
               <TabsTrigger value="real-estate" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Home className="h-3.5 w-3.5" /> Real Estate
               </TabsTrigger>
+              <TabsTrigger value="job-scraper" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Briefcase className="h-3.5 w-3.5" /> Job Scraper
+              </TabsTrigger>
               <TabsTrigger value="search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Search className="h-3.5 w-3.5" /> Search
               </TabsTrigger>
@@ -4414,6 +4418,10 @@ export default function WebScraper() {
               </>
           )}
         </TabsContent>
+
+          <TabsContent value="job-scraper" className="space-y-4 mt-0">
+            <GoogleJobsScraper />
+          </TabsContent>
 
           {/* ── Search Tab — Clay-like Rich Interface ── */}
           <TabsContent value="search" className="space-y-4 mt-0">
