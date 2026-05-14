@@ -20,20 +20,15 @@ const corsHeaders = {
 
 const MERGE_KEYS = new Set(["q", "job_title", "keywords", "company", "exclude_keywords"]);
 const LOCATION_KEYS = new Set(["location", "uule"]);
-const PASSTHROUGH_KEYS = new Set([
-  "google_domain",
-  "gl",
-  "hl",
-  "lrad",
-  "ltype",
-  "chips",
-  "next_page_token",
-]);
+const PASSTHROUGH_KEYS = new Set(["google_domain", "gl", "hl", "lrad", "ltype", "chips", "next_page_token"]);
 
 function stringifyFragment(val: unknown): string {
   if (val == null) return "";
   if (Array.isArray(val)) {
-    return val.map((x) => String(x).trim()).filter(Boolean).join(" ");
+    return val
+      .map((x) => String(x).trim())
+      .filter(Boolean)
+      .join(" ");
   }
   return String(val).trim();
 }
@@ -73,10 +68,7 @@ function paramString(v: unknown): string | null {
   return s || null;
 }
 
-function buildSerpapiGoogleJobsParams(
-  body: Record<string, unknown>,
-  apiKey: string,
-): Record<string, string> {
+function buildSerpapiGoogleJobsParams(body: Record<string, unknown>, apiKey: string): Record<string, string> {
   const mergedQ = mergeGoogleJobsQ(body);
   const params: Record<string, string> = {
     engine: "google_jobs",
@@ -95,13 +87,7 @@ function buildSerpapiGoogleJobsParams(
     if (s != null) params[key] = s;
   }
 
-  const skipExtra = new Set([
-    ...MERGE_KEYS,
-    ...LOCATION_KEYS,
-    ...PASSTHROUGH_KEYS,
-    "api_key",
-    "engine",
-  ]);
+  const skipExtra = new Set([...MERGE_KEYS, ...LOCATION_KEYS, ...PASSTHROUGH_KEYS, "api_key", "engine"]);
   for (const [k, v] of Object.entries(body)) {
     if (skipExtra.has(k) || v == null) continue;
     if (typeof v === "object") continue;
@@ -259,9 +245,10 @@ Deno.serve(async (req) => {
       }
     } else {
       const parsed = await req.json().catch(() => null);
-      body = parsed != null && typeof parsed === "object" && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : {};
+      body =
+        parsed != null && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : {};
     }
   } catch {
     body = {};
