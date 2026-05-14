@@ -1,7 +1,13 @@
 /**
  * Google Jobs via SerpApi — mirrors Omar_bucio_backend_Scraper/utils/google_jobs_serpapi.py
- * Secret: SERPAPI_API_KEY (Supabase Dashboard → Edge Functions → Secrets).
+ * Secret: SERPAPI_API_KEY (Supabase Dashboard -> Edge Functions -> Secrets).
  */
+
+/** Supabase Edge runs on Deno; TS in the repo does not load Deno lib by default. */
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+};
 
 const SERPAPI_SEARCH_URL = "https://serpapi.com/search";
 
@@ -236,7 +242,7 @@ Deno.serve(async (req) => {
         next_page_token: null,
         serpapi_pagination: { next_page_token: null },
         error:
-          "SERPAPI_API_KEY is not set. Add it under Supabase → Project Settings → Edge Functions → Secrets, then redeploy.",
+          "SERPAPI_API_KEY is not set. Add it under Supabase Project Settings -> Edge Functions -> Secrets, then redeploy.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
