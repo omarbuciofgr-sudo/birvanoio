@@ -274,6 +274,21 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       keyword: string;
       locationQuery: string;
     }) => {
+      const r = validateScraper('local', {
+        locationQuery: params.locationQuery,
+        lat: params.lat,
+        lng: params.lng,
+        radiusMiles: params.radiusMiles,
+        searchType: params.searchType,
+        keyword: params.keyword,
+      });
+      if (!r.valid) {
+        toast.error(r.message);
+        requestAnimationFrame(() => {
+          document.querySelector('[data-invalid-field]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+        return;
+      }
       localSearchMutation.mutate(params);
     },
     [localSearchMutation],
