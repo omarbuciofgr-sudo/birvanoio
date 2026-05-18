@@ -1,6 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { scraperBackendApi } from '@/lib/api/scraperBackend';
 import { edgeFetch, resolveEdgeFunctionUrl } from '@/lib/api/supabaseEdgeFetch';
+import {
+  peopleSearchHasRestrictiveFilters,
+  relaxPeopleSearchBody,
+  type PeopleSearchRequestBody,
+} from '@/lib/api/peopleSearchRequest';
 
 export interface CompanySearchInput {
   industry?: string;
@@ -51,6 +56,8 @@ export interface CompanyResult {
   logo_url?: string | null;
   /** People enrichment / Apollo mobile line */
   mobile_phone?: string | null;
+  /** Apollo person id from People Search — used for bulk_match / person match enrich */
+  apollo_person_id?: string | null;
 }
 
 export interface PersonResult {
@@ -112,6 +119,105 @@ export interface PeopleSearchResponse {
   error?: string;
   /** Hint when results are empty (e.g. after relaxed retry) */
   message?: string;
+  providers?: string[];
+}
+
+const PRODUCTION_PEOPLE_SEARCH_PROJECT = 'xgcvdduwrvgquurhngzq';
+
+function isLocalDevHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
+function useFlaskPeopleSearchEnv(): boolean {
+  const raw = (import.meta.env.VITE_USE_FLASK_PEOPLE_SEARCH as string | undefined)?.trim().toLowerCase();
+  return raw === 'true' || raw === '1' || raw === 'yes';
+}
+
+async function resolveFlaskPeopleSearchUrl(): Promise<string | null> {
+  if (!useFlaskPeopleSearchEnv() && !isLocalDevHost()) return null;
+  try {
+    const reachable = await scraperBackendApi.isScraperBackendReachable();
+    if (!reachable) return null;
+    const base = scraperBackendApi.getBaseUrl().replace(/\/+$/, '');
+    return `${base}/api/people-search`;
+  } catch {
+    return null;
+  }
+}
+
+function resolveEdgePeopleSearchUrl(): string {
+  const edgeOverride = (import.meta.env.VITE_PEOPLE_SEARCH_URL as string | undefined)?.trim();
+  if (edgeOverride) return edgeOverride.replace(/\/+$/, '');
+  return resolveEdgeFunctionUrl('people-search', 'VITE_PEOPLE_SEARCH_URL');
+}
+
+/** Edge first (deployed people-search); Flask only when VITE_USE_FLASK_PEOPLE_SEARCH=true. */
+async function resolvePeopleSearchPostUrl(): Promise<string> {
+  if (useFlaskPeopleSearchEnv()) {
+    const flask = await resolveFlaskPeopleSearchUrl();
+    if (flask) return flask;
+  }
+
+  const edgeUrl = resolveEdgePeopleSearchUrl();
+  if (
+    import.meta.env.DEV &&
+    edgeUrl.includes('supabase.co') &&
+    !edgeUrl.includes(PRODUCTION_PEOPLE_SEARCH_PROJECT)
+  ) {
+    console.warn(
+      `[People Search] Edge URL uses a different Supabase project than ${PRODUCTION_PEOPLE_SEARCH_PROJECT}. ` +
+        'Set VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and VITE_PEOPLE_SEARCH_URL in birvanoio/.env',
+    );
+  }
+  return edgeUrl;
+}
+
+function isFlaskPeopleSearchUrl(url: string): boolean {
+  return /\/api\/people-search\/?$/i.test(url.replace(/\/+$/, ''));
+}
+
+async function postPeopleSearch(
+  input: PeopleSearchRequestBody,
+  url: string,
+): Promise<{ ok: boolean; status: number; raw: PeopleSearchResponse | null }> {
+  const isEdge = /supabase\.co\/functions\/v1\//i.test(url);
+  if (isEdge) {
+    const { ok, status, data } = await edgeFetch<PeopleSearchResponse>('people-search', input, { url });
+    return { ok, status, raw: data };
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const raw = (await res.json().catch(() => null)) as PeopleSearchResponse | null;
+  return { ok: res.ok, status: res.status, raw };
+}
+
+function normalizePeopleSearchResponse(
+  raw: PeopleSearchResponse | null,
+  ok: boolean,
+  status: number,
+): PeopleSearchResponse {
+  const data = raw ?? { success: false, people: [] };
+  if (!ok) {
+    return {
+      success: false,
+      error: data.error || `People search failed (${status || 'network'})`,
+      people: [],
+    };
+  }
+  if (data.success === false && data.error) {
+    return { success: false, error: data.error, people: [] };
+  }
+  return {
+    ...data,
+    success: data.success !== false,
+    people: Array.isArray(data.people) ? data.people : [],
+  };
 }
 
 export interface JobSearchResponse {
@@ -204,52 +310,46 @@ export const industrySearchApi = {
   /**
    * Search for people by title, seniority, company, location, etc.
    */
-  async searchPeople(input: {
-    person_titles?: string[];
-    person_seniorities?: string[];
-    person_departments?: string[];
-    person_locations?: string[];
-    organization_industry_tag_ids?: string[];
-    organization_num_employees_ranges?: string[];
-    q_organization_name?: string;
-    profile_keywords?: string[];
-    email_status?: string;
-    technologies?: string[];
-    revenue_range?: string;
-    funding_range?: string;
-    funding_stage?: string;
-    market_segments?: string[];
-    buying_intent?: string;
-    sic_codes?: string[];
-    naics_codes?: string[];
-    job_posting_filter?: string;
-    job_categories?: string[];
-    exclude_person_names?: string[];
-    person_past_titles?: string[];
-    past_companies?: string[];
-    years_experience_min?: number;
-    years_experience_max?: number;
-    limit?: number;
-  }): Promise<PeopleSearchResponse> {
-    const url = resolveEdgeFunctionUrl('people-search', 'VITE_PEOPLE_SEARCH_URL');
+  async searchPeople(input: PeopleSearchRequestBody): Promise<PeopleSearchResponse> {
     try {
-      const { ok, status, data } = await edgeFetch<PeopleSearchResponse>(
-        'people-search',
-        input,
-        { url },
-      );
-      const raw = data ?? { success: false, people: [] };
-      if (!ok) {
-        return {
-          success: false,
-          error: raw.error || `People search failed (${status || 'network'})`,
-          people: [],
-        };
+      const primaryUrl = await resolvePeopleSearchPostUrl();
+      let url = primaryUrl;
+      let { ok, status, raw } = await postPeopleSearch(input, url);
+      let result = normalizePeopleSearchResponse(raw, ok, status);
+
+      const restrictive = peopleSearchHasRestrictiveFilters(input);
+      if (result.people && result.people.length === 0 && restrictive) {
+        const relaxed = relaxPeopleSearchBody(input);
+        const retry = await postPeopleSearch(relaxed, url);
+        const relaxedResult = normalizePeopleSearchResponse(retry.raw, retry.ok, retry.status);
+        if (relaxedResult.people && relaxedResult.people.length > 0) {
+          return {
+            ...relaxedResult,
+            message:
+              'Results found after omitting past company, past title, exclude, profile keywords, and technologies.',
+          };
+        }
+        result = relaxedResult;
       }
-      if (raw?.success === false && raw.error) {
-        return { success: false, error: raw.error, people: [] };
+
+      // Local Flask can return zero rows while deployed Edge (same Apollo key) still works.
+      if (
+        result.people &&
+        result.people.length === 0 &&
+        isFlaskPeopleSearchUrl(url) &&
+        !useFlaskPeopleSearchEnv()
+      ) {
+        const edgeUrl = resolveEdgePeopleSearchUrl();
+        if (edgeUrl !== url) {
+          const edgeTry = await postPeopleSearch(input, edgeUrl);
+          const edgeResult = normalizePeopleSearchResponse(edgeTry.raw, edgeTry.ok, edgeTry.status);
+          if (edgeResult.people && edgeResult.people.length > 0) {
+            return edgeResult;
+          }
+        }
       }
-      return raw;
+
+      return result;
     } catch (e) {
       console.error('People search error:', e);
       return {
@@ -257,7 +357,7 @@ export const industrySearchApi = {
         error:
           e instanceof Error
             ? e.message
-            : 'People search Edge function unreachable — deploy people-search and set APOLLO_API_KEY on Supabase.',
+            : 'People search failed — start api_server.py locally or set VITE_PEOPLE_SEARCH_URL on Supabase.',
         people: [],
       };
     }

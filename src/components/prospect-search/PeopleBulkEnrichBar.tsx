@@ -64,18 +64,21 @@ function buildWaterfallBody(row: CompanyResult, enrichFields?: string[]) {
   const domain = normalizeDomain(row.domain);
   const orgName = (row.organization_name || '').trim();
   const li = (row.linkedin_url || '').trim();
+  const apolloId = (row.apollo_person_id || '').trim();
   const body: Parameters<typeof invokeWaterfallEnrich>[0] = {
     enrichment_target: 'person',
     ...(domain ? { domain } : {}),
     ...(orgName ? { company_name: orgName } : {}),
     ...(row.name?.trim() ? { person_display_name: row.name.trim() } : {}),
     ...(li ? { linkedin_url: li } : {}),
+    ...(apolloId ? { apollo_person_id: apolloId } : {}),
     target_titles: ['owner', 'ceo', 'founder', 'president'],
   };
   if (enrichFields?.length) body.enrich_fields = enrichFields;
-  const onlyCompanyDomain =
-    enrichFields?.length === 1 && enrichFields[0].toLowerCase() === 'company_domain';
-  if (!onlyCompanyDomain) {
+  const ef = enrichFields?.map((f) => f.toLowerCase()) ?? [];
+  const onlyCompanyDomain = ef.length === 1 && ef[0] === 'company_domain';
+  const industryOnly = ef.length === 1 && ef[0] === 'industry';
+  if (!onlyCompanyDomain && !industryOnly) {
     body.enrichment_mode = 'strict_b2b_v1';
   }
   return body;

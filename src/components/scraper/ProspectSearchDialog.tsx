@@ -29,6 +29,19 @@ import { resolvePersonOrganizationName } from '@/lib/peopleSearchPersonMap';
 import { prospectSearchApi, type ProspectResult } from '@/lib/api/prospectSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { validateScraper } from '@/config/scraperValidation';
+import {
+  formatPeopleSearchEmptyError,
+  peopleSearchHasRestrictiveFilters,
+  type PeopleSearchRequestBody,
+} from '@/lib/api/peopleSearchRequest';
+
+/** Apollo `currently_using_any_of_technology_uids` expects 24-char hex IDs, not product names. */
+function apolloTechnologyUids(technologies: string[]): string[] | undefined {
+  const uids = technologies
+    .map((t) => t.trim())
+    .filter((t) => /^[a-f0-9]{24}$/i.test(t));
+  return uids.length > 0 ? uids : undefined;
+}
 
 export type ExternalLensFilters = Partial<ProspectSearchFilters> & {
   plannerSearchType?: SearchType;
@@ -311,7 +324,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           ...peopleFilters.certifications,
         ].filter(Boolean);
 
-        const response = await industrySearchApi.searchPeople({
+        const peopleSearchBody: PeopleSearchRequestBody = {
           person_titles: peopleFilters.jobTitles.length > 0 ? peopleFilters.jobTitles : undefined,
           person_seniorities: peopleFilters.seniority.length > 0 ? peopleFilters.seniority : undefined,
           person_departments: peopleFilters.departments.length > 0 ? peopleFilters.departments : undefined,
@@ -323,7 +336,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           q_organization_name: peopleFilters.companies.length > 0 ? peopleFilters.companies.join(' ') : undefined,
           profile_keywords: allKeywords.length > 0 ? allKeywords : undefined,
           email_status: peopleFilters.emailStatus || undefined,
-          technologies: peopleFilters.technologies.length > 0 ? peopleFilters.technologies : undefined,
+          technologies: apolloTechnologyUids(peopleFilters.technologies),
           revenue_range: peopleFilters.annualRevenue || undefined,
           funding_range: peopleFilters.fundingRaised || undefined,
           funding_stage: peopleFilters.fundingStage || undefined,
@@ -339,7 +352,9 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           years_experience_min: peopleFilters.yearsExperienceMin ? parseInt(peopleFilters.yearsExperienceMin) : undefined,
           years_experience_max: peopleFilters.yearsExperienceMax ? parseInt(peopleFilters.yearsExperienceMax) : undefined,
           limit: peopleFilters.limit,
-        });
+        };
+
+        const response = await industrySearchApi.searchPeople(peopleSearchBody);
 
         if (response.success && Array.isArray(response.people) && response.people.length > 0) {
           const mapped: CompanyResult[] = response.people.map((p) => {
@@ -349,6 +364,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               name: p.name,
               domain: p.organization_domain || '',
               organization_name: organization_name ?? null,
+              apollo_person_id: p.id || null,
               website: p.organization_domain ? `https://${p.organization_domain}` : null,
               linkedin_url: p.linkedin_url,
               industry: p.organization_industry,
@@ -366,14 +382,20 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               phone: p.phone ?? null,
             };
           });
-          return { success: true, companies: mapped, prospectResults: null };
+          return {
+            success: true,
+            companies: mapped,
+            prospectResults: null,
+            peopleSearchMessage: response.message,
+          };
         }
         return {
           success: false,
-          error:
-            response.error ||
-            response.message ||
-            'No results — broaden filters or remove past company / past title / exclude keywords.',
+          error: formatPeopleSearchEmptyError(
+            response.error || response.message,
+            peopleSearchHasRestrictiveFilters(peopleSearchBody),
+            response.providers,
+          ),
         };
       }
 
@@ -482,7 +504,12 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
         setTotalPages((response as any).pagination?.total_pages || 1);
         setCurrentPage(variables?.page || 1);
         setIsLoadingMore(false);
-        toast.success(`Found ${response.companies.length} results`);
+        const relaxedNote = (response as { peopleSearchMessage?: string }).peopleSearchMessage;
+        if (relaxedNote) {
+          toast.success(`Found ${response.companies.length} results`, { description: relaxedNote });
+        } else {
+          toast.success(`Found ${response.companies.length} results`);
+        }
       } else {
         setIsLoadingMore(false);
         toast.error((response as any).error || 'Search failed');

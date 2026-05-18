@@ -10,6 +10,7 @@ export type WaterfallEnrichBody = {
   enrichment_mode?: 'strict_b2b_v1' | string;
   linkedin_url?: string;
   person_display_name?: string;
+  apollo_person_id?: string;
   target_titles?: string[];
   enrich_fields?: string[];
   intent_goals?: string[];

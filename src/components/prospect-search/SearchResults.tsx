@@ -214,6 +214,9 @@ export function SearchResults({
             ? { person_display_name: company.name.trim() }
             : {}),
           ...(enrichmentTarget === 'person' && li ? { linkedin_url: li } : {}),
+          ...(enrichmentTarget === 'person' && company.apollo_person_id
+            ? { apollo_person_id: company.apollo_person_id }
+            : {}),
           target_titles: ['owner', 'ceo', 'founder', 'president'],
         },
         { maxRetriesOn429: 3 },

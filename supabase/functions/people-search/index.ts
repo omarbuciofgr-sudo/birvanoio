@@ -138,26 +138,89 @@ function apolloDisplayName(p: {
 }
 
 const APOLLO_BULK_MATCH_URL = "https://api.apollo.io/api/v1/people/bulk_match";
+const APOLLO_ORG_ENRICH_URL = "https://api.apollo.io/api/v1/organizations/enrich";
 
-/** Search preview omits real last names; bulk_match by id returns full name (uses Apollo enrichment credits). */
-async function hydrateApolloFullNamesFromBulkMatch(rows: PersonResult[], apiKey: string): Promise<void> {
+function organizationDomainFromOrg(org: Record<string, unknown> | null | undefined): string | null {
+  if (!org || typeof org !== "object") return null;
+  for (const key of ["primary_domain", "domain"]) {
+    const v = org[key];
+    if (typeof v === "string" && v.trim()) return v.trim().toLowerCase();
+  }
+  const wu = org.website_url;
+  if (typeof wu === "string" && wu.trim()) {
+    return wu
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .split("/")[0] || null;
+  }
+  return null;
+}
+
+function mergeApolloPersonMatch(row: PersonResult, m: Record<string, unknown>): void {
+  const fn = String(m.first_name ?? "").trim();
+  const ln = String(m.last_name ?? "").trim();
+  const full = String(m.name ?? "").trim();
+  const name = full || [fn, ln].filter(Boolean).join(" ");
+  if (name) row.name = name;
+  if (fn) row.first_name = fn;
+  if (ln) row.last_name = ln;
+  if (m.linkedin_url && !row.linkedin_url) row.linkedin_url = String(m.linkedin_url);
+
+  const email = String(m.email ?? "").trim();
+  if (email && !row.email) row.email = email;
+  if (m.email_status && !row.email_status) row.email_status = String(m.email_status);
+
+  const org = (m.organization ?? {}) as Record<string, unknown>;
+  if (org.name && !row.organization_name) row.organization_name = String(org.name);
+  const dom = organizationDomainFromOrg(org);
+  if (dom && !row.organization_domain) row.organization_domain = dom;
+  const ind = org.industry;
+  if (typeof ind === "string" && ind.trim() && !row.organization_industry) {
+    row.organization_industry = ind.trim();
+  }
+  const ec = org.estimated_num_employees;
+  if (typeof ec === "number" && ec > 0 && !row.organization_employee_count) {
+    row.organization_employee_count = ec;
+  }
+
+  const pns = m.phone_numbers as unknown[] | undefined;
+  if (Array.isArray(pns) && pns.length > 0 && !row.phone) {
+    const first = pns[0] as Record<string, unknown>;
+    const phone = String(first.sanitized_number ?? first.number ?? "").trim();
+    if (phone) row.phone = phone;
+  }
+}
+
+/** bulk_match fills names, work email, and org fields omitted by api_search preview. */
+async function hydrateApolloPeopleFromBulkMatch(rows: PersonResult[], apiKey: string): Promise<void> {
   const raw = (Deno.env.get("APOLLO_PEOPLE_SEARCH_FULL_NAME") || "true").trim().toLowerCase();
   if (["0", "false", "no", "off"].includes(raw)) return;
 
-  const need = rows.filter((r) => r.id && !String(r.last_name ?? "").trim());
+  const need = rows.filter((r) => {
+    if (!r.id) return false;
+    return (
+      !String(r.last_name ?? "").trim() ||
+      !row.organization_domain ||
+      !row.organization_industry ||
+      !row.email
+    );
+  });
   if (!need.length) return;
 
   const byId = new Map(rows.filter((r) => r.id).map((r) => [String(r.id), r]));
+  const revealEmail = (Deno.env.get("APOLLO_PEOPLE_SEARCH_REVEAL_EMAIL") || "false").trim().toLowerCase();
+  const revealEmails = ["1", "true", "yes", "on"].includes(revealEmail);
 
   console.log(
-    `[People Apollo] bulk_match: hydrating ${need.length} full names (credits; set APOLLO_PEOPLE_SEARCH_FULL_NAME=false to skip)`,
+    `[People Apollo] bulk_match: hydrating ${need.length} rows (credits; APOLLO_PEOPLE_SEARCH_FULL_NAME=false to skip)`,
   );
 
   for (let i = 0; i < need.length; i += 10) {
     const chunk = need.slice(i, i + 10);
     const details = chunk.map((r) => ({ id: r.id }));
     const qs = new URLSearchParams({
-      reveal_personal_emails: "false",
+      reveal_personal_emails: revealEmails ? "true" : "false",
       reveal_phone_number: "false",
     });
     try {
@@ -180,18 +243,99 @@ async function hydrateApolloFullNamesFromBulkMatch(rows: PersonResult[], apiKey:
         if (!m || typeof m !== "object" || !m.id) continue;
         const row = byId.get(String(m.id));
         if (!row) continue;
-        const fn = String(m.first_name ?? "").trim();
-        const ln = String(m.last_name ?? "").trim();
-        const full = String(m.name ?? "").trim();
-        const name = full || [fn, ln].filter(Boolean).join(" ");
-        if (name) row.name = name;
-        if (fn) row.first_name = fn;
-        if (ln) row.last_name = ln;
-        if (m.linkedin_url && !row.linkedin_url) row.linkedin_url = m.linkedin_url;
+        mergeApolloPersonMatch(row, m as Record<string, unknown>);
       }
     } catch (e) {
       console.warn("[People Apollo] bulk_match failed", e);
     }
+  }
+}
+
+async function resolveApolloOrgDomainByName(name: string, apiKey: string): Promise<string | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const headers = {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-cache",
+    "X-Api-Key": apiKey,
+  };
+  for (const params of [
+    { page: 1, per_page: 5, q_organization_name: trimmed },
+    { page: 1, per_page: 5, q_keywords: trimmed },
+  ]) {
+    try {
+      let response = await fetch("https://api.apollo.io/api/v1/organizations/search", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(params),
+      });
+      let data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        response = await fetch("https://api.apollo.io/api/v1/mixed_companies/search", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(params),
+        });
+        data = await response.json().catch(() => ({}));
+        if (!response.ok) continue;
+      }
+      const orgs = (data.organizations || data.accounts || []) as Record<string, unknown>[];
+      for (const org of orgs) {
+        const d = organizationDomainFromOrg(org);
+        if (d) return d;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+/** organizations/enrich for rows still missing industry or domain after bulk_match. */
+async function hydrateApolloOrganizationsFromEnrich(rows: PersonResult[], apiKey: string): Promise<void> {
+  const domainCache = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    if (row.organization_industry && row.organization_domain) continue;
+
+    let domain = row.organization_domain?.trim().toLowerCase() || "";
+    if (!domain && row.organization_name) {
+      domain = (await resolveApolloOrgDomainByName(row.organization_name, apiKey)) || "";
+      if (domain && !row.organization_domain) row.organization_domain = domain;
+    }
+    if (!domain) continue;
+
+    let org = domainCache.get(domain);
+    if (!org) {
+      try {
+        const response = await fetch(APOLLO_ORG_ENRICH_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "X-Api-Key": apiKey,
+          },
+          body: JSON.stringify({ domain }),
+        });
+        const data = await response.json().catch(() => ({}));
+        org = (data.organization || {}) as Record<string, unknown>;
+        domainCache.set(domain, org);
+      } catch (e) {
+        console.warn("[People Apollo] organizations/enrich failed", domain, e);
+        continue;
+      }
+    }
+
+    const ind = org.industry;
+    if (typeof ind === "string" && ind.trim() && !row.organization_industry) {
+      row.organization_industry = ind.trim();
+    }
+    const dom = organizationDomainFromOrg(org);
+    if (dom && !row.organization_domain) row.organization_domain = dom;
+    const ec = org.estimated_num_employees;
+    if (typeof ec === "number" && ec > 0 && !row.organization_employee_count) {
+      row.organization_employee_count = ec;
+    }
+    if (org.name && !row.organization_name) row.organization_name = String(org.name);
   }
 }
 
@@ -235,7 +379,12 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
     else if (input.email_status === "has_email") params.contact_email_status = ["verified", "guessed", "unavailable"];
   }
 
-  if (input.technologies?.length) params.currently_using_any_of_technology_uids = input.technologies;
+  if (input.technologies?.length) {
+    const uids = input.technologies
+      .map((t) => String(t).trim())
+      .filter((t) => /^[a-f0-9]{24}$/i.test(t));
+    if (uids.length > 0) params.currently_using_any_of_technology_uids = uids;
+  }
 
   if (input.revenue_range) {
     const revenueMap: Record<string, string[]> = {
@@ -332,7 +481,8 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
       seniority: p.seniority || null,
       departments: p.departments || [],
       organization_name: p.organization?.name || null,
-      organization_domain: p.organization?.primary_domain || null,
+      organization_domain: organizationDomainFromOrg(p.organization) ||
+        (typeof p.organization?.primary_domain === "string" ? p.organization.primary_domain : null),
       organization_industry: p.organization?.industry || null,
       organization_employee_count: p.organization?.estimated_num_employees || null,
       city: p.city || null,
@@ -345,7 +495,8 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
       phone: p.phone_numbers?.[0]?.sanitized_number || p.phone || null,
       source_provider: "apollo",
     }));
-    await hydrateApolloFullNamesFromBulkMatch(rows, apiKey);
+    await hydrateApolloPeopleFromBulkMatch(rows, apiKey);
+    await hydrateApolloOrganizationsFromEnrich(rows, apiKey);
     return rows;
   } catch (e) {
     console.error("[People Apollo] Exception:", e);

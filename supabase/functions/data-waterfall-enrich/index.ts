@@ -55,6 +55,7 @@ interface EnrichmentInput {
   person_display_name?: string;
   organization_name?: string;
   linkedin_url?: string;
+  apollo_person_id?: string;
 }
 
 interface EnrichmentResult {
@@ -184,6 +185,92 @@ async function enrichWithClay(
     if (fields.length > 0) return { data: result, fields };
   } catch (error) { console.error('Clay waterfall error:', error); }
   return { data: null, fields: [] };
+}
+
+/** Scout footer Industry — firmographics from employer domain (not a random person at the domain). */
+async function enrichOrganizationIndustry(
+  domain: string,
+  apiKey: string,
+): Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }> {
+  try {
+    const response = await fetch('https://api.apollo.io/api/v1/organizations/enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+      body: JSON.stringify({ domain: cleanDomain(domain) }),
+    });
+    const data = await response.json().catch(() => ({}));
+    const org = data.organization as Record<string, unknown> | undefined;
+    if (!org) return { data: null, fields: [] };
+    const fields: string[] = [];
+    const result: Partial<EnrichmentResult> = {
+      company_name: typeof org.name === 'string' ? org.name : null,
+      industry: typeof org.industry === 'string' ? org.industry : null,
+      employee_count:
+        typeof org.estimated_num_employees === 'number' ? org.estimated_num_employees : null,
+      annual_revenue: typeof org.annual_revenue === 'number' ? org.annual_revenue : null,
+      founded_year: typeof org.founded_year === 'number' ? org.founded_year : null,
+      headquarters_city: typeof org.city === 'string' ? org.city : null,
+      headquarters_state: typeof org.state === 'string' ? org.state : null,
+    };
+    if (result.industry) fields.push('industry');
+    if (result.employee_count) fields.push('employee_count');
+    if (result.company_name) fields.push('company_name');
+    if (fields.length === 0) return { data: null, fields: [] };
+    return { data: result, fields };
+  } catch (error) {
+    console.error('Apollo organizations/enrich error:', error);
+    return { data: null, fields: [] };
+  }
+}
+
+/** Match the searched person by Apollo id or LinkedIn (work email when credits allow). */
+async function enrichWithApolloPersonMatch(
+  apolloPersonId: string,
+  linkedinUrl: string,
+  apiKey: string,
+): Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }> {
+  try {
+    const details: Record<string, string> = {};
+    if (apolloPersonId) details.id = apolloPersonId;
+    else if (linkedinUrl) details.linkedin_url = linkedinUrl;
+    else return { data: null, fields: [] };
+
+    const qs = new URLSearchParams({
+      reveal_personal_emails: 'true',
+      reveal_phone_number: 'false',
+    });
+    const response = await fetch(`https://api.apollo.io/api/v1/people/match?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+      body: JSON.stringify(details),
+    });
+    const data = await response.json().catch(() => ({}));
+    const p = data.person as Record<string, unknown> | undefined;
+    if (!p) return { data: null, fields: [] };
+
+    const org = (p.organization || {}) as Record<string, unknown>;
+    const fields: string[] = [];
+    const result: Partial<EnrichmentResult> = {
+      full_name: typeof p.name === 'string' ? p.name : null,
+      email: typeof p.email === 'string' ? p.email : null,
+      job_title: typeof p.title === 'string' ? p.title : null,
+      linkedin_url: typeof p.linkedin_url === 'string' ? p.linkedin_url : null,
+      company_name: typeof org.name === 'string' ? org.name : null,
+      industry: typeof org.industry === 'string' ? org.industry : null,
+      employee_count:
+        typeof org.estimated_num_employees === 'number' ? org.estimated_num_employees : null,
+    };
+    if (result.full_name) fields.push('full_name');
+    if (result.email) fields.push('email');
+    if (result.job_title) fields.push('job_title');
+    if (result.linkedin_url) fields.push('linkedin_url');
+    if (result.industry) fields.push('industry');
+    if (fields.length === 0) return { data: null, fields: [] };
+    return { data: result, fields };
+  } catch (error) {
+    console.error('Apollo people/match error:', error);
+    return { data: null, fields: [] };
+  }
 }
 
 // Apollo enrichment
@@ -1033,6 +1120,43 @@ Deno.serve(async (req) => {
 
     const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
 
+    // Scout footer Industry — Apollo organizations/enrich (not mixed_people CEO pick)
+    if (efLower.length === 1 && efLower[0] === 'industry') {
+      if (!apolloApiKey) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'APOLLO_API_KEY is required for industry enrichment.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (!input.domain && companyName) {
+        const resolved = await resolveDomainFromCompanyName(companyName, apolloApiKey);
+        if (resolved) input.domain = cleanDomain(resolved);
+      }
+      if (!input.domain) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: companyName
+              ? 'Could not resolve employer to a domain. Use footer Resolve first or add a domain.'
+              : 'Domain or organization name is required for industry enrichment.',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const step = await enrichOrganizationIndustry(input.domain, apolloApiKey);
+      const payload = step.data || { industry: null, employee_count: null };
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: { ...payload, domain: input.domain },
+          is_complete: !!payload.industry,
+          providers_used: step.fields.length ? ['apollo_org_enrich'] : [],
+          waterfall_log: [],
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // Scout bulk: organization → domain only (no person waterfall)
     if (efLower.includes('company_domain')) {
       if (input.domain) {
@@ -1198,6 +1322,17 @@ Deno.serve(async (req) => {
       }
 
       if (wantEmail) {
+        const apolloPersonId = String(body.apollo_person_id || '').trim();
+        const linkedinForMatch = String(body.linkedin_url || input.linkedin_url || '').trim();
+        if (apolloApiKey && (apolloPersonId || linkedinForMatch)) {
+          console.log('[strict_b2b_v1] email: Apollo people/match first');
+          await runStep(
+            'apollo_person_match',
+            apolloApiKey,
+            !result.email,
+            () => enrichWithApolloPersonMatch(apolloPersonId, linkedinForMatch, apolloApiKey),
+          );
+        }
         console.log('[strict_b2b_v1] email chain: Hunter → RocketReach → Snov (stop once email set); then ZeroBounce');
         await runStep('hunter', hunterApiKey, !result.email, () => enrichWithHunter(input, result, hunterApiKey!));
         await runStep(
