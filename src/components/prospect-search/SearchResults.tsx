@@ -256,6 +256,10 @@ export function SearchResults({
           const mob = String(enriched.mobile_phone || '').trim();
           if (mob) patch.mobile_phone = mob;
         }
+        const fullName = String(enriched.full_name || '').trim();
+        if (fullName) patch.name = fullName;
+        const liOut = String(enriched.linkedin_url || '').trim();
+        if (liOut) patch.linkedin_url = liOut;
         if (Object.keys(patch).length > 0) onPatchResults([{ index, patch }]);
       }
       setEnrichmentStatus(prev => ({ ...prev, [index]: 'done' }));

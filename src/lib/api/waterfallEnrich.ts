@@ -1,49 +1,4 @@
-import { scraperBackendApi } from '@/lib/api/scraperBackend';
-
-/**
- * Strip mistaken path suffixes from VITE_SCRAPER_BACKEND_URL (e.g. …/waterfall-enrich → root)
- * so we always POST to Flask `POST /api/waterfall-enrich` on Railway/local.
- */
-function normalizeScraperRootForWaterfall(baseRaw: string): string {
-  let base = baseRaw.trim().replace(/\/+$/, '');
-  // Strip mistaken path suffixes (repeat until stable — handles …/api/waterfall-enrich/waterfall-enrich etc.)
-  for (let i = 0; i < 4; i++) {
-    const prev = base;
-    base = base.replace(/\/api\/waterfall-enrich$/i, '');
-    base = base.replace(/\/waterfall-enrich$/i, '');
-    base = base.replace(/\/api$/i, '');
-    base = base.replace(/\/+$/, '');
-    if (base === prev) break;
-  }
-  return base;
-}
-
-/**
- * Scout must call the Flask route `POST /api/waterfall-enrich` (person + company, org→domain).
- * If `VITE_SCRAPER_BACKEND_URL` points at `*.supabase.co/functions/...`, the Edge function
- * `data-waterfall-enrich` returns 400 "Domain is required" for people rows without a domain.
- */
-function resolveWaterfallEnrichPostUrl(): string {
-  let base = normalizeScraperRootForWaterfall(scraperBackendApi.getBaseUrl());
-  const host =
-    typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
-  const isLocalDev = host === 'localhost' || host === '127.0.0.1';
-
-  if (isLocalDev && /supabase\.co/i.test(base) && /\/functions\//i.test(base)) {
-    base = normalizeScraperRootForWaterfall('http://localhost:8080');
-  }
-
-  // Common typo: …/functions/v1/waterfall-enrich (404) — real slug is data-waterfall-enrich
-  if (/supabase\.co\/functions\/v1\/waterfall-enrich$/i.test(base)) {
-    base = base.replace(/\/waterfall-enrich$/i, '/data-waterfall-enrich');
-  }
-
-  if (/\/functions\/v1\/[\w-]+$/i.test(base)) {
-    return base;
-  }
-
-  return `${base}/api/waterfall-enrich`;
-}
+import { resolveEdgeFunctionUrl, edgeHeaders } from '@/lib/api/supabaseEdgeFetch';
 
 export type WaterfallEnrichBody = {
   domain?: string;
@@ -51,7 +6,7 @@ export type WaterfallEnrichBody = {
   organization_name?: string;
   /** Scout People Search → "person"; Company/Jobs → "company" */
   enrichment_target?: 'company' | 'person';
-  /** strict_b2b_v1 = Hunter→RR→Snov→ZB + Lusha→RR→PDL only (Flask/Edge). Omit for legacy waterfall on Edge-only deployments. */
+  /** strict_b2b_v1 = Hunter→RR→Snov→ZB + Lusha→RR→PDL (Edge). Omit for legacy waterfall fields (e.g. industry). */
   enrichment_mode?: 'strict_b2b_v1' | string;
   linkedin_url?: string;
   person_display_name?: string;
@@ -69,15 +24,15 @@ export type WaterfallEnrichResponse = {
   providers_used?: string[];
 };
 
-/**
- * Company contact enrichment via Flask `/api/waterfall-enrich` (no Supabase Edge Function).
- * Return shape matches `supabase.functions.invoke`: `{ data, error }`.
- */
 export type InvokeWaterfallOptions = {
   signal?: AbortSignal;
   /** Retries on HTTP 429 (rate limit) with exponential backoff. */
   maxRetriesOn429?: number;
 };
+
+function resolveWaterfallEnrichPostUrl(): string {
+  return resolveEdgeFunctionUrl('data-waterfall-enrich', 'VITE_WATERFALL_ENRICH_URL');
+}
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -97,9 +52,10 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Scout footer / Quick enrich → Supabase Edge `data-waterfall-enrich` only. */
 export async function invokeWaterfallEnrich(
   body: WaterfallEnrichBody,
-  opts?: InvokeWaterfallOptions
+  opts?: InvokeWaterfallOptions,
 ): Promise<{ data: WaterfallEnrichResponse | null; error: Error | null; status?: number }> {
   const url = resolveWaterfallEnrichPostUrl();
   const max429 = opts?.maxRetriesOn429 ?? 0;
@@ -109,7 +65,7 @@ export async function invokeWaterfallEnrich(
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: edgeHeaders(),
         body: JSON.stringify(body),
         cache: 'no-store',
         signal: opts?.signal,
@@ -127,7 +83,7 @@ export async function invokeWaterfallEnrich(
         const msg =
           json && typeof json === 'object' && json.error
             ? String(json.error)
-            : `Enrichment API HTTP ${res.status} — is api_server.py running and /api/waterfall-enrich deployed?`;
+            : `Enrichment API HTTP ${res.status} — deploy data-waterfall-enrich and set vendor secrets on Supabase.`;
         return { data: json ?? null, error: new Error(msg), status: res.status };
       }
       if (!json || typeof json !== 'object' || json.success !== true) {

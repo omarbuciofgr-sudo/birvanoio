@@ -45,6 +45,21 @@ type EnrichmentRowPatch = {
 const CONCURRENCY = 4;
 const RETRY_429 = 3;
 
+/** Merge person-level fields from enrichment into table row patches. */
+function personPatchFromEnriched(enriched: Record<string, unknown>): Partial<CompanyResult> {
+  const patch: Partial<CompanyResult> = {};
+  const fn = String(enriched.full_name || '').trim();
+  if (fn) patch.name = fn;
+  const li = String(enriched.linkedin_url || '').trim();
+  if (li) patch.linkedin_url = li;
+  const dom = normalizeDomain(String(enriched.domain || ''));
+  if (dom) {
+    patch.domain = dom;
+    patch.website = `https://${dom}`;
+  }
+  return patch;
+}
+
 function buildWaterfallBody(row: CompanyResult, enrichFields?: string[]) {
   const domain = normalizeDomain(row.domain);
   const orgName = (row.organization_name || '').trim();
@@ -372,7 +387,7 @@ export function PeopleBulkEnrichBar({
                 bump();
                 return;
               }
-              onPatchRows([{ index, patch: { email } }]);
+              onPatchRows([{ index, patch: { email, ...personPatchFromEnriched(enriched) } }]);
               enrichPatches.push({ index, patch: { email } });
               metaBatch.push({ index, code: 'OK' });
               ok += 1;
@@ -413,6 +428,7 @@ export function PeopleBulkEnrichBar({
                   patch: {
                     phone: phone || mobile || row.phone,
                     mobile_phone: mobile || undefined,
+                    ...personPatchFromEnriched(enriched),
                   },
                 },
               ]);

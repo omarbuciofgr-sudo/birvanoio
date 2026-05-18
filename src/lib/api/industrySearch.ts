@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { scraperBackendApi } from '@/lib/api/scraperBackend';
+import { edgeFetch, resolveEdgeFunctionUrl } from '@/lib/api/supabaseEdgeFetch';
 
 export interface CompanySearchInput {
   industry?: string;
@@ -230,19 +231,18 @@ export const industrySearchApi = {
     years_experience_max?: number;
     limit?: number;
   }): Promise<PeopleSearchResponse> {
-    const base = scraperBackendApi.getBaseUrl();
+    const url = resolveEdgeFunctionUrl('people-search', 'VITE_PEOPLE_SEARCH_URL');
     try {
-      const res = await fetch(`${base}/api/people-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-        cache: 'no-store',
-      });
-      const raw = (await res.json().catch(() => ({}))) as PeopleSearchResponse;
-      if (!res.ok) {
+      const { ok, status, data } = await edgeFetch<PeopleSearchResponse>(
+        'people-search',
+        input,
+        { url },
+      );
+      const raw = data ?? { success: false, people: [] };
+      if (!ok) {
         return {
           success: false,
-          error: raw.error || `People search failed (${res.status})`,
+          error: raw.error || `People search failed (${status || 'network'})`,
           people: [],
         };
       }
@@ -257,7 +257,7 @@ export const industrySearchApi = {
         error:
           e instanceof Error
             ? e.message
-            : 'Scraper backend unreachable — start api_server.py and set APOLLO_API_KEY in backend .env',
+            : 'People search Edge function unreachable — deploy people-search and set APOLLO_API_KEY on Supabase.',
         people: [],
       };
     }

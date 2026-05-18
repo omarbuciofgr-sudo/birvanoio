@@ -115,6 +115,90 @@ const DEPARTMENT_MAP: Record<string, string> = {
   'media': 'media_and_communication',
 };
 
+/**
+ * Apollo `mixed_people/api_search` preview usually sends `last_name_obfuscated` (e.g. `Hu***n`)
+ * instead of real `last_name`. Without it, only `first_name` is visible until enrichment.
+ */
+function apolloDisplayName(p: {
+  first_name?: string | null;
+  last_name?: string | null;
+  last_name_obfuscated?: string | null;
+  lastNameObfuscated?: string | null;
+  name?: string | null;
+}): string {
+  const fn = String(p.first_name ?? '').trim();
+  const ln = String(p.last_name ?? '').trim();
+  const lnObf = String(p.last_name_obfuscated ?? p.lastNameObfuscated ?? '').trim();
+  const fromParts = [fn, ln].filter(Boolean).join(' ');
+  const full = String(p.name ?? '').trim();
+  if (fn && ln) return fromParts;
+  if (fn && lnObf) return `${fn} ${lnObf}`.trim();
+  if (full) return full;
+  return fromParts || fn || lnObf;
+}
+
+const APOLLO_BULK_MATCH_URL = 'https://api.apollo.io/api/v1/people/bulk_match';
+
+/** Search preview omits real last names; bulk_match by id returns full name (uses Apollo enrichment credits). */
+async function hydrateApolloFullNamesFromBulkMatch(rows: PersonResult[], apiKey: string): Promise<void> {
+  const raw = (Deno.env.get('APOLLO_PEOPLE_SEARCH_FULL_NAME') || 'true').trim().toLowerCase();
+  if (['0', 'false', 'no', 'off'].includes(raw)) return;
+
+  const need = rows.filter((r) => r.id && !String(r.last_name ?? '').trim());
+  if (!need.length) return;
+
+  const byId = new Map(rows.filter((r) => r.id).map((r) => [String(r.id), r]));
+
+  console.log(
+    `[People Apollo] bulk_match: hydrating ${need.length} full names (credits; set APOLLO_PEOPLE_SEARCH_FULL_NAME=false to skip)`,
+  );
+
+  for (let i = 0; i < need.length; i += 10) {
+    const chunk = need.slice(i, i + 10);
+    const details = chunk.map((r) => ({ id: r.id }));
+    const qs = new URLSearchParams({
+      reveal_personal_emails: 'false',
+      reveal_phone_number: 'false',
+    });
+    try {
+      const response = await fetch(`${APOLLO_BULK_MATCH_URL}?${qs}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Api-Key': apiKey,
+        },
+        body: JSON.stringify({ details }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.warn(
+          '[People Apollo] bulk_match HTTP',
+          response.status,
+          JSON.stringify(data).slice(0, 400),
+        );
+        continue;
+      }
+      const matches = Array.isArray(data.matches) ? data.matches : [];
+      for (const m of matches) {
+        if (!m || typeof m !== 'object' || !m.id) continue;
+        const row = byId.get(String(m.id));
+        if (!row) continue;
+        const fn = String(m.first_name ?? '').trim();
+        const ln = String(m.last_name ?? '').trim();
+        const full = String(m.name ?? '').trim();
+        const name = full || [fn, ln].filter(Boolean).join(' ');
+        if (name) row.name = name;
+        if (fn) row.first_name = fn;
+        if (ln) row.last_name = ln;
+        if (m.linkedin_url && !row.linkedin_url) row.linkedin_url = m.linkedin_url;
+      }
+    } catch (e) {
+      console.warn('[People Apollo] bulk_match failed', e);
+    }
+  }
+}
+
 // ── Provider 1: Apollo ──────────────────────────────────────────────
 async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<PersonResult[] | null> {
   const params: Record<string, unknown> = {
@@ -228,9 +312,9 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
     console.log(`[People Apollo] Found ${people.length} people`);
     if (people.length === 0) return null;
 
-    return people.map((p: any) => ({
+    const rows: PersonResult[] = people.map((p: any) => ({
       id: p.id || '',
-      name: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.name || '',
+      name: apolloDisplayName(p),
       first_name: p.first_name || null,
       last_name: p.last_name || null,
       title: p.title || null,
@@ -251,6 +335,8 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
       phone: p.phone_numbers?.[0]?.sanitized_number || p.phone || null,
       source_provider: 'apollo',
     }));
+    await hydrateApolloFullNamesFromBulkMatch(rows, apiKey);
+    return rows;
   } catch (e) {
     console.error('[People Apollo] Exception:', e);
     return null;

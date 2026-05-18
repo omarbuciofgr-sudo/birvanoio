@@ -44,7 +44,7 @@ async function fetchWithRetry(
  */
 
 interface EnrichmentInput {
-  domain: string;
+  domain?: string;
   name?: string;
   email?: string;
   company_name?: string;
@@ -905,6 +905,90 @@ function shouldRunStrictB2bV1(body: Record<string, unknown>): boolean {
   return ef.length === 0 || ef.includes('email') || ef.includes('phone');
 }
 
+function cleanDomain(domain: string): string {
+  let d = (domain || '').trim().toLowerCase();
+  d = d.replace(/^https?:\/\//, '');
+  d = d.split('/')[0].trim();
+  return d;
+}
+
+function domainFromOrg(org: Record<string, unknown>): string {
+  const primary = org.primary_domain ?? org.domain;
+  if (typeof primary === 'string' && primary.trim()) return cleanDomain(primary);
+  const wu = org.website_url;
+  if (typeof wu === 'string' && wu.trim()) return cleanDomain(wu);
+  return '';
+}
+
+/** Apollo org search — mirrors Flask waterfall_enrich._resolve_domain_from_company_name */
+async function resolveDomainFromCompanyName(name: string, apiKey: string): Promise<string | null> {
+  const trimmed = name.trim();
+  if (!trimmed || !apiKey) return null;
+  const attempts = [
+    { page: 1, per_page: 5, q_organization_name: trimmed },
+    { page: 1, per_page: 5, q_keywords: trimmed },
+  ];
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    'X-Api-Key': apiKey,
+  };
+
+  for (const params of attempts) {
+    try {
+      let response = await fetch('https://api.apollo.io/api/v1/organizations/search', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(params),
+      });
+      let data = await response.json();
+      if (!response.ok) {
+        response = await fetch('https://api.apollo.io/api/v1/mixed_companies/search', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(params),
+        });
+        data = await response.json();
+        if (!response.ok) continue;
+      }
+      const orgs = (data.organizations || data.accounts || []) as Record<string, unknown>[];
+      for (const org of orgs) {
+        const d = domainFromOrg(org);
+        if (d) return d;
+      }
+    } catch (e) {
+      console.warn('[Apollo org resolve]', e);
+    }
+  }
+  return null;
+}
+
+/** Scout bulk resolve response shape (includes domain for table patch). */
+function companyDomainDataShell(domain: string | null, companyName: string | null): Record<string, unknown> {
+  return {
+    full_name: null,
+    email: null,
+    phone: null,
+    mobile_phone: null,
+    direct_phone: null,
+    job_title: null,
+    seniority_level: null,
+    department: null,
+    linkedin_url: null,
+    company_name: companyName,
+    company_linkedin_url: null,
+    employee_count: null,
+    annual_revenue: null,
+    industry: null,
+    founded_year: null,
+    headquarters_city: null,
+    headquarters_state: null,
+    domain,
+    providers_used: domain ? ['apollo_org_resolve'] : [],
+    waterfall_log: [],
+  };
+}
+
 // ========== MAIN HANDLER ==========
 
 Deno.serve(async (req) => {
@@ -938,21 +1022,98 @@ Deno.serve(async (req) => {
       }
     }
 
-    const input: EnrichmentInput = body;
+    const input: EnrichmentInput = {
+      ...body,
+      domain: cleanDomain(String(body.domain || '')),
+    };
+    const efLower = enrichFieldsLowerFromBody(body);
+    const companyName = String(
+      input.company_name || body.organization_name || '',
+    ).trim();
+
+    const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
+
+    // Scout bulk: organization → domain only (no person waterfall)
+    if (efLower.includes('company_domain')) {
+      if (input.domain) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: companyDomainDataShell(input.domain, companyName || null),
+            is_complete: true,
+            providers_used: [],
+            waterfall_log: [],
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (!apolloApiKey) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'APOLLO_API_KEY is required to resolve organization → domain.',
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (!companyName) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Organization name is required to resolve a domain.',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const resolved = await resolveDomainFromCompanyName(companyName, apolloApiKey);
+      const domain = resolved ? cleanDomain(resolved) : null;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: companyDomainDataShell(domain, companyName),
+          is_complete: !!domain,
+          providers_used: domain ? ['apollo_org_resolve'] : [],
+          waterfall_log: [],
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Person/company enrich without domain: try Apollo org resolve from employer name
+    if (!input.domain && companyName && apolloApiKey) {
+      const resolved = await resolveDomainFromCompanyName(companyName, apolloApiKey);
+      if (resolved) input.domain = cleanDomain(resolved);
+    }
 
     if (!input.domain) {
+      if (shouldRunStrictB2bV1(body)) {
+        const msg = companyName
+          ? 'Could not resolve organization to a domain. Add a domain manually or try a different employer name.'
+          : 'Organization name is required to resolve a domain for contact enrichment.';
+        return new Response(
+          JSON.stringify({ success: false, error: msg }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (efLower.includes('industry') || efLower.length > 0) {
+        const msg = companyName
+          ? 'Could not resolve organization to a domain. Use bulk Resolve first or add a domain.'
+          : 'Domain or organization name is required for enrichment.';
+        return new Response(
+          JSON.stringify({ success: false, error: msg }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
       return new Response(
         JSON.stringify({
           success: false,
-          error:
-            'Domain is required for this Edge handler. Run Flask api_server.py locally and leave VITE_SCRAPER_BACKEND_URL unset (uses http://localhost:8080), or set Supabase secret SCRAPER_BACKEND_URL to your Flask base URL so this function can forward requests.',
+          error: 'Domain is required when no organization name is available to resolve one.',
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
     const clayApiKey = Deno.env.get('CLAY_API_KEY');
-    const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
     const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
     const pdlApiKey = Deno.env.get('PDL_API_KEY');
     const clearbitApiKey = Deno.env.get('CLEARBIT_API_KEY') || Deno.env.get('HUBSPOT_API_KEY');
@@ -1099,7 +1260,8 @@ Deno.serve(async (req) => {
       }
 
       result.waterfall_log = waterfallLog;
-      const finalResult = result as EnrichmentResult;
+      const finalResult = result as EnrichmentResult & { domain?: string | null };
+      if (input.domain) finalResult.domain = input.domain;
       const isComplete = hasCoreContactData(result);
       console.log(
         `[strict_b2b_v1] done. providers=${finalResult.providers_used.join(', ')} complete=${isComplete}`,
