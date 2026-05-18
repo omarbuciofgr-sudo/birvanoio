@@ -872,6 +872,19 @@ function normalizeLinkedInUrl(value: unknown): string | null {
   return `https://${cleaned}`;
 }
 
+function matchesRequestedFilters(person: PersonResult, input: PeopleSearchInput): boolean {
+  const title = `${person.title || ""} ${person.headline || ""}`.toLowerCase();
+  const orgIndustry = `${person.organization_industry || ""}`.toLowerCase();
+  const location = `${person.city || ""} ${person.state || ""} ${person.country || ""}`.toLowerCase();
+  const titleOk = !input.person_titles?.length || input.person_titles.some((t) => title.includes(t.toLowerCase().replace(/s$/, "")));
+  const industryOk = !input.organization_industry_tag_ids?.length || input.organization_industry_tag_ids.some((i) => orgIndustry.includes(i.toLowerCase().replace(/&/g, "and").split(/\s+/)[0]));
+  const locationOk = !input.person_locations?.length || input.person_locations.some((l) => {
+    const needle = l.toLowerCase();
+    return location.includes(needle) || (needle === "us" && location.includes("united states")) || (needle === "usa" && location.includes("united states"));
+  });
+  return titleOk && industryOk && locationOk;
+}
+
 function linkedinFromContactOut(key: string, p: Record<string, unknown>): string | null {
   for (const raw of [p.linkedin_url, p.url, key]) {
     const normalized = normalizeLinkedInUrl(raw);
@@ -932,7 +945,7 @@ async function searchContactOut(input: PeopleSearchInput, apiKey: string): Promi
     if (entries.length === 0) return null;
     console.log(`[People ContactOut] Found ${entries.length} people`);
 
-    return entries.map(([key, p]) => {
+    const rows = entries.map(([key, p]) => {
       const company = (p.company && typeof p.company === "object" ? p.company : {}) as Record<string, unknown>;
       const contact = (p.contact_info && typeof p.contact_info === "object" ? p.contact_info : {}) as Record<string, unknown>;
       const exp = Array.isArray(p.experience) ? p.experience.find((e) => e && typeof e === "object" && (e as Record<string, unknown>).is_current) as Record<string, unknown> | undefined : undefined;
@@ -961,7 +974,8 @@ async function searchContactOut(input: PeopleSearchInput, apiKey: string): Promi
         phone: firstString(contact.phones),
         source_provider: "contactout",
       };
-    });
+    }).filter((p) => matchesRequestedFilters(p, input));
+    return rows.length ? rows : null;
   } catch (e) {
     console.error("[People ContactOut] Exception:", e);
     return null;
