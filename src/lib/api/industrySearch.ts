@@ -122,7 +122,7 @@ export interface PeopleSearchResponse {
   providers?: string[];
 }
 
-const PRODUCTION_PEOPLE_SEARCH_PROJECT = 'xgcvdduwrvgquurhngzq';
+const PRODUCTION_PEOPLE_SEARCH_PROJECT = 'eotfijnsfwroukhjwsbe';
 
 function isLocalDevHost(): boolean {
   if (typeof window === 'undefined') return false;
