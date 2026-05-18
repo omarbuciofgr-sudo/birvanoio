@@ -1263,7 +1263,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    const mergedPeople = Array.from(mergedMap.values()).slice(0, limit);
+    const scoreCompleteness = (p: PersonResult) =>
+      (p.email ? 8 : 0) +
+      (p.phone ? 8 : 0) +
+      (p.linkedin_url ? 4 : 0) +
+      (p.organization_name ? 2 : 0) +
+      (p.organization_domain ? 2 : 0) +
+      (p.organization_industry ? 1 : 0);
+    const mergedPeople = Array.from(mergedMap.values())
+      .sort((a, b) => scoreCompleteness(b) - scoreCompleteness(a))
+      .slice(0, limit);
     console.log(`[Merge] Final: ${mergedPeople.length} merged people from [${usedProviders.join(", ")}]`);
 
     return new Response(
