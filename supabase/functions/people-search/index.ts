@@ -1004,7 +1004,7 @@ async function searchContactOut(input: PeopleSearchInput, apiKey: string): Promi
     const before = rows.length;
     const filtered = rows.filter((p) => matchesRequestedFilters(p, input));
     if (filtered.length < before) {
-      console.log(`[People ContactOut] Filter rejected ${before - filtered.length}/${before}. Sample:`, JSON.stringify(rows[0]).slice(0, 400));
+      console.log(`[People ContactOut] Filter rejected ${before - filtered.length}/${before} (likely sandbox/sample data not matching requested filters)`);
     }
     return filtered.length ? filtered : null;
   } catch (e) {
