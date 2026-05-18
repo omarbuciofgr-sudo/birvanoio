@@ -814,7 +814,151 @@ async function searchLusha(input: PeopleSearchInput, apiKey: string): Promise<Pe
   }
 }
 
-// ── Provider 5: Hunter.io ───────────────────────────────────────────
+// ── Provider 5: ContactOut ──────────────────────────────────────────
+const CONTACTOUT_INDUSTRY_MAP: Record<string, string> = {
+  software: "Computer Software",
+  technology: "Information Technology and Services",
+  information_technology_services: "Information Technology and Services",
+  "information technology & services": "Information Technology and Services",
+  financial_services: "Financial Services",
+  healthcare: "Hospital & Health Care",
+  real_estate: "Real Estate",
+  construction: "Construction",
+  manufacturing: "Manufacturing",
+  retail: "Retail",
+  restaurants: "Restaurants",
+  hospitality: "Hospitality",
+  education: "Education Management",
+  legal: "Law Practice",
+  marketing: "Marketing and Advertising",
+  consulting: "Management Consulting",
+  insurance: "Insurance",
+  telecommunications: "Telecommunications",
+  transportation: "Transportation/Trucking/Railroad",
+  energy: "Oil & Energy",
+  agriculture: "Farming",
+  entertainment: "Entertainment",
+  nonprofit: "Nonprofit Organization Management",
+};
+
+function mapContactOutIndustry(value: string): string {
+  const trimmed = value.trim();
+  const key = trimmed.toLowerCase().replace(/[\s-]+/g, "_");
+  return CONTACTOUT_INDUSTRY_MAP[key] || CONTACTOUT_INDUSTRY_MAP[trimmed.toLowerCase()] || trimmed.replace(/&/g, "and");
+}
+
+function firstString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry === "string" && entry.trim()) return entry.trim();
+      if (entry && typeof entry === "object") {
+        const obj = entry as Record<string, unknown>;
+        for (const key of ["email", "value", "number", "internationalNumber", "nationalNumber"]) {
+          if (typeof obj[key] === "string" && String(obj[key]).trim()) return String(obj[key]).trim();
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function linkedinFromContactOut(key: string, p: Record<string, unknown>): string | null {
+  for (const raw of [p.linkedin_url, p.url, key]) {
+    if (typeof raw === "string" && raw.includes("linkedin.com/in/")) return raw.trim();
+  }
+  const vanity = typeof p.li_vanity === "string" ? p.li_vanity.trim().replace(/^\/+|\/+$/g, "") : "";
+  return vanity ? `https://www.linkedin.com/in/${vanity}` : null;
+}
+
+async function searchContactOut(input: PeopleSearchInput, apiKey: string): Promise<PersonResult[] | null> {
+  const body: Record<string, unknown> = {
+    page: input.page || 1,
+    page_size: Math.min(input.limit || 25, 100),
+    current_titles_only: true,
+    include_related_job_titles: true,
+    match_experience: "current",
+    data_types: ["work_email", "personal_email", "phone"],
+    reveal_info: true,
+    detailed_experience: true,
+  };
+
+  if (input.person_titles?.length) body.job_title = input.person_titles;
+  if (input.person_locations?.length) body.location = input.person_locations;
+  if (input.q_organization_name) body.company = [input.q_organization_name];
+  if (input.organization_industry_tag_ids?.length) {
+    body.industry = input.organization_industry_tag_ids.map(mapContactOutIndustry);
+  }
+
+  if (!input.person_titles?.length && !input.person_locations?.length && !input.organization_industry_tag_ids?.length) {
+    console.log("[People ContactOut] No title/location/industry filters");
+    return null;
+  }
+
+  console.log("[People ContactOut] Params:", JSON.stringify(body));
+
+  try {
+    const response = await fetch("https://api.contactout.com/v1/people/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        token: apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || (typeof data.status_code === "number" && data.status_code >= 400)) {
+      console.error(`[People ContactOut] Error ${response.status}:`, JSON.stringify(data).slice(0, 300));
+      return null;
+    }
+
+    const rawProfiles = data.profiles;
+    const entries: [string, Record<string, unknown>][] = Array.isArray(rawProfiles)
+      ? rawProfiles.map((p: Record<string, unknown>, i: number) => [String(p.linkedin_url || p.url || i), p])
+      : rawProfiles && typeof rawProfiles === "object"
+        ? Object.entries(rawProfiles as Record<string, Record<string, unknown>>)
+        : [];
+    if (entries.length === 0) return null;
+    console.log(`[People ContactOut] Found ${entries.length} people`);
+
+    return entries.map(([key, p]) => {
+      const company = (p.company && typeof p.company === "object" ? p.company : {}) as Record<string, unknown>;
+      const contact = (p.contact_info && typeof p.contact_info === "object" ? p.contact_info : {}) as Record<string, unknown>;
+      const exp = Array.isArray(p.experience) ? p.experience.find((e) => e && typeof e === "object" && (e as Record<string, unknown>).is_current) as Record<string, unknown> | undefined : undefined;
+      const linkedin = linkedinFromContactOut(key, p);
+      const orgDomain = firstString(company.domain) || firstString(company.email_domain) || firstString(company.website) || firstString(exp?.domain);
+      return {
+        id: String(p.li_vanity || linkedin || key || ""),
+        name: firstString(p.full_name) || firstString(p.name) || "",
+        first_name: null,
+        last_name: null,
+        title: firstString(p.title) || firstString(exp?.title),
+        headline: firstString(p.headline),
+        seniority: firstString(p.seniority),
+        departments: firstString(p.job_function) ? [firstString(p.job_function)!] : [],
+        organization_name: firstString(company.name) || firstString(exp?.company_name),
+        organization_domain: orgDomain ? orgDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : null,
+        organization_industry: firstString(company.industry) || firstString(p.industry),
+        organization_employee_count: typeof company.size === "number" ? company.size : typeof company.employees === "number" ? company.employees : null,
+        city: firstString(p.location),
+        state: null,
+        country: firstString(p.country) || firstString(company.country),
+        linkedin_url: linkedin,
+        email_status: null,
+        photo_url: firstString(p.profile_picture_url),
+        email: firstString(contact.work_emails) || firstString(contact.emails) || firstString(contact.personal_emails),
+        phone: firstString(contact.phones),
+        source_provider: "contactout",
+      };
+    });
+  } catch (e) {
+    console.error("[People ContactOut] Exception:", e);
+    return null;
+  }
+}
+
+// ── Provider 6: Hunter.io ───────────────────────────────────────────
 async function searchHunter(input: PeopleSearchInput, apiKey: string): Promise<PersonResult[] | null> {
   // Hunter works best with a company domain or name
   const companyName = input.q_organization_name;
