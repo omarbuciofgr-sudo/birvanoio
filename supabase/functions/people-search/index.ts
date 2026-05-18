@@ -451,22 +451,34 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
   console.log("[People Apollo] Params:", JSON.stringify(params));
 
   try {
-    const response = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "X-Api-Key": apiKey,
-      },
-      body: JSON.stringify(params),
-    });
+    const tryEndpoint = async (path: string) => {
+      const r = await fetch(`https://api.apollo.io${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "X-Api-Key": apiKey,
+        },
+        body: JSON.stringify(params),
+      });
+      const text = await r.text();
+      let parsed: any = null;
+      try { parsed = text ? JSON.parse(text) : null; } catch { /* non-JSON body */ }
+      return { ok: r.ok, status: r.status, parsed, text };
+    };
 
-    const data = await response.json();
-    if (!response.ok) {
-      console.error(`[People Apollo] Error ${response.status}:`, data?.error || data);
-      return null;
+    let resp = await tryEndpoint("/api/v1/mixed_people/api_search");
+    // Fallback to the standard endpoint when api_search rejects the key.
+    if (!resp.ok && (resp.status === 401 || resp.status === 403 || resp.status === 404)) {
+      console.warn(`[People Apollo] api_search ${resp.status} (${(resp.text || "").slice(0, 80)}) — retrying /mixed_people/search`);
+      resp = await tryEndpoint("/api/v1/mixed_people/search");
     }
 
+    if (!resp.ok) {
+      console.error(`[People Apollo] Error ${resp.status}:`, (resp.parsed && (resp.parsed.error || resp.parsed)) || (resp.text || "").slice(0, 200));
+      return null;
+    }
+    const data = resp.parsed || {};
     const people = data.people || [];
     console.log(`[People Apollo] Found ${people.length} people`);
     if (people.length === 0) return null;
@@ -505,22 +517,89 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
 }
 
 // ── Provider 2: People Data Labs ────────────────────────────────────
+const PDL_INDUSTRY_MAP: Record<string, string> = {
+  software: "computer software",
+  technology: "information technology and services",
+  financial_services: "financial services",
+  finance: "financial services",
+  healthcare: "hospital & health care",
+  real_estate: "real estate",
+  construction: "construction",
+  manufacturing: "manufacturing",
+  retail: "retail",
+  restaurants: "restaurants",
+  hospitality: "hospitality",
+  education: "education management",
+  legal: "law practice",
+  marketing: "marketing and advertising",
+  marketing_agencies: "marketing and advertising",
+  advertising: "marketing and advertising",
+  consulting: "management consulting",
+  insurance: "insurance",
+  telecommunications: "telecommunications",
+  transportation: "transportation/trucking/railroad",
+  logistics: "logistics and supply chain",
+  energy: "oil & energy",
+  agriculture: "farming",
+  entertainment: "entertainment",
+  media: "media production",
+  nonprofit: "nonprofit organization management",
+};
+
+function mapPdlIndustry(v: string): string {
+  const key = v.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return PDL_INDUSTRY_MAP[key] || v.trim().toLowerCase().replace(/_/g, " ");
+}
+
+const PDL_COUNTRY_MAP: Record<string, string> = {
+  us: "united states",
+  usa: "united states",
+  "u.s.": "united states",
+  "u.s.a.": "united states",
+  uk: "united kingdom",
+  "u.k.": "united kingdom",
+  ca: "canada",
+  au: "australia",
+};
+
+function escPdl(s: string): string {
+  return String(s).replace(/'/g, "''");
+}
+
+function pdlLocationClause(loc: string): string {
+  const trimmed = loc.trim();
+  const lower = trimmed.toLowerCase();
+  const country = PDL_COUNTRY_MAP[lower];
+  if (country) return `location_country='${escPdl(country)}'`;
+  // Two-letter US state code
+  if (/^[A-Z]{2}$/.test(trimmed) && !["US", "UK", "CA", "AU"].includes(trimmed)) {
+    return `location_region='${escPdl(lower)}'`;
+  }
+  // City, ST
+  if (/,\s*[A-Za-z]{2}$/.test(trimmed)) {
+    return `location_name='${escPdl(lower)}'`;
+  }
+  // Try as country first
+  return `(location_country='${escPdl(lower)}' OR location_name='${escPdl(lower)}' OR location_region='${escPdl(lower)}')`;
+}
+
 async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<PersonResult[] | null> {
   const clauses: string[] = [];
 
   if (input.person_titles?.length) {
-    const titleClauses = input.person_titles.map((t) => `job_title='${t}'`).join(" OR ");
+    const titleClauses = input.person_titles.map((t) => `job_title LIKE '%${escPdl(t.toLowerCase())}%'`).join(" OR ");
     clauses.push(`(${titleClauses})`);
   }
   if (input.person_locations?.length) {
-    const locClauses = input.person_locations.map((l) => `location_name='${l}'`).join(" OR ");
+    const locClauses = input.person_locations.map((l) => pdlLocationClause(l)).join(" OR ");
     clauses.push(`(${locClauses})`);
   }
   if (input.organization_industry_tag_ids?.length) {
-    clauses.push(`industry='${input.organization_industry_tag_ids[0]}'`);
+    const ind = mapPdlIndustry(input.organization_industry_tag_ids[0]);
+    clauses.push(`industry='${escPdl(ind)}'`);
   }
   if (input.q_organization_name) {
-    clauses.push(`job_company_name='${input.q_organization_name}'`);
+    clauses.push(`job_company_name='${escPdl(input.q_organization_name.toLowerCase())}'`);
   }
 
   if (clauses.length === 0) {
