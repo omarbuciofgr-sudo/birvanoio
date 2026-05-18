@@ -135,3 +135,7 @@ verify_jwt = false
 # JWT verified inside the function (user access token). Matches other scraper-related invokes.
 [functions.tracerfy-skip-trace]
 verify_jwt = false
+
+# Scout strict_b2b_v1 waterfall (Lusha/RR/PDL). Browser invokeWaterfallEnrich uses fetch without user JWT.
+[functions.data-waterfall-enrich]
+verify_jwt = false

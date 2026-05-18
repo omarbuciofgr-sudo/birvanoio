@@ -51,6 +51,8 @@ export type WaterfallEnrichBody = {
   organization_name?: string;
   /** Scout People Search → "person"; Company/Jobs → "company" */
   enrichment_target?: 'company' | 'person';
+  /** strict_b2b_v1 = Hunter→RR→Snov→ZB + Lusha→RR→PDL only (Flask/Edge). Omit for legacy waterfall on Edge-only deployments. */
+  enrichment_mode?: 'strict_b2b_v1' | string;
   linkedin_url?: string;
   person_display_name?: string;
   target_titles?: string[];
@@ -71,37 +73,76 @@ export type WaterfallEnrichResponse = {
  * Company contact enrichment via Flask `/api/waterfall-enrich` (no Supabase Edge Function).
  * Return shape matches `supabase.functions.invoke`: `{ data, error }`.
  */
+export type InvokeWaterfallOptions = {
+  signal?: AbortSignal;
+  /** Retries on HTTP 429 (rate limit) with exponential backoff. */
+  maxRetriesOn429?: number;
+};
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        reject(new DOMException('Aborted', 'AbortError'));
+      },
+      { once: true },
+    );
+  });
+}
+
 export async function invokeWaterfallEnrich(
-  body: WaterfallEnrichBody
-): Promise<{ data: WaterfallEnrichResponse | null; error: Error | null }> {
+  body: WaterfallEnrichBody,
+  opts?: InvokeWaterfallOptions
+): Promise<{ data: WaterfallEnrichResponse | null; error: Error | null; status?: number }> {
   const url = resolveWaterfallEnrichPostUrl();
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-    });
-    const json = (await res.json().catch(() => null)) as WaterfallEnrichResponse | null;
-    if (!res.ok) {
-      const msg =
-        json && typeof json === 'object' && json.error
-          ? String(json.error)
-          : `Enrichment API HTTP ${res.status} — is api_server.py running and /api/waterfall-enrich deployed?`;
-      return { data: json ?? null, error: new Error(msg) };
+  const max429 = opts?.maxRetriesOn429 ?? 0;
+  let attempt = 0;
+
+  while (true) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+        signal: opts?.signal,
+      });
+      const json = (await res.json().catch(() => null)) as WaterfallEnrichResponse | null;
+
+      if (res.status === 429 && attempt < max429) {
+        const delay = 1000 * Math.pow(2, attempt);
+        attempt += 1;
+        await sleep(delay, opts?.signal);
+        continue;
+      }
+
+      if (!res.ok) {
+        const msg =
+          json && typeof json === 'object' && json.error
+            ? String(json.error)
+            : `Enrichment API HTTP ${res.status} — is api_server.py running and /api/waterfall-enrich deployed?`;
+        return { data: json ?? null, error: new Error(msg), status: res.status };
+      }
+      if (!json || typeof json !== 'object' || json.success !== true) {
+        const msg =
+          json && typeof json === 'object' && json.error
+            ? String(json.error)
+            : 'Unexpected response from enrichment API (missing success: true).';
+        return { data: json, error: new Error(msg), status: res.status };
+      }
+      return { data: json, error: null, status: res.status };
+    } catch (e) {
+      return {
+        data: null,
+        error: e instanceof Error ? e : new Error(String(e)),
+      };
     }
-    if (!json || typeof json !== 'object' || json.success !== true) {
-      const msg =
-        json && typeof json === 'object' && json.error
-          ? String(json.error)
-          : 'Unexpected response from enrichment API (missing success: true).';
-      return { data: json, error: new Error(msg) };
-    }
-    return { data: json, error: null };
-  } catch (e) {
-    return {
-      data: null,
-      error: e instanceof Error ? e : new Error(String(e)),
-    };
   }
 }

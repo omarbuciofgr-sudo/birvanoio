@@ -97,6 +97,7 @@ export function EnrichmentActionsPanel({
 
         const enrichBody: WaterfallEnrichBody = {
           enrichment_target: enrichmentTarget,
+          enrichment_mode: 'strict_b2b_v1',
           ...(domain ? { domain } : {}),
           ...(orgName ? { company_name: orgName } : {}),
           ...(enrichmentTarget === 'person' && company.name?.trim()

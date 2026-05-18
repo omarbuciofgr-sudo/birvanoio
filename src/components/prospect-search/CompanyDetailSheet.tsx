@@ -139,6 +139,40 @@ export function CompanyDetailSheet({
 
           {(enrichment || onEnrich) && <Separator />}
 
+          {/* People preview parity: same employer + profile URL as SearchResults table */}
+          {isPerson && (
+            <section className="space-y-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Employer & profile
+              </h4>
+              <ol className="text-[10px] text-muted-foreground space-y-1 mb-2 list-decimal list-inside leading-relaxed">
+                <li>Check employer and LinkedIn match the row (empty means Apollo did not return them).</li>
+                <li>Use Resolve domains / Industry / Email / Phone in the preview footer to enrich; or run single-row enrichment below.</li>
+              </ol>
+              <DetailRow
+                icon={<Building2 className="h-3.5 w-3.5" />}
+                label="Employer"
+                value={(company.organization_name || '').trim() || '—'}
+              />
+              {company.linkedin_url ? (
+                <DetailRow
+                  icon={<Linkedin className="h-3.5 w-3.5" />}
+                  label="LinkedIn"
+                  value={
+                    company.linkedin_url.length > 48
+                      ? `${company.linkedin_url.slice(0, 45)}…`
+                      : company.linkedin_url
+                  }
+                  href={company.linkedin_url}
+                />
+              ) : (
+                <DetailRow icon={<Linkedin className="h-3.5 w-3.5" />} label="LinkedIn" value="—" />
+              )}
+            </section>
+          )}
+
+          {isPerson && <Separator />}
+
           {/* Company details */}
           <section className="space-y-2">
             <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">Company</h4>
@@ -199,14 +233,16 @@ export function CompanyDetailSheet({
             </>
           )}
 
-          {/* Social links */}
-          {(company.linkedin_url || company.social_profiles) && (
+          {/* Social links (person LinkedIn is under Employer & profile) */}
+          {((!isPerson && company.linkedin_url) || company.social_profiles) && (
             <>
               <Separator />
               <section>
                 <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Links</h4>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {company.linkedin_url && <SocialLink href={company.linkedin_url} icon={<Linkedin className="h-3.5 w-3.5" />} label="LinkedIn" />}
+                  {!isPerson && company.linkedin_url && (
+                    <SocialLink href={company.linkedin_url} icon={<Linkedin className="h-3.5 w-3.5" />} label="LinkedIn" />
+                  )}
                   {company.social_profiles?.twitter && <SocialLink href={company.social_profiles.twitter} icon={<Twitter className="h-3.5 w-3.5" />} label="Twitter" />}
                   {company.social_profiles?.facebook && <SocialLink href={company.social_profiles.facebook} icon={<Facebook className="h-3.5 w-3.5" />} label="Facebook" />}
                   {company.social_profiles?.instagram && <SocialLink href={company.social_profiles.instagram} icon={<Instagram className="h-3.5 w-3.5" />} label="Instagram" />}

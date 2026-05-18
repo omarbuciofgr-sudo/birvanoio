@@ -25,6 +25,7 @@ import { SearchTypeSelector, SearchTypeHeader, SearchType } from '@/components/p
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
+import { resolvePersonOrganizationName } from '@/lib/peopleSearchPersonMap';
 import { prospectSearchApi, type ProspectResult } from '@/lib/api/prospectSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { validateScraper } from '@/config/scraperValidation';
@@ -341,26 +342,30 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
         });
 
         if (response.success && Array.isArray(response.people) && response.people.length > 0) {
-          const mapped: CompanyResult[] = response.people.map((p) => ({
-            name: p.name,
-            domain: p.organization_domain || '',
-            organization_name: p.organization_name ?? null,
-            website: p.organization_domain ? `https://${p.organization_domain}` : null,
-            linkedin_url: p.linkedin_url,
-            industry: p.organization_industry,
-            employee_count: p.organization_employee_count,
-            employee_range: null,
-            annual_revenue: null,
-            founded_year: null,
-            description: [p.title, p.organization_name].filter(Boolean).join(' at '),
-            headquarters_city: p.city,
-            headquarters_state: p.state,
-            headquarters_country: p.country,
-            technologies: [],
-            keywords: p.departments || [],
-            email: p.email ?? null,
-            phone: p.phone ?? null,
-          }));
+          const mapped: CompanyResult[] = response.people.map((p) => {
+            // Employer: prefer Apollo org field; else parse "… at {Employer}" from headline/title (peopleSearchPersonMap).
+            const organization_name = resolvePersonOrganizationName(p);
+            return {
+              name: p.name,
+              domain: p.organization_domain || '',
+              organization_name: organization_name ?? null,
+              website: p.organization_domain ? `https://${p.organization_domain}` : null,
+              linkedin_url: p.linkedin_url,
+              industry: p.organization_industry,
+              employee_count: p.organization_employee_count,
+              employee_range: null,
+              annual_revenue: null,
+              founded_year: null,
+              description: [p.title, organization_name].filter(Boolean).join(' at '),
+              headquarters_city: p.city,
+              headquarters_state: p.state,
+              headquarters_country: p.country,
+              technologies: [],
+              keywords: p.departments || [],
+              email: p.email ?? null,
+              phone: p.phone ?? null,
+            };
+          });
           return { success: true, companies: mapped, prospectResults: null };
         }
         return {
@@ -559,6 +564,50 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
     const selected = selectedRows.size > 0
       ? results.filter((_, i) => selectedRows.has(i))
       : results;
+    if (searchType === 'people') {
+      const headers = [
+        'Name',
+        'Organization',
+        'Domain',
+        'Description',
+        'Industry',
+        'Employees',
+        'Employee Range',
+        'Revenue',
+        'Founded',
+        'City',
+        'State',
+        'Country',
+        'LinkedIn',
+        'Technologies',
+      ];
+      const rows = selected.map((c) => [
+        c.name,
+        (c.organization_name || '').trim(),
+        c.domain,
+        c.description || '',
+        c.industry || '',
+        c.employee_count?.toString() || '',
+        c.employee_range || '',
+        c.annual_revenue?.toString() || '',
+        c.founded_year?.toString() || '',
+        c.headquarters_city || '',
+        c.headquarters_state || '',
+        c.headquarters_country || '',
+        c.linkedin_url || '',
+        (c.technologies || []).join('; '),
+      ]);
+      const csv = [headers, ...rows].map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `people-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${selected.length} people`);
+      return;
+    }
     const headers = ['Name', 'Domain', 'Industry', 'Employees', 'Employee Range', 'Revenue', 'Founded', 'City', 'State', 'Country', 'LinkedIn', 'Technologies'];
     const rows = selected.map((c) => [
       c.name, c.domain, c.industry || '', c.employee_count?.toString() || '', c.employee_range || '',
@@ -566,7 +615,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       c.headquarters_city || '', c.headquarters_state || '', c.headquarters_country || '',
       c.linkedin_url || '', (c.technologies || []).join('; '),
     ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -760,6 +809,19 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             hasMoreResults={currentPage < totalPages}
             totalResults={totalResults}
             enrichmentTarget={searchType === 'people' ? 'person' : 'company'}
+            onPatchResults={
+              searchType === 'people'
+                ? (patches) => {
+                    setResults((prev) => {
+                      const next = [...prev];
+                      for (const { index, patch } of patches) {
+                        if (next[index]) next[index] = { ...next[index], ...patch };
+                      }
+                      return next;
+                    });
+                  }
+                : undefined
+            }
           />
         </div>
       </div>

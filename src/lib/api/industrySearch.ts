@@ -48,6 +48,8 @@ export interface CompanyResult {
   phone?: string | null;
   email?: string | null;
   logo_url?: string | null;
+  /** People enrichment / Apollo mobile line */
+  mobile_phone?: string | null;
 }
 
 export interface PersonResult {

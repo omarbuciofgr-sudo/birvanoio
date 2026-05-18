@@ -378,6 +378,7 @@ export const prospectSearchApi = {
 
     const { data, error } = await invokeWaterfallEnrich({
       domain,
+      enrichment_mode: 'strict_b2b_v1',
       target_titles: targetTitles || ['owner', 'ceo', 'founder', 'president'],
     });
 

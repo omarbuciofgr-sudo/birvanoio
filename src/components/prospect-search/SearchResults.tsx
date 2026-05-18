@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -6,15 +6,14 @@ import {
   Download,
   Save,
   Loader2,
-  AlertTriangle,
   Play,
   CheckCircle2,
   XCircle,
   PanelRightOpen,
   PanelRightClose,
+  FileText,
   Globe,
   Linkedin,
-  ExternalLink,
   Twitter,
   Facebook,
   Instagram,
@@ -24,6 +23,12 @@ import {
 import { CompanyResult } from '@/lib/api/industrySearch';
 import { toast } from 'sonner';
 import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
+import { PeopleBulkEnrichBar, PeopleRowStatusIcon } from '@/components/prospect-search/PeopleBulkEnrichBar';
+import {
+  derivePeopleRowSignals,
+  normalizeDomain,
+  type PeopleSkipReasonCode,
+} from '@/components/prospect-search/peopleRowReadiness';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { EnrichmentActionsPanel } from './EnrichmentActionsPanel';
 import { CompanyDetailSheet } from './CompanyDetailSheet';
@@ -33,6 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 function CompanyLogo({ domain, name }: { domain: string | null | undefined; name: string }) {
   const cleanDomain = (() => {
@@ -73,6 +79,11 @@ interface SearchResultsProps {
   totalResults?: number;
   /** People Search rows need Apollo people/match + person context */
   enrichmentTarget?: 'company' | 'person';
+  /**
+   * People preview: merge enrichment into in-memory rows until Import saves leads.
+   * Matches Flask vs Edge forwarding rules in `waterfallEnrich.ts` (org→domain needs Flask or Edge forward).
+   */
+  onPatchResults?: (patches: Array<{ index: number; patch: Partial<CompanyResult> }>) => void;
 }
 
 function getTypeBadge(types: string[], industry: string | null): string {
@@ -119,10 +130,22 @@ export function SearchResults({
   hasMoreResults,
   totalResults,
   enrichmentTarget = 'company',
+  onPatchResults,
 }: SearchResultsProps) {
+  const isPerson = enrichmentTarget === 'person';
+  /** Person: checkbox + Details + Bulk + Name + Employer + LinkedIn + Domain + … + Enrich; company: checkbox + Details + Name + Domain + … */
+  const tableColSpan = isPerson ? 16 : 11;
   const { canAfford, spendCredits } = useCredits();
   const [enrichmentStatus, setEnrichmentStatus] = useState<Record<number, EnrichmentStatus>>({});
   const [enrichmentData, setEnrichmentData] = useState<Record<number, EnrichmentResult>>({});
+  const [peopleRowMeta, setPeopleRowMeta] = useState<
+    Record<number, { code: PeopleSkipReasonCode; detail?: string }>
+  >({});
+  const [peopleBulkRunning, setPeopleBulkRunning] = useState(false);
+
+  useEffect(() => {
+    setPeopleRowMeta({});
+  }, [enrichmentTarget]);
 
   const toggleRow = (index: number) => {
     const newSelected = new Set(selectedRows);
@@ -147,6 +170,7 @@ export function SearchResults({
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   const handleEnrich = useCallback(async (index: number, company: CompanyResult) => {
+    if (peopleBulkRunning) return;
     if (enrichmentStatus[index] === 'loading' || enrichmentStatus[index] === 'done') return;
 
     if (!canAfford('enrich')) {
@@ -180,16 +204,20 @@ export function SearchResults({
         return;
       }
 
-      const { data, error } = await invokeWaterfallEnrich({
-        enrichment_target: enrichmentTarget,
-        ...(domain ? { domain } : {}),
-        ...(orgName ? { company_name: orgName } : {}),
-        ...(enrichmentTarget === 'person' && company.name?.trim()
-          ? { person_display_name: company.name.trim() }
-          : {}),
-        ...(enrichmentTarget === 'person' && li ? { linkedin_url: li } : {}),
-        target_titles: ['owner', 'ceo', 'founder', 'president'],
-      });
+      const { data, error } = await invokeWaterfallEnrich(
+        {
+          enrichment_target: enrichmentTarget,
+          enrichment_mode: 'strict_b2b_v1',
+          ...(domain ? { domain } : {}),
+          ...(orgName ? { company_name: orgName } : {}),
+          ...(enrichmentTarget === 'person' && company.name?.trim()
+            ? { person_display_name: company.name.trim() }
+            : {}),
+          ...(enrichmentTarget === 'person' && li ? { linkedin_url: li } : {}),
+          target_titles: ['owner', 'ceo', 'founder', 'president'],
+        },
+        { maxRetriesOn429: 3 },
+      );
 
       if (error || !data?.success) {
         setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
@@ -211,13 +239,39 @@ export function SearchResults({
           linkedin_url: String(enriched.linkedin_url || '') || '',
         } as EnrichmentResult,
       }));
+      if (enrichmentTarget === 'person' && onPatchResults) {
+        const patch: Partial<CompanyResult> = {};
+        const dom = normalizeDomain(String(enriched.domain || ''));
+        if (dom) {
+          patch.domain = dom;
+          patch.website = `https://${dom}`;
+        }
+        const ind = String(enriched.industry || '').trim();
+        if (ind) patch.industry = ind;
+        const em = String(enriched.email || '').trim();
+        if (em) patch.email = em;
+        const ph = String(enriched.phone || enriched.mobile_phone || '').trim();
+        if (ph) {
+          patch.phone = ph;
+          const mob = String(enriched.mobile_phone || '').trim();
+          if (mob) patch.mobile_phone = mob;
+        }
+        if (Object.keys(patch).length > 0) onPatchResults([{ index, patch }]);
+      }
       setEnrichmentStatus(prev => ({ ...prev, [index]: 'done' }));
       toast.success(`Enriched ${company.name}`);
     } catch {
       setEnrichmentStatus(prev => ({ ...prev, [index]: 'error' }));
       toast.error(`Enrichment failed for ${company.name}`);
     }
-  }, [enrichmentStatus, canAfford, spendCredits, enrichmentTarget]);
+  }, [
+    enrichmentStatus,
+    canAfford,
+    spendCredits,
+    enrichmentTarget,
+    onPatchResults,
+    peopleBulkRunning,
+  ]);
 
   const handleEnrichSelected = useCallback(async () => {
     if (bulkEnriching) return;
@@ -234,18 +288,25 @@ export function SearchResults({
     }
     setBulkEnriching(true);
     for (const idx of toEnrich) {
+      if (peopleBulkRunning) break;
       await handleEnrich(idx, results[idx]);
     }
     setBulkEnriching(false);
-    toast.success(`Enriched ${toEnrich.length} companies.`);
-  }, [bulkEnriching, selectedRows, enrichmentStatus, canAfford, handleEnrich, results]);
+    toast.success(
+      enrichmentTarget === 'person'
+        ? `Finished quick enrich on ${toEnrich.length} row(s). Check the “Quick enrich” column for status.`
+        : `Enriched ${toEnrich.length} companies.`,
+    );
+  }, [bulkEnriching, selectedRows, enrichmentStatus, canAfford, handleEnrich, results, peopleBulkRunning, enrichmentTarget]);
 
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-background">
         <div className="text-center space-y-3">
           <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
-          <p className="text-xs text-muted-foreground">Searching companies…</p>
+          <p className="text-xs text-muted-foreground">
+            {isPerson ? 'Searching people…' : 'Searching companies…'}
+          </p>
         </div>
       </div>
     );
@@ -294,32 +355,44 @@ export function SearchResults({
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
       {/* Header */}
-      <div className="flex-shrink-0 px-5 py-3 border-b border-border/60 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold">Preview</h3>
+      <div className="flex-shrink-0 px-5 py-3 border-b border-border/60 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Preview</h3>
+            {isPerson && (
+              <Badge variant="secondary" className="text-[10px] font-medium px-2 py-0 h-5">
+                People
+              </Badge>
+            )}
+          </div>
           {selectedRows.size > 0 && (
             <Button
               size="sm"
               variant="outline"
               onClick={handleEnrichSelected}
-              disabled={bulkEnriching}
+              disabled={bulkEnriching || peopleBulkRunning}
               className="text-xs h-7 gap-1.5 border-border/60"
+              title="Runs the single-row “Click to run” enrich on each checked row (credits per row). This is not the same as the footer buttons, which fill domain / industry / email / phone from the provider and update the table in bulk."
             >
               {bulkEnriching ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Play className="h-3 w-3" />
               )}
-              Enrich {selectedRows.size} selected
+              Quick enrich · {selectedRows.size} row{selectedRows.size === 1 ? '' : 's'}
               <Badge variant="outline" className="text-[9px] py-0 px-1 ml-0.5 font-normal border-border/60">
                 {selectedRows.size * CREDIT_COSTS.enrich} cr
               </Badge>
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-primary font-medium">
-            Previewing {results.length} results. {importCount.toLocaleString()} will be imported.
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-muted-foreground">
+            {results.length} in preview ·{' '}
+            <span className="text-foreground font-medium">{importCount.toLocaleString()} will import</span>
+            {selectedRows.size > 0 ? (
+              <span className="text-muted-foreground"> ({selectedRows.size} checked)</span>
+            ) : null}
           </span>
           <button
             onClick={() => setShowActionsPanel(!showActionsPanel)}
@@ -331,11 +404,29 @@ export function SearchResults({
         </div>
       </div>
 
+      {isPerson && (
+        <div className="flex-shrink-0 px-5 py-2.5 border-b border-border/50 bg-muted/25 text-[11px] leading-snug text-muted-foreground">
+          <p className="font-medium text-foreground/90 text-xs mb-1.5">How this screen works</p>
+          <ul className="grid gap-1.5 sm:grid-cols-3 list-none m-0 p-0">
+            <li className="rounded-md border border-border/40 bg-background/60 px-2.5 py-1.5">
+              <span className="text-foreground font-medium">Table</span> — Rows are your search hits. Scroll horizontally to see all columns (none stay pinned). Nothing is saved as a lead until you use{' '}
+              <span className="text-foreground font-medium">Import</span>.
+            </li>
+            <li className="rounded-md border border-border/40 bg-background/60 px-2.5 py-1.5">
+              <span className="text-foreground font-medium">Quick enrich</span> (header) — One paid enrich action per checked row. Different from the footer tools.
+            </li>
+            <li className="rounded-md border border-border/40 bg-background/60 px-2.5 py-1.5">
+              <span className="text-foreground font-medium">Footer tools</span> — Fill domain, industry, email, or phone in the table. The{' '}
+              <span className="text-foreground font-medium">Last run</span> column shows green / amber / gray after each run.
+            </li>
+          </ul>
+        </div>
+      )}
       {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <div className="min-w-[1360px]">
+      <div className="flex-1 min-h-0 overflow-auto overscroll-x-contain">
+        <div className={`shrink-0 ${isPerson ? 'min-w-[2020px]' : 'min-w-[1520px]'}`}>
           <table className="w-full text-[13px]">
-            <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+            <thead className="sticky top-0 z-10 bg-muted border-b border-border/60 shadow-sm">
               <tr className="border-b border-border/60">
                 <th className="w-12 px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                   <input
@@ -345,48 +436,134 @@ export function SearchResults({
                     className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
                   />
                 </th>
+                <th
+                  className="w-11 px-1 py-2.5 text-center text-xs font-medium text-muted-foreground"
+                  title="Open row details (employer, LinkedIn, domain, enrichment). You can also double-click a row."
+                >
+                  <span className="sr-only">Details</span>
+                  <FileText className="h-3.5 w-3.5 opacity-70 mx-auto" aria-hidden />
+                </th>
+                {isPerson && (
+                  <th
+                    className="w-[4.5rem] min-w-[4.5rem] max-w-[4.5rem] px-1 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                    title="Shows the result of the last footer action on this row. Green = OK, amber = skipped or error (hover the icon). Gray = not run yet."
+                  >
+                    <span className="flex flex-col leading-tight gap-0.5">
+                      <span className="text-[10px] font-semibold text-foreground/90">Last run</span>
+                      <span className="text-[9px] font-normal text-muted-foreground">footer</span>
+                    </span>
+                  </th>
+                )}
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">T</span> Name
-                  </span>
+                  {isPerson ? (
+                    'Name'
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">T</span> Name
+                    </span>
+                  )}
+                </th>
+                {/* Person preview: identity fields aligned with peopleRowReadiness (org + person LI) — after Name, before Domain */}
+                {isPerson && (
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground max-w-[140px]">
+                    Employer
+                  </th>
+                )}
+                {isPerson && (
+                  <th
+                    className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground max-w-[160px]"
+                    title="Person LinkedIn profile URL from search. Opens in a new tab when present."
+                  >
+                    LinkedIn
+                  </th>
+                )}
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground max-w-[160px]">
+                  Domain
+                </th>
+                <th
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                  title={isPerson ? 'Usually title and employer from search (helps you recognize the row).' : undefined}
+                >
+                  {isPerson ? (
+                    'Role / headline'
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">T</span> Description
+                    </span>
+                  )}
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">T</span> Description
-                  </span>
+                  {isPerson ? (
+                    'Industry'
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">T</span> Primary Industry
+                    </span>
+                  )}
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">T</span> Primary Industry
-                  </span>
+                  {isPerson ? (
+                    'Employees'
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">#</span> Employees
+                    </span>
+                  )}
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">#</span> Employees
-                  </span>
+                  {isPerson ? 'Location' : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">📍</span> Location
+                    </span>
+                  )}
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">📍</span> Location
-                  </span>
+                  {isPerson ? 'Links' : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">🔗</span> Links
+                    </span>
+                  )}
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">🔗</span> Links
-                  </span>
+                  {isPerson ? 'Company type' : (
+                    <span className="flex items-center gap-1">
+                      <span className="text-primary font-semibold">T</span> Type
+                    </span>
+                  )}
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="text-primary font-semibold">T</span> Type
-                  </span>
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">
-                  <span className="flex items-center gap-1">
-                    Enrich
-                    <Badge variant="outline" className="text-[9px] py-0 px-1 ml-1 font-normal border-border/60">
-                      {CREDIT_COSTS.enrich} cr
-                    </Badge>
-                  </span>
+                {isPerson && (
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground max-w-[140px]">
+                    Work email
+                  </th>
+                )}
+                {isPerson && (
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground max-w-[120px]">
+                    Phone
+                  </th>
+                )}
+                <th
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground whitespace-nowrap"
+                  title={
+                    isPerson
+                      ? 'Same as “Quick enrich” in the header: one paid enrich for this row only (not the footer batch tools).'
+                      : 'Runs a one-row Apollo-style enrich (credits). Separate from the footer bulk buttons, which update many rows.'
+                  }
+                >
+                  {isPerson ? (
+                    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <span>Quick enrich</span>
+                      <Badge variant="outline" className="text-[9px] py-0 px-1 font-normal border-border/60">
+                        {CREDIT_COSTS.enrich} cr
+                      </Badge>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      Enrich
+                      <Badge variant="outline" className="text-[9px] py-0 px-1 ml-1 font-normal border-border/60">
+                        {CREDIT_COSTS.enrich} cr
+                      </Badge>
+                    </span>
+                  )}
                 </th>
               </tr>
             </thead>
@@ -395,6 +572,8 @@ export function SearchResults({
                 const isSelected = selectedRows.has(index);
                 const status = enrichmentStatus[index] || 'idle';
                 const enriched = enrichmentData[index];
+                const sig = derivePeopleRowSignals(company);
+                const rowMeta = peopleRowMeta[index];
                 return (
                   <tr
                     key={index}
@@ -407,7 +586,7 @@ export function SearchResults({
                       window.getSelection()?.removeAllRanges();
                       setDetailIndex(index);
                     }}
-                    title="Double-click to view details"
+                    title="Double-click row or use Details to open the side panel"
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -417,11 +596,134 @@ export function SearchResults({
                         className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
                       />
                     </td>
+                    <td className="px-1 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        title="View details: employer, LinkedIn, domain, description, enrichment"
+                        aria-label={`View details for ${company.name || 'row'}`}
+                        onClick={() => setDetailIndex(index)}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                    {isPerson && (
+                      <td
+                        className="px-2 py-3 align-middle w-[4.5rem] min-w-[4.5rem] max-w-[4.5rem]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <PeopleRowStatusIcon
+                                  code={rowMeta?.code}
+                                  detail={rowMeta?.detail}
+                                  warnMissingLinkedin={
+                                    !sig.hasDomain &&
+                                    !sig.hasPersonLinkedIn &&
+                                    (sig.hasOrgName || sig.hasPersonName)
+                                  }
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-[320px] text-xs whitespace-pre-wrap">
+                              {rowMeta?.code
+                                ? `${rowMeta.code}${rowMeta.detail ? `\n${rowMeta.detail}` : ''}`
+                                : 'Green = last footer step succeeded for this row. Amber = skipped or provider error (hover for code). Gray = footer has not run yet.\nUse Resolve / Industry / Email / Phone or Enrich all (pipeline).'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
+                    )}
                     <td className="px-4 py-3 font-medium max-w-[180px]">
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <CompanyLogo domain={company.domain || company.website} name={company.name} />
                         <span className="truncate">{company.name}</span>
                       </div>
+                    </td>
+                    {isPerson && (
+                      <td className="px-3 py-3 text-xs text-muted-foreground max-w-[140px]">
+                        {(() => {
+                          const org = (company.organization_name || '').trim();
+                          if (org) {
+                            return (
+                              <span className="truncate block" title={org}>
+                                {org}
+                              </span>
+                            );
+                          }
+                          return (
+                            <span
+                              className="text-muted-foreground cursor-help"
+                              title="No employer name from the people search API for this row. If your Description looks like “Role at Company”, try re-running search or use bulk Resolve once you have other signals."
+                            >
+                              —
+                            </span>
+                          );
+                        })()}
+                      </td>
+                    )}
+                    {isPerson && (
+                      <td
+                        className="px-3 py-3 text-xs max-w-[160px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {(() => {
+                          const raw = (company.linkedin_url || '').trim();
+                          if (!raw) {
+                            return (
+                              <span
+                                className="text-muted-foreground cursor-help"
+                                title="People search did not return a LinkedIn URL for this person. Footer bulk steps can still use employer name + person name when the provider supports it."
+                              >
+                                —
+                              </span>
+                            );
+                          }
+                          const label = raw.length > 42 ? `${raw.slice(0, 39)}…` : raw;
+                          return (
+                            <a
+                              href={raw}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="truncate block text-primary hover:underline max-w-full"
+                              title={raw}
+                            >
+                              {label}
+                            </a>
+                          );
+                        })()}
+                      </td>
+                    )}
+                    <td
+                      className="px-3 py-3 text-xs max-w-[160px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {normalizeDomain(company.domain) ? (
+                        <a
+                          href={company.website || `https://${normalizeDomain(company.domain)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="truncate block text-primary hover:underline"
+                          title={normalizeDomain(company.domain)}
+                        >
+                          {normalizeDomain(company.domain)}
+                        </a>
+                      ) : (
+                        <span
+                          className={cn('text-muted-foreground', isPerson && 'cursor-help')}
+                          title={
+                            isPerson
+                              ? 'No company domain on this row. If Employer is filled, try footer → Resolve domains to look up a domain from the org name.'
+                              : undefined
+                          }
+                        >
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground max-w-[260px]">
                       {company.description ? (
@@ -506,14 +808,40 @@ export function SearchResults({
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       {getTypeBadge([], company.industry)}
                     </td>
+                    {isPerson && (
+                      <td className="px-3 py-3 text-xs max-w-[140px]" onClick={(e) => e.stopPropagation()}>
+                        <span className="truncate block" title={company.email || enriched?.email || ''}>
+                          {company.email || enriched?.email || '—'}
+                        </span>
+                      </td>
+                    )}
+                    {isPerson && (
+                      <td className="px-3 py-3 text-xs max-w-[120px]" onClick={(e) => e.stopPropagation()}>
+                        <span
+                          className="truncate block"
+                          title={
+                            [company.phone || enriched?.phone, company.mobile_phone].filter(Boolean).join(' · ') ||
+                            ''
+                          }
+                        >
+                          {company.phone || enriched?.phone || '—'}
+                          {company.mobile_phone ? (
+                            <span className="text-muted-foreground block truncate">mob: {company.mobile_phone}</span>
+                          ) : null}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-xs whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       {status === 'idle' && (
                         <button
                           onClick={() => handleEnrich(index, company)}
-                          className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors group"
+                          disabled={peopleBulkRunning}
+                          className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors group disabled:opacity-40 disabled:pointer-events-none"
                         >
                           <Play className="h-3 w-3 group-hover:text-primary" />
-                          <span className="group-hover:text-primary">Click to run</span>
+                          <span className="group-hover:text-primary">
+                            {isPerson ? 'Run quick enrich' : 'Click to run'}
+                          </span>
                         </button>
                       )}
                       {status === 'loading' && (
@@ -560,7 +888,7 @@ export function SearchResults({
               {/* Load More button */}
               {hasMoreResults && onLoadMore && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-center">
+                  <td colSpan={tableColSpan} className="px-4 py-4 text-center">
                     <Button
                       variant="outline"
                       size="sm"
@@ -582,13 +910,53 @@ export function SearchResults({
       </div>
 
       {/* Bottom bar */}
-      <div className="flex-shrink-0 px-5 py-3 border-t border-border/60 bg-muted/30 flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          {selectedRows.size > 0
-            ? `${selectedRows.size} of ${results.length} selected`
-            : `${results.length} results${totalResults && totalResults > results.length ? ` of ${totalResults.toLocaleString()}` : ''}`}
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="flex-shrink-0 px-5 py-3 border-t border-border/60 bg-muted/30 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground shrink-0">Selection</span>
+            <span>
+              {selectedRows.size > 0
+                ? `${selectedRows.size} of ${results.length} checked`
+                : `${results.length} on this page${totalResults && totalResults > results.length ? ` (${totalResults.toLocaleString()} total)` : ''}`}
+            </span>
+          </div>
+          {isPerson && onPatchResults && (
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Update cells from data providers
+              </span>
+              <PeopleBulkEnrichBar
+              results={results}
+              selectedRows={selectedRows}
+              onPatchRows={onPatchResults}
+              onMergeEnrichment={(patches) => {
+                setEnrichmentData((prev) => {
+                  const next = { ...prev };
+                  for (const { index, patch } of patches) {
+                    next[index] = { ...next[index], ...patch };
+                  }
+                  return next;
+                });
+              }}
+              onRowMetaBatch={(patches) => {
+                setPeopleRowMeta((prev) => {
+                  const next = { ...prev };
+                  for (const p of patches) {
+                    next[p.index] = { code: p.code, detail: p.detail };
+                  }
+                  return next;
+                });
+              }}
+              onRunningChange={setPeopleBulkRunning}
+            />
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-1 items-stretch sm:items-end shrink-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-left sm:text-right">
+            Save leads
+          </span>
+          <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onExport} className="text-xs h-8 gap-1.5 border-border/60">
             <Download className="h-3 w-3" />
             Export CSV
@@ -606,6 +974,7 @@ export function SearchResults({
             )}
             Import {selectedRows.size > 0 ? `${selectedRows.size} leads` : ''}
           </Button>
+          </div>
         </div>
       </div>
       </div>
@@ -620,7 +989,7 @@ export function SearchResults({
         />
       )}
 
-      {/* Detail Sheet (double-click) */}
+      {/* Detail Sheet (Details button or double-click row) */}
       <CompanyDetailSheet
         open={detailIndex !== null}
         onOpenChange={(o) => !o && setDetailIndex(null)}

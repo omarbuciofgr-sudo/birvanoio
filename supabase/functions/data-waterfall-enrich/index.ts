@@ -34,13 +34,13 @@ async function fetchWithRetry(
 
 /**
  * Data Waterfall Enrichment - Chain multiple providers for maximum coverage
- * 
- * Order: Clay → Apollo → Hunter → PDL → Snov.io → RocketReach → Lusha → ContactOut → Clearbit → Google Search
- * 
- * Clay is the first provider in the waterfall since it orchestrates 75+ enrichment
- * providers internally. If Clay returns complete data, subsequent providers are skipped.
- * Each provider fills in missing data from the previous one.
- * Stops when we have complete contact info (name, email, phone).
+ *
+ * Legacy order (enrichment_mode omitted): Clay → Apollo → Hunter → PDL → Snov.io → RocketReach → Lusha → …
+ *
+ * Strict contact-only mode: enrichment_mode === "strict_b2b_v1"
+ *   Email: Hunter → RocketReach → Snov → ZeroBounce (validate once; invalid → clear & stop discovery)
+ *   Phone: Lusha → RocketReach lookupProfile → RocketReach person/search (phones) → PDL. Stops RR/Snov email chain once email exists (cost control).
+ *   Uses vendor + validation credits; see module comment in strict branch.
  */
 
 interface EnrichmentInput {
@@ -49,6 +49,12 @@ interface EnrichmentInput {
   email?: string;
   company_name?: string;
   target_titles?: string[];
+  /** When set to strict_b2b_v1, only Hunter→RR→Snov→ZB (email) and Lusha→RR→PDL (phone) run (plus optional org→domain resolve via Flask). */
+  enrichment_mode?: string;
+  enrich_fields?: string[];
+  person_display_name?: string;
+  organization_name?: string;
+  linkedin_url?: string;
 }
 
 interface EnrichmentResult {
@@ -306,6 +312,8 @@ async function enrichWithPDL(
     if (currentData.email) params.email = currentData.email;
     if (currentData.full_name) params.name = currentData.full_name;
     if (input.domain) params.company = input.domain;
+    const li = (currentData.linkedin_url || '').trim();
+    if (li.includes('linkedin.com')) params.profile = li;
     if (Object.keys(params).length === 0) return { data: null, fields: [] };
     
     const queryString = new URLSearchParams(params).toString();
@@ -313,8 +321,12 @@ async function enrichWithPDL(
       `https://api.peopledatalabs.com/v5/person/enrich?${queryString}`,
       { headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' } }
     );
-    if (!response.ok) return { data: null, fields: [] };
-    const data = await response.json();
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.log(`[strict_phone] pdl http=${response.status} snippet=${JSON.stringify(body).slice(0, 160)}`);
+      return { data: null, fields: [] };
+    }
+    const data = body;
     
     if (data.status === 200 && data.data) {
       const person = data.data;
@@ -323,15 +335,23 @@ async function enrichWithPDL(
       
       if (!currentData.full_name && person.full_name) { result.full_name = person.full_name; fields.push('full_name'); }
       if (!currentData.email && (person.work_email || person.personal_emails?.[0])) { result.email = person.work_email || person.personal_emails[0]; fields.push('email'); }
-      if (!currentData.phone && person.phone_numbers?.[0]) { result.phone = person.phone_numbers[0]; fields.push('phone'); }
-      if (!currentData.mobile_phone && person.mobile_phone) { result.mobile_phone = person.mobile_phone; fields.push('mobile_phone'); }
+      const pns = person.phone_numbers;
+      if (!currentData.phone && Array.isArray(pns) && pns.length > 0) {
+        const first = pns[0];
+        const num = typeof first === 'string' ? first : (first?.number || first?.sanitized_number);
+        if (num) { result.phone = String(num); fields.push('phone'); }
+      }
+      if (!currentData.mobile_phone && person.mobile_phone) { result.mobile_phone = String(person.mobile_phone); fields.push('mobile_phone'); }
       if (!currentData.job_title && person.job_title) { result.job_title = person.job_title; fields.push('job_title'); }
       if (!currentData.linkedin_url && person.linkedin_url) { result.linkedin_url = person.linkedin_url; fields.push('linkedin_url'); }
       if (!currentData.company_name && person.job_company_name) { result.company_name = person.job_company_name; fields.push('company_name'); }
       if (!currentData.industry && person.job_company_industry) { result.industry = person.job_company_industry; fields.push('industry'); }
       
+      const merged = fields.filter((f) => f === 'phone' || f === 'mobile_phone');
+      console.log(`[strict_phone] pdl http=${response.status} merged=${merged.join(',') || '[]'}`);
       return { data: result, fields };
     }
+    console.log(`[strict_phone] pdl http=${response.status} merged=[] snippet=${JSON.stringify(data).slice(0, 120)}`);
   } catch (error) { console.error('PDL waterfall error:', error); }
   return { data: null, fields: [] };
 }
@@ -405,7 +425,8 @@ async function enrichWithSnovio(
 async function enrichWithRocketReach(
   input: EnrichmentInput,
   currentData: Partial<EnrichmentResult>,
-  apiKey: string
+  apiKey: string,
+  opts?: { emailsOnly?: boolean; phonesOnly?: boolean },
 ): Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }> {
   try {
     const searchBody: Record<string, unknown> = {
@@ -414,6 +435,8 @@ async function enrichWithRocketReach(
     };
     if (currentData.full_name) searchBody.name = currentData.full_name;
     if (input.target_titles?.length) searchBody.current_title = input.target_titles;
+    const li = (currentData.linkedin_url || '').trim();
+    if (li.includes('linkedin.com')) searchBody.linkedin_url = li;
     
     const response = await fetchWithRetry(
       'https://api.rocketreach.co/api/v2/person/search',
@@ -427,26 +450,106 @@ async function enrichWithRocketReach(
       }
     );
     const data = await response.json();
+    const phonesOnly = opts?.phonesOnly === true;
     
     if (data.profiles?.length) {
       const profile = data.profiles[0];
       const fields: string[] = [];
       const result: Partial<EnrichmentResult> = {};
-      
-      if (!currentData.full_name && profile.name) { result.full_name = profile.name; fields.push('full_name'); }
-      if (!currentData.email && profile.current_work_email) { result.email = profile.current_work_email; fields.push('email'); }
-      if (!currentData.email && !result.email && profile.emails?.length) { result.email = profile.emails[0]; fields.push('email'); }
-      if (!currentData.phone && profile.phones?.length) {
-        result.phone = typeof profile.phones[0] === 'object' ? profile.phones[0].number : profile.phones[0];
-        fields.push('phone');
+      const emailsOnly = opts?.emailsOnly === true;
+
+      if (!phonesOnly) {
+        if (!currentData.full_name && profile.name) { result.full_name = profile.name; fields.push('full_name'); }
+        if (!currentData.email && profile.current_work_email) { result.email = profile.current_work_email; fields.push('email'); }
+        if (!currentData.email && !result.email && profile.emails?.length) { result.email = profile.emails[0]; fields.push('email'); }
+        if (!currentData.job_title && profile.current_title) { result.job_title = profile.current_title; fields.push('job_title'); }
+        if (!currentData.linkedin_url && profile.linkedin_url) { result.linkedin_url = profile.linkedin_url; fields.push('linkedin_url'); }
+        if (!currentData.company_name && profile.current_employer) { result.company_name = profile.current_employer; fields.push('company_name'); }
       }
-      if (!currentData.job_title && profile.current_title) { result.job_title = profile.current_title; fields.push('job_title'); }
-      if (!currentData.linkedin_url && profile.linkedin_url) { result.linkedin_url = profile.linkedin_url; fields.push('linkedin_url'); }
-      if (!currentData.company_name && profile.current_employer) { result.company_name = profile.current_employer; fields.push('company_name'); }
+      if (!emailsOnly) {
+        if (!currentData.phone && profile.phones?.length) {
+          for (const entry of profile.phones) {
+            const num = typeof entry === 'string' ? entry : (entry?.number || entry?.sanitized_number);
+            if (num) {
+              result.phone = String(num);
+              fields.push('phone');
+              break;
+            }
+          }
+        }
+      }
       
-      if (fields.length > 0) return { data: result, fields };
+      if (fields.length > 0) {
+        if (phonesOnly) {
+          const merged = fields.filter((f) => f === 'phone' || f === 'mobile_phone');
+          console.log(`[strict_phone] rocketreach_search http=${response.status} merged=${merged.join(',') || '[]'}`);
+        }
+        return { data: result, fields };
+      }
+    }
+    if (phonesOnly) {
+      console.log(
+        `[strict_phone] rocketreach_search http=${response.status} merged=[] profiles=${data?.profiles?.length ?? 0}`,
+      );
     }
   } catch (error) { console.error('RocketReach waterfall error:', error); }
+  return { data: null, fields: [] };
+}
+
+/** RocketReach lookupProfile — often returns phones when person/search teaser does not. */
+async function enrichWithRocketReachLookup(
+  input: EnrichmentInput,
+  currentData: Partial<EnrichmentResult>,
+  apiKey: string,
+): Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }> {
+  try {
+    const body: Record<string, string> = {};
+    const li = (currentData.linkedin_url || '').trim();
+    if (li.includes('linkedin.com')) body.linkedin_url = li;
+    const fn = (currentData.full_name || '').trim();
+    const emp = (input.company_name || input.domain || '').trim();
+    if (fn && emp) {
+      body.name = fn;
+      body.current_employer = emp;
+    }
+    if (Object.keys(body).length === 0) return { data: null, fields: [] };
+
+    const response = await fetchWithRetry(
+      'https://api.rocketreach.co/v2/api/lookupProfile',
+      {
+        method: 'POST',
+        headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.log(`[strict_phone] rocketreach_lookup http=${response.status} snippet=${JSON.stringify(data).slice(0, 160)}`);
+      return { data: null, fields: [] };
+    }
+    const teaser = typeof data.teaser === 'object' && data.teaser ? data.teaser : {};
+    const phones = (Array.isArray(data.phones) && data.phones) || (Array.isArray(teaser.phones) && teaser.phones) || [];
+    const fields: string[] = [];
+    const result: Partial<EnrichmentResult> = {};
+    if (!currentData.phone && phones.length > 0) {
+      const e0 = phones[0];
+      const num = typeof e0 === 'string' ? e0 : (e0?.number || e0?.sanitized_number);
+      if (num) {
+        result.phone = String(num);
+        fields.push('phone');
+      }
+    }
+    const mob = data.current_personal_phone || data.current_work_phone;
+    if (!result.phone && !currentData.mobile_phone && typeof mob === 'string' && mob.trim()) {
+      result.mobile_phone = mob.trim();
+      fields.push('mobile_phone');
+    }
+    const merged = fields.filter((f) => f === 'phone' || f === 'mobile_phone');
+    console.log(`[strict_phone] rocketreach_lookup http=${response.status} merged=${merged.join(',') || '[]'}`);
+    if (fields.length > 0) return { data: result, fields };
+  } catch (error) {
+    console.error('RocketReach lookupProfile error:', error);
+  }
   return { data: null, fields: [] };
 }
 
@@ -460,9 +563,9 @@ async function enrichWithLusha(
     const params: Record<string, string> = {};
     if (input.domain) params.company = input.domain;
     if (currentData.full_name) {
-      const nameParts = currentData.full_name.split(' ');
-      params.firstName = nameParts[0];
-      params.lastName = nameParts[nameParts.length - 1];
+      const nameParts = currentData.full_name.trim().split(/\s+/);
+      params.firstName = nameParts[0] || '';
+      if (nameParts.length > 1) params.lastName = nameParts.slice(1).join(' ');
     }
     if (currentData.linkedin_url) params.linkedinUrl = currentData.linkedin_url;
     
@@ -475,35 +578,67 @@ async function enrichWithLusha(
       }
     );
     
-    if (!response.ok) return { data: null, fields: [] };
-    const data = await response.json();
-    
-    if (data) {
-      const fields: string[] = [];
-      const result: Partial<EnrichmentResult> = {};
-      
-      if (!currentData.full_name && data.firstName && data.lastName) {
-        result.full_name = `${data.firstName} ${data.lastName}`;
-        fields.push('full_name');
-      }
-      if (!currentData.email && data.emailAddresses?.length) {
-        result.email = data.emailAddresses[0].email;
-        fields.push('email');
-      }
-      if (!currentData.phone && data.phoneNumbers?.length) {
-        const directDial = data.phoneNumbers.find((p: any) => p.type === 'direct') || data.phoneNumbers[0];
-        result.phone = directDial.internationalNumber || directDial.number;
-        fields.push('phone');
-        if (directDial.type === 'direct') {
-          result.direct_phone = result.phone;
-          fields.push('direct_phone');
+    const raw = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (!response.ok) {
+      console.log(`[strict_phone] lusha http=${response.status} snippet=${JSON.stringify(raw).slice(0, 160)}`);
+      return { data: null, fields: [] };
+    }
+    let contact: Record<string, unknown> = raw;
+    if (typeof raw.contact === 'object' && raw.contact) contact = raw.contact as Record<string, unknown>;
+    const firstName = (contact.firstName ?? raw.firstName) as string | undefined;
+    const lastName = (contact.lastName ?? raw.lastName) as string | undefined;
+    const emailAddresses = (contact.emailAddresses ?? raw.emailAddresses) as { email?: string }[] | undefined;
+    const jobTitle = (contact.jobTitle ?? raw.jobTitle) as string | undefined;
+    const company = (contact.company ?? raw.company) as { name?: string } | undefined;
+
+    const fields: string[] = [];
+    const result: Partial<EnrichmentResult> = {};
+
+    if (!currentData.full_name && firstName && lastName) {
+      result.full_name = `${firstName} ${lastName}`;
+      fields.push('full_name');
+    }
+    if (!currentData.email && emailAddresses?.length) {
+      result.email = emailAddresses[0].email;
+      fields.push('email');
+    }
+    const pns = (contact.phoneNumbers as unknown[]) || (contact.phones as unknown[]) ||
+      (raw.phoneNumbers as unknown[]) || (raw.phones as unknown[]) || [];
+    if (!currentData.phone && Array.isArray(pns) && pns.length > 0) {
+      const mobilePick = pns.find((p: unknown) =>
+        typeof p === 'object' && p && String((p as { type?: string }).type || '').toLowerCase() === 'mobile');
+      const directPick = pns.find((p: unknown) =>
+        typeof p === 'object' && p && String((p as { type?: string }).type || '').toLowerCase() === 'direct');
+      const pick = (mobilePick || directPick || pns[0]) as {
+        internationalNumber?: string;
+        nationalNumber?: string;
+        number?: string;
+        type?: string;
+      };
+      if (pick && typeof pick === 'object') {
+        const num = pick.internationalNumber || pick.nationalNumber || pick.number;
+        if (num) {
+          const t = String(pick.type || '').toLowerCase();
+          if (t === 'mobile' || t === 'cell') {
+            result.mobile_phone = String(num);
+            fields.push('mobile_phone');
+          } else {
+            result.phone = String(num);
+            fields.push('phone');
+            if (t === 'direct') {
+              result.direct_phone = String(num);
+              fields.push('direct_phone');
+            }
+          }
         }
       }
-      if (!currentData.job_title && data.jobTitle) { result.job_title = data.jobTitle; fields.push('job_title'); }
-      if (!currentData.company_name && data.company?.name) { result.company_name = data.company.name; fields.push('company_name'); }
-      
-      if (fields.length > 0) return { data: result, fields };
     }
+    if (!currentData.job_title && jobTitle) { result.job_title = jobTitle; fields.push('job_title'); }
+    if (!currentData.company_name && company?.name) { result.company_name = company.name; fields.push('company_name'); }
+
+    const merged = fields.filter((f) => f === 'phone' || f === 'mobile_phone' || f === 'direct_phone');
+    console.log(`[strict_phone] lusha http=${response.status} merged=${merged.join(',') || '[]'}`);
+    if (fields.length > 0) return { data: result, fields };
   } catch (error) { console.error('Lusha waterfall error:', error); }
   return { data: null, fields: [] };
 }
@@ -751,6 +886,25 @@ async function validatePhoneWithTwilio(
   }
 }
 
+function phoneStillMissingStrict(r: Partial<EnrichmentResult>): boolean {
+  return !String(r.phone ?? '').trim() && !String(r.mobile_phone ?? '').trim() &&
+    !String(r.direct_phone ?? '').trim();
+}
+
+function enrichFieldsLowerFromBody(body: Record<string, unknown>): string[] {
+  const ef = body.enrich_fields;
+  if (!Array.isArray(ef)) return [];
+  return ef.map((x) => String(x).toLowerCase());
+}
+
+/** strict_b2b_v1: contact-only chain; skip for org-domain-only bulk resolve. */
+function shouldRunStrictB2bV1(body: Record<string, unknown>): boolean {
+  if (String(body.enrichment_mode || '').toLowerCase() !== 'strict_b2b_v1') return false;
+  const ef = enrichFieldsLowerFromBody(body);
+  if (ef.includes('company_domain')) return false;
+  return ef.length === 0 || ef.includes('email') || ef.includes('phone');
+}
+
 // ========== MAIN HANDLER ==========
 
 Deno.serve(async (req) => {
@@ -759,40 +913,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get all API keys
-    const clayApiKey = Deno.env.get('CLAY_API_KEY');
-    const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
-    const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
-    const pdlApiKey = Deno.env.get('PDL_API_KEY');
-    const clearbitApiKey = Deno.env.get('CLEARBIT_API_KEY') || Deno.env.get('HUBSPOT_API_KEY');
-    const snovioApiKey = Deno.env.get('SNOVIO_API_KEY');
-    const rocketreachApiKey = Deno.env.get('ROCKETREACH_API_KEY');
-    const lushaApiKey = Deno.env.get('LUSHA_API_KEY');
-    const contactoutApiKey = Deno.env.get('CONTACTOUT_API_KEY');
-    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
-    
-    const availableProviders: string[] = [];
-    if (clayApiKey) availableProviders.push('clay');
-    if (apolloApiKey) availableProviders.push('apollo');
-    if (hunterApiKey) availableProviders.push('hunter');
-    if (pdlApiKey) availableProviders.push('pdl');
-    if (snovioApiKey) availableProviders.push('snovio');
-    if (rocketreachApiKey) availableProviders.push('rocketreach');
-    if (lushaApiKey) availableProviders.push('lusha');
-    if (contactoutApiKey) availableProviders.push('contactout');
-    if (clearbitApiKey) availableProviders.push('clearbit');
-    if (firecrawlApiKey) availableProviders.push('google_search');
-    
-    if (availableProviders.length === 0) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'No enrichment providers configured.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const body = await req.json();
+    const body = (await req.json()) as EnrichmentInput & Record<string, unknown>;
 
-    // Prefer Flask (person match + org→domain). Set secret SCRAPER_BACKEND_URL or BRIVANO_SCRAPER_URL to your api_server base, e.g. https://your-app.up.railway.app
     const scraperBase = (Deno.env.get('SCRAPER_BACKEND_URL') || Deno.env.get('BRIVANO_SCRAPER_URL') || '')
       .trim()
       .replace(/\/$/, '');
@@ -817,7 +939,7 @@ Deno.serve(async (req) => {
     }
 
     const input: EnrichmentInput = body;
-    
+
     if (!input.domain) {
       return new Response(
         JSON.stringify({
@@ -826,6 +948,190 @@ Deno.serve(async (req) => {
             'Domain is required for this Edge handler. Run Flask api_server.py locally and leave VITE_SCRAPER_BACKEND_URL unset (uses http://localhost:8080), or set Supabase secret SCRAPER_BACKEND_URL to your Flask base URL so this function can forward requests.',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const clayApiKey = Deno.env.get('CLAY_API_KEY');
+    const apolloApiKey = Deno.env.get('APOLLO_API_KEY');
+    const hunterApiKey = Deno.env.get('HUNTER_API_KEY');
+    const pdlApiKey = Deno.env.get('PDL_API_KEY');
+    const clearbitApiKey = Deno.env.get('CLEARBIT_API_KEY') || Deno.env.get('HUBSPOT_API_KEY');
+    const snovioApiKey = Deno.env.get('SNOVIO_API_KEY');
+    const rocketreachApiKey = Deno.env.get('ROCKETREACH_API_KEY');
+    const lushaApiKey = Deno.env.get('LUSHA_API_KEY');
+    const contactoutApiKey = Deno.env.get('CONTACTOUT_API_KEY');
+    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    const zerobounceApiKey = Deno.env.get('ZEROBOUNCE_API_KEY');
+
+    // ── strict_b2b_v1: Hunter → RR → Snov → ZB; phone Lusha → RR → PDL (no Clay/Apollo/Clearbit/etc.) ──
+    if (shouldRunStrictB2bV1(body)) {
+      const strictHasAny = !!(hunterApiKey || rocketreachApiKey || snovioApiKey || lushaApiKey || pdlApiKey ||
+        zerobounceApiKey);
+      if (!strictHasAny) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error:
+              'strict_b2b_v1 requires at least one of HUNTER_API_KEY, ROCKETREACH_API_KEY, SNOVIO_API_KEY, LUSHA_API_KEY, PDL_API_KEY, ZEROBOUNCE_API_KEY',
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const ef = enrichFieldsLowerFromBody(body);
+      const wantEmail = ef.length === 0 || ef.includes('email');
+      const wantPhone = ef.length === 0 || ef.includes('phone');
+
+      let result: Partial<EnrichmentResult> = {
+        full_name: (body.person_display_name as string | undefined) || input.name || null,
+        email: null,
+        phone: null,
+        mobile_phone: null,
+        direct_phone: null,
+        job_title: null,
+        seniority_level: null,
+        department: null,
+        linkedin_url: (body.linkedin_url as string | undefined) || null,
+        company_name: input.company_name || (body.organization_name as string | undefined) || null,
+        company_linkedin_url: null,
+        employee_count: null,
+        annual_revenue: null,
+        industry: null,
+        founded_year: null,
+        headquarters_city: null,
+        headquarters_state: null,
+        providers_used: [],
+        waterfall_log: [],
+      };
+
+      const waterfallLog: WaterfallStep[] = [];
+
+      async function runStep(
+        providerName: string,
+        apiKey: string | undefined,
+        condition: boolean,
+        fn: () => Promise<{ data: Partial<EnrichmentResult> | null; fields: string[] }>,
+      ) {
+        if (!apiKey || !condition) return;
+        const startTime = Date.now();
+        const stepResult = await fn();
+        const duration = Date.now() - startTime;
+
+        waterfallLog.push({
+          provider: providerName,
+          success: !!stepResult.data,
+          fields_found: stepResult.fields,
+          fields_missing: getMissingFields({ ...result, ...stepResult.data }),
+          duration_ms: duration,
+        });
+
+        if (stepResult.data) {
+          for (const [key, value] of Object.entries(stepResult.data)) {
+            if (value !== null && value !== undefined && !(result as Record<string, unknown>)[key]) {
+              (result as Record<string, unknown>)[key] = value;
+            }
+          }
+          (result.providers_used as string[]).push(providerName);
+        }
+        console.log(`[strict_b2b_v1] ${providerName}: ${stepResult.fields.length} fields (${condition})`);
+      }
+
+      if (wantEmail) {
+        console.log('[strict_b2b_v1] email chain: Hunter → RocketReach → Snov (stop once email set); then ZeroBounce');
+        await runStep('hunter', hunterApiKey, !result.email, () => enrichWithHunter(input, result, hunterApiKey!));
+        await runStep(
+          'rocketreach_email',
+          rocketreachApiKey,
+          !result.email,
+          () => enrichWithRocketReach(input, result, rocketreachApiKey!, { emailsOnly: true }),
+        );
+        await runStep('snovio', snovioApiKey, !result.email, () => enrichWithSnovio(input, result, snovioApiKey!));
+
+        if (zerobounceApiKey && result.email) {
+          const startTime = Date.now();
+          const zbResult = await validateEmailWithZeroBounce(result.email, zerobounceApiKey);
+          const duration = Date.now() - startTime;
+          waterfallLog.push({
+            provider: 'zerobounce',
+            success: zbResult.valid,
+            fields_found: zbResult.valid ? ['email_validated'] : [],
+            fields_missing: [],
+            duration_ms: duration,
+          });
+          if (zbResult.valid) {
+            (result.providers_used as string[]).push('zerobounce');
+            console.log(`[strict_b2b_v1] ZeroBounce OK — ${zbResult.status}`);
+          } else {
+            console.log(
+              `[strict_b2b_v1] ZeroBounce INVALID — ${zbResult.status}; clearing email (no further discovery)`,
+            );
+            result.email = null;
+          }
+        }
+      }
+
+      if (wantPhone) {
+        console.log('[strict_b2b_v1] phone chain: Lusha → RocketReach lookup → RocketReach search → PDL');
+        await runStep(
+          'lusha',
+          lushaApiKey,
+          phoneStillMissingStrict(result),
+          () => enrichWithLusha(input, result, lushaApiKey!),
+        );
+        await runStep(
+          'rocketreach_lookup_phone',
+          rocketreachApiKey,
+          phoneStillMissingStrict(result),
+          () => enrichWithRocketReachLookup(input, result, rocketreachApiKey!),
+        );
+        await runStep(
+          'rocketreach_phone',
+          rocketreachApiKey,
+          phoneStillMissingStrict(result),
+          () => enrichWithRocketReach(input, result, rocketreachApiKey!, { phonesOnly: true }),
+        );
+        await runStep(
+          'pdl',
+          pdlApiKey,
+          phoneStillMissingStrict(result),
+          () => enrichWithPDL(input, result, pdlApiKey!),
+        );
+      }
+
+      result.waterfall_log = waterfallLog;
+      const finalResult = result as EnrichmentResult;
+      const isComplete = hasCoreContactData(result);
+      console.log(
+        `[strict_b2b_v1] done. providers=${finalResult.providers_used.join(', ')} complete=${isComplete}`,
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: finalResult,
+          is_complete: isComplete,
+          providers_used: finalResult.providers_used,
+          waterfall_log: waterfallLog,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const availableProviders: string[] = [];
+    if (clayApiKey) availableProviders.push('clay');
+    if (apolloApiKey) availableProviders.push('apollo');
+    if (hunterApiKey) availableProviders.push('hunter');
+    if (pdlApiKey) availableProviders.push('pdl');
+    if (snovioApiKey) availableProviders.push('snovio');
+    if (rocketreachApiKey) availableProviders.push('rocketreach');
+    if (lushaApiKey) availableProviders.push('lusha');
+    if (contactoutApiKey) availableProviders.push('contactout');
+    if (clearbitApiKey) availableProviders.push('clearbit');
+    if (firecrawlApiKey) availableProviders.push('google_search');
+    
+    if (availableProviders.length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'No enrichment providers configured.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
@@ -920,7 +1226,6 @@ Deno.serve(async (req) => {
       () => enrichWithGoogleSearch(input, result, firecrawlApiKey!));
     
     // Step 10: ZeroBounce email validation
-    const zerobounceApiKey = Deno.env.get('ZEROBOUNCE_API_KEY');
     if (zerobounceApiKey && result.email) {
       const startTime = Date.now();
       const zbResult = await validateEmailWithZeroBounce(result.email, zerobounceApiKey);
