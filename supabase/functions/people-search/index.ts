@@ -848,6 +848,7 @@ function mapContactOutIndustry(value: string): string {
 }
 
 function firstString(value: unknown): string | null {
+  if (typeof value === "boolean") return null;
   if (typeof value === "string" && value.trim()) return value.trim();
   if (Array.isArray(value)) {
     for (const entry of value) {
@@ -863,9 +864,18 @@ function firstString(value: unknown): string | null {
   return null;
 }
 
+function normalizeLinkedInUrl(value: unknown): string | null {
+  const raw = firstString(value);
+  if (!raw) return null;
+  const cleaned = raw.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "");
+  if (!cleaned.includes("linkedin.com/in/")) return null;
+  return `https://${cleaned}`;
+}
+
 function linkedinFromContactOut(key: string, p: Record<string, unknown>): string | null {
   for (const raw of [p.linkedin_url, p.url, key]) {
-    if (typeof raw === "string" && raw.includes("linkedin.com/in/")) return raw.trim();
+    const normalized = normalizeLinkedInUrl(raw);
+    if (normalized) return normalized;
   }
   const vanity = typeof p.li_vanity === "string" ? p.li_vanity.trim().replace(/^\/+|\/+$/g, "") : "";
   return vanity ? `https://www.linkedin.com/in/${vanity}` : null;
