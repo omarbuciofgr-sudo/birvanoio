@@ -1,10 +1,11 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { validatePeopleSearchRequest } from '../_shared/scraperValidation.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { validatePeopleSearchRequest } from "../_shared/scraperValidation.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
 interface PeopleSearchInput {
@@ -69,50 +70,50 @@ interface PersonResult {
 
 // Map seniority labels to Apollo codes
 const SENIORITY_MAP: Record<string, string> = {
-  'owner': 'owner',
-  'founder': 'founder',
-  'c_suite': 'c_suite',
-  'c_level': 'c_suite',
-  'partner': 'partner',
-  'vp': 'vp',
-  'head': 'head',
-  'director': 'director',
-  'lead': 'senior',
-  'manager': 'manager',
-  'senior': 'senior',
-  'mid': 'senior',
-  'associate': 'entry',
-  'entry': 'entry',
-  'intern': 'intern',
+  owner: "owner",
+  founder: "founder",
+  c_suite: "c_suite",
+  c_level: "c_suite",
+  partner: "partner",
+  vp: "vp",
+  head: "head",
+  director: "director",
+  lead: "senior",
+  manager: "manager",
+  senior: "senior",
+  mid: "senior",
+  associate: "entry",
+  entry: "entry",
+  intern: "intern",
 };
 
 /** Apollo expects org size like "1,10" not "1-10" (same as industry-search). */
 function mapApolloEmployeeRanges(ranges: string[]): string[] {
   return ranges.map((r) => {
-    if (r === '5001+' || r === '10001+') return '10001,';
-    return r.replace('-', ',');
+    if (r === "5001+" || r === "10001+") return "10001,";
+    return r.replace("-", ",");
   });
 }
 
 // Map department labels to Apollo codes
 const DEPARTMENT_MAP: Record<string, string> = {
-  'engineering': 'engineering',
-  'sales': 'sales',
-  'marketing': 'marketing',
-  'finance': 'finance',
-  'hr': 'human_resources',
-  'operations': 'operations',
-  'product': 'product_management',
-  'design': 'design',
-  'support': 'support',
-  'legal': 'legal',
-  'customer_success': 'support',
-  'it': 'information_technology',
-  'executive': 'master_executive',
-  'data': 'data_science',
-  'education': 'education',
-  'consulting': 'consulting',
-  'media': 'media_and_communication',
+  engineering: "engineering",
+  sales: "sales",
+  marketing: "marketing",
+  finance: "finance",
+  hr: "human_resources",
+  operations: "operations",
+  product: "product_management",
+  design: "design",
+  support: "support",
+  legal: "legal",
+  customer_success: "support",
+  it: "information_technology",
+  executive: "master_executive",
+  data: "data_science",
+  education: "education",
+  consulting: "consulting",
+  media: "media_and_communication",
 };
 
 /**
@@ -126,25 +127,25 @@ function apolloDisplayName(p: {
   lastNameObfuscated?: string | null;
   name?: string | null;
 }): string {
-  const fn = String(p.first_name ?? '').trim();
-  const ln = String(p.last_name ?? '').trim();
-  const lnObf = String(p.last_name_obfuscated ?? p.lastNameObfuscated ?? '').trim();
-  const fromParts = [fn, ln].filter(Boolean).join(' ');
-  const full = String(p.name ?? '').trim();
+  const fn = String(p.first_name ?? "").trim();
+  const ln = String(p.last_name ?? "").trim();
+  const lnObf = String(p.last_name_obfuscated ?? p.lastNameObfuscated ?? "").trim();
+  const fromParts = [fn, ln].filter(Boolean).join(" ");
+  const full = String(p.name ?? "").trim();
   if (fn && ln) return fromParts;
   if (fn && lnObf) return `${fn} ${lnObf}`.trim();
   if (full) return full;
   return fromParts || fn || lnObf;
 }
 
-const APOLLO_BULK_MATCH_URL = 'https://api.apollo.io/api/v1/people/bulk_match';
+const APOLLO_BULK_MATCH_URL = "https://api.apollo.io/api/v1/people/bulk_match";
 
 /** Search preview omits real last names; bulk_match by id returns full name (uses Apollo enrichment credits). */
 async function hydrateApolloFullNamesFromBulkMatch(rows: PersonResult[], apiKey: string): Promise<void> {
-  const raw = (Deno.env.get('APOLLO_PEOPLE_SEARCH_FULL_NAME') || 'true').trim().toLowerCase();
-  if (['0', 'false', 'no', 'off'].includes(raw)) return;
+  const raw = (Deno.env.get("APOLLO_PEOPLE_SEARCH_FULL_NAME") || "true").trim().toLowerCase();
+  if (["0", "false", "no", "off"].includes(raw)) return;
 
-  const need = rows.filter((r) => r.id && !String(r.last_name ?? '').trim());
+  const need = rows.filter((r) => r.id && !String(r.last_name ?? "").trim());
   if (!need.length) return;
 
   const byId = new Map(rows.filter((r) => r.id).map((r) => [String(r.id), r]));
@@ -157,44 +158,40 @@ async function hydrateApolloFullNamesFromBulkMatch(rows: PersonResult[], apiKey:
     const chunk = need.slice(i, i + 10);
     const details = chunk.map((r) => ({ id: r.id }));
     const qs = new URLSearchParams({
-      reveal_personal_emails: 'false',
-      reveal_phone_number: 'false',
+      reveal_personal_emails: "false",
+      reveal_phone_number: "false",
     });
     try {
       const response = await fetch(`${APOLLO_BULK_MATCH_URL}?${qs}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Api-Key': apiKey,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "X-Api-Key": apiKey,
         },
         body: JSON.stringify({ details }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        console.warn(
-          '[People Apollo] bulk_match HTTP',
-          response.status,
-          JSON.stringify(data).slice(0, 400),
-        );
+        console.warn("[People Apollo] bulk_match HTTP", response.status, JSON.stringify(data).slice(0, 400));
         continue;
       }
       const matches = Array.isArray(data.matches) ? data.matches : [];
       for (const m of matches) {
-        if (!m || typeof m !== 'object' || !m.id) continue;
+        if (!m || typeof m !== "object" || !m.id) continue;
         const row = byId.get(String(m.id));
         if (!row) continue;
-        const fn = String(m.first_name ?? '').trim();
-        const ln = String(m.last_name ?? '').trim();
-        const full = String(m.name ?? '').trim();
-        const name = full || [fn, ln].filter(Boolean).join(' ');
+        const fn = String(m.first_name ?? "").trim();
+        const ln = String(m.last_name ?? "").trim();
+        const full = String(m.name ?? "").trim();
+        const name = full || [fn, ln].filter(Boolean).join(" ");
         if (name) row.name = name;
         if (fn) row.first_name = fn;
         if (ln) row.last_name = ln;
         if (m.linkedin_url && !row.linkedin_url) row.linkedin_url = m.linkedin_url;
       }
     } catch (e) {
-      console.warn('[People Apollo] bulk_match failed', e);
+      console.warn("[People Apollo] bulk_match failed", e);
     }
   }
 }
@@ -208,10 +205,10 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
 
   if (input.person_titles?.length) params.person_titles = input.person_titles;
   if (input.person_seniorities?.length) {
-    params.person_seniorities = input.person_seniorities.map(s => SENIORITY_MAP[s] || s);
+    params.person_seniorities = input.person_seniorities.map((s) => SENIORITY_MAP[s] || s);
   }
   if (input.person_departments?.length) {
-    params.person_departments = input.person_departments.map(d => DEPARTMENT_MAP[d] || d);
+    params.person_departments = input.person_departments.map((d) => DEPARTMENT_MAP[d] || d);
   }
   if (input.person_locations?.length) params.person_locations = input.person_locations;
 
@@ -225,27 +222,32 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
 
   const keywordParts: string[] = [];
   if (input.profile_keywords?.length) keywordParts.push(...input.profile_keywords);
-  if (keywordParts.length > 0) params.q_keywords = keywordParts.join(' ');
+  if (keywordParts.length > 0) params.q_keywords = keywordParts.join(" ");
 
   if (input.exclude_person_names?.length) params.person_not_names = input.exclude_person_names;
   if (input.person_past_titles?.length) params.person_past_titles = input.person_past_titles;
   if (input.past_companies?.length) {
-    params.q_person_past_organization_name = input.past_companies.join(' ');
+    params.q_person_past_organization_name = input.past_companies.join(" ");
   }
 
   if (input.email_status) {
-    if (input.email_status === 'verified') params.contact_email_status = ['verified'];
-    else if (input.email_status === 'likely_valid') params.contact_email_status = ['verified', 'guessed'];
-    else if (input.email_status === 'has_email') params.contact_email_status = ['verified', 'guessed', 'unavailable'];
+    if (input.email_status === "verified") params.contact_email_status = ["verified"];
+    else if (input.email_status === "likely_valid") params.contact_email_status = ["verified", "guessed"];
+    else if (input.email_status === "has_email") params.contact_email_status = ["verified", "guessed", "unavailable"];
   }
 
   if (input.technologies?.length) params.currently_using_any_of_technology_uids = input.technologies;
 
   if (input.revenue_range) {
     const revenueMap: Record<string, string[]> = {
-      '0-1M': ['0-1M'], '1M-5M': ['1M-10M'], '5M-10M': ['1M-10M'],
-      '10M-50M': ['10M-50M'], '50M-100M': ['50M-100M'], '100M-500M': ['100M-500M'],
-      '500M-1B': ['500M-1B'], '1B+': ['1B+'],
+      "0-1M": ["0-1M"],
+      "1M-5M": ["1M-10M"],
+      "5M-10M": ["1M-10M"],
+      "10M-50M": ["10M-50M"],
+      "50M-100M": ["50M-100M"],
+      "100M-500M": ["100M-500M"],
+      "500M-1B": ["500M-1B"],
+      "1B+": ["1B+"],
     };
     const mapped = revenueMap[input.revenue_range];
     if (mapped) params.organization_revenue_ranges = mapped;
@@ -253,51 +255,60 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
 
   if (input.funding_stage) {
     const stageMap: Record<string, string> = {
-      'seed': 'seed', 'series_a': 'series_a', 'series_b': 'series_b',
-      'series_c': 'series_c', 'series_d': 'series_d', 'ipo': 'ipo',
-      'private_equity': 'private_equity', 'debt_financing': 'debt_financing', 'grant': 'grant',
+      seed: "seed",
+      series_a: "series_a",
+      series_b: "series_b",
+      series_c: "series_c",
+      series_d: "series_d",
+      ipo: "ipo",
+      private_equity: "private_equity",
+      debt_financing: "debt_financing",
+      grant: "grant",
     };
     const mapped = stageMap[input.funding_stage];
     if (mapped) params.organization_latest_funding_stage_cd = [mapped];
   }
 
   if (input.market_segments?.length) {
-    const segmentKeywords = input.market_segments.map(s => {
+    const segmentKeywords = input.market_segments.map((s) => {
       const map: Record<string, string> = {
-        'enterprise': 'enterprise', 'mid_market': 'mid-market',
-        'smb': 'small business', 'startup': 'startup',
+        enterprise: "enterprise",
+        mid_market: "mid-market",
+        smb: "small business",
+        startup: "startup",
       };
       return map[s] || s;
     });
     params.q_organization_keyword_tags = [
-      ...(params.q_organization_keyword_tags as string[] || []),
+      ...((params.q_organization_keyword_tags as string[]) || []),
       ...segmentKeywords,
     ];
   }
 
-  if (input.buying_intent === 'high') {
-    params.organization_job_locations = params.organization_job_locations || ['United States'];
+  if (input.buying_intent === "high") {
+    params.organization_job_locations = params.organization_job_locations || ["United States"];
   }
   if (input.sic_codes?.length) params.organization_sic_codes = input.sic_codes;
   if (input.naics_codes?.length) params.organization_naics_codes = input.naics_codes;
-  if (input.job_posting_filter === 'has_job_postings') {
-    params.organization_job_locations = params.organization_job_locations || ['United States'];
+  if (input.job_posting_filter === "has_job_postings") {
+    params.organization_job_locations = params.organization_job_locations || ["United States"];
   }
   if (input.job_categories?.length) {
-    params.organization_department_or_subdepartment_counts = input.job_categories.map(cat => ({
-      department_or_subdepartment: cat, min: 1,
+    params.organization_department_or_subdepartment_counts = input.job_categories.map((cat) => ({
+      department_or_subdepartment: cat,
+      min: 1,
     }));
   }
 
-  console.log('[People Apollo] Params:', JSON.stringify(params));
+  console.log("[People Apollo] Params:", JSON.stringify(params));
 
   try {
-    const response = await fetch('https://api.apollo.io/api/v1/mixed_people/api_search', {
-      method: 'POST',
+    const response = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-Api-Key': apiKey,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": apiKey,
       },
       body: JSON.stringify(params),
     });
@@ -313,7 +324,7 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
     if (people.length === 0) return null;
 
     const rows: PersonResult[] = people.map((p: any) => ({
-      id: p.id || '',
+      id: p.id || "",
       name: apolloDisplayName(p),
       first_name: p.first_name || null,
       last_name: p.last_name || null,
@@ -333,12 +344,12 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
       photo_url: p.photo_url || null,
       email: p.email || null,
       phone: p.phone_numbers?.[0]?.sanitized_number || p.phone || null,
-      source_provider: 'apollo',
+      source_provider: "apollo",
     }));
     await hydrateApolloFullNamesFromBulkMatch(rows, apiKey);
     return rows;
   } catch (e) {
-    console.error('[People Apollo] Exception:', e);
+    console.error("[People Apollo] Exception:", e);
     return null;
   }
 }
@@ -348,11 +359,11 @@ async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<Pers
   const clauses: string[] = [];
 
   if (input.person_titles?.length) {
-    const titleClauses = input.person_titles.map(t => `job_title='${t}'`).join(' OR ');
+    const titleClauses = input.person_titles.map((t) => `job_title='${t}'`).join(" OR ");
     clauses.push(`(${titleClauses})`);
   }
   if (input.person_locations?.length) {
-    const locClauses = input.person_locations.map(l => `location_name='${l}'`).join(' OR ');
+    const locClauses = input.person_locations.map((l) => `location_name='${l}'`).join(" OR ");
     clauses.push(`(${locClauses})`);
   }
   if (input.organization_industry_tag_ids?.length) {
@@ -363,22 +374,22 @@ async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<Pers
   }
 
   if (clauses.length === 0) {
-    console.log('[People PDL] No filters');
+    console.log("[People PDL] No filters");
     return null;
   }
 
-  const sqlQuery = clauses.join(' AND ');
+  const sqlQuery = clauses.join(" AND ");
   console.log(`[People PDL] Query: ${sqlQuery}`);
 
   try {
     const params = new URLSearchParams({
       sql: `SELECT * FROM person WHERE ${sqlQuery}`,
       size: String(Math.min(input.limit || 25, 100)),
-      dataset: 'all',
+      dataset: "all",
     });
 
     const response = await fetch(`https://api.peopledatalabs.com/v5/person/search?${params}`, {
-      headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+      headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
     });
 
     const data = await response.json();
@@ -392,8 +403,8 @@ async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<Pers
     console.log(`[People PDL] Found ${people.length} people`);
 
     return people.map((p: any) => ({
-      id: p.id || '',
-      name: p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || '',
+      id: p.id || "",
+      name: p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "",
       first_name: p.first_name || null,
       last_name: p.last_name || null,
       title: p.job_title || null,
@@ -401,7 +412,7 @@ async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<Pers
       seniority: p.job_title_levels?.[0] || null,
       departments: p.job_title_sub_role ? [p.job_title_sub_role] : [],
       organization_name: p.job_company_name || null,
-      organization_domain: p.job_company_website?.replace(/^https?:\/\//, '').replace(/\/$/, '') || null,
+      organization_domain: p.job_company_website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || null,
       organization_industry: p.industry || null,
       organization_employee_count: p.job_company_size || null,
       city: p.location_locality || null,
@@ -412,10 +423,10 @@ async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<Pers
       photo_url: null,
       email: p.work_email || p.personal_emails?.[0] || null,
       phone: p.mobile_phone || p.phone_numbers?.[0] || null,
-      source_provider: 'pdl',
+      source_provider: "pdl",
     }));
   } catch (e) {
-    console.error('[People PDL] Exception:', e);
+    console.error("[People PDL] Exception:", e);
     return null;
   }
 }
@@ -434,24 +445,30 @@ async function searchRocketReach(input: PeopleSearchInput, apiKey: string): Prom
 
   if (input.person_seniorities?.length) {
     const seniorityMap: Record<string, string> = {
-      'c_suite': 'c_level', 'c_level': 'c_level', 'vp': 'vp',
-      'director': 'director', 'manager': 'manager', 'senior': 'senior',
-      'owner': 'owner', 'founder': 'founder', 'partner': 'partner',
+      c_suite: "c_level",
+      c_level: "c_level",
+      vp: "vp",
+      director: "director",
+      manager: "manager",
+      senior: "senior",
+      owner: "owner",
+      founder: "founder",
+      partner: "partner",
     };
-    query.management_levels = input.person_seniorities.map(s => seniorityMap[s] || s);
+    query.management_levels = input.person_seniorities.map((s) => seniorityMap[s] || s);
   }
 
   if (!input.person_titles?.length && !input.q_organization_name && !input.organization_industry_tag_ids?.length) {
-    console.log('[People RocketReach] No search criteria');
+    console.log("[People RocketReach] No search criteria");
     return null;
   }
 
-  console.log('[People RocketReach] Params:', JSON.stringify(query));
+  console.log("[People RocketReach] Params:", JSON.stringify(query));
 
   try {
-    const response = await fetch('https://api.rocketreach.co/api/v2/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Api-Key': apiKey },
+    const response = await fetch("https://api.rocketreach.co/api/v2/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Api-Key": apiKey },
       body: JSON.stringify(query),
     });
 
@@ -466,8 +483,8 @@ async function searchRocketReach(input: PeopleSearchInput, apiKey: string): Prom
     if (profiles.length === 0) return null;
 
     return profiles.map((p: any) => ({
-      id: String(p.id || ''),
-      name: p.name || [p.first_name, p.last_name].filter(Boolean).join(' ') || '',
+      id: String(p.id || ""),
+      name: p.name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "",
       first_name: p.first_name || null,
       last_name: p.last_name || null,
       title: p.current_title || p.title || null,
@@ -475,7 +492,7 @@ async function searchRocketReach(input: PeopleSearchInput, apiKey: string): Prom
       seniority: p.management_level || null,
       departments: p.department ? [p.department] : [],
       organization_name: p.current_employer || p.company_name || null,
-      organization_domain: p.employer_website?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null,
+      organization_domain: p.employer_website?.replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null,
       organization_industry: p.industry || null,
       organization_employee_count: null,
       city: p.city || p.location?.city || null,
@@ -486,10 +503,10 @@ async function searchRocketReach(input: PeopleSearchInput, apiKey: string): Prom
       photo_url: p.profile_pic || null,
       email: p.current_work_email || p.emails?.[0] || null,
       phone: p.phones?.[0]?.number || p.phone || null,
-      source_provider: 'rocketreach',
+      source_provider: "rocketreach",
     }));
   } catch (e) {
-    console.error('[People RocketReach] Exception:', e);
+    console.error("[People RocketReach] Exception:", e);
     return null;
   }
 }
@@ -499,33 +516,33 @@ async function searchLusha(input: PeopleSearchInput, apiKey: string): Promise<Pe
   const filters: Record<string, unknown>[] = [];
 
   if (input.person_titles?.length) {
-    filters.push({ type: 'job_title', values: input.person_titles });
+    filters.push({ type: "job_title", values: input.person_titles });
   }
   if (input.person_locations?.length) {
-    filters.push({ type: 'location', values: input.person_locations });
+    filters.push({ type: "location", values: input.person_locations });
   }
   if (input.person_seniorities?.length) {
-    filters.push({ type: 'seniority', values: input.person_seniorities });
+    filters.push({ type: "seniority", values: input.person_seniorities });
   }
   if (input.organization_industry_tag_ids?.length) {
-    filters.push({ type: 'industry', values: input.organization_industry_tag_ids });
+    filters.push({ type: "industry", values: input.organization_industry_tag_ids });
   }
   if (input.q_organization_name) {
-    filters.push({ type: 'company_name', values: [input.q_organization_name] });
+    filters.push({ type: "company_name", values: [input.q_organization_name] });
   }
 
   if (filters.length === 0) {
-    console.log('[People Lusha] No filters');
+    console.log("[People Lusha] No filters");
     return null;
   }
 
   const requestBody = { contacts: filters, limit: Math.min(input.limit || 25, 100) };
-  console.log('[People Lusha] Params:', JSON.stringify(requestBody));
+  console.log("[People Lusha] Params:", JSON.stringify(requestBody));
 
   try {
-    const response = await fetch('https://api.lusha.com/prospecting/api/v2/person/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api_key': apiKey },
+    const response = await fetch("https://api.lusha.com/prospecting/api/v2/person/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", api_key: apiKey },
       body: JSON.stringify(requestBody),
     });
 
@@ -540,8 +557,8 @@ async function searchLusha(input: PeopleSearchInput, apiKey: string): Promise<Pe
     if (people.length === 0) return null;
 
     return people.map((p: any) => ({
-      id: String(p.id || ''),
-      name: [p.first_name || p.firstName, p.last_name || p.lastName].filter(Boolean).join(' ') || p.full_name || '',
+      id: String(p.id || ""),
+      name: [p.first_name || p.firstName, p.last_name || p.lastName].filter(Boolean).join(" ") || p.full_name || "",
       first_name: p.first_name || p.firstName || null,
       last_name: p.last_name || p.lastName || null,
       title: p.job_title || p.title || null,
@@ -560,10 +577,10 @@ async function searchLusha(input: PeopleSearchInput, apiKey: string): Promise<Pe
       photo_url: p.photo_url || null,
       email: p.email || p.work_email || p.emails?.[0]?.email || null,
       phone: p.phone || p.direct_phone || p.phones?.[0]?.number || null,
-      source_provider: 'lusha',
+      source_provider: "lusha",
     }));
   } catch (e) {
-    console.error('[People Lusha] Exception:', e);
+    console.error("[People Lusha] Exception:", e);
     return null;
   }
 }
@@ -573,7 +590,7 @@ async function searchHunter(input: PeopleSearchInput, apiKey: string): Promise<P
   // Hunter works best with a company domain or name
   const companyName = input.q_organization_name;
   if (!companyName) {
-    console.log('[People Hunter] No company name to search');
+    console.log("[People Hunter] No company name to search");
     return null;
   }
 
@@ -588,11 +605,11 @@ async function searchHunter(input: PeopleSearchInput, apiKey: string): Promise<P
 
     // Filter by seniority if provided
     if (input.person_seniorities?.length) {
-      params.set('seniority', input.person_seniorities[0]);
+      params.set("seniority", input.person_seniorities[0]);
     }
     // Filter by department
     if (input.person_departments?.length) {
-      params.set('department', input.person_departments[0]);
+      params.set("department", input.person_departments[0]);
     }
 
     const response = await fetch(`https://api.hunter.io/v2/domain-search?${params}`);
@@ -605,7 +622,7 @@ async function searchHunter(input: PeopleSearchInput, apiKey: string): Promise<P
 
     const result = data.data;
     if (!result?.emails?.length) {
-      console.log('[People Hunter] No results');
+      console.log("[People Hunter] No results");
       return null;
     }
 
@@ -614,8 +631,8 @@ async function searchHunter(input: PeopleSearchInput, apiKey: string): Promise<P
     console.log(`[People Hunter] Found ${result.emails.length} people`);
 
     return result.emails.map((e: any) => ({
-      id: '',
-      name: [e.first_name, e.last_name].filter(Boolean).join(' ') || '',
+      id: "",
+      name: [e.first_name, e.last_name].filter(Boolean).join(" ") || "",
       first_name: e.first_name || null,
       last_name: e.last_name || null,
       title: e.position || null,
@@ -634,10 +651,10 @@ async function searchHunter(input: PeopleSearchInput, apiKey: string): Promise<P
       photo_url: null,
       email: e.value || null,
       phone: e.phone_number || null,
-      source_provider: 'hunter',
+      source_provider: "hunter",
     }));
   } catch (e) {
-    console.error('[People Hunter] Exception:', e);
+    console.error("[People Hunter] Exception:", e);
     return null;
   }
 }
@@ -651,21 +668,21 @@ async function searchClay(input: PeopleSearchInput, apiKey: string): Promise<Per
   if (input.person_locations?.length) queryParts.push(...input.person_locations);
 
   if (queryParts.length === 0) {
-    console.log('[People Clay] No search criteria');
+    console.log("[People Clay] No search criteria");
     return null;
   }
 
-  console.log(`[People Clay] Searching: ${queryParts.join(', ')}`);
+  console.log(`[People Clay] Searching: ${queryParts.join(", ")}`);
 
   try {
-    const response = await fetch('https://api.clay.com/v3/people/search', {
-      method: 'POST',
+    const response = await fetch("https://api.clay.com/v3/people/search", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        query: queryParts.join(' '),
+        query: queryParts.join(" "),
         limit: Math.min(input.limit || 25, 50),
         filters: {
           ...(input.person_titles?.length ? { titles: input.person_titles } : {}),
@@ -687,8 +704,8 @@ async function searchClay(input: PeopleSearchInput, apiKey: string): Promise<Per
     if (people.length === 0) return null;
 
     return people.map((p: any) => ({
-      id: String(p.id || ''),
-      name: p.name || p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || '',
+      id: String(p.id || ""),
+      name: p.name || p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "",
       first_name: p.first_name || null,
       last_name: p.last_name || null,
       title: p.title || p.job_title || null,
@@ -707,10 +724,10 @@ async function searchClay(input: PeopleSearchInput, apiKey: string): Promise<Per
       photo_url: p.photo_url || null,
       email: p.email || p.work_email || null,
       phone: p.phone || p.direct_phone || null,
-      source_provider: 'clay',
+      source_provider: "clay",
     }));
   } catch (e) {
-    console.error('[People Clay] Exception:', e);
+    console.error("[People Clay] Exception:", e);
     return null;
   }
 }
@@ -719,10 +736,13 @@ async function searchClay(input: PeopleSearchInput, apiKey: string): Promise<Per
 function normalizeKey(person: PersonResult): string {
   // Key by linkedin URL first (most unique), then by name+company
   if (person.linkedin_url) {
-    return person.linkedin_url.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+    return person.linkedin_url
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, "")
+      .toLowerCase();
   }
-  const name = (person.name || '').toLowerCase().trim();
-  const org = (person.organization_name || person.organization_domain || '').toLowerCase().trim();
+  const name = (person.name || "").toLowerCase().trim();
+  const org = (person.organization_name || person.organization_domain || "").toLowerCase().trim();
   return `${name}@${org}`;
 }
 
@@ -754,37 +774,40 @@ function mergePerson(primary: PersonResult, secondary: PersonResult): PersonResu
 
 // ── Main Handler ────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    const requestedHeaders = req.headers.get('access-control-request-headers');
+  if (req.method === "OPTIONS") {
+    const requestedHeaders = req.headers.get("access-control-request-headers");
     return new Response(null, {
       headers: {
         ...corsHeaders,
-        ...(requestedHeaders ? { 'Access-Control-Allow-Headers': requestedHeaders } : {}),
+        ...(requestedHeaders ? { "Access-Control-Allow-Headers": requestedHeaders } : {}),
       },
     });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Authentication required' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ success: false, error: "Authentication required" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
   if (userError || !user) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Invalid authentication' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ success: false, error: "Invalid authentication" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -794,74 +817,76 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Missing required fields',
+          error: "Missing required fields",
           missing: v.missingFields,
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     const limit = body.limit || 25;
-    console.log('People search request:', JSON.stringify(body));
+    console.log("People search request:", JSON.stringify(body));
 
     // Build provider list
     const providers: { name: string; fn: () => Promise<PersonResult[] | null> }[] = [];
 
-    const apolloKey = Deno.env.get('APOLLO_API_KEY');
-    if (apolloKey) providers.push({ name: 'Apollo', fn: () => searchApollo(body, apolloKey) });
+    const apolloKey = Deno.env.get("APOLLO_API_KEY");
+    if (apolloKey) providers.push({ name: "Apollo", fn: () => searchApollo(body, apolloKey) });
 
-    const pdlKey = Deno.env.get('PDL_API_KEY');
-    if (pdlKey) providers.push({ name: 'PDL', fn: () => searchPDL(body, pdlKey) });
+    const pdlKey = Deno.env.get("PDL_API_KEY");
+    if (pdlKey) providers.push({ name: "PDL", fn: () => searchPDL(body, pdlKey) });
 
-    const rocketReachKey = Deno.env.get('ROCKETREACH_API_KEY');
-    if (rocketReachKey) providers.push({ name: 'RocketReach', fn: () => searchRocketReach(body, rocketReachKey) });
+    const rocketReachKey = Deno.env.get("ROCKETREACH_API_KEY");
+    if (rocketReachKey) providers.push({ name: "RocketReach", fn: () => searchRocketReach(body, rocketReachKey) });
 
-    const lushaKey = Deno.env.get('LUSHA_API_KEY');
-    if (lushaKey) providers.push({ name: 'Lusha', fn: () => searchLusha(body, lushaKey) });
+    const lushaKey = Deno.env.get("LUSHA_API_KEY");
+    if (lushaKey) providers.push({ name: "Lusha", fn: () => searchLusha(body, lushaKey) });
 
-    const hunterKey = Deno.env.get('HUNTER_API_KEY');
-    if (hunterKey) providers.push({ name: 'Hunter', fn: () => searchHunter(body, hunterKey) });
+    const hunterKey = Deno.env.get("HUNTER_API_KEY");
+    if (hunterKey) providers.push({ name: "Hunter", fn: () => searchHunter(body, hunterKey) });
 
-    const clayKey = Deno.env.get('CLAY_API_KEY');
-    if (clayKey) providers.push({ name: 'Clay', fn: () => searchClay(body, clayKey) });
+    const clayKey = Deno.env.get("CLAY_API_KEY");
+    if (clayKey) providers.push({ name: "Clay", fn: () => searchClay(body, clayKey) });
 
     if (providers.length === 0) {
       return new Response(
         JSON.stringify({
           success: false,
           error:
-            'No B2B search API keys configured. Add APOLLO_API_KEY (and optionally PDL, RocketReach, etc.) in Supabase → Edge Functions → Secrets.',
+            "No B2B search API keys configured. Add APOLLO_API_KEY (and optionally PDL, RocketReach, etc.) in Supabase → Edge Functions → Secrets.",
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Run ALL providers in parallel
     console.log(`[Merge] Running ${providers.length} providers in parallel...`);
-    const allResults = await Promise.allSettled(providers.map(async (p) => {
-      console.log(`[Merge] Starting ${p.name}...`);
-      const result = await p.fn();
-      if (result && result.length > 0) {
-        console.log(`[Merge] ✓ ${p.name} returned ${result.length} people`);
-        return { name: p.name, people: result };
-      }
-      console.log(`[Merge] ✗ ${p.name} returned no results`);
-      return { name: p.name, people: [] as PersonResult[] };
-    }));
+    const allResults = await Promise.allSettled(
+      providers.map(async (p) => {
+        console.log(`[Merge] Starting ${p.name}...`);
+        const result = await p.fn();
+        if (result && result.length > 0) {
+          console.log(`[Merge] ✓ ${p.name} returned ${result.length} people`);
+          return { name: p.name, people: result };
+        }
+        console.log(`[Merge] ✗ ${p.name} returned no results`);
+        return { name: p.name, people: [] as PersonResult[] };
+      }),
+    );
 
     // Build merged map keyed by normalized identity
     const mergedMap = new Map<string, PersonResult>();
     const usedProviders: string[] = [];
 
     for (const settled of allResults) {
-      if (settled.status !== 'fulfilled') continue;
+      if (settled.status !== "fulfilled") continue;
       const { name, people } = settled.value;
       if (people.length === 0) continue;
       usedProviders.push(name);
 
       for (const person of people) {
         const key = normalizeKey(person);
-        if (!key || key === '@') continue;
+        if (!key || key === "@") continue;
         const existing = mergedMap.get(key);
         if (existing) {
           mergedMap.set(key, mergePerson(existing, person));
@@ -872,22 +897,22 @@ Deno.serve(async (req) => {
     }
 
     const mergedPeople = Array.from(mergedMap.values()).slice(0, limit);
-    console.log(`[Merge] Final: ${mergedPeople.length} merged people from [${usedProviders.join(', ')}]`);
+    console.log(`[Merge] Final: ${mergedPeople.length} merged people from [${usedProviders.join(", ")}]`);
 
     return new Response(
       JSON.stringify({
         success: true,
         people: mergedPeople,
         total: mergedPeople.length,
-        providers: usedProviders.map(p => p.toLowerCase()),
+        providers: usedProviders.map((p) => p.toLowerCase()),
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error('People search error:', error);
+    console.error("People search error:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Search failed' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Search failed" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
