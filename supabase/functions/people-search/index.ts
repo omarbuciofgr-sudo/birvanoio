@@ -505,22 +505,89 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
 }
 
 // ── Provider 2: People Data Labs ────────────────────────────────────
+const PDL_INDUSTRY_MAP: Record<string, string> = {
+  software: "computer software",
+  technology: "information technology and services",
+  financial_services: "financial services",
+  finance: "financial services",
+  healthcare: "hospital & health care",
+  real_estate: "real estate",
+  construction: "construction",
+  manufacturing: "manufacturing",
+  retail: "retail",
+  restaurants: "restaurants",
+  hospitality: "hospitality",
+  education: "education management",
+  legal: "law practice",
+  marketing: "marketing and advertising",
+  marketing_agencies: "marketing and advertising",
+  advertising: "marketing and advertising",
+  consulting: "management consulting",
+  insurance: "insurance",
+  telecommunications: "telecommunications",
+  transportation: "transportation/trucking/railroad",
+  logistics: "logistics and supply chain",
+  energy: "oil & energy",
+  agriculture: "farming",
+  entertainment: "entertainment",
+  media: "media production",
+  nonprofit: "nonprofit organization management",
+};
+
+function mapPdlIndustry(v: string): string {
+  const key = v.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return PDL_INDUSTRY_MAP[key] || v.trim().toLowerCase().replace(/_/g, " ");
+}
+
+const PDL_COUNTRY_MAP: Record<string, string> = {
+  us: "united states",
+  usa: "united states",
+  "u.s.": "united states",
+  "u.s.a.": "united states",
+  uk: "united kingdom",
+  "u.k.": "united kingdom",
+  ca: "canada",
+  au: "australia",
+};
+
+function escPdl(s: string): string {
+  return String(s).replace(/'/g, "''");
+}
+
+function pdlLocationClause(loc: string): string {
+  const trimmed = loc.trim();
+  const lower = trimmed.toLowerCase();
+  const country = PDL_COUNTRY_MAP[lower];
+  if (country) return `location_country='${escPdl(country)}'`;
+  // Two-letter US state code
+  if (/^[A-Z]{2}$/.test(trimmed) && !["US", "UK", "CA", "AU"].includes(trimmed)) {
+    return `location_region='${escPdl(lower)}'`;
+  }
+  // City, ST
+  if (/,\s*[A-Za-z]{2}$/.test(trimmed)) {
+    return `location_name='${escPdl(lower)}'`;
+  }
+  // Try as country first
+  return `(location_country='${escPdl(lower)}' OR location_name='${escPdl(lower)}' OR location_region='${escPdl(lower)}')`;
+}
+
 async function searchPDL(input: PeopleSearchInput, apiKey: string): Promise<PersonResult[] | null> {
   const clauses: string[] = [];
 
   if (input.person_titles?.length) {
-    const titleClauses = input.person_titles.map((t) => `job_title='${t}'`).join(" OR ");
+    const titleClauses = input.person_titles.map((t) => `job_title LIKE '%${escPdl(t.toLowerCase())}%'`).join(" OR ");
     clauses.push(`(${titleClauses})`);
   }
   if (input.person_locations?.length) {
-    const locClauses = input.person_locations.map((l) => `location_name='${l}'`).join(" OR ");
+    const locClauses = input.person_locations.map((l) => pdlLocationClause(l)).join(" OR ");
     clauses.push(`(${locClauses})`);
   }
   if (input.organization_industry_tag_ids?.length) {
-    clauses.push(`industry='${input.organization_industry_tag_ids[0]}'`);
+    const ind = mapPdlIndustry(input.organization_industry_tag_ids[0]);
+    clauses.push(`industry='${escPdl(ind)}'`);
   }
   if (input.q_organization_name) {
-    clauses.push(`job_company_name='${input.q_organization_name}'`);
+    clauses.push(`job_company_name='${escPdl(input.q_organization_name.toLowerCase())}'`);
   }
 
   if (clauses.length === 0) {
