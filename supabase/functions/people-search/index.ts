@@ -201,9 +201,9 @@ async function hydrateApolloPeopleFromBulkMatch(rows: PersonResult[], apiKey: st
     if (!r.id) return false;
     return (
       !String(r.last_name ?? "").trim() ||
-      !row.organization_domain ||
-      !row.organization_industry ||
-      !row.email
+      !r.organization_domain ||
+      !r.organization_industry ||
+      !r.email
     );
   });
   if (!need.length) return;
