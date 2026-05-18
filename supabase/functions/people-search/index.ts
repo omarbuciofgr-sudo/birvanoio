@@ -1190,6 +1190,9 @@ Deno.serve(async (req) => {
     const pdlKey = Deno.env.get("PDL_API_KEY");
     if (pdlKey) providers.push({ name: "PDL", fn: () => searchPDL(body, pdlKey) });
 
+    const contactOutKey = Deno.env.get("CONTACTOUT_API_KEY");
+    if (contactOutKey) providers.push({ name: "ContactOut", fn: () => searchContactOut(body, contactOutKey) });
+
     const rocketReachKey = Deno.env.get("ROCKETREACH_API_KEY");
     if (rocketReachKey) providers.push({ name: "RocketReach", fn: () => searchRocketReach(body, rocketReachKey) });
 
