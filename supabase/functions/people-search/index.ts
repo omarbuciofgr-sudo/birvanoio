@@ -451,22 +451,34 @@ async function searchApollo(input: PeopleSearchInput, apiKey: string): Promise<P
   console.log("[People Apollo] Params:", JSON.stringify(params));
 
   try {
-    const response = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "X-Api-Key": apiKey,
-      },
-      body: JSON.stringify(params),
-    });
+    const tryEndpoint = async (path: string) => {
+      const r = await fetch(`https://api.apollo.io${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "X-Api-Key": apiKey,
+        },
+        body: JSON.stringify(params),
+      });
+      const text = await r.text();
+      let parsed: any = null;
+      try { parsed = text ? JSON.parse(text) : null; } catch { /* non-JSON body */ }
+      return { ok: r.ok, status: r.status, parsed, text };
+    };
 
-    const data = await response.json();
-    if (!response.ok) {
-      console.error(`[People Apollo] Error ${response.status}:`, data?.error || data);
-      return null;
+    let resp = await tryEndpoint("/api/v1/mixed_people/api_search");
+    // Fallback to the standard endpoint when api_search rejects the key.
+    if (!resp.ok && (resp.status === 401 || resp.status === 403 || resp.status === 404)) {
+      console.warn(`[People Apollo] api_search ${resp.status} (${(resp.text || "").slice(0, 80)}) — retrying /mixed_people/search`);
+      resp = await tryEndpoint("/api/v1/mixed_people/search");
     }
 
+    if (!resp.ok) {
+      console.error(`[People Apollo] Error ${resp.status}:`, (resp.parsed && (resp.parsed.error || resp.parsed)) || (resp.text || "").slice(0, 200));
+      return null;
+    }
+    const data = resp.parsed || {};
     const people = data.people || [];
     console.log(`[People Apollo] Found ${people.length} people`);
     if (people.length === 0) return null;
