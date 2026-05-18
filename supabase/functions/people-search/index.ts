@@ -873,15 +873,41 @@ function normalizeLinkedInUrl(value: unknown): string | null {
 }
 
 function matchesRequestedFilters(person: PersonResult, input: PeopleSearchInput): boolean {
-  const title = `${person.title || ""} ${person.headline || ""}`.toLowerCase();
-  const orgIndustry = `${person.organization_industry || ""}`.toLowerCase();
-  const location = `${person.city || ""} ${person.state || ""} ${person.country || ""}`.toLowerCase();
-  const titleOk = !input.person_titles?.length || input.person_titles.some((t) => title.includes(t.toLowerCase().replace(/s$/, "")));
-  const industryOk = !input.organization_industry_tag_ids?.length || input.organization_industry_tag_ids.some((i) => orgIndustry.includes(i.toLowerCase().replace(/&/g, "and").split(/\s+/)[0]));
-  const locationOk = !input.person_locations?.length || input.person_locations.some((l) => {
-    const needle = l.toLowerCase();
-    return location.includes(needle) || (needle === "us" && location.includes("united states")) || (needle === "usa" && location.includes("united states"));
-  });
+  // Lenient: if the provider didn't return a field, don't reject the row for that field.
+  // We only reject when the provider returned a value that clearly contradicts the request.
+  const title = `${person.title || ""} ${person.headline || ""}`.toLowerCase().trim();
+  const orgIndustry = `${person.organization_industry || ""}`.toLowerCase().trim();
+  const location = `${person.city || ""} ${person.state || ""} ${person.country || ""}`.toLowerCase().trim();
+
+  const titleOk =
+    !input.person_titles?.length ||
+    !title ||
+    input.person_titles.some((t) => {
+      const needle = t.toLowerCase().replace(/s$/, "");
+      // match on any word of the requested title (e.g. "Marketing Manager" -> "marketing" or "manager")
+      return needle.split(/\s+/).some((w) => w.length > 2 && title.includes(w));
+    });
+
+  const industryOk =
+    !input.organization_industry_tag_ids?.length ||
+    !orgIndustry ||
+    input.organization_industry_tag_ids.some((i) => {
+      const needle = i.toLowerCase().replace(/&/g, "and").replace(/_/g, " ");
+      return needle.split(/\s+/).some((w) => w.length > 2 && orgIndustry.includes(w));
+    });
+
+  const locationOk =
+    !input.person_locations?.length ||
+    !location ||
+    input.person_locations.some((l) => {
+      const needle = l.toLowerCase().trim();
+      if (location.includes(needle)) return true;
+      if ((needle === "us" || needle === "usa" || needle === "united states") &&
+          (location.includes("united states") || /\bus\b/.test(location) || location.includes("america"))) return true;
+      // city/state token match
+      return needle.split(/[, ]+/).some((w) => w.length > 2 && location.includes(w));
+    });
+
   return titleOk && industryOk && locationOk;
 }
 
