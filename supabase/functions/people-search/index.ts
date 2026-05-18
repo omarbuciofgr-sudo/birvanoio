@@ -1000,8 +1000,13 @@ async function searchContactOut(input: PeopleSearchInput, apiKey: string): Promi
         phone: firstString(contact.phones),
         source_provider: "contactout",
       };
-    }).filter((p) => matchesRequestedFilters(p, input));
-    return rows.length ? rows : null;
+    });
+    const before = rows.length;
+    const filtered = rows.filter((p) => matchesRequestedFilters(p, input));
+    if (filtered.length < before) {
+      console.log(`[People ContactOut] Filter rejected ${before - filtered.length}/${before}. Sample:`, JSON.stringify(rows[0]).slice(0, 400));
+    }
+    return filtered.length ? filtered : null;
   } catch (e) {
     console.error("[People ContactOut] Exception:", e);
     return null;
