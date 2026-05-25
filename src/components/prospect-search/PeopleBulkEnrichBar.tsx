@@ -14,6 +14,7 @@ import {
 import { Loader2, Globe, Factory, Mail, Phone, Layers, CheckCircle2, AlertCircle, Circle } from 'lucide-react';
 import type { CompanyResult } from '@/lib/api/industrySearch';
 import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
+import { normalizePhoneField } from '@/lib/phoneNormalize';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
 import { toast } from 'sonner';
 import {
@@ -45,40 +46,22 @@ type EnrichmentRowPatch = {
 const CONCURRENCY = 4;
 const RETRY_429 = 3;
 
-/** Merge person-level fields from enrichment into table row patches. */
-function personPatchFromEnriched(enriched: Record<string, unknown>): Partial<CompanyResult> {
-  const patch: Partial<CompanyResult> = {};
-  const fn = String(enriched.full_name || '').trim();
-  if (fn) patch.name = fn;
-  const li = String(enriched.linkedin_url || '').trim();
-  if (li) patch.linkedin_url = li;
-  const dom = normalizeDomain(String(enriched.domain || ''));
-  if (dom) {
-    patch.domain = dom;
-    patch.website = `https://${dom}`;
-  }
-  return patch;
-}
-
 function buildWaterfallBody(row: CompanyResult, enrichFields?: string[]) {
   const domain = normalizeDomain(row.domain);
   const orgName = (row.organization_name || '').trim();
   const li = (row.linkedin_url || '').trim();
-  const apolloId = (row.apollo_person_id || '').trim();
   const body: Parameters<typeof invokeWaterfallEnrich>[0] = {
     enrichment_target: 'person',
     ...(domain ? { domain } : {}),
     ...(orgName ? { company_name: orgName } : {}),
     ...(row.name?.trim() ? { person_display_name: row.name.trim() } : {}),
     ...(li ? { linkedin_url: li } : {}),
-    ...(apolloId ? { apollo_person_id: apolloId } : {}),
     target_titles: ['owner', 'ceo', 'founder', 'president'],
   };
   if (enrichFields?.length) body.enrich_fields = enrichFields;
-  const ef = enrichFields?.map((f) => f.toLowerCase()) ?? [];
-  const onlyCompanyDomain = ef.length === 1 && ef[0] === 'company_domain';
-  const industryOnly = ef.length === 1 && ef[0] === 'industry';
-  if (!onlyCompanyDomain && !industryOnly) {
+  const onlyCompanyDomain =
+    enrichFields?.length === 1 && enrichFields[0].toLowerCase() === 'company_domain';
+  if (!onlyCompanyDomain) {
     body.enrichment_mode = 'strict_b2b_v1';
   }
   return body;
@@ -390,7 +373,7 @@ export function PeopleBulkEnrichBar({
                 bump();
                 return;
               }
-              onPatchRows([{ index, patch: { email, ...personPatchFromEnriched(enriched) } }]);
+              onPatchRows([{ index, patch: { email } }]);
               enrichPatches.push({ index, patch: { email } });
               metaBatch.push({ index, code: 'OK' });
               ok += 1;
@@ -417,8 +400,10 @@ export function PeopleBulkEnrichBar({
                 return;
               }
               const enriched = (data?.data || {}) as Record<string, unknown>;
-              const phone = String(enriched.phone || '').trim();
-              const mobile = String(enriched.mobile_phone || '').trim();
+              const phone =
+                normalizePhoneField(enriched.phone) ||
+                normalizePhoneField(enriched.direct_phone);
+              const mobile = normalizePhoneField(enriched.mobile_phone);
               if (!phone && !mobile) {
                 metaBatch.push({ index, code: 'NO_PHONE_RETURNED' });
                 skipped += 1;
@@ -431,7 +416,6 @@ export function PeopleBulkEnrichBar({
                   patch: {
                     phone: phone || mobile || row.phone,
                     mobile_phone: mobile || undefined,
-                    ...personPatchFromEnriched(enriched),
                   },
                 },
               ]);

@@ -6,6 +6,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/** Reject provider booleans like mobile_phone: true (not a dialable number). */
+function normalizePhoneValue(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "boolean") return null;
+  const s = String(value).trim();
+  if (!s || /^(true|false|null|none)$/i.test(s)) return null;
+  if (s.replace(/\D/g, "").length < 7) return null;
+  return s;
+}
+
 // Retry helper with exponential backoff
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, baseDelay = 1000): Promise<Response> {
   let lastError: Error | null = null;
@@ -149,15 +159,21 @@ async function enrichWithClay(
       result.email = data.work_email || data.email;
       fields.push("email");
     }
-    if (data.phone_number || data.mobile_phone || data.direct_phone) {
-      result.phone = data.phone_number || data.mobile_phone || data.direct_phone;
+    const clayPhone =
+      normalizePhoneValue(data.phone_number) ||
+      normalizePhoneValue(data.mobile_phone) ||
+      normalizePhoneValue(data.direct_phone);
+    if (clayPhone) {
+      result.phone = clayPhone;
       fields.push("phone");
-      if (data.mobile_phone) {
-        result.mobile_phone = data.mobile_phone;
+      const clayMobile = normalizePhoneValue(data.mobile_phone);
+      if (clayMobile) {
+        result.mobile_phone = clayMobile;
         fields.push("mobile_phone");
       }
-      if (data.direct_phone) {
-        result.direct_phone = data.direct_phone;
+      const clayDirect = normalizePhoneValue(data.direct_phone);
+      if (clayDirect) {
+        result.direct_phone = clayDirect;
         fields.push("direct_phone");
       }
     }
@@ -458,8 +474,9 @@ async function enrichWithPDL(
           fields.push("phone");
         }
       }
-      if (!currentData.mobile_phone && person.mobile_phone) {
-        result.mobile_phone = String(person.mobile_phone);
+      const pdlMobile = normalizePhoneValue(person.mobile_phone);
+      if (!currentData.mobile_phone && pdlMobile) {
+        result.mobile_phone = pdlMobile;
         fields.push("mobile_phone");
       }
       if (!currentData.job_title && person.job_title) {
@@ -1099,7 +1116,11 @@ async function validatePhoneWithTwilio(
 }
 
 function phoneStillMissingStrict(r: Partial<EnrichmentResult>): boolean {
-  return !String(r.phone ?? "").trim() && !String(r.mobile_phone ?? "").trim() && !String(r.direct_phone ?? "").trim();
+  return (
+    !normalizePhoneValue(r.phone) &&
+    !normalizePhoneValue(r.mobile_phone) &&
+    !normalizePhoneValue(r.direct_phone)
+  );
 }
 
 function enrichFieldsLowerFromBody(body: Record<string, unknown>): string[] {

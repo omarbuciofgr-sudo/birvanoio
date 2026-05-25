@@ -23,6 +23,7 @@ import {
 import { CompanyResult } from '@/lib/api/industrySearch';
 import { toast } from 'sonner';
 import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
+import { normalizePhoneField } from '@/lib/phoneNormalize';
 import { PeopleBulkEnrichBar, PeopleRowStatusIcon } from '@/components/prospect-search/PeopleBulkEnrichBar';
 import {
   derivePeopleRowSignals,
@@ -214,9 +215,6 @@ export function SearchResults({
             ? { person_display_name: company.name.trim() }
             : {}),
           ...(enrichmentTarget === 'person' && li ? { linkedin_url: li } : {}),
-          ...(enrichmentTarget === 'person' && company.apollo_person_id
-            ? { apollo_person_id: company.apollo_person_id }
-            : {}),
           target_titles: ['owner', 'ceo', 'founder', 'president'],
         },
         { maxRetriesOn429: 3 },
@@ -233,11 +231,13 @@ export function SearchResults({
       }
 
       const enriched = (data.data || {}) as Record<string, any>;
+      const phone = normalizePhoneField(enriched.phone || enriched.mobile_phone);
+      const mobile = normalizePhoneField(enriched.mobile_phone);
       setEnrichmentData(prev => ({
         ...prev,
         [index]: {
           email: String(enriched.email || '') || '',
-          phone: String(enriched.phone || enriched.mobile_phone || '') || '',
+          phone,
           contact_name: String(enriched.full_name || '') || '',
           linkedin_url: String(enriched.linkedin_url || '') || '',
         } as EnrichmentResult,
@@ -253,16 +253,8 @@ export function SearchResults({
         if (ind) patch.industry = ind;
         const em = String(enriched.email || '').trim();
         if (em) patch.email = em;
-        const ph = String(enriched.phone || enriched.mobile_phone || '').trim();
-        if (ph) {
-          patch.phone = ph;
-          const mob = String(enriched.mobile_phone || '').trim();
-          if (mob) patch.mobile_phone = mob;
-        }
-        const fullName = String(enriched.full_name || '').trim();
-        if (fullName) patch.name = fullName;
-        const liOut = String(enriched.linkedin_url || '').trim();
-        if (liOut) patch.linkedin_url = liOut;
+        if (phone) patch.phone = phone;
+        if (mobile && mobile !== phone) patch.mobile_phone = mobile;
         if (Object.keys(patch).length > 0) onPatchResults([{ index, patch }]);
       }
       setEnrichmentStatus(prev => ({ ...prev, [index]: 'done' }));
@@ -824,18 +816,25 @@ export function SearchResults({
                     )}
                     {isPerson && (
                       <td className="px-3 py-3 text-xs max-w-[120px]" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const displayPhone =
+                            normalizePhoneField(company.phone || enriched?.phone) || '';
+                          const displayMobile = normalizePhoneField(company.mobile_phone) || '';
+                          return (
                         <span
                           className="truncate block"
                           title={
-                            [company.phone || enriched?.phone, company.mobile_phone].filter(Boolean).join(' · ') ||
+                            [displayPhone, displayMobile].filter(Boolean).join(' · ') ||
                             ''
                           }
                         >
-                          {company.phone || enriched?.phone || '—'}
-                          {company.mobile_phone ? (
-                            <span className="text-muted-foreground block truncate">mob: {company.mobile_phone}</span>
+                          {displayPhone || '—'}
+                          {displayMobile && displayMobile !== displayPhone ? (
+                            <span className="text-muted-foreground block truncate">mob: {displayMobile}</span>
                           ) : null}
                         </span>
+                          );
+                        })()}
                       </td>
                     )}
                     <td className="px-4 py-3 text-xs whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
