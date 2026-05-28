@@ -52,16 +52,36 @@ serve(async (req) => {
       );
     }
 
-    const { agentId } = await req.json();
+    // Look up the user's own configured ElevenLabs agent ID; ignore any client-supplied value
+    const serviceClient = createClient(
+      SUPABASE_URL,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? SUPABASE_ANON_KEY,
+    );
+    const { data: profile, error: profileError } = await serviceClient
+      .from("profiles")
+      .select("elevenlabs_agent_id")
+      .eq("user_id", userId)
+      .maybeSingle();
 
+    if (profileError) {
+      console.error("Profile lookup failed:", profileError);
+      return new Response(
+        JSON.stringify({ error: "Failed to load profile" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const agentId = profile?.elevenlabs_agent_id;
     if (!agentId) {
       return new Response(
-        JSON.stringify({ error: "Agent ID is required" }),
+        JSON.stringify({ error: "No ElevenLabs agent configured for this user" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Fetching conversation token for agent: ${agentId}`);
+    console.log(`Fetching conversation token for user ${userId}, agent: ${agentId}`);
+
+
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`,

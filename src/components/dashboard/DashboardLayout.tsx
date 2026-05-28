@@ -157,30 +157,16 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   useEffect(() => {
     const checkUserRoles = async () => {
       if (!user?.id) return;
-      const isLocalhost =
-        typeof window !== 'undefined' &&
-        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      const adminEmailsEnv = typeof import.meta.env.VITE_ADMIN_EMAILS === 'string'
-        ? (import.meta.env.VITE_ADMIN_EMAILS as string).trim().toLowerCase().split(',').map((e) => e.trim()).filter(Boolean)
-        : [];
-      const emailIsAdmin =
-        user?.email &&
-        (adminEmailsEnv.includes(user.email.toLowerCase()) ||
-          user.email.toLowerCase().endsWith('@brivano.io'));
 
-      let adminData: boolean | null = null;
       try {
         const { data } = await supabase.rpc('has_role', {
           _user_id: user.id,
           _role: 'admin'
         });
-        adminData = !!data;
+        if (data) setIsAdmin(true);
       } catch {
-        adminData = null;
+        // ignore; default non-admin
       }
-
-      // Show Admin: Supabase role, localhost, or allowed email (any host so deployment/Lovable shows Admin)
-      if (adminData || isLocalhost || emailIsAdmin) setIsAdmin(true);
 
       const { data: clientData } = await supabase
         .from('client_users')
@@ -191,6 +177,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
     };
     checkUserRoles();
   }, [user?.id, user?.email]);
+
 
   const handleSignOut = async () => {
     await signOut();
