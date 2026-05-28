@@ -76,9 +76,6 @@ const AdminImport = () => {
         console.error('Error checking admin role:', error);
         setIsAdmin(false);
       }
-
-        setIsAdmin(false);
-      }
       setCheckingRole(false);
     };
 
