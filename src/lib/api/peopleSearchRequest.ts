@@ -1,5 +1,26 @@
 /** Shared People Search request shaping (Flask + Edge). */
 
+import { COUNTRIES } from '@/components/prospect-search/constants';
+
+/**
+ * Build Apollo `person_locations` array from country codes, states, and cities.
+ * Country codes are mapped to readable labels (e.g. "US" -> "United States").
+ */
+export function buildPersonLocationsForApollo(
+  countries: string[] = [],
+  states: string[] = [],
+  cities: string[] = [],
+): string[] {
+  const countryLabels = (countries || []).map((code) => {
+    const found = COUNTRIES.find((c) => c.value === code);
+    return found ? found.label : code;
+  });
+  return [...(cities || []), ...(states || []), ...countryLabels]
+    .map((v) => (v || '').trim())
+    .filter(Boolean);
+}
+
+
 export type PeopleSearchRequestBody = {
   person_titles?: string[];
   person_seniorities?: string[];
