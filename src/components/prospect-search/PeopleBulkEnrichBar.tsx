@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader2, Globe, Factory, Mail, Phone, Layers, CheckCircle2, AlertCircle, Circle } from 'lucide-react';
 import type { CompanyResult } from '@/lib/api/industrySearch';
+import { employeeCountToRange } from '@/lib/peopleExport';
 import { invokeWaterfallEnrich } from '@/lib/api/waterfallEnrich';
 import { normalizePhoneField } from '@/lib/phoneNormalize';
 import { useCredits, CREDIT_COSTS } from '@/hooks/useCredits';
@@ -339,7 +340,10 @@ export function PeopleBulkEnrichBar({
               }
               const patch: Partial<CompanyResult> = { industry: ind };
               const ec = enriched.employee_count;
-              if (typeof ec === 'number' && ec > 0) patch.employee_count = ec;
+              if (typeof ec === 'number' && ec > 0) {
+                patch.employee_count = ec;
+                patch.employee_range = employeeCountToRange(ec) || null;
+              }
               onPatchRows([{ index, patch }]);
               metaBatch.push({ index, code: 'OK' });
               ok += 1;

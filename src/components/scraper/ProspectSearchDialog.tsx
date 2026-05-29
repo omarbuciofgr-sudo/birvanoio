@@ -25,23 +25,12 @@ import { SearchTypeSelector, SearchTypeHeader, SearchType } from '@/components/p
 import { defaultFilters, ProspectSearchFilters, INDUSTRIES } from '@/components/prospect-search/constants';
 import { industrySearchApi, CompanyResult } from '@/lib/api/industrySearch';
 import { EMPLOYEE_RANGES } from '@/lib/api/industrySearch';
+import { buildPersonLocationsForApollo } from '@/lib/api/peopleSearchRequest';
 import { resolvePersonOrganizationName } from '@/lib/peopleSearchPersonMap';
 import { prospectSearchApi, type ProspectResult } from '@/lib/api/prospectSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { validateScraper } from '@/config/scraperValidation';
-import {
-  formatPeopleSearchEmptyError,
-  peopleSearchHasRestrictiveFilters,
-  type PeopleSearchRequestBody,
-} from '@/lib/api/peopleSearchRequest';
-
-/** Apollo `currently_using_any_of_technology_uids` expects 24-char hex IDs, not product names. */
-function apolloTechnologyUids(technologies: string[]): string[] | undefined {
-  const uids = technologies
-    .map((t) => t.trim())
-    .filter((t) => /^[a-f0-9]{24}$/i.test(t));
-  return uids.length > 0 ? uids : undefined;
-}
+import { downloadPeopleCsv, employeeCountToRange } from '@/lib/peopleExport';
 
 export type ExternalLensFilters = Partial<ProspectSearchFilters> & {
   plannerSearchType?: SearchType;
@@ -313,7 +302,11 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       const page = opts?.page || 1;
       // ΓöÇΓöÇ People Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       if (searchType === 'people') {
-        const locationParts = [...peopleFilters.cities, ...peopleFilters.states, ...peopleFilters.countries];
+        const personLocations = buildPersonLocationsForApollo(
+          peopleFilters.countries,
+          peopleFilters.states,
+          peopleFilters.cities,
+        );
         // People Search: Apollo via scraper backend /api/people-search (all filters — funding, job postings, past roles, etc.)
         // Only skills / free-form profile / certifications → Apollo q_keywords.
         // Do NOT merge languages, education level, or schools: Apollo treats q_keywords as
@@ -324,11 +317,11 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           ...peopleFilters.certifications,
         ].filter(Boolean);
 
-        const peopleSearchBody: PeopleSearchRequestBody = {
+        const response = await industrySearchApi.searchPeople({
           person_titles: peopleFilters.jobTitles.length > 0 ? peopleFilters.jobTitles : undefined,
           person_seniorities: peopleFilters.seniority.length > 0 ? peopleFilters.seniority : undefined,
           person_departments: peopleFilters.departments.length > 0 ? peopleFilters.departments : undefined,
-          person_locations: locationParts.length > 0 ? locationParts : undefined,
+          person_locations: personLocations.length > 0 ? personLocations : undefined,
           organization_industry_tag_ids: peopleFilters.industries.length > 0
             ? peopleFilters.industries.map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
             : undefined,
@@ -336,7 +329,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           q_organization_name: peopleFilters.companies.length > 0 ? peopleFilters.companies.join(' ') : undefined,
           profile_keywords: allKeywords.length > 0 ? allKeywords : undefined,
           email_status: peopleFilters.emailStatus || undefined,
-          technologies: apolloTechnologyUids(peopleFilters.technologies),
+          technologies: peopleFilters.technologies.length > 0 ? peopleFilters.technologies : undefined,
           revenue_range: peopleFilters.annualRevenue || undefined,
           funding_range: peopleFilters.fundingRaised || undefined,
           funding_stage: peopleFilters.fundingStage || undefined,
@@ -352,9 +345,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           years_experience_min: peopleFilters.yearsExperienceMin ? parseInt(peopleFilters.yearsExperienceMin) : undefined,
           years_experience_max: peopleFilters.yearsExperienceMax ? parseInt(peopleFilters.yearsExperienceMax) : undefined,
           limit: peopleFilters.limit,
-        };
-
-        const response = await industrySearchApi.searchPeople(peopleSearchBody);
+        });
 
         if (response.success && Array.isArray(response.people) && response.people.length > 0) {
           const mapped: CompanyResult[] = response.people.map((p) => {
@@ -364,12 +355,11 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               name: p.name,
               domain: p.organization_domain || '',
               organization_name: organization_name ?? null,
-              apollo_person_id: p.id || null,
               website: p.organization_domain ? `https://${p.organization_domain}` : null,
               linkedin_url: p.linkedin_url,
               industry: p.organization_industry,
               employee_count: p.organization_employee_count,
-              employee_range: null,
+              employee_range: employeeCountToRange(p.organization_employee_count) || null,
               annual_revenue: null,
               founded_year: null,
               description: [p.title, organization_name].filter(Boolean).join(' at '),
@@ -380,28 +370,35 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
               keywords: p.departments || [],
               email: p.email ?? null,
               phone: p.phone ?? null,
+              job_title: p.title ?? null,
+              headline: p.headline ?? null,
+              seniority: p.seniority ?? null,
             };
           });
           return {
             success: true,
             companies: mapped,
             prospectResults: null,
-            peopleSearchMessage: response.message,
+            filtersRelaxed: response.filters_relaxed,
+            relaxedMessage: response.message,
           };
         }
         return {
           success: false,
-          error: formatPeopleSearchEmptyError(
-            response.error || response.message,
-            peopleSearchHasRestrictiveFilters(peopleSearchBody),
-            response.providers,
-          ),
+          error:
+            response.error ||
+            response.message ||
+            'No results — broaden filters or remove past company / past title / exclude keywords.',
         };
       }
 
       // ΓöÇΓöÇ Job Search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       if (searchType === 'jobs') {
-        const locationParts = [...jobFilters.cities, ...jobFilters.states, ...jobFilters.countries];
+        const jobLocations = buildPersonLocationsForApollo(
+          jobFilters.countries,
+          jobFilters.states,
+          jobFilters.cities,
+        );
 
         const response = await industrySearchApi.searchJobs({
           job_titles: jobFilters.jobTitles.length > 0 ? jobFilters.jobTitles : undefined,
@@ -411,7 +408,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             ? jobFilters.industries.map((v) => INDUSTRIES.find((i) => i.value === v)?.label || v)
             : undefined,
           companies: jobFilters.companies.length > 0 ? jobFilters.companies : undefined,
-          locations: locationParts.length > 0 ? locationParts : undefined,
+          locations: jobLocations.length > 0 ? jobLocations : undefined,
           employment_types: jobFilters.employmentType.length > 0 ? jobFilters.employmentType : undefined,
           seniority: jobFilters.seniority.length > 0 ? jobFilters.seniority : undefined,
           recruiter_keywords: jobFilters.recruiterKeywords.length > 0 ? jobFilters.recruiterKeywords : undefined,
@@ -504,11 +501,14 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
         setTotalPages((response as any).pagination?.total_pages || 1);
         setCurrentPage(variables?.page || 1);
         setIsLoadingMore(false);
-        const relaxedNote = (response as { peopleSearchMessage?: string }).peopleSearchMessage;
-        if (relaxedNote) {
-          toast.success(`Found ${response.companies.length} results`, { description: relaxedNote });
-        } else {
-          toast.success(`Found ${response.companies.length} results`);
+        toast.success(`Found ${response.companies.length} results`);
+        const relaxed = (response as { filtersRelaxed?: string[]; relaxedMessage?: string }).filtersRelaxed;
+        const relaxedMsg = (response as { relaxedMessage?: string }).relaxedMessage;
+        if (relaxed?.length) {
+          toast.info(
+            relaxedMsg ||
+              `Some filters were relaxed to find matches (${relaxed.join(', ')}). Core title and location still apply.`,
+          );
         }
       } else {
         setIsLoadingMore(false);
@@ -592,46 +592,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
       ? results.filter((_, i) => selectedRows.has(i))
       : results;
     if (searchType === 'people') {
-      const headers = [
-        'Name',
-        'Organization',
-        'Domain',
-        'Description',
-        'Industry',
-        'Employees',
-        'Employee Range',
-        'Revenue',
-        'Founded',
-        'City',
-        'State',
-        'Country',
-        'LinkedIn',
-        'Technologies',
-      ];
-      const rows = selected.map((c) => [
-        c.name,
-        (c.organization_name || '').trim(),
-        c.domain,
-        c.description || '',
-        c.industry || '',
-        c.employee_count?.toString() || '',
-        c.employee_range || '',
-        c.annual_revenue?.toString() || '',
-        c.founded_year?.toString() || '',
-        c.headquarters_city || '',
-        c.headquarters_state || '',
-        c.headquarters_country || '',
-        c.linkedin_url || '',
-        (c.technologies || []).join('; '),
-      ]);
-      const csv = [headers, ...rows].map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `people-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadPeopleCsv(selected);
       toast.success(`Exported ${selected.length} people`);
       return;
     }
