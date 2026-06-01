@@ -311,17 +311,27 @@ export type BackendHotpadsLastResultResponse = {
   total_stored?: number;
   /** Omitted rows when include_pm=0 (PM/managed/corporate heuristics) */
   pm_rows_hidden?: number;
+  /** Set when ?location= was applied on last-result */
+  location_filter?: string;
+  total_before_location_filter?: number;
 };
 
 export type LastResultFetchOptions = {
   retries?: number;
   /** When true, requests ?include_pm=1 so backend returns PM/realtor rows too */
   includePm?: boolean;
+  /** Backend returns only listings matching this city (e.g. "Austin, TX") */
+  location?: string;
+  /** Omit location filter — load every city from the platform table */
+  allCities?: boolean;
 };
 
 function lastResultQuery(options?: LastResultFetchOptions): string {
-  // Explicit 0 vs 1 so toggling by-owner vs Include PM never relies on a missing param (clearer for caches and logs).
-  return options?.includePm === true ? '?include_pm=1' : '?include_pm=0';
+  const params = new URLSearchParams();
+  params.set("include_pm", options?.includePm === true ? "1" : "0");
+  const loc = (options?.location || "").trim();
+  if (loc) params.set("location", loc);
+  return `?${params.toString()}`;
 }
 
 /** Avoid browser HTTP cache returning the wrong payload when toggling include_pm on the same path. */

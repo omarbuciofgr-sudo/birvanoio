@@ -104,6 +104,13 @@ function looseCommaCityStateMatch(address: string, cityKey: string, state: strin
   return new RegExp(`,\\s*${escCity}\\s*,\\s*${escSt}\\b`, 'i').test(address);
 }
 
+/** Zillow slug style: `123 Main St Austin TX 78701` (no comma before city). */
+function slugCityStateTailMatch(address: string, cityKey: string, state: string): boolean {
+  const escCity = cityKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escSt = state.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escCity}\\s+${escSt}\\b(?:\\s+\\d{5}(?:-\\d{4})?)?\\s*$`, 'i').test(address.trim());
+}
+
 /**
  * True when the listing's city + state match the searched city (and state if provided).
  * Strict: "New York, NY" matches Manhattan-style "New York, NY" only — not Brooklyn, Queens, or NJ.
@@ -126,7 +133,10 @@ export function addressMatchesSearch(address: string | undefined, searchLocation
   }
 
   if (searchState) {
-    return looseCommaCityStateMatch(address, wantCity, searchState);
+    return (
+      looseCommaCityStateMatch(address, wantCity, searchState) ||
+      slugCityStateTailMatch(address, wantCity, searchState)
+    );
   }
   const a = address.toLowerCase();
   return a.includes(wantCity) || a.includes(rawCity.toLowerCase().trim());

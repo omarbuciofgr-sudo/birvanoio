@@ -15,7 +15,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
-import { scraperBackendApi, buildHotpadsUrl, buildTruliaUrl, buildZillowFrboRentalsUrl, isZillowFrboUsCountryLocation } from '@/lib/api/scraperBackend';
+import {
+  scraperBackendApi,
+  buildHotpadsUrl,
+  buildTruliaUrl,
+  buildZillowFrboRentalsUrl,
+  isZillowFrboUsCountryLocation,
+  type LastResultFetchOptions,
+} from '@/lib/api/scraperBackend';
 import {
   hotpadsListingUrlLooksBuildingHub,
   isCorporateLandlordDisplayName,
@@ -1204,6 +1211,15 @@ export default function WebScraper() {
     return list.length;
   }, [reListings, rePlatform, reByOwnerStrict, reHotpadsScrapeLive]);
 
+  /** Pass search city to Railway/local last-result so deployed app returns that metro only (live scrape + filter). */
+  const buildLastResultFetchOpts = useCallback(
+    (includePm?: boolean): LastResultFetchOptions => ({
+      includePm: includePm ?? !reByOwnerStrict,
+      ...(reMatchLocationFilter && reLocation?.trim() ? { location: reLocation.trim() } : {}),
+    }),
+    [reByOwnerStrict, reMatchLocationFilter, reLocation],
+  );
+
   /** Same row as Match & Refresh when loaded; also next to Refresh in the empty-state card so you can escape By-owner-only with 0 rows. */
   const renderListingScopeToolbar = () => {
     if (rePlatform === 'all') return null;
@@ -1222,7 +1238,7 @@ export default function WebScraper() {
           onClick={() => {
             setReByOwnerStrict(false);
             if (rePlatform !== 'all') {
-              void fetchLastResultForPlatform(rePlatform, { includePm: true });
+              void fetchLastResultForPlatform(rePlatform, buildLastResultFetchOpts(true));
             }
           }}
         >
@@ -1237,7 +1253,7 @@ export default function WebScraper() {
           onClick={() => {
             setReByOwnerStrict(true);
             if (rePlatform !== 'all') {
-              void fetchLastResultForPlatform(rePlatform, { includePm: false });
+              void fetchLastResultForPlatform(rePlatform, buildLastResultFetchOpts(false));
             }
           }}
         >
@@ -1294,7 +1310,7 @@ export default function WebScraper() {
    * Load the latest backend-stored scrape for a single platform (used by “Refresh listings” only).
    * Pass explicit `platform` when needed so callers aren’t blocked on the next `rePlatform` render.
    */
-  const fetchLastResultForPlatform = useCallback(async (platform: string, fetchOpts?: { includePm?: boolean }) => {
+  const fetchLastResultForPlatform = useCallback(async (platform: string, fetchOpts?: LastResultFetchOptions) => {
     if (platform === 'all') {
       toast.info('Choose a single platform (not All), then refresh listings.');
       return;
@@ -1323,7 +1339,11 @@ export default function WebScraper() {
 
       let includePmFlag = fetchOpts?.includePm ?? !reByOwnerStrict;
       const fetchLast = async (includePm: boolean) => {
-        const opts = { includePm };
+        const opts: LastResultFetchOptions = fetchOpts?.allCities
+          ? { includePm }
+          : fetchOpts?.location?.trim()
+            ? { includePm, location: fetchOpts.location.trim() }
+            : buildLastResultFetchOpts(includePm);
         if (platform === 'hotpads') return scraperBackendApi.getHotpadsLastResult(opts);
         if (platform === 'trulia') return scraperBackendApi.getTruliaLastResult(opts);
         if (platform === 'zillow') return scraperBackendApi.getZillowFsboLastResult(opts);
@@ -1338,13 +1358,26 @@ export default function WebScraper() {
       const mapKey =
         platform === 'zillow' ? 'zillow' : platform === 'zillow_frbo' ? 'zillow_frbo' : platform;
       let mapped = mapBackendListingsForPlatform(mapKey, result.listings || []);
-      const r = result as { total_stored?: number; pm_rows_hidden?: number };
+      const r = result as {
+        total_stored?: number;
+        pm_rows_hidden?: number;
+        location_filter?: string;
+        total_before_location_filter?: number;
+      };
       const dbHasRows =
         (typeof r.total_stored === 'number' && r.total_stored > 0) ||
         (typeof r.pm_rows_hidden === 'number' && r.pm_rows_hidden > 0);
+      const cityFilterActive = Boolean(r.location_filter?.trim());
+      const rowsBeforeCity = r.total_before_location_filter;
 
       /** By-owner-only returned nothing while DB still has rows → retry with PM included so Refresh works in one click. */
-      if (!includePmFlag && mapped.length === 0 && !result.error && dbHasRows) {
+      if (
+        !includePmFlag &&
+        mapped.length === 0 &&
+        !result.error &&
+        dbHasRows &&
+        !(cityFilterActive && typeof rowsBeforeCity === 'number' && rowsBeforeCity > 0)
+      ) {
         setReByOwnerStrict(false);
         includePmFlag = true;
         result = await fetchLast(true);
@@ -1363,8 +1396,19 @@ export default function WebScraper() {
       const rLoaded = result as { pm_rows_hidden?: number; total_stored?: number };
       const hidden = typeof rLoaded.pm_rows_hidden === 'number' ? rLoaded.pm_rows_hidden : undefined;
       const totalDb = typeof rLoaded.total_stored === 'number' ? rLoaded.total_stored : undefined;
+      if (mapped.length === 0 && cityFilterActive && r.location_filter) {
+        toast.info(
+          `No listings in the database for "${r.location_filter}". Run Find Listings to scrape that city live.`,
+        );
+      }
+
       let loadSuffix: string;
-      if (includePmFlag) {
+      if (cityFilterActive && r.location_filter) {
+        loadSuffix = ` for "${r.location_filter}"`;
+        if (typeof rowsBeforeCity === 'number' && rowsBeforeCity > mapped.length) {
+          loadSuffix += ` (${mapped.length} of ${rowsBeforeCity} in platform scope)`;
+        }
+      } else if (includePmFlag) {
         loadSuffix = ' (full Supabase set — nothing stripped for this request).';
       } else if (hidden !== undefined && hidden > 0 && totalDb !== undefined) {
         loadSuffix = ` (by-owner: ${hidden} PM/broker row${hidden !== 1 ? 's' : ''} hidden · ${totalDb} in DB).`;
@@ -1408,11 +1452,11 @@ export default function WebScraper() {
     } finally {
       setReRefreshingListings(false);
     }
-  }, [reByOwnerStrict]);
+  }, [reByOwnerStrict, buildLastResultFetchOpts]);
 
   const refreshListingsFromBackend = useCallback(async () => {
-    await fetchLastResultForPlatform(rePlatform);
-  }, [fetchLastResultForPlatform, rePlatform]);
+    await fetchLastResultForPlatform(rePlatform, buildLastResultFetchOpts());
+  }, [fetchLastResultForPlatform, rePlatform, buildLastResultFetchOpts]);
 
   /** Platform change only updates selection; listings load after Find Listings or Refresh listings. */
   const handleRealEstatePlatformChange = (value: string) => {
@@ -2032,11 +2076,19 @@ export default function WebScraper() {
         setReLoading(false);
         reLoadingScrapeGenRef.current = -1;
       };
-      /** Turn off Find Listings spinner when rows first appear during a long poll (Zillow/FSBO/Apartments progressive). Lock stays until releaseScrapeUiIfOwner / finally. */
+      /** Turn off Find Listings spinner during long polls (even when 0 rows yet for this city). */
       const clearFindListingsSpinnerIfOwner = () => {
         if (scrapeGen !== reScrapeGenerationRef.current) return;
         if (reLoadingScrapeGenRef.current !== scrapeGen) return;
         setReLoading(false);
+      };
+      let progressiveFetchCount = 0;
+      const applyProgressiveLastResult = (mapped: any[]) => {
+        applyListings(mapped);
+        clearFindListingsSpinnerIfOwner();
+        if (progressiveFetchCount++ === 0 && mapped.length === 0 && reLocation?.trim()) {
+          st.info(`Scraping ${reLocation.trim()} — listings appear here as they are saved to the database.`);
+        }
       };
       // Release lock if the backend hangs (Zillow/Hotpads/FSBO can run 30+ min; 8m was cutting off FRBO mid-poll)
       const backendScrapeLongRun =
@@ -2053,8 +2105,8 @@ export default function WebScraper() {
         });
       }, safetyMinutes * 60 * 1000);
 
-      // Default: include PM/realtor; scope toggles in toolbar next to Match / Refresh (after load)
-      const lastResultOpts = { includePm: !reByOwnerStrict };
+      // Include PM + search city on every last-result poll (live city-scoped results on deploy)
+      const lastResultOpts = buildLastResultFetchOpts();
       if (isHotpads) {
         // Check backend once so we show a clear message without multiple connection-refused console errors
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
@@ -2099,7 +2151,10 @@ export default function WebScraper() {
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
             lastProgressiveFetch = Date.now();
             try {
-              const partial = await scraperBackendApi.getHotpadsLastResult({ includePm: true });
+              const partial = await scraperBackendApi.getHotpadsLastResult({
+                ...buildLastResultFetchOpts(true),
+                includePm: true,
+              });
               const partialMapped = (partial.listings || []).map((l) => ({
                 address: l.address,
                 bedrooms: l.bedrooms,
@@ -2116,10 +2171,7 @@ export default function WebScraper() {
                 days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
                 hp_strict_signal: (l as { hp_strict_signal?: string | null }).hp_strict_signal ?? null,
               }));
-              if (partialMapped.length > 0) {
-                applyListings(partialMapped);
-                clearFindListingsSpinnerIfOwner();
-              }
+              applyProgressiveLastResult(partialMapped);
             } catch {
               /* ignore */
             }
@@ -2257,7 +2309,10 @@ export default function WebScraper() {
           trulia_strict_signal: (l as { trulia_strict_signal?: string }).trulia_strict_signal ?? null,
         });
         try {
-          const boot = await scraperBackendApi.getTruliaLastResult({ includePm: true });
+          const boot = await scraperBackendApi.getTruliaLastResult({
+            ...buildLastResultFetchOpts(true),
+            includePm: true,
+          });
           const bootMapped = (boot.listings || []).map((x) => mapTruliaPartialRow(x as Record<string, unknown>));
           if (bootMapped.length > 0) {
             applyListings(bootMapped);
@@ -2279,14 +2334,14 @@ export default function WebScraper() {
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchInterval) {
             lastProgressiveFetch = Date.now();
             try {
-              const partial = await scraperBackendApi.getTruliaLastResult({ includePm: true });
+              const partial = await scraperBackendApi.getTruliaLastResult({
+                ...buildLastResultFetchOpts(true),
+                includePm: true,
+              });
               const partialMapped = (partial.listings || []).map((x) =>
                 mapTruliaPartialRow(x as Record<string, unknown>),
               );
-              if (partialMapped.length > 0) {
-                applyListings(partialMapped);
-                clearFindListingsSpinnerIfOwner();
-              }
+              applyProgressiveLastResult(partialMapped);
             } catch {
               /* ignore */
             }
@@ -2324,7 +2379,10 @@ export default function WebScraper() {
           typeof trTotal === 'number' &&
           trTotal > 0
         ) {
-          const full = await scraperBackendApi.getTruliaLastResult({ includePm: true });
+          const full = await scraperBackendApi.getTruliaLastResult({
+            ...buildLastResultFetchOpts(true),
+            includePm: true,
+          });
           const fullMapped = (full.listings || []).map(mapTruliaRow);
           if (fullMapped.length > 0) {
             mapped = fullMapped;
@@ -2412,10 +2470,7 @@ export default function WebScraper() {
             try {
               const partial = await scraperBackendApi.getZillowFsboLastResult(lastResultOpts);
               const partialMapped = (partial.listings || []).map(mapZillowFsboBackendRow);
-              if (partialMapped.length > 0) {
-                applyListings(partialMapped);
-                clearFindListingsSpinnerIfOwner();
-              }
+              applyProgressiveLastResult(partialMapped);
             } catch {
               /* ignore */
             }
@@ -2429,8 +2484,15 @@ export default function WebScraper() {
         const result = await scraperBackendApi.getZillowFsboLastResult(lastResultOpts);
         const mapped = (result.listings || []).map(mapZillowFsboBackendRow);
         applyListings(mapped);
+        const locLabel = reLocation.trim();
         if (mapped.length > 0) {
-          st.success(`Found ${mapped.length} Zillow FSBO listings`);
+          st.success(
+            `Found ${mapped.length} Zillow FSBO listing${mapped.length !== 1 ? 's' : ''}${locLabel ? ` for ${locLabel}` : ''}`,
+          );
+        } else if (locLabel) {
+          st.info(
+            `Scrape finished. No ${locLabel} listings in the database yet — wait a moment and Refresh, or check ZYTE_API_KEY on the scraper backend.`,
+          );
         }
         const fsboTotal = (result as { total?: number }).total;
         const r = result as { total_stored?: number; pm_rows_hidden?: number };
@@ -2553,10 +2615,7 @@ export default function WebScraper() {
             try {
               const partial = await scraperBackendApi.getZillowFrboLastResult(lastResultOpts);
               const partialMapped = (partial.listings || []).map(mapZillowFrboBackendRow);
-              if (partialMapped.length > 0) {
-                applyListings(partialMapped);
-                clearFindListingsSpinnerIfOwner();
-              }
+              applyProgressiveLastResult(partialMapped);
             } catch {
               /* ignore */
             }
@@ -2682,10 +2741,7 @@ export default function WebScraper() {
                   days_on_market: (l as { days_on_market?: string; days_on_zillow?: string }).days_on_market ?? (l as { days_on_zillow?: string }).days_on_zillow,
                 };
               });
-              if (partialMapped.length > 0) {
-                applyListings(partialMapped);
-                clearFindListingsSpinnerIfOwner();
-              }
+              applyProgressiveLastResult(partialMapped);
             } catch {
               // ignore progressive fetch errors
             }
@@ -2809,10 +2865,7 @@ export default function WebScraper() {
                   days_on_market: l.days_on_market ?? l.days_on_zillow,
                 }),
               );
-              if (partialMapped.length > 0) {
-                applyListings(partialMapped);
-                clearFindListingsSpinnerIfOwner();
-              }
+              applyProgressiveLastResult(partialMapped);
             } catch { /* ignore */ }
           }
         }
@@ -4035,8 +4088,16 @@ export default function WebScraper() {
                         size="sm"
                         variant={reMatchLocationFilter ? 'outline' : 'default'}
                         className="h-7 text-[10px] px-2"
-                        onClick={() => setReMatchLocationFilter(false)}
-                        title="Show every loaded row in the table and map (still applies stale filter if enabled)"
+                        onClick={() => {
+                          setReMatchLocationFilter(false);
+                          if (rePlatform !== 'all') {
+                            void fetchLastResultForPlatform(rePlatform, {
+                              includePm: !reByOwnerStrict,
+                              allCities: true,
+                            });
+                          }
+                        }}
+                        title="Load all saved rows for this platform (every city)"
                       >
                         Show all rows ({reShownWithoutLocationFilter})
                       </Button>
@@ -4046,8 +4107,13 @@ export default function WebScraper() {
                         variant={reMatchLocationFilter ? 'default' : 'outline'}
                         className="h-7 text-[10px] px-2"
                         disabled={!reLocation?.trim()}
-                        onClick={() => setReMatchLocationFilter(true)}
-                        title="Only addresses that match the location box"
+                        onClick={() => {
+                          setReMatchLocationFilter(true);
+                          if (rePlatform !== 'all' && reLocation?.trim()) {
+                            void fetchLastResultForPlatform(rePlatform, buildLastResultFetchOpts());
+                          }
+                        }}
+                        title="Only listings matching the city in the search box"
                       >
                         Match &quot;{reLocation?.trim() || 'location'}&quot;
                       </Button>
