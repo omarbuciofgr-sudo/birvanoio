@@ -70,9 +70,20 @@ function resolveSupabaseForClient(mode: string) {
   return { url, key };
 }
 
+/** Railway/local Flask URL — Lovable Cloud Secrets reject VITE_*; use SCRAPER_BACKEND_URL there. */
+function resolveScraperBackendForClient(mode: string): string {
+  const file = loadEnv(mode, process.cwd(), "");
+  const stripQuotes = (s: string) => s.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "");
+  const raw =
+    pickEnv(file, ["VITE_SCRAPER_BACKEND_URL", "SCRAPER_BACKEND_URL", "scraper_backend_url"]) ||
+    pickEnvCi(file, ["vite_scraper_backend_url", "scraper_backend_url"]);
+  return stripQuotes(raw);
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const { url: supabaseUrl, key: supabaseAnon } = resolveSupabaseForClient(mode);
+  const scraperBackend = resolveScraperBackendForClient(mode);
 
   // Only map non-empty values. Always defining "" overwrites Vite/Lovable-injected `import.meta.env` and causes a blank production app.
   const define: Record<string, string> = {};
@@ -81,6 +92,9 @@ export default defineConfig(({ mode }) => {
   }
   if (supabaseAnon) {
     define["import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY"] = JSON.stringify(supabaseAnon);
+  }
+  if (scraperBackend) {
+    define["import.meta.env.VITE_SCRAPER_BACKEND_URL"] = JSON.stringify(scraperBackend);
   }
 
   return {
