@@ -1132,6 +1132,8 @@ export default function WebScraper() {
   const reScrapeGenerationRef = useRef(0);
   /** Which scrape generation turned the Find Listings spinner on — only that run may turn it off (avoids stale runs clearing a newer run’s loading). */
   const reLoadingScrapeGenRef = useRef(-1);
+  /** Latest Find Listings handler (Refresh can start a live scrape when the DB has no rows for this city). */
+  const runRealEstateScrapeRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     setReLastBackendPmMeta(null);
@@ -1316,10 +1318,19 @@ export default function WebScraper() {
    * Load the latest backend-stored scrape for a single platform (used by “Refresh listings” only).
    * Pass explicit `platform` when needed so callers aren’t blocked on the next `rePlatform` render.
    */
-  const fetchLastResultForPlatform = useCallback(async (platform: string, fetchOpts?: LastResultFetchOptions) => {
+  const fetchLastResultForPlatform = useCallback(async (
+    platform: string,
+    fetchOpts?: LastResultFetchOptions,
+  ): Promise<{
+    n: number;
+    cityFilterActive: boolean;
+    locationFilter?: string;
+    rowsBeforeCity?: number;
+    totalStored?: number;
+  } | null> => {
     if (platform === 'all') {
       toast.info('Choose a single platform (not All), then refresh listings.');
-      return;
+      return null;
     }
     /**
      * Invalidate any in-flight Find Listings poll (same scrapeGen). Otherwise Zillow FRBO progressive
@@ -1340,7 +1351,7 @@ export default function WebScraper() {
         platform !== 'apartments'
       ) {
         toast.info('Refresh works for Hotpads, Trulia, Zillow FSBO/FRBO, FSBO.com, and Apartments.com.');
-        return;
+        return null;
       }
 
       let includePmFlag = fetchOpts?.includePm ?? !reByOwnerStrict;
@@ -1402,18 +1413,15 @@ export default function WebScraper() {
       const rLoaded = result as { pm_rows_hidden?: number; total_stored?: number };
       const hidden = typeof rLoaded.pm_rows_hidden === 'number' ? rLoaded.pm_rows_hidden : undefined;
       const totalDb = typeof rLoaded.total_stored === 'number' ? rLoaded.total_stored : undefined;
-      if (mapped.length === 0 && cityFilterActive && r.location_filter) {
-        toast.info(
-          `No listings in the database for "${r.location_filter}". Run Find Listings to scrape that city live.`,
-        );
-      }
+      const otherCitiesInDb =
+        mapped.length === 0 &&
+        cityFilterActive &&
+        typeof rowsBeforeCity === 'number' &&
+        rowsBeforeCity > 0;
 
       let loadSuffix: string;
       if (cityFilterActive && r.location_filter) {
         loadSuffix = ` for "${r.location_filter}"`;
-        if (typeof rowsBeforeCity === 'number' && rowsBeforeCity > mapped.length) {
-          loadSuffix += ` (${mapped.length} of ${rowsBeforeCity} in platform scope)`;
-        }
       } else if (includePmFlag) {
         loadSuffix = ' (full Supabase set — nothing stripped for this request).';
       } else if (hidden !== undefined && hidden > 0 && totalDb !== undefined) {
@@ -1426,7 +1434,21 @@ export default function WebScraper() {
       } else {
         loadSuffix = ' (by-owner — backend applied PM/managed heuristics).';
       }
-      toast.success(`Loaded ${n} listing${n !== 1 ? 's' : ''}${loadSuffix}`);
+      if (n === 0 && cityFilterActive && r.location_filter) {
+        if (otherCitiesInDb) {
+          toast.warning(
+            `No saved listings for "${r.location_filter}". The database has ${rowsBeforeCity} listing${rowsBeforeCity !== 1 ? 's' : ''} from other cities — Refresh does not scrape. Use Find Listings to run a live scrape for this city.`,
+            { duration: 12000 },
+          );
+        } else {
+          toast.warning(
+            `No listings for "${r.location_filter}" in the database yet. Click Find Listings to scrape this city live (Zyte + backend scraper).`,
+            { duration: 10000 },
+          );
+        }
+      } else {
+        toast.success(`Loaded ${n} listing${n !== 1 ? 's' : ''}${loadSuffix}`);
+      }
 
       const r2 = result as { total_stored?: number; pm_rows_hidden?: number };
       if (
@@ -1453,16 +1475,42 @@ export default function WebScraper() {
             : 'Hotpads: By-owner removed 0 rows beyond the PM/managed filter. If counts match Include PM, no rows were classified as PM in the database.',
         );
       }
+      return {
+        n,
+        cityFilterActive,
+        locationFilter: r.location_filter,
+        rowsBeforeCity,
+        totalStored: totalDb,
+      };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Refresh failed');
+      return null;
     } finally {
       setReRefreshingListings(false);
     }
   }, [reByOwnerStrict, buildLastResultFetchOpts]);
 
-  const refreshListingsFromBackend = useCallback(async () => {
-    await fetchLastResultForPlatform(rePlatform, buildLastResultFetchOpts());
-  }, [fetchLastResultForPlatform, rePlatform, buildLastResultFetchOpts]);
+  const refreshListingsFromBackend = useCallback(
+    async (opts?: { autoScrapeIfEmpty?: boolean }) => {
+      const stats = await fetchLastResultForPlatform(rePlatform, buildLastResultFetchOpts());
+      const autoScrape = opts?.autoScrapeIfEmpty !== false;
+      if (
+        autoScrape &&
+        stats &&
+        stats.n === 0 &&
+        stats.cityFilterActive &&
+        reLocation?.trim() &&
+        rePlatform !== 'all' &&
+        !reScrapeInFlightRef.current
+      ) {
+        toast.info(`Starting live scrape for ${reLocation.trim()}…`, {
+          description: 'Refresh only reads the database; Find Listings runs the scraper on Zillow/Hotpads/etc.',
+        });
+        await runRealEstateScrapeRef.current?.();
+      }
+    },
+    [fetchLastResultForPlatform, rePlatform, buildLastResultFetchOpts, reLocation],
+  );
 
   /** Platform change only updates selection; listings load after Find Listings or Refresh listings. */
   const handleRealEstatePlatformChange = (value: string) => {
@@ -3005,6 +3053,7 @@ export default function WebScraper() {
       }
     }
   };
+  runRealEstateScrapeRef.current = handleRealEstateScrape;
 
   const exportListingsToCSV = () => {
     if (reListings.length === 0) return;
@@ -4063,8 +4112,9 @@ export default function WebScraper() {
                     </>
                   ) : (
                     <>
-                      Nothing loaded yet. Click <span className="font-medium text-foreground">Find Listings</span> to run a scrape, or{' '}
-                      <span className="font-medium text-foreground">Refresh listings</span> to load the last saved run for this platform from the backend.
+                      Nothing loaded yet. Click <span className="font-medium text-foreground">Find Listings</span> to{' '}
+                      <span className="font-medium text-foreground">scrape this city live</span> (Zillow/Hotpads API via backend).
+                      Refresh only reloads rows already saved in Supabase — it does not scrape a new city.
                       {reByOwnerStrict && (
                         <span className="block mt-2 text-amber-600/95 dark:text-amber-400/95">
                           <span className="font-medium">By-owner only</span> is on — if the database has rows but you see none, choose{' '}
@@ -4160,7 +4210,7 @@ export default function WebScraper() {
                         className="h-7 text-[10px] px-2 gap-1"
                         disabled={reRefreshingListings || rePlatform === 'all'}
                         onClick={() => void refreshListingsFromBackend()}
-                        title="Reload from backend (Include PM / By-owner buttons to the left)"
+                        title="Reload from Supabase. If this city has 0 rows, automatically starts Find Listings (live scrape)."
                       >
                         {reRefreshingListings ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                         Refresh listings
