@@ -324,6 +324,8 @@ export type LastResultFetchOptions = {
   location?: string;
   /** Omit location filter — load every city from the platform table */
   allCities?: boolean;
+  /** ISO timestamp — only rows saved at/after this time (current Find Listings run) */
+  since?: string;
 };
 
 function lastResultQuery(options?: LastResultFetchOptions): string {
@@ -331,6 +333,8 @@ function lastResultQuery(options?: LastResultFetchOptions): string {
   params.set("include_pm", options?.includePm === true ? "1" : "0");
   const loc = (options?.location || "").trim();
   if (loc) params.set("location", loc);
+  const since = (options?.since || "").trim();
+  if (since) params.set("since", since);
   return `?${params.toString()}`;
 }
 
@@ -410,16 +414,28 @@ export const scraperBackendApi = {
 
   async triggerFromUrl(
     url: string,
-    options?: { force?: boolean; /** Zillow FRBO: save PM/managed contacts to Supabase (matches UI "Include PM") */ savePm?: boolean },
+    options?: {
+      force?: boolean;
+      /** Save PM/managed contacts to Supabase (matches UI "Include PM / realtor") */
+      savePm?: boolean;
+      /** Search box city (e.g. Atlanta, GA) — stored on scrape session for last-result */
+      location?: string;
+    },
   ): Promise<BackendTriggerFromUrlResponse> {
     const base = getBaseUrl();
-    // Send URL in query string too so backend gets it even if JSON body is not parsed
     const savePm = options?.savePm === true ? "&save_pm=1" : "";
-    const qs = `?url=${encodeURIComponent(url)}${options?.force ? "&force=1" : ""}${savePm}`;
+    const loc = (options?.location || "").trim();
+    const locQs = loc ? `&location=${encodeURIComponent(loc)}` : "";
+    const qs = `?url=${encodeURIComponent(url)}${options?.force ? "&force=1" : ""}${savePm}${locQs}`;
     const res = await fetch(`${base}/api/trigger-from-url${qs}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, force: options?.force === true, save_pm: options?.savePm === true }),
+      body: JSON.stringify({
+        url,
+        force: options?.force === true,
+        save_pm: options?.savePm === true,
+        location: loc || undefined,
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

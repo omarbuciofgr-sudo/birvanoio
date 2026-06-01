@@ -115,9 +115,34 @@ function slugCityStateTailMatch(address: string, cityKey: string, state: string)
  * True when the listing's city + state match the searched city (and state if provided).
  * Strict: "New York, NY" matches Manhattan-style "New York, NY" only — not Brooklyn, Queens, or NJ.
  */
-export function addressMatchesSearch(address: string | undefined, searchLocation: string | undefined): boolean {
+/** Build metro slug from search box, e.g. Atlanta, GA -> atlanta-ga */
+function metroSlugFromSearch(searchLocation: string): string | null {
+  const { city: rawCity, state: searchState } = parseSearchLocation(searchLocation);
+  if (!rawCity || !searchState) return null;
+  const citySlug = canonicalSearchCityKey(rawCity).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  return citySlug ? `${citySlug}-${searchState.toLowerCase()}` : null;
+}
+
+function listingUrlMatchesMetro(listingUrl: string | undefined, searchLocation: string): boolean {
+  const metro = metroSlugFromSearch(searchLocation);
+  if (!metro || !listingUrl?.trim()) return false;
+  const u = listingUrl.toLowerCase().replace(/_/g, '-');
+  return (
+    u.includes(`/${metro}/`) ||
+    u.includes(`/${metro}`) ||
+    u.includes(`-${metro}-`) ||
+    u.includes(`-${metro}/`)
+  );
+}
+
+export function addressMatchesSearch(
+  address: string | undefined,
+  searchLocation: string | undefined,
+  listingUrl?: string,
+): boolean {
   if (!searchLocation?.trim()) return true;
   if (isZillowFrboUsCountryLocation(searchLocation)) return true;
+  if (listingUrl?.trim() && listingUrlMatchesMetro(listingUrl, searchLocation)) return true;
   if (!address?.trim()) return false;
   const { city: rawCity, state: searchState } = parseSearchLocation(searchLocation);
   const wantCity = canonicalSearchCityKey(rawCity);

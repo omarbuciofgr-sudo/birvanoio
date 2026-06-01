@@ -1147,7 +1147,13 @@ export default function WebScraper() {
     let rows = reListings.map((listing, index) => ({ listing, realIndex: index }));
     rows = rows.filter(({ listing }) => listingMatchesRealEstatePlatform(listing, rePlatform));
     if (reMatchLocationFilter && reLocation?.trim()) {
-      rows = rows.filter(({ listing }) => addressMatchesSearch(listingDisplayAddress(listing), reLocation));
+      rows = rows.filter(({ listing }) =>
+        addressMatchesSearch(
+          listingDisplayAddress(listing),
+          reLocation,
+          (listing.listing_url || listing.source_url || '') as string,
+        ),
+      );
     }
     // Skip trace fills contact in React; hide PM/corporate names unless user successfully traced (always show enriched row).
     const byOwnerTable =
@@ -2014,6 +2020,8 @@ export default function WebScraper() {
     reLoadingScrapeGenRef.current = scrapeGen;
     setReMatchLocationFilter(true);
     setReLoading(true); setReListings([]); setReErrors([]);
+    /** Only rows saved during this Find Listings run (avoids showing other metros from the DB). */
+    const scrapeSinceIso = new Date(Date.now() - 120_000).toISOString();
 
     const isHotpads = rePlatform === 'hotpads';
     const isTrulia = rePlatform === 'trulia';
@@ -2105,8 +2113,8 @@ export default function WebScraper() {
         });
       }, safetyMinutes * 60 * 1000);
 
-      // Include PM + search city on every last-result poll (live city-scoped results on deploy)
-      const lastResultOpts = buildLastResultFetchOpts();
+      // Include PM + search city + current-run timestamp on every last-result poll
+      const lastResultOpts = { ...buildLastResultFetchOpts(), since: scrapeSinceIso };
       if (isHotpads) {
         // Check backend once so we show a clear message without multiple connection-refused console errors
         const backendReachable = await scraperBackendApi.isScraperBackendReachable();
@@ -2128,7 +2136,11 @@ export default function WebScraper() {
         }
         // Reset and always send force=1 so backend clears "already running" (works with any backend version)
         await scraperBackendApi.resetHotpadsStatus();
-        const triggerRes = await scraperBackendApi.triggerFromUrl(url, { force: true });
+        const triggerRes = await scraperBackendApi.triggerFromUrl(url, {
+          force: true,
+          location: reLocation.trim(),
+          savePm: !reByOwnerStrict,
+        });
         if (triggerRes.error) {
           st.error(triggerRes.error);
           return;
@@ -2282,6 +2294,7 @@ export default function WebScraper() {
         const triggerRes = await scraperBackendApi.triggerFromUrl(url, {
           force: true,
           savePm: !reByOwnerStrict,
+          location: reLocation.trim(),
         });
         if (triggerRes.error) {
           st.error(triggerRes.error);
@@ -2449,14 +2462,18 @@ export default function WebScraper() {
           return;
         }
         await scraperBackendApi.resetZillowFsboStatus();
-        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
+        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, {
+          force: true,
+          location: reLocation.trim(),
+          savePm: !reByOwnerStrict,
+        });
         if (triggerRes.error) {
           st.error(triggerRes.error);
           return;
         }
         st.info('Zillow FSBO scraper started. Listings appear here as the backend saves them — open List View to watch.');
         const pollInterval = 2000;
-        const maxWait = 5 * 60 * 1000;
+        const maxWait = 30 * 60 * 1000;
         const progressiveFetchInterval = 8000;
         const start = Date.now();
         let lastProgressiveFetch = 0;
@@ -2490,9 +2507,18 @@ export default function WebScraper() {
             `Found ${mapped.length} Zillow FSBO listing${mapped.length !== 1 ? 's' : ''}${locLabel ? ` for ${locLabel}` : ''}`,
           );
         } else if (locLabel) {
-          st.info(
-            `Scrape finished. No ${locLabel} listings in the database yet — wait a moment and Refresh, or check ZYTE_API_KEY on the scraper backend.`,
-          );
+          if (status.status === 'running') {
+            st.warning(
+              `Scraper still running for ${locLabel}. Listings appear as they save — use Refresh listings in a few minutes.`,
+            );
+          } else {
+            const r0 = result as { total_stored?: number; total_before_location_filter?: number };
+            st.info(
+              r0.total_before_location_filter === 0 && (r0.total_stored ?? 0) > 0
+                ? `No new ${locLabel} listings from this run yet (${r0.total_stored} older rows in the database are from other cities). Wait and Refresh, or check ZYTE_API_KEY on Railway.`
+                : `Scrape finished. No ${locLabel} listings saved yet — wait and Refresh, or check ZYTE_API_KEY on the scraper backend.`,
+            );
+          }
         }
         const fsboTotal = (result as { total?: number }).total;
         const r = result as { total_stored?: number; pm_rows_hidden?: number };
@@ -2579,6 +2605,7 @@ export default function WebScraper() {
           : await scraperBackendApi.triggerFromUrl(zillowFrboScrapeUrl!, {
               force: true,
               savePm: !reByOwnerStrict,
+              location: reLocation.trim(),
             });
         if (triggerRes.error) {
           st.error(triggerRes.error);
@@ -2701,7 +2728,11 @@ export default function WebScraper() {
           return;
         }
         await scraperBackendApi.resetFsboStatus();
-        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
+        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, {
+          force: true,
+          location: reLocation.trim(),
+          savePm: !reByOwnerStrict,
+        });
         if (triggerRes.error) {
           st.error(triggerRes.error);
           return;
@@ -2827,7 +2858,11 @@ export default function WebScraper() {
           return;
         }
         await scraperBackendApi.resetApartmentsStatus();
-        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, { force: true });
+        const triggerRes = await scraperBackendApi.triggerFromUrl(searchRes.url, {
+          force: true,
+          location: reLocation.trim(),
+          savePm: !reByOwnerStrict,
+        });
         if (triggerRes.error) {
           st.error(triggerRes.error);
           return;
