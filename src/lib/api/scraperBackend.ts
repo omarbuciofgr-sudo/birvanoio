@@ -503,6 +503,8 @@ const lastResultFetchInit: RequestInit = { cache: "no-store" };
 const HEALTH_CHECK_TIMEOUT_MS = 12000;
 const HEALTH_CHECK_RETRY_DELAY_MS = 2000;
 const API_FETCH_TIMEOUT_MS = 45000;
+const STATUS_FETCH_TIMEOUT_MS = 20000;
+const TRIGGER_FETCH_TIMEOUT_MS = 60000;
 
 async function fetchWithTimeout(
   url: string,
@@ -515,6 +517,61 @@ async function fetchWithTimeout(
     return await fetch(url, { ...lastResultFetchInit, ...init, signal: controller.signal });
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** Lightweight status/reset calls with retry — avoids aborting long scrapes on one blip. */
+async function fetchStatusPath(
+  path: string,
+  timeoutMs = STATUS_FETCH_TIMEOUT_MS,
+  retries = 2,
+): Promise<{ ok: boolean; data: Record<string, unknown>; status: number }> {
+  const base = getBaseUrl();
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(`${base}${path}`, {}, timeoutMs);
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      return { ok: res.ok, data, status: res.status };
+    } catch (e) {
+      lastError = e;
+      if (attempt < retries) await new Promise((r) => setTimeout(r, 1200));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Network error");
+}
+
+function parseStatusResponse(
+  result: { ok: boolean; data: Record<string, unknown>; status: number },
+): BackendHotpadsStatusResponse {
+  if (!result.ok) {
+    const err = typeof result.data.error === "string" ? result.data.error : `Request failed: ${result.status}`;
+    return { status: "idle", error: err };
+  }
+  const status = result.data.status === "running" ? "running" : "idle";
+  return {
+    status,
+    last_run: typeof result.data.last_run === "string" ? result.data.last_run : undefined,
+    error: typeof result.data.error === "string" ? result.data.error : undefined,
+    started_at: typeof result.data.started_at === "string" ? result.data.started_at : undefined,
+    location: typeof result.data.location === "string" ? result.data.location : undefined,
+  };
+}
+
+/**
+ * Use inside poll loops: transient Railway/network failures should not end the scrape early.
+ */
+export async function pollScraperStatus(
+  getter: () => Promise<BackendHotpadsStatusResponse>,
+): Promise<BackendHotpadsStatusResponse> {
+  try {
+    const s = await getter();
+    if (s.status === "idle" && s.error && /network|reset|abort|timeout|fetch|failed/i.test(s.error)) {
+      return { status: "running", error: s.error };
+    }
+    return s;
+  } catch {
+    return { status: "running", error: "transient_network" };
   }
 }
 
@@ -715,21 +772,29 @@ export const scraperBackendApi = {
     const loc = (options?.location || "").trim();
     const locQs = loc ? `&location=${encodeURIComponent(loc)}` : "";
     const qs = `?url=${encodeURIComponent(url)}${options?.force ? "&force=1" : ""}${savePm}${locQs}`;
-    const res = await fetch(`${base}/api/trigger-from-url${qs}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url,
-        force: options?.force === true,
-        save_pm: options?.savePm === true,
-        location: loc || undefined,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { error: data.error || `Request failed: ${res.status}` };
+    try {
+      const res = await fetchWithTimeout(
+        `${base}/api/trigger-from-url${qs}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url,
+            force: options?.force === true,
+            save_pm: options?.savePm === true,
+            location: loc || undefined,
+          }),
+        },
+        TRIGGER_FETCH_TIMEOUT_MS,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { error: data.error || `Request failed: ${res.status}` };
+      }
+      return data;
+    } catch (e: unknown) {
+      return { error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async triggerZillowFrboCountry(
@@ -752,23 +817,24 @@ export const scraperBackendApi = {
   },
 
   async getHotpadsStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-hotpads`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-hotpads"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   /** Clear backend "running" state so a new scrape can start (use when you get "already running" 400). */
   async resetHotpadsStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    // Use GET status-hotpads?reset=1 (always present); POST /api/hotpads/reset may 404 on some backends
-    const res = await fetch(`${base}/api/status-hotpads?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-hotpads?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getHotpadsLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
@@ -795,21 +861,23 @@ export const scraperBackendApi = {
   },
 
   async getTruliaStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-trulia`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-trulia"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async resetTruliaStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-trulia?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-trulia?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getTruliaLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
@@ -836,21 +904,23 @@ export const scraperBackendApi = {
   },
 
   async getRedfinStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-redfin`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-redfin"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async resetRedfinStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-redfin?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-redfin?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getRedfinLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
@@ -877,21 +947,23 @@ export const scraperBackendApi = {
   },
 
   async getZillowFrboStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-zillow-frbo`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-zillow-frbo"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async resetZillowFrboStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-zillow-frbo?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-zillow-frbo?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getZillowFrboLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
@@ -918,21 +990,23 @@ export const scraperBackendApi = {
   },
 
   async getZillowFsboStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetchWithTimeout(`${base}/api/status-zillow-fsbo`, {}, 15000);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-zillow-fsbo"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async resetZillowFsboStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-zillow-fsbo?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-zillow-fsbo?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getZillowFsboLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
@@ -959,21 +1033,23 @@ export const scraperBackendApi = {
   },
 
   async getFsboStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-fsbo`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-fsbo"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async resetFsboStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-fsbo?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-fsbo?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getFsboLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
@@ -1000,21 +1076,23 @@ export const scraperBackendApi = {
   },
 
   async getApartmentsStatus(): Promise<BackendHotpadsStatusResponse> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-apartments`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { status: "idle", error: data.error || `Request failed: ${res.status}` };
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-apartments"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
     }
-    return data;
   },
 
   async resetApartmentsStatus(): Promise<{ message?: string; error?: string }> {
-    const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-apartments?reset=1`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: data.error || `Request failed: ${res.status}` };
-    return data;
+    try {
+      const result = await fetchStatusPath("/api/status-apartments?reset=1");
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
   },
 
   async getApartmentsLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {

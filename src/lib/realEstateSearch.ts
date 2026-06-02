@@ -44,7 +44,9 @@ export function friendlyApiError(raw: string | undefined | null): string {
     low.includes('network') ||
     low.includes('aborted') ||
     low.includes('timeout') ||
+    low.includes('connection reset') ||
     low.includes('econnrefused') ||
+    low.includes('econnreset') ||
     low.includes('cors')
   ) {
     return RE_USER_MESSAGES.backend_unreachable;

@@ -17,6 +17,7 @@ import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
 import {
   scraperBackendApi,
+  pollScraperStatus,
   buildHotpadsUrl,
   buildApartmentsFrboUrl,
   buildFsboSearchUrl,
@@ -2274,6 +2275,7 @@ export default function WebScraper() {
     };
 
     let scrapeSafetyTimer: number | undefined;
+    let liveRowsShown = 0;
     try {
       const applyListings = (updater: any[] | ((prev: any[]) => any[])) => {
         if (scrapeGen !== reScrapeGenerationRef.current) return;
@@ -2305,7 +2307,6 @@ export default function WebScraper() {
         rePlatform === 'zillow' ? 'zillow' : rePlatform === 'zillow_frbo' ? 'zillow_frbo' : rePlatform;
       let progressiveFetchCount = 0;
       let livePollCount = 0;
-      let liveRowsShown = 0;
       const enrichForSearch = (listings: unknown[]) => {
         const mapped = mapBackendListingsForPlatform(backendMapKey, listings || []);
         if (!searchCity || !searchState) return mapped;
@@ -2386,8 +2387,8 @@ export default function WebScraper() {
       };
       const progressiveFetchIntervalMs = isApartments
         ? 2500
-        : isZillowFrbo || isFsbo
-          ? 5000
+        : isZillowFsbo || isZillowFrbo || isFsbo
+          ? 8000
           : 4000;
 
       if (rePlatform === 'all') {
@@ -2433,10 +2434,10 @@ export default function WebScraper() {
         const maxWait = 30 * 60 * 1000;
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await scraperBackendApi.getHotpadsStatus();
+        let status = await pollScraperStatus(() => scraperBackendApi.getHotpadsStatus());
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
-          status = await scraperBackendApi.getHotpadsStatus();
+          status = await pollScraperStatus(() => scraperBackendApi.getHotpadsStatus());
           if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
             lastProgressiveFetch = Date.now();
@@ -2542,10 +2543,10 @@ export default function WebScraper() {
         const maxWait = 30 * 60 * 1000;
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await scraperBackendApi.getTruliaStatus();
+        let status = await pollScraperStatus(() => scraperBackendApi.getTruliaStatus());
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
-          status = await scraperBackendApi.getTruliaStatus();
+          status = await pollScraperStatus(() => scraperBackendApi.getTruliaStatus());
           if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
             lastProgressiveFetch = Date.now();
@@ -2632,10 +2633,10 @@ export default function WebScraper() {
         const maxWait = 30 * 60 * 1000;
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await scraperBackendApi.getZillowFsboStatus();
+        let status = await pollScraperStatus(() => scraperBackendApi.getZillowFsboStatus());
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
-          status = await scraperBackendApi.getZillowFsboStatus();
+          status = await pollScraperStatus(() => scraperBackendApi.getZillowFsboStatus());
           if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
             lastProgressiveFetch = Date.now();
@@ -2740,10 +2741,10 @@ export default function WebScraper() {
         const maxWait = usCountryFrbo ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000;
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await scraperBackendApi.getZillowFrboStatus();
+        let status = await pollScraperStatus(() => scraperBackendApi.getZillowFrboStatus());
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
-          status = await scraperBackendApi.getZillowFrboStatus();
+          status = await pollScraperStatus(() => scraperBackendApi.getZillowFrboStatus());
           if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
             lastProgressiveFetch = Date.now();
@@ -2846,10 +2847,10 @@ export default function WebScraper() {
         const maxWait = 25 * 60 * 1000; // 25 min (FSBO can take 15–20 min for 128 listings)
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await scraperBackendApi.getFsboStatus();
+        let status = await pollScraperStatus(() => scraperBackendApi.getFsboStatus());
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
-          status = await scraperBackendApi.getFsboStatus();
+          status = await pollScraperStatus(() => scraperBackendApi.getFsboStatus());
           if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
             lastProgressiveFetch = Date.now();
@@ -2942,10 +2943,10 @@ export default function WebScraper() {
         const maxWait = 30 * 60 * 1000;
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await scraperBackendApi.getApartmentsStatus();
+        let status = await pollScraperStatus(() => scraperBackendApi.getApartmentsStatus());
         while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
           await new Promise((r) => setTimeout(r, pollInterval));
-          status = await scraperBackendApi.getApartmentsStatus();
+          status = await pollScraperStatus(() => scraperBackendApi.getApartmentsStatus());
           if (scrapeCancelled()) break;
           if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
             lastProgressiveFetch = Date.now();
@@ -3008,7 +3009,16 @@ export default function WebScraper() {
       }
     } catch (e: unknown) {
       console.debug('[scout] search failed', e);
-      st.error(friendlyApiError(e instanceof Error ? e.message : String(e)));
+      if (liveRowsShown > 0) {
+        st.warning('Connection interrupted while fetching results. Showing listings loaded so far.');
+        if (scrapeGen === reScrapeGenerationRef.current && reLoadingScrapeGenRef.current === scrapeGen) {
+          reScrapeInFlightRef.current = false;
+          setReLoading(false);
+          reLoadingScrapeGenRef.current = -1;
+        }
+      } else {
+        st.error(friendlyApiError(e instanceof Error ? e.message : String(e)));
+      }
     } finally {
       if (scrapeSafetyTimer !== undefined) window.clearTimeout(scrapeSafetyTimer);
       if (scrapeGen > 0 && scrapeGen === reScrapeGenerationRef.current) {
