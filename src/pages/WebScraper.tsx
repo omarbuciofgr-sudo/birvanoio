@@ -2357,7 +2357,7 @@ export default function WebScraper() {
           const result = await scraperBackendApi.fetchSearchResultsDuringScrape(
             backendMapKey,
             livePollOpts(),
-            { allowDbFallback: backendMapKey !== 'zillow_frbo' && backendMapKey !== 'fsbo' },
+            { allowDbFallback: true },
           );
           if (result.error) {
             console.debug('[scout] poll', backendMapKey, result.error);
