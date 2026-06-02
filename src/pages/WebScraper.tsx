@@ -17,7 +17,6 @@ import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
 import {
   scraperBackendApi,
-  pollScraperStatus,
   buildHotpadsUrl,
   buildApartmentsFrboUrl,
   buildFsboSearchUrl,
@@ -2204,8 +2203,7 @@ export default function WebScraper() {
         return;
       }
       if (searchRes.action === 'error') {
-        toast.warning(searchRes.user_message || RE_USER_MESSAGES.temporary_issue);
-        return;
+        console.warn('[scout] pre-search API failed; continuing with scrape trigger', searchRes);
       }
       const mapKey =
         rePlatform === 'zillow' ? 'zillow' : rePlatform === 'zillow_frbo' ? 'zillow_frbo' : rePlatform;
@@ -2306,7 +2304,6 @@ export default function WebScraper() {
       const backendMapKey =
         rePlatform === 'zillow' ? 'zillow' : rePlatform === 'zillow_frbo' ? 'zillow_frbo' : rePlatform;
       let progressiveFetchCount = 0;
-      let livePollCount = 0;
       const enrichForSearch = (listings: unknown[]) => {
         const mapped = mapBackendListingsForPlatform(backendMapKey, listings || []);
         if (!searchCity || !searchState) return mapped;
@@ -2340,7 +2337,6 @@ export default function WebScraper() {
         reScrapeInFlightRef.current = false;
         setReLoading(false);
         reLoadingScrapeGenRef.current = -1;
-        st.warning(RE_USER_MESSAGES.temporary_issue);
       }, safetyMinutes * 60 * 1000);
 
       /** After scrape ends: full city from DB (for Refresh / next search). */
@@ -2353,23 +2349,40 @@ export default function WebScraper() {
         includePm: true,
         location: searchLocation,
       });
-      const pollSearchResultsFromBackend = async (): Promise<number> => {
-        if (scrapeCancelled()) return liveRowsShown;
+      const pollSearchResultsFromBackend = async (): Promise<{ count: number; running: boolean }> => {
+        if (scrapeCancelled()) return { count: liveRowsShown, running: true };
         try {
-          livePollCount += 1;
           const result = await scraperBackendApi.fetchSearchResultsDuringScrape(
             backendMapKey,
             livePollOpts(),
-            { allowDbFallback: livePollCount === 1 || livePollCount % 3 === 0 },
           );
           if (result.error) {
             console.debug('[scout] poll', backendMapKey, result.error);
           }
           setTableFromApi(result.listings || [], { live: true });
-          return result.listings?.length ?? 0;
+          return {
+            count: result.listings?.length ?? 0,
+            running: result.scraper_running === true ? true : result.scraper_running === false ? false : undefined,
+          };
         } catch (e) {
           console.debug('[scout] poll failed', backendMapKey, e);
-          return liveRowsShown;
+          return { count: liveRowsShown, running: true };
+        }
+      };
+      /** Poll live-results + last-result only — never /status-* (those timed out at 45s on Railway). */
+      const runResultsOnlyPollLoop = async (maxWaitMs: number, pollIntervalMs: number) => {
+        const start = Date.now();
+        let idleStreak = 0;
+        while (Date.now() - start < maxWaitMs && !scrapeCancelled()) {
+          await new Promise((r) => setTimeout(r, pollIntervalMs));
+          if (scrapeCancelled()) break;
+          const { running } = await pollSearchResultsFromBackend();
+          if (running === false) {
+            idleStreak += 1;
+            if (idleStreak >= 2) break;
+          } else {
+            idleStreak = 0;
+          }
         }
       };
       const finishSearchFromApi = (
@@ -2377,20 +2390,17 @@ export default function WebScraper() {
         opts?: { successToast?: boolean },
       ) => {
         setTableFromApi(result.listings || []);
-        if ((result.listings?.length ?? 0) === 0) {
+        const n = result.listings?.length ?? 0;
+        if (n === 0 && !result.error) {
           st.warning(RE_USER_MESSAGES.no_listings_found);
-        } else if (opts?.successToast !== false) {
-          st.success(RE_USER_MESSAGES.listings_found);
+        } else if (n > 0) {
+          if (opts?.successToast !== false) st.success(RE_USER_MESSAGES.listings_found);
         }
-        if (result.error) applyErrors([{ url: '', error: friendlyApiError(result.error) }]);
+        if (result.error && n === 0) {
+          applyErrors([{ url: '', error: friendlyApiError(result.error) }]);
+        }
         releaseScrapeUiIfOwner();
       };
-      const progressiveFetchIntervalMs = isApartments
-        ? 2500
-        : isZillowFsbo || isZillowFrbo || isFsbo
-          ? 8000
-          : 4000;
-
       if (rePlatform === 'all') {
         /* Firecrawl path at end of chain */
       } else if (!isBackendRealEstatePlatform(rePlatform)) {
@@ -2401,12 +2411,6 @@ export default function WebScraper() {
       }
 
       if (isHotpads) {
-        // Check backend once so we show a clear message without multiple connection-refused console errors
-        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
-        if (!backendReachable) {
-          st.error(RE_USER_MESSAGES.temporary_issue);
-          return;
-        }
         // Build Hotpads URL on frontend to avoid backend search-location 500/encoding issues
         // Brivano Scout FRBO flow: must use Hotpads "for rent by owner" URL (not generic apartments-for-rent).
         const propertyType = 'for-rent-by-owner';
@@ -2430,26 +2434,11 @@ export default function WebScraper() {
         setReHotpadsScrapeLive(true);
         await pollSearchResultsFromBackend();
         try {
-        const pollInterval = 2000;
+        const pollInterval = 5000;
         const maxWait = 30 * 60 * 1000;
-        const start = Date.now();
-        let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await pollScraperStatus(() => scraperBackendApi.getHotpadsStatus());
-        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollInterval));
-          status = await pollScraperStatus(() => scraperBackendApi.getHotpadsStatus());
-          if (scrapeCancelled()) break;
-          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
-            lastProgressiveFetch = Date.now();
-            await pollSearchResultsFromBackend();
-          }
-        }
+        await runResultsOnlyPollLoop(maxWait, pollInterval);
         if (scrapeCancelled()) return;
-        if (status.status === 'running') {
-          st.warning('Scraper is still running. Showing results saved so far.');
-        }
         setReHotpadsScrapeLive(false);
-        await pollSearchResultsFromBackend();
         const result = await scraperBackendApi.getHotpadsLastResult(finalCityResultOpts());
         if (typeof result.include_pm === 'boolean') setReLastApiIncludePm(result.include_pm);
         setReLastBackendPmMeta(extractBackendPmMeta(result, result.listings?.length ?? 0));
@@ -2510,16 +2499,6 @@ export default function WebScraper() {
           setReHotpadsScrapeLive(false);
         }
         } else if (isTrulia) {
-        // Trulia: same flow as Hotpads (backend scraper, trigger-from-url, last-result)
-        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
-        if (!backendReachable) {
-          const base = scraperBackendApi.getBaseUrl();
-          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          st.error(isLocal
-            ? 'Trulia scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
-            : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          return;
-        }
         const url = buildTruliaUrl(reLocation.trim());
         if (!url) {
           st.error('Could not build Trulia URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
@@ -2538,25 +2517,8 @@ export default function WebScraper() {
           'Trulia scrape running — table fills as rows save to Supabase (include PM while running); when it finishes, By-owner rules apply on the final load.',
         );
         await pollSearchResultsFromBackend();
-        const pollInterval = 2000;
-        const maxWait = 30 * 60 * 1000;
-        const start = Date.now();
-        let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await pollScraperStatus(() => scraperBackendApi.getTruliaStatus());
-        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollInterval));
-          status = await pollScraperStatus(() => scraperBackendApi.getTruliaStatus());
-          if (scrapeCancelled()) break;
-          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
-            lastProgressiveFetch = Date.now();
-            await pollSearchResultsFromBackend();
-          }
-        }
+        await runResultsOnlyPollLoop(30 * 60 * 1000, 5000);
         if (scrapeCancelled()) return;
-        if (status.status === 'running') {
-          st.warning('Scraper is still running. Showing results saved so far.');
-        }
-        await pollSearchResultsFromBackend();
         const result = await scraperBackendApi.getTruliaLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
         if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
@@ -2597,16 +2559,6 @@ export default function WebScraper() {
           }
         }
         } else if (isZillowFsbo) {
-        // Zillow FSBO: search-location to get URL, trigger-from-url, then last-result from zillow_fsbo_listings
-        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
-        if (!backendReachable) {
-          const base = scraperBackendApi.getBaseUrl();
-          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          st.error(isLocal
-            ? 'Zillow FSBO scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO scraping.'
-            : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          return;
-        }
         let zillowFsboUrl = buildZillowFsboUrl(reLocation.trim());
         if (!zillowFsboUrl) {
           const searchRes = await scraperBackendApi.searchLocation('zillow_fsbo', reLocation.trim());
@@ -2627,25 +2579,8 @@ export default function WebScraper() {
         }
         st.info('Zillow FSBO scraper started. Listings appear here as the backend saves them — open List View to watch.');
         await pollSearchResultsFromBackend();
-        const pollInterval = 5000;
-        const maxWait = 30 * 60 * 1000;
-        const start = Date.now();
-        let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await pollScraperStatus(() => scraperBackendApi.getZillowFsboStatus());
-        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollInterval));
-          status = await pollScraperStatus(() => scraperBackendApi.getZillowFsboStatus());
-          if (scrapeCancelled()) break;
-          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
-            lastProgressiveFetch = Date.now();
-            await pollSearchResultsFromBackend();
-          }
-        }
+        await runResultsOnlyPollLoop(30 * 60 * 1000, 8000);
         if (scrapeCancelled()) return;
-        if (status.status === 'running') {
-          st.warning('Scraper is still running. Showing results saved so far.');
-        }
-        await pollSearchResultsFromBackend();
         const result = await scraperBackendApi.getZillowFsboLastResult(finalCityResultOpts());
         finishSearchFromApi(result, { successToast: false });
         const mappedLen = result.listings?.length ?? 0;
@@ -2690,16 +2625,6 @@ export default function WebScraper() {
           }
         }
         } else if (isZillowFrbo) {
-        // Zillow FRBO: search-location to get URL, trigger-from-url, then last-result from zillow_frbo_listings
-        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
-        if (!backendReachable) {
-          const base = scraperBackendApi.getBaseUrl();
-          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          st.error(isLocal
-            ? 'Zillow FRBO scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms" for FSBO/FRBO scraping.'
-            : 'Deployed scraper backend is not reachable. Check your network or try again in a moment. You can also use "All Platforms".');
-          return;
-        }
         const usCountryFrbo = isZillowFrboUsCountryLocation(reLocation.trim());
         let zillowFrboScrapeUrl: string | null = null;
         if (!usCountryFrbo) {
@@ -2734,25 +2659,9 @@ export default function WebScraper() {
             : 'Zillow FRBO scraper started. Listings appear here as the backend saves them — open List View to watch rows fill in.',
         );
         await pollSearchResultsFromBackend();
-        const pollInterval = 2000;
-        const maxWait = usCountryFrbo ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000;
-        const start = Date.now();
-        let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await pollScraperStatus(() => scraperBackendApi.getZillowFrboStatus());
-        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollInterval));
-          status = await pollScraperStatus(() => scraperBackendApi.getZillowFrboStatus());
-          if (scrapeCancelled()) break;
-          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
-            lastProgressiveFetch = Date.now();
-            await pollSearchResultsFromBackend();
-          }
-        }
+        const frboMaxWait = usCountryFrbo ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000;
+        await runResultsOnlyPollLoop(frboMaxWait, 8000);
         if (scrapeCancelled()) return;
-        if (status.status === 'running') {
-          st.warning('Scraper is still running. Showing results saved so far.');
-        }
-        await pollSearchResultsFromBackend();
         const result = await scraperBackendApi.getZillowFrboLastResult(finalCityResultOpts());
         finishSearchFromApi(result, { successToast: false });
         if ((result.listings?.length ?? 0) > 0) {
@@ -2809,16 +2718,6 @@ export default function WebScraper() {
           }
         }
         } else if (isFsbo) {
-        // FSBO.com: search-location -> trigger-from-url -> poll status -> last-result from fsbo_listings
-        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
-        if (!backendReachable) {
-          const base = scraperBackendApi.getBaseUrl();
-          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          st.error(isLocal
-            ? 'FSBO.com scraper backend is not running. Start the backend server (e.g. port 8080) or use "All Platforms".'
-            : 'Deployed scraper backend is not reachable. Check your network or try again.');
-          return;
-        }
         let fsboUrl = buildFsboSearchUrl(reLocation.trim());
         if (!fsboUrl) {
           const searchRes = await scraperBackendApi.searchLocation('fsbo', reLocation.trim());
@@ -2839,25 +2738,8 @@ export default function WebScraper() {
         }
         st.info('FSBO.com scraper started. Listings will appear as they are scraped.');
         await pollSearchResultsFromBackend();
-        const pollInterval = 2000;
-        const maxWait = 25 * 60 * 1000; // 25 min (FSBO can take 15–20 min for 128 listings)
-        const start = Date.now();
-        let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await pollScraperStatus(() => scraperBackendApi.getFsboStatus());
-        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollInterval));
-          status = await pollScraperStatus(() => scraperBackendApi.getFsboStatus());
-          if (scrapeCancelled()) break;
-          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
-            lastProgressiveFetch = Date.now();
-            await pollSearchResultsFromBackend();
-          }
-        }
+        await runResultsOnlyPollLoop(25 * 60 * 1000, 8000);
         if (scrapeCancelled()) return;
-        if (status.status === 'running') {
-          st.warning('Scraper is still running. Showing results saved so far.');
-        }
-        await pollSearchResultsFromBackend();
         const result = await scraperBackendApi.getFsboLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
         if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
@@ -2903,13 +2785,6 @@ export default function WebScraper() {
             'Apartments.com is mostly property managers. Listings still appear while scraping; use Include PM / realtor to keep every contact after the run.',
           );
         }
-        const backendReachable = await scraperBackendApi.isScraperBackendReachable();
-        if (!backendReachable) {
-          const base = scraperBackendApi.getBaseUrl();
-          const isLocal = base.includes('localhost') || base.includes('127.0.0.1');
-          st.error(isLocal ? 'Apartments.com scraper backend is not running. Start the backend server (e.g. port 8080).' : 'Deployed scraper backend is not reachable.');
-          return;
-        }
         let apartmentsUrl = buildApartmentsFrboUrl(reLocation.trim());
         if (!apartmentsUrl) {
           const searchRes = await scraperBackendApi.searchLocation('apartments', reLocation.trim(), 'apartments');
@@ -2934,23 +2809,8 @@ export default function WebScraper() {
         }
         st.info(`Searching ${searchLocation} — listings will appear here as they are found, then saved when the search finishes.`);
         await pollSearchResultsFromBackend();
-        const pollInterval = 2000;
-        const maxWait = 30 * 60 * 1000;
-        const start = Date.now();
-        let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
-        let status = await pollScraperStatus(() => scraperBackendApi.getApartmentsStatus());
-        while (status.status === 'running' && Date.now() - start < maxWait && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollInterval));
-          status = await pollScraperStatus(() => scraperBackendApi.getApartmentsStatus());
-          if (scrapeCancelled()) break;
-          if (status.status === 'running' && Date.now() - lastProgressiveFetch >= progressiveFetchIntervalMs) {
-            lastProgressiveFetch = Date.now();
-            await pollSearchResultsFromBackend();
-          }
-        }
+        await runResultsOnlyPollLoop(30 * 60 * 1000, 5000);
         if (scrapeCancelled()) return;
-        if (status.status === 'running') st.warning('Scraper is still running. Showing results saved so far.');
-        await pollSearchResultsFromBackend();
         const result = await scraperBackendApi.getApartmentsLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
         if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {

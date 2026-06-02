@@ -428,6 +428,8 @@ export type BackendHotpadsLastResultResponse = {
   rows_fetch_mode?: string;
   /** Non-technical copy for the UI */
   user_message?: string;
+  /** From /live-results — true while the scrape subprocess is active */
+  scraper_running?: boolean;
   normalized_location?: {
     search_city?: string | null;
     search_state?: string | null;
@@ -486,7 +488,7 @@ async function fetchLiveResults(
   const base = getBaseUrl();
   const q = lastResultQuery(options);
   try {
-    const res = await fetchWithTimeout(`${base}/api/${segment}/live-results${q}`, {}, 45000);
+    const res = await fetchWithTimeout(`${base}/api/${segment}/live-results${q}`, {}, SCRAPE_POLL_TIMEOUT_MS);
     const data = await res.json().catch(() => ({ listings: [] }));
     if (!res.ok) {
       return { listings: [], error: data.error || `Request failed: ${res.status}` };
@@ -502,11 +504,12 @@ const lastResultFetchInit: RequestInit = { cache: "no-store" };
 
 const HEALTH_CHECK_TIMEOUT_MS = 12000;
 const HEALTH_CHECK_RETRY_DELAY_MS = 2000;
-const API_FETCH_TIMEOUT_MS = 45000;
-/** Status must respond quickly; 20s caused canceled polls while backend was busy. */
-const STATUS_FETCH_TIMEOUT_MS = 45000;
+/** Long timeout — Railway scrapes can block workers; aborting early caused empty tables. */
+const SCRAPE_POLL_TIMEOUT_MS = 120000;
+const API_FETCH_TIMEOUT_MS = SCRAPE_POLL_TIMEOUT_MS;
+const STATUS_FETCH_TIMEOUT_MS = 15000;
 const STATUS_RESET_TIMEOUT_MS = 30000;
-const TRIGGER_FETCH_TIMEOUT_MS = 60000;
+const TRIGGER_FETCH_TIMEOUT_MS = 90000;
 
 async function fetchWithTimeout(
   url: string,
@@ -665,18 +668,22 @@ export const scraperBackendApi = {
   async fetchSearchResultsDuringScrape(
     platformKey: string,
     options?: LastResultFetchOptions,
-    opts?: { allowDbFallback?: boolean },
   ): Promise<BackendHotpadsLastResultResponse> {
     const live = await fetchLiveResults(platformKey, options);
-    const liveCount = live.listings?.length ?? 0;
-    if (liveCount > 0) return live;
-    if (opts?.allowDbFallback !== true) {
-      return live;
+    let db: BackendHotpadsLastResultResponse = { listings: [] };
+    try {
+      db = await this.fetchLastResultForPlatform(platformKey, { ...options, retries: 0 });
+    } catch {
+      /* live buffer is enough while scrape runs */
     }
-    const db = await this.fetchLastResultForPlatform(platformKey, { ...options, retries: 0 });
+    const liveCount = live.listings?.length ?? 0;
     const dbCount = db.listings?.length ?? 0;
-    if (dbCount > 0) return db;
-    return live.listings ? live : db;
+    const best = dbCount > liveCount ? db : live;
+    return {
+      ...best,
+      scraper_running: live.scraper_running,
+      listings: best.listings ?? [],
+    };
   },
 
   async normalizeLocation(location: string): Promise<{
