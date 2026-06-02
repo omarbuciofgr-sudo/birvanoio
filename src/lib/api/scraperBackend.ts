@@ -2,6 +2,7 @@
  * Scraper backend API (your Flask server).
  * Used for Hotpads (and future scrapers) instead of Supabase Edge Functions.
  */
+import { normalizeLocationClient } from '@/lib/realEstateSearch';
 
 /** Full state name → 2-letter abbreviation (for "Chicago, Illinois" etc.). */
 export const stateNameToAbbrev: Record<string, string> = {
@@ -148,6 +149,109 @@ export function isZillowFrboUsCountryLocation(location: string): boolean {
 }
 
 /** Build Trulia FSBO URL (same cities as Hotpads). Used when scraping Trulia from Brivano Scout. */
+/** Zillow FSBO SERP (e.g. Atlanta, GA → …/atlanta-ga/fsbo/). */
+export function buildZillowFsboUrl(location: string): string | null {
+  const loc = (location || "").trim();
+  if (!loc) return null;
+  const cityToState: Record<string, string> = {
+    minneapolis: "mn", "new york": "ny", "los angeles": "ca", chicago: "il",
+    houston: "tx", phoenix: "az", philadelphia: "pa", "san antonio": "tx",
+    "san diego": "ca", dallas: "tx", austin: "tx", seattle: "wa", denver: "co",
+    boston: "ma", miami: "fl", atlanta: "ga", detroit: "mi", portland: "or",
+    washington: "dc", "san francisco": "ca", orlando: "fl", tampa: "fl",
+  };
+  const low = loc.toLowerCase();
+  let stateAbbrev: string | null = cityToState[low] ?? null;
+  let city = loc;
+  const commaMatch2 = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
+  if (commaMatch2) {
+    city = commaMatch2[1].trim();
+    stateAbbrev = commaMatch2[2].trim().toLowerCase();
+  }
+  if (!stateAbbrev) {
+    const commaMatchFull = loc.match(/^(.+?),\s*(.+)$/);
+    if (commaMatchFull) {
+      city = commaMatchFull[1].trim();
+      const statePart = commaMatchFull[2].trim().toLowerCase();
+      stateAbbrev = stateNameToAbbrev[statePart] ?? (statePart.length === 2 ? statePart : null);
+    }
+  }
+  if (!stateAbbrev) {
+    const spaceMatch = loc.match(/^(.+?)\s+([A-Za-z]{2})\s*$/);
+    if (spaceMatch) {
+      city = spaceMatch[1].trim();
+      stateAbbrev = spaceMatch[2].trim().toLowerCase();
+    }
+  }
+  if (!stateAbbrev || !city) return null;
+  const slug = city
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!slug) return null;
+  return `https://www.zillow.com/${slug}-${stateAbbrev}/fsbo/`;
+}
+
+/** FSBO.com city search list URL. */
+export function buildFsboSearchUrl(location: string): string | null {
+  const loc = (location || "").trim();
+  if (!loc) return null;
+  const city = loc.split(",")[0]?.trim();
+  if (!city) return null;
+  const citySlug = city
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!citySlug) return null;
+  return `https://www.forsalebyowner.com/search/list/${citySlug}`;
+}
+
+/** Apartments.com FRBO SERP for a metro (e.g. Atlanta, GA → …/atlanta-ga/for-rent-by-owner/). */
+export function buildApartmentsFrboUrl(location: string): string | null {
+  const loc = (location || "").trim();
+  if (!loc) return null;
+  const cityToState: Record<string, string> = {
+    minneapolis: "mn", "new york": "ny", "los angeles": "ca", chicago: "il",
+    houston: "tx", phoenix: "az", philadelphia: "pa", "san antonio": "tx",
+    "san diego": "ca", dallas: "tx", austin: "tx", seattle: "wa", denver: "co",
+    boston: "ma", miami: "fl", atlanta: "ga", detroit: "mi", portland: "or",
+    washington: "dc", "san francisco": "ca", orlando: "fl", tampa: "fl",
+  };
+  const low = loc.toLowerCase();
+  let stateAbbrev: string | null = cityToState[low] ?? null;
+  let city = loc;
+  const commaMatch2 = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
+  if (commaMatch2) {
+    city = commaMatch2[1].trim();
+    stateAbbrev = commaMatch2[2].trim().toLowerCase();
+  }
+  if (!stateAbbrev) {
+    const commaMatchFull = loc.match(/^(.+?),\s*(.+)$/);
+    if (commaMatchFull) {
+      city = commaMatchFull[1].trim();
+      const statePart = commaMatchFull[2].trim().toLowerCase();
+      stateAbbrev = stateNameToAbbrev[statePart] ?? (statePart.length === 2 ? statePart : null);
+    }
+  }
+  if (!stateAbbrev) {
+    const spaceMatch = loc.match(/^(.+?)\s+([A-Za-z]{2})\s*$/);
+    if (spaceMatch) {
+      city = spaceMatch[1].trim();
+      stateAbbrev = spaceMatch[2].trim().toLowerCase();
+    }
+  }
+  if (!stateAbbrev || !city) return null;
+  const slug = city
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!slug) return null;
+  return `https://www.apartments.com/${slug}-${stateAbbrev}/for-rent-by-owner/`;
+}
+
 export function buildTruliaUrl(location: string): string | null {
   const loc = (location || "").trim();
   if (!loc) return null;
@@ -285,6 +389,10 @@ export type BackendHotpadsStatusResponse = {
   status: "running" | "idle";
   last_run?: string;
   error?: string;
+  /** ISO timestamp when the current scrape started (from trigger-from-url). */
+  started_at?: string;
+  /** Search box city stored on the scrape session. */
+  location?: string;
 };
 
 export type BackendHotpadsLastResultResponse = {
@@ -314,6 +422,27 @@ export type BackendHotpadsLastResultResponse = {
   /** Set when ?location= was applied on last-result */
   location_filter?: string;
   total_before_location_filter?: number;
+  /** Why the UI received 0 rows (when set) */
+  empty_reason?: string;
+  location_match_mode?: string;
+  rows_fetch_mode?: string;
+  /** Non-technical copy for the UI */
+  user_message?: string;
+  normalized_location?: {
+    search_city?: string | null;
+    search_state?: string | null;
+    search_location?: string | null;
+    city_slug?: string | null;
+    city_state_slug?: string | null;
+    valid?: boolean;
+  };
+};
+
+export type RealEstateSearchResponse = BackendHotpadsLastResultResponse & {
+  success?: boolean;
+  action?: 'cached' | 'needs_scrape' | 'scraping' | 'cached_filtered' | 'invalid_location' | 'error';
+  normalized?: BackendHotpadsLastResultResponse['normalized_location'];
+  scrape_url?: string | null;
 };
 
 export type LastResultFetchOptions = {
@@ -336,6 +465,36 @@ function lastResultQuery(options?: LastResultFetchOptions): string {
   const since = (options?.since || "").trim();
   if (since) params.set("since", since);
   return `?${params.toString()}`;
+}
+
+/** Flask /api/{segment}/live-results — in-memory scrape buffer (display before DB save). */
+const LIVE_RESULTS_SEGMENT: Record<string, string> = {
+  hotpads: "hotpads",
+  trulia: "trulia",
+  zillow: "zillow-fsbo",
+  zillow_frbo: "zillow-frbo",
+  fsbo: "fsbo",
+  apartments: "apartments",
+};
+
+async function fetchLiveResults(
+  platformKey: string,
+  options?: LastResultFetchOptions,
+): Promise<BackendHotpadsLastResultResponse> {
+  const segment = LIVE_RESULTS_SEGMENT[platformKey];
+  if (!segment) return { listings: [], error: "Unknown platform" };
+  const base = getBaseUrl();
+  const q = lastResultQuery(options);
+  try {
+    const res = await fetch(`${base}/api/${segment}/live-results${q}`, lastResultFetchInit);
+    const data = await res.json().catch(() => ({ listings: [] }));
+    if (!res.ok) {
+      return { listings: [], error: data.error || `Request failed: ${res.status}` };
+    }
+    return data;
+  } catch (e: unknown) {
+    return { listings: [], error: e instanceof Error ? e.message : "Network error" };
+  }
 }
 
 /** Avoid browser HTTP cache returning the wrong payload when toggling include_pm on the same path. */
@@ -397,6 +556,120 @@ export async function isScraperBackendReachable(): Promise<boolean> {
 export const scraperBackendApi = {
   getBaseUrl,
   isScraperBackendReachable,
+
+  /** Listings from the active scrape buffer (shown before Supabase flush). */
+  getLiveResults(platformKey: string, options?: LastResultFetchOptions) {
+    return fetchLiveResults(platformKey, options);
+  },
+
+  async fetchLastResultForPlatform(
+    platformKey: string,
+    options?: LastResultFetchOptions,
+  ): Promise<BackendHotpadsLastResultResponse> {
+    switch (platformKey) {
+      case "hotpads":
+        return this.getHotpadsLastResult(options);
+      case "trulia":
+        return this.getTruliaLastResult(options);
+      case "zillow":
+        return this.getZillowFsboLastResult(options);
+      case "zillow_frbo":
+        return this.getZillowFrboLastResult(options);
+      case "fsbo":
+        return this.getFsboLastResult(options);
+      case "apartments":
+        return this.getApartmentsLastResult(options);
+      default:
+        return { listings: [], error: "Unknown platform" };
+    }
+  },
+
+  /**
+   * Live buffer during an active scrape. By default skips /last-result (slow on large tables).
+   * Set allowDbFallback=true to load Supabase when the buffer is still empty.
+   */
+  async fetchSearchResultsDuringScrape(
+    platformKey: string,
+    options?: LastResultFetchOptions,
+    opts?: { allowDbFallback?: boolean },
+  ): Promise<BackendHotpadsLastResultResponse> {
+    const live = await fetchLiveResults(platformKey, options);
+    const liveCount = live.listings?.length ?? 0;
+    if (liveCount > 0) return live;
+    if (opts?.allowDbFallback !== true) {
+      return live;
+    }
+    const db = await this.fetchLastResultForPlatform(platformKey, options);
+    const dbCount = db.listings?.length ?? 0;
+    if (dbCount > 0) return db;
+    return live.listings ? live : db;
+  },
+
+  async normalizeLocation(location: string): Promise<{
+    success: boolean;
+    valid?: boolean;
+    search_city?: string | null;
+    search_state?: string | null;
+    search_location?: string | null;
+    city_slug?: string | null;
+    city_state_slug?: string | null;
+    user_message?: string;
+  }> {
+    const base = getBaseUrl();
+    try {
+      const res = await fetch(`${base}/api/real-estate/normalize-location`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: location.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.valid !== false && data.search_location) {
+        return { success: true, ...data };
+      }
+    } catch {
+      /* fall through to client normalize */
+    }
+    const client = normalizeLocationClient(location);
+    if (client.success && client.search_location) {
+      return { success: true, ...client };
+    }
+    return {
+      success: false,
+      valid: false,
+      user_message: "We couldn't find that city. Please check the city and state and try again.",
+    };
+  },
+
+  async realEstateSearch(
+    platform: string,
+    location: string,
+    options?: { includePm?: boolean },
+  ): Promise<RealEstateSearchResponse> {
+    const base = getBaseUrl();
+    const res = await fetch(`${base}/api/real-estate/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        platform,
+        location: location.trim(),
+        include_pm: options?.includePm === true,
+      }),
+    });
+    if (res.status === 404) {
+      return { listings: [], success: true, action: 'needs_scrape' as const };
+    }
+    const data = await res.json().catch(() => ({ listings: [] }));
+    if (!res.ok) {
+      return {
+        listings: [],
+        success: false,
+        action: 'error',
+        user_message: data.user_message,
+        error: data.error,
+      };
+    }
+    return data;
+  },
 
   async searchLocation(platform: string, location: string, propertyType: string = "apartments"): Promise<BackendSearchLocationResponse> {
     const base = getBaseUrl();
