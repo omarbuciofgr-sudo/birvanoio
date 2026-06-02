@@ -2416,7 +2416,7 @@ export default function WebScraper() {
           return;
         }
         // Reset and always send force=1 so backend clears "already running" (works with any backend version)
-        await scraperBackendApi.resetHotpadsStatus();
+        // trigger force=1 clears stale running state — skip blocking reset (was timing out at 30s×2)
         const triggerRes = await scraperBackendApi.triggerFromUrl(url, {
           force: true,
           location: reLocation.trim(),
@@ -2525,7 +2525,6 @@ export default function WebScraper() {
           st.error('Could not build Trulia URL. Use a city (e.g. Chicago) or "City, State" (e.g. Chicago, Illinois or Chicago, IL).');
           return;
         }
-        await scraperBackendApi.resetTruliaStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(url, {
           force: true,
           savePm: !reByOwnerStrict,
@@ -2617,7 +2616,6 @@ export default function WebScraper() {
           }
           zillowFsboUrl = searchRes.url;
         }
-        await scraperBackendApi.resetZillowFsboStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(zillowFsboUrl, {
           force: true,
           location: reLocation.trim(),
@@ -2716,7 +2714,6 @@ export default function WebScraper() {
             zillowFrboScrapeUrl = searchRes.url;
           }
         }
-        await scraperBackendApi.resetZillowFrboStatus();
         const triggerRes = usCountryFrbo
           ? await scraperBackendApi.triggerZillowFrboCountry({
               country: 'US',
@@ -2831,7 +2828,6 @@ export default function WebScraper() {
           }
           fsboUrl = searchRes.url;
         }
-        await scraperBackendApi.resetFsboStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(fsboUrl, {
           force: true,
           location: reLocation.trim(),
@@ -2927,7 +2923,6 @@ export default function WebScraper() {
             return;
           }
         }
-        await scraperBackendApi.resetApartmentsStatus();
         const triggerRes = await scraperBackendApi.triggerFromUrl(apartmentsUrl, {
           force: true,
           location: reLocation.trim(),
