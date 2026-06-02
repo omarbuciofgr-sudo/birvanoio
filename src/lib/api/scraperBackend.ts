@@ -486,7 +486,7 @@ async function fetchLiveResults(
   const base = getBaseUrl();
   const q = lastResultQuery(options);
   try {
-    const res = await fetchWithTimeout(`${base}/api/${segment}/live-results${q}`, {}, 30000);
+    const res = await fetchWithTimeout(`${base}/api/${segment}/live-results${q}`, {}, 45000);
     const data = await res.json().catch(() => ({ listings: [] }));
     if (!res.ok) {
       return { listings: [], error: data.error || `Request failed: ${res.status}` };
@@ -503,7 +503,9 @@ const lastResultFetchInit: RequestInit = { cache: "no-store" };
 const HEALTH_CHECK_TIMEOUT_MS = 12000;
 const HEALTH_CHECK_RETRY_DELAY_MS = 2000;
 const API_FETCH_TIMEOUT_MS = 45000;
-const STATUS_FETCH_TIMEOUT_MS = 20000;
+/** Status must respond quickly; 20s caused canceled polls while backend was busy. */
+const STATUS_FETCH_TIMEOUT_MS = 45000;
+const STATUS_RESET_TIMEOUT_MS = 30000;
 const TRIGGER_FETCH_TIMEOUT_MS = 60000;
 
 async function fetchWithTimeout(
@@ -520,11 +522,11 @@ async function fetchWithTimeout(
   }
 }
 
-/** Lightweight status/reset calls with retry — avoids aborting long scrapes on one blip. */
+/** Lightweight status/reset calls — keep retries low so polls don't stack 3× timeouts. */
 async function fetchStatusPath(
   path: string,
   timeoutMs = STATUS_FETCH_TIMEOUT_MS,
-  retries = 2,
+  retries = 0,
 ): Promise<{ ok: boolean; data: Record<string, unknown>; status: number }> {
   const base = getBaseUrl();
   let lastError: unknown;
@@ -827,7 +829,7 @@ export const scraperBackendApi = {
   /** Clear backend "running" state so a new scrape can start (use when you get "already running" 400). */
   async resetHotpadsStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-hotpads?reset=1");
+      const result = await fetchStatusPath("/api/status-hotpads?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }
@@ -870,7 +872,7 @@ export const scraperBackendApi = {
 
   async resetTruliaStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-trulia?reset=1");
+      const result = await fetchStatusPath("/api/status-trulia?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }
@@ -913,7 +915,7 @@ export const scraperBackendApi = {
 
   async resetRedfinStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-redfin?reset=1");
+      const result = await fetchStatusPath("/api/status-redfin?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }
@@ -956,7 +958,7 @@ export const scraperBackendApi = {
 
   async resetZillowFrboStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-zillow-frbo?reset=1");
+      const result = await fetchStatusPath("/api/status-zillow-frbo?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }
@@ -999,7 +1001,7 @@ export const scraperBackendApi = {
 
   async resetZillowFsboStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-zillow-fsbo?reset=1");
+      const result = await fetchStatusPath("/api/status-zillow-fsbo?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }
@@ -1042,7 +1044,7 @@ export const scraperBackendApi = {
 
   async resetFsboStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-fsbo?reset=1");
+      const result = await fetchStatusPath("/api/status-fsbo?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }
@@ -1085,7 +1087,7 @@ export const scraperBackendApi = {
 
   async resetApartmentsStatus(): Promise<{ message?: string; error?: string }> {
     try {
-      const result = await fetchStatusPath("/api/status-apartments?reset=1");
+      const result = await fetchStatusPath("/api/status-apartments?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
       if (!result.ok) {
         return { error: (result.data.error as string) || `Request failed: ${result.status}` };
       }

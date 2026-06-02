@@ -2629,7 +2629,7 @@ export default function WebScraper() {
         }
         st.info('Zillow FSBO scraper started. Listings appear here as the backend saves them — open List View to watch.');
         await pollSearchResultsFromBackend();
-        const pollInterval = 2000;
+        const pollInterval = 5000;
         const maxWait = 30 * 60 * 1000;
         const start = Date.now();
         let lastProgressiveFetch = Date.now() - progressiveFetchIntervalMs;
