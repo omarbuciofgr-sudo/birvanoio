@@ -2349,8 +2349,116 @@ export default function WebScraper() {
         includePm: true,
         location: searchLocation,
       });
-      const pollSearchResultsFromBackend = async (): Promise<{ count: number; running: boolean }> => {
-        if (scrapeCancelled()) return { count: liveRowsShown, running: true };
+      const SCRAPE_CHECKPOINT_MS = 5 * 60 * 1000;
+      const SCRAPE_POLL_MS = 8000;
+      const savedLeadUrlsRef = new Set<string>();
+      type PollSnapshot = {
+        count: number;
+        running: boolean | undefined;
+        listings: unknown[];
+        scrape_error?: string;
+        exit_code?: number;
+      };
+      const listingKey = (l: { source_url?: string; listing_url?: string }) =>
+        String(l.source_url || l.listing_url || '').trim();
+      const platformLeadDomain = () => {
+        if (isHotpads) return 'hotpads.com';
+        if (isTrulia) return 'trulia.com';
+        if (isZillowFsbo || isZillowFrbo) return 'zillow.com';
+        if (isFsbo) return 'forsalebyowner.com';
+        if (isApartments) return 'apartments.com';
+        return 'unknown';
+      };
+      const platformLeadSource = () => {
+        if (isHotpads) return 'hotpads';
+        if (isTrulia) return 'trulia';
+        if (isZillowFsbo) return 'zillow_fsbo';
+        if (isZillowFrbo) return 'zillow_frbo';
+        if (isFsbo) return 'fsbo';
+        if (isApartments) return 'apartments';
+        return backendMapKey;
+      };
+      const buildScrapedLeadRows = (listings: ReturnType<typeof enrichForSearch>) => {
+        const defaultDomain = platformLeadDomain();
+        const src = platformLeadSource();
+        const listingType =
+          isZillowFrbo || isApartments || isHotpads ? 'rent' : 'sale';
+        return listings.map((listing) => ({
+          domain: listing.source_url
+            ? (() => {
+                try {
+                  return new URL(listing.source_url).hostname;
+                } catch {
+                  return defaultDomain;
+                }
+              })()
+            : defaultDomain,
+          source_url: listing.source_url || listing.listing_url || null,
+          address: listing.address || null,
+          full_name: listing.owner_name || null,
+          best_email: (listing as { owner_email?: string }).owner_email || null,
+          best_phone: listing.owner_phone || null,
+          all_emails: (listing as { owner_email?: string }).owner_email
+            ? [(listing as { owner_email?: string }).owner_email!]
+            : [],
+          all_phones: listing.owner_phone ? [listing.owner_phone] : [],
+          status: 'new' as const,
+          confidence_score: 50,
+          lead_type: 'person' as const,
+          source_type: 'real_estate_scraper' as const,
+          schema_data: {
+            address: listing.address,
+            bedrooms: listing.bedrooms,
+            bathrooms: listing.bathrooms,
+            price: listing.price,
+            listing_type: listingType,
+            source_platform: src,
+            square_feet: listing.square_feet,
+          },
+          enrichment_providers_used: [] as string[],
+        }));
+      };
+      const saveNewListingsCheckpoint = async (listings: ReturnType<typeof enrichForSearch>) => {
+        if (!reSaveToDb || !user?.id || scrapeCancelled()) return;
+        const fresh = listings.filter((l) => {
+          const k = listingKey(l);
+          return k && !savedLeadUrlsRef.has(k);
+        });
+        if (!fresh.length) return;
+        try {
+          const rows = buildScrapedLeadRows(fresh);
+          const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
+          if (!error && data?.length) {
+            fresh.forEach((l) => {
+              const k = listingKey(l);
+              if (k) savedLeadUrlsRef.add(k);
+            });
+            applyListings((prev) =>
+              prev.map((l) =>
+                fresh.some((f) => listingKey(f) === listingKey(l))
+                  ? { ...l, saved_to_db: true }
+                  : l,
+              ),
+            );
+            st.success(`Saved ${data.length} new listing(s) to database`);
+          } else if (error) {
+            const is404 =
+              String((error as { message?: string }).message || '').includes('404') ||
+              (error as { code?: string }).code === 'PGRST116';
+            if (is404) {
+              st.info(
+                'Listings are in the platform table. Run birvanoio Supabase migrations to save to scraped_leads.',
+              );
+            }
+          }
+        } catch {
+          /* checkpoint save is best-effort — scrape continues */
+        }
+      };
+      const pollSearchResultsFromBackend = async (): Promise<PollSnapshot> => {
+        if (scrapeCancelled()) {
+          return { count: liveRowsShown, running: true, listings: [] };
+        }
         try {
           const result = await scraperBackendApi.fetchSearchResultsDuringScrape(
             backendMapKey,
@@ -2362,28 +2470,54 @@ export default function WebScraper() {
           setTableFromApi(result.listings || [], { live: true });
           return {
             count: result.listings?.length ?? 0,
-            running: result.scraper_running === true ? true : result.scraper_running === false ? false : undefined,
+            running:
+              result.scraper_running === true
+                ? true
+                : result.scraper_running === false
+                  ? false
+                  : undefined,
+            listings: result.listings || [],
+            scrape_error: result.scrape_error,
+            exit_code: result.exit_code,
           };
         } catch (e) {
           console.debug('[scout] poll failed', backendMapKey, e);
-          return { count: liveRowsShown, running: true };
+          return { count: liveRowsShown, running: true, listings: [] };
         }
       };
-      /** Poll live-results + last-result only — never /status-* (those timed out at 45s on Railway). */
-      const runResultsOnlyPollLoop = async (maxWaitMs: number, pollIntervalMs: number) => {
+      /** Poll live-results + last-result; every 5 min show/save checkpoint while scrape continues. */
+      const runResultsOnlyPollLoop = async (maxWaitMs: number): Promise<PollSnapshot> => {
         const start = Date.now();
         let idleStreak = 0;
+        let lastCheckpoint = Date.now();
+        let last = await pollSearchResultsFromBackend();
+        if (last.scrape_error && last.count === 0 && last.running === false) {
+          st.error(friendlyApiError(last.scrape_error));
+          return last;
+        }
         while (Date.now() - start < maxWaitMs && !scrapeCancelled()) {
-          await new Promise((r) => setTimeout(r, pollIntervalMs));
+          await new Promise((r) => setTimeout(r, SCRAPE_POLL_MS));
           if (scrapeCancelled()) break;
-          const { running } = await pollSearchResultsFromBackend();
-          if (running === false) {
+          last = await pollSearchResultsFromBackend();
+          if (Date.now() - lastCheckpoint >= SCRAPE_CHECKPOINT_MS) {
+            lastCheckpoint = Date.now();
+            if (last.count > 0) {
+              st.info(`${last.count} listing(s) so far — still searching…`);
+              await saveNewListingsCheckpoint(enrichForSearch(last.listings));
+            }
+          }
+          if (last.scrape_error && last.count === 0 && last.running === false) {
+            st.error(friendlyApiError(last.scrape_error));
+            break;
+          }
+          if (last.running === false) {
             idleStreak += 1;
             if (idleStreak >= 2) break;
           } else {
             idleStreak = 0;
           }
         }
+        return last;
       };
       const finishSearchFromApi = (
         result: { listings?: unknown[]; error?: string },
@@ -2434,9 +2568,7 @@ export default function WebScraper() {
         setReHotpadsScrapeLive(true);
         await pollSearchResultsFromBackend();
         try {
-        const pollInterval = 5000;
-        const maxWait = 30 * 60 * 1000;
-        await runResultsOnlyPollLoop(maxWait, pollInterval);
+        await runResultsOnlyPollLoop(30 * 60 * 1000);
         if (scrapeCancelled()) return;
         setReHotpadsScrapeLive(false);
         const result = await scraperBackendApi.getHotpadsLastResult(finalCityResultOpts());
@@ -2446,55 +2578,7 @@ export default function WebScraper() {
         if (reByOwnerStrict && (result.listings?.length ?? 0) === 0) {
           st.info(RE_USER_MESSAGES.by_owner_filtered_all);
         }
-        // Save to Supabase scraped_leads when "Save to Database" is on (matches frontend structure)
-        if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
-          try {
-            const rows = enrichForSearch(result.listings || []).map((listing) => ({
-              domain: listing.source_url ? (() => { try { return new URL(listing.source_url).hostname; } catch { return 'hotpads.com'; } })() : 'hotpads.com',
-              source_url: listing.source_url || listing.listing_url || null,
-              address: listing.address || null,
-              full_name: listing.owner_name || null,
-              best_email: (listing as any).owner_email || null,
-              best_phone: listing.owner_phone || null,
-              all_emails: (listing as any).owner_email ? [(listing as any).owner_email] : [],
-              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
-              status: 'new' as const,
-              confidence_score: 50,
-              lead_type: 'person',
-              source_type: 'real_estate_scraper',
-              schema_data: {
-          address: listing.address,
-                bedrooms: listing.bedrooms,
-                bathrooms: listing.bathrooms,
-          price: listing.price,
-                listing_type: listing.listing_type,
-                source_platform: 'hotpads',
-          square_feet: listing.square_feet,
-              },
-              enrichment_providers_used: [],
-            }));
-            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
-            if (!error && data?.length) {
-              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              st.success(`Saved ${data.length} Hotpads listings to database`);
-            } else if (error) {
-              const is404 = String((error as any)?.message || '').includes('404') || (error as any)?.code === 'PGRST116';
-              if (is404) {
-                st.info('Listings are in hotpads_listings. The "scraped_leads" table was not found—run birvanoio Supabase migrations to save to the leads pipeline.');
-              } else {
-                st.error('Could not save listings to database');
-              }
-            }
-          } catch (e: any) {
-            const msg = String(e?.message || '');
-            const is404 = msg.includes('404') || msg.includes('Not Found');
-            if (is404) {
-              st.info('Listings are in hotpads_listings. The "scraped_leads" table was not found—run birvanoio Supabase migrations to save to the leads pipeline.');
-      } else {
-              st.error('Failed to save listings to database');
-            }
-          }
-          }
+        await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
         } finally {
           setReHotpadsScrapeLive(false);
         }
@@ -2517,47 +2601,11 @@ export default function WebScraper() {
           'Trulia scrape running — table fills as rows save to Supabase (include PM while running); when it finishes, By-owner rules apply on the final load.',
         );
         await pollSearchResultsFromBackend();
-        await runResultsOnlyPollLoop(30 * 60 * 1000, 5000);
+        await runResultsOnlyPollLoop(30 * 60 * 1000);
         if (scrapeCancelled()) return;
         const result = await scraperBackendApi.getTruliaLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
-        if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
-          try {
-            const rows = enrichForSearch(result.listings || []).map((listing: Record<string, any>) => ({
-              domain: 'trulia.com',
-              source_url: String(listing.source_url || listing.listing_url || ''),
-              address: String(listing.address || ''),
-              full_name: String(listing.owner_name || ''),
-              best_email: null as string | null,
-              best_phone: listing.owner_phone ? String(listing.owner_phone) : null,
-              all_emails: [],
-              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
-              status: 'new' as const,
-              confidence_score: 50,
-              lead_type: 'person',
-              source_type: 'real_estate_scraper',
-              schema_data: {
-                address: listing.address,
-                bedrooms: listing.bedrooms,
-                bathrooms: listing.bathrooms,
-                price: listing.price,
-                listing_type: 'sale',
-                source_platform: 'trulia',
-                square_feet: listing.square_feet,
-              },
-              enrichment_providers_used: [],
-            }));
-            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
-            if (!error && data?.length) {
-              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              st.success(`Saved ${data.length} Trulia listings to database`);
-            } else if (error) {
-              st.error('Could not save listings to database');
-            }
-          } catch {
-            st.error('Failed to save listings to database');
-          }
-        }
+        await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
         } else if (isZillowFsbo) {
         let zillowFsboUrl = buildZillowFsboUrl(reLocation.trim());
         if (!zillowFsboUrl) {
@@ -2579,7 +2627,7 @@ export default function WebScraper() {
         }
         st.info('Zillow FSBO scraper started. Listings appear here as the backend saves them — open List View to watch.');
         await pollSearchResultsFromBackend();
-        await runResultsOnlyPollLoop(30 * 60 * 1000, 8000);
+        await runResultsOnlyPollLoop(30 * 60 * 1000);
         if (scrapeCancelled()) return;
         const result = await scraperBackendApi.getZillowFsboLastResult(finalCityResultOpts());
         finishSearchFromApi(result, { successToast: false });
@@ -2587,43 +2635,7 @@ export default function WebScraper() {
         if (mappedLen === 0) {
           st.warning(RE_USER_MESSAGES.no_listings_found);
         }
-        if (reSaveToDb && mappedLen > 0 && user?.id) {
-          try {
-            const rows = enrichForSearch(result.listings || []).map((listing) => ({
-              domain: 'zillow.com',
-              source_url: listing.source_url || listing.listing_url || null,
-              address: listing.address || null,
-              full_name: listing.owner_name || null,
-              best_email: null,
-              best_phone: listing.owner_phone || null,
-              all_emails: [],
-              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
-              status: 'new' as const,
-              confidence_score: 50,
-              lead_type: 'person',
-              source_type: 'real_estate_scraper',
-              schema_data: {
-                address: listing.address,
-                bedrooms: listing.bedrooms,
-                bathrooms: listing.bathrooms,
-                price: listing.price,
-                listing_type: 'sale',
-                source_platform: 'zillow_fsbo',
-                square_feet: listing.square_feet,
-              },
-              enrichment_providers_used: [],
-            }));
-            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
-            if (!error && data?.length) {
-              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              st.success(`Saved ${data.length} Zillow FSBO listings to database`);
-            } else if (error) {
-              st.error('Could not save listings to database');
-            }
-          } catch {
-            st.error('Failed to save listings to database');
-          }
-        }
+        await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
         } else if (isZillowFrbo) {
         const usCountryFrbo = isZillowFrboUsCountryLocation(reLocation.trim());
         let zillowFrboScrapeUrl: string | null = null;
@@ -2660,7 +2672,7 @@ export default function WebScraper() {
         );
         await pollSearchResultsFromBackend();
         const frboMaxWait = usCountryFrbo ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000;
-        await runResultsOnlyPollLoop(frboMaxWait, 8000);
+        await runResultsOnlyPollLoop(frboMaxWait);
         if (scrapeCancelled()) return;
         const result = await scraperBackendApi.getZillowFrboLastResult(finalCityResultOpts());
         finishSearchFromApi(result, { successToast: false });
@@ -2680,43 +2692,7 @@ export default function WebScraper() {
             );
           }
         }
-        if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
-          try {
-            const rows = enrichForSearch(result.listings || []).map((listing) => ({
-              domain: 'zillow.com',
-              source_url: listing.source_url || listing.listing_url || null,
-              address: listing.address || null,
-              full_name: listing.owner_name || null,
-              best_email: null,
-              best_phone: listing.owner_phone || null,
-              all_emails: [],
-              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
-              status: 'new' as const,
-              confidence_score: 50,
-              lead_type: 'person',
-              source_type: 'real_estate_scraper',
-              schema_data: {
-                address: listing.address,
-                bedrooms: listing.bedrooms,
-                bathrooms: listing.bathrooms,
-                price: listing.price,
-                listing_type: 'rent',
-                source_platform: 'zillow_frbo',
-                square_feet: listing.square_feet,
-              },
-              enrichment_providers_used: [],
-            }));
-            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
-            if (!error && data?.length) {
-              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              st.success(`Saved ${data.length} Zillow FRBO listings to database`);
-            } else if (error) {
-              st.error('Could not save listings to database');
-            }
-          } catch {
-            st.error('Failed to save listings to database');
-          }
-        }
+        await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
         } else if (isFsbo) {
         let fsboUrl = buildFsboSearchUrl(reLocation.trim());
         if (!fsboUrl) {
@@ -2738,47 +2714,11 @@ export default function WebScraper() {
         }
         st.info('FSBO.com scraper started. Listings will appear as they are scraped.');
         await pollSearchResultsFromBackend();
-        await runResultsOnlyPollLoop(25 * 60 * 1000, 8000);
+        await runResultsOnlyPollLoop(25 * 60 * 1000);
         if (scrapeCancelled()) return;
         const result = await scraperBackendApi.getFsboLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
-        if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
-          try {
-            const rows = enrichForSearch(result.listings || []).map((listing) => ({
-              domain: 'forsalebyowner.com',
-              source_url: listing.source_url || listing.listing_url || null,
-              address: listing.address || null,
-              full_name: listing.owner_name || null,
-              best_email: (listing as any).owner_email || null,
-              best_phone: listing.owner_phone || null,
-              all_emails: (listing as any).owner_email ? [(listing as any).owner_email] : [],
-              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
-              status: 'new' as const,
-              confidence_score: 50,
-              lead_type: 'person',
-              source_type: 'real_estate_scraper',
-              schema_data: {
-                address: listing.address,
-                bedrooms: listing.bedrooms,
-                bathrooms: listing.bathrooms,
-                price: listing.price,
-                listing_type: 'sale',
-                source_platform: 'fsbo',
-                square_feet: listing.square_feet,
-              },
-              enrichment_providers_used: [],
-            }));
-            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
-            if (!error && data?.length) {
-              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              st.success(`Saved ${data.length} FSBO.com listings to database`);
-            } else if (error) {
-              st.error('Could not save listings to database');
-            }
-          } catch {
-            st.error('Failed to save listings to database');
-          }
-        }
+        await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
         } else if (isApartments) {
         if (reByOwnerStrict) {
           st.info(
@@ -2809,32 +2749,11 @@ export default function WebScraper() {
         }
         st.info(`Searching ${searchLocation} — listings will appear here as they are found, then saved when the search finishes.`);
         await pollSearchResultsFromBackend();
-        await runResultsOnlyPollLoop(30 * 60 * 1000, 5000);
+        await runResultsOnlyPollLoop(30 * 60 * 1000);
         if (scrapeCancelled()) return;
         const result = await scraperBackendApi.getApartmentsLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
-        if (reSaveToDb && (result.listings?.length ?? 0) > 0 && user?.id) {
-          try {
-            const rows = enrichForSearch(result.listings || []).map((listing) => ({
-              domain: 'apartments.com',
-              source_url: listing.source_url || listing.listing_url || null,
-              address: listing.address || null,
-              full_name: listing.owner_name || null,
-              best_email: (listing as any).owner_email || null,
-              best_phone: listing.owner_phone || null,
-              all_emails: (listing as any).owner_email ? [(listing as any).owner_email] : [],
-              all_phones: listing.owner_phone ? [listing.owner_phone] : [],
-              status: 'new' as const, confidence_score: 50, lead_type: 'person', source_type: 'real_estate_scraper',
-              schema_data: { address: listing.address, bedrooms: listing.bedrooms, bathrooms: listing.bathrooms, price: listing.price, listing_type: 'rent', source_platform: 'apartments', square_feet: listing.square_feet },
-              enrichment_providers_used: [],
-            }));
-            const { data, error } = await supabase.from('scraped_leads').insert(rows).select('id');
-            if (!error && data?.length) {
-              applyListings((prev) => prev.map((l) => ({ ...l, saved_to_db: true })));
-              st.success(`Saved ${data.length} Apartments.com listings to database`);
-            } else if (error) st.error('Could not save listings to database');
-          } catch { st.error('Failed to save listings to database'); }
-        }
+        await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
         } else {
         // All Platforms: FSBO/FRBO uses Edge Function that requires signed-in admin
         const { data: { session } } = await supabase.auth.getSession();

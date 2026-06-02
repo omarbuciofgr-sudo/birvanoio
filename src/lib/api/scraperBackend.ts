@@ -430,6 +430,12 @@ export type BackendHotpadsLastResultResponse = {
   user_message?: string;
   /** From /live-results — true while the scrape subprocess is active */
   scraper_running?: boolean;
+  /** Subprocess exit code when scrape finished with an error */
+  exit_code?: number;
+  /** Human-readable scrape failure (when exit_code != 0) */
+  scrape_error?: string;
+  /** Rows in live buffer before location filter */
+  total_buffered?: number;
   normalized_location?: {
     search_city?: string | null;
     search_state?: string | null;
@@ -682,6 +688,9 @@ export const scraperBackendApi = {
     return {
       ...best,
       scraper_running: live.scraper_running,
+      exit_code: live.exit_code ?? db.exit_code,
+      scrape_error: live.scrape_error ?? db.scrape_error,
+      total_buffered: live.total_buffered,
       listings: best.listings ?? [],
     };
   },
