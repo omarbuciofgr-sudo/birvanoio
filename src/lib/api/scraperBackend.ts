@@ -486,7 +486,7 @@ async function fetchLiveResults(
   const base = getBaseUrl();
   const q = lastResultQuery(options);
   try {
-    const res = await fetch(`${base}/api/${segment}/live-results${q}`, lastResultFetchInit);
+    const res = await fetchWithTimeout(`${base}/api/${segment}/live-results${q}`, {}, 30000);
     const data = await res.json().catch(() => ({ listings: [] }));
     if (!res.ok) {
       return { listings: [], error: data.error || `Request failed: ${res.status}` };
@@ -500,8 +500,23 @@ async function fetchLiveResults(
 /** Avoid browser HTTP cache returning the wrong payload when toggling include_pm on the same path. */
 const lastResultFetchInit: RequestInit = { cache: "no-store" };
 
-const HEALTH_CHECK_TIMEOUT_MS = 20000; // 20s for Railway cold start
-const HEALTH_CHECK_RETRY_DELAY_MS = 2000; // wait 2s before retry
+const HEALTH_CHECK_TIMEOUT_MS = 12000;
+const HEALTH_CHECK_RETRY_DELAY_MS = 2000;
+const API_FETCH_TIMEOUT_MS = 45000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = API_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...lastResultFetchInit, ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function pingHealthOnce(base: string, signal: AbortSignal): Promise<boolean> {
   const res = await fetch(`${base}/api/health`, {
@@ -599,7 +614,7 @@ export const scraperBackendApi = {
     if (opts?.allowDbFallback !== true) {
       return live;
     }
-    const db = await this.fetchLastResultForPlatform(platformKey, options);
+    const db = await this.fetchLastResultForPlatform(platformKey, { ...options, retries: 0 });
     const dbCount = db.listings?.length ?? 0;
     if (dbCount > 0) return db;
     return live.listings ? live : db;
@@ -646,7 +661,7 @@ export const scraperBackendApi = {
     options?: { includePm?: boolean },
   ): Promise<RealEstateSearchResponse> {
     const base = getBaseUrl();
-    const res = await fetch(`${base}/api/real-estate/search`, {
+    const res = await fetchWithTimeout(`${base}/api/real-estate/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -654,7 +669,7 @@ export const scraperBackendApi = {
         location: location.trim(),
         include_pm: options?.includePm === true,
       }),
-    });
+    }, 60000);
     if (res.status === 404) {
       return { listings: [], success: true, action: 'needs_scrape' as const };
     }
@@ -763,7 +778,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/hotpads/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/hotpads/last-result${q}`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -804,7 +819,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/trulia/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/trulia/last-result${q}`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -845,7 +860,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/redfin/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/redfin/last-result${q}`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -886,7 +901,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/zillow-frbo/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/zillow-frbo/last-result${q}`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -904,7 +919,7 @@ export const scraperBackendApi = {
 
   async getZillowFsboStatus(): Promise<BackendHotpadsStatusResponse> {
     const base = getBaseUrl();
-    const res = await fetch(`${base}/api/status-zillow-fsbo`);
+    const res = await fetchWithTimeout(`${base}/api/status-zillow-fsbo`, {}, 15000);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       return { status: "idle", error: data.error || `Request failed: ${res.status}` };
@@ -927,7 +942,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/zillow-fsbo/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/zillow-fsbo/last-result${q}`, {}, API_FETCH_TIMEOUT_MS);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -968,7 +983,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/fsbo/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/fsbo/last-result${q}`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;
@@ -1009,7 +1024,7 @@ export const scraperBackendApi = {
     const q = lastResultQuery(options);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(`${base}/api/apartments/last-result${q}`, lastResultFetchInit);
+        const res = await fetchWithTimeout(`${base}/api/apartments/last-result${q}`);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;

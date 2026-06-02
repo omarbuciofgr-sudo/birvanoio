@@ -2304,6 +2304,7 @@ export default function WebScraper() {
       const backendMapKey =
         rePlatform === 'zillow' ? 'zillow' : rePlatform === 'zillow_frbo' ? 'zillow_frbo' : rePlatform;
       let progressiveFetchCount = 0;
+      let livePollCount = 0;
       let liveRowsShown = 0;
       const enrichForSearch = (listings: unknown[]) => {
         const mapped = mapBackendListingsForPlatform(backendMapKey, listings || []);
@@ -2354,10 +2355,11 @@ export default function WebScraper() {
       const pollSearchResultsFromBackend = async (): Promise<number> => {
         if (scrapeCancelled()) return liveRowsShown;
         try {
+          livePollCount += 1;
           const result = await scraperBackendApi.fetchSearchResultsDuringScrape(
             backendMapKey,
             livePollOpts(),
-            { allowDbFallback: true },
+            { allowDbFallback: livePollCount === 1 || livePollCount % 3 === 0 },
           );
           if (result.error) {
             console.debug('[scout] poll', backendMapKey, result.error);
