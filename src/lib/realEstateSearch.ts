@@ -66,7 +66,9 @@ export function friendlyApiError(raw: string | undefined | null): string {
     if (low.includes('already running')) return RE_USER_MESSAGES.scrape_in_progress;
     return RE_USER_MESSAGES.temporary_issue;
   }
-  if (low.includes('invalid location') || low.includes('location parsing')) {
+  if (low.includes('exited with code') || low.includes('scraper process exited')) {
+    return t.length < 200 ? t : t.slice(0, 200);
+  }
     return RE_USER_MESSAGES.invalid_location;
   }
   if (low.includes('unsupported platform') || low.includes('empty dataset') || low.includes('spider')) {

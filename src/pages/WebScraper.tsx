@@ -2492,6 +2492,7 @@ export default function WebScraper() {
         let lastCheckpoint = Date.now();
         let last = await pollSearchResultsFromBackend();
         if (last.scrape_error && last.count === 0 && last.running === false) {
+          pollHadScrapeErrorRef.current = true;
           st.error(friendlyApiError(last.scrape_error));
           return last;
         }
@@ -2507,6 +2508,7 @@ export default function WebScraper() {
             }
           }
           if (last.scrape_error && last.count === 0 && last.running === false) {
+            pollHadScrapeErrorRef.current = true;
             st.error(friendlyApiError(last.scrape_error));
             break;
           }
@@ -2519,13 +2521,18 @@ export default function WebScraper() {
         }
         return last;
       };
+      const pollHadScrapeErrorRef = { current: false };
       const finishSearchFromApi = (
-        result: { listings?: unknown[]; error?: string },
-        opts?: { successToast?: boolean },
+        result: { listings?: unknown[]; error?: string; scrape_error?: string },
+        opts?: { successToast?: boolean; skipEmptyWarning?: boolean },
       ) => {
         setTableFromApi(result.listings || []);
         const n = result.listings?.length ?? 0;
-        if (n === 0 && !result.error) {
+        const scrapeFailed = Boolean(
+          (result as { scrape_error?: string }).scrape_error ||
+          pollHadScrapeErrorRef.current,
+        );
+        if (n === 0 && !result.error && !opts?.skipEmptyWarning && !scrapeFailed) {
           st.warning(RE_USER_MESSAGES.no_listings_found);
         } else if (n > 0) {
           if (opts?.successToast !== false) st.success(RE_USER_MESSAGES.listings_found);
@@ -2627,12 +2634,15 @@ export default function WebScraper() {
         }
         st.info('Zillow FSBO scraper started. Listings appear here as the backend saves them — open List View to watch.');
         await pollSearchResultsFromBackend();
-        await runResultsOnlyPollLoop(30 * 60 * 1000);
+        const pollLast = await runResultsOnlyPollLoop(30 * 60 * 1000);
         if (scrapeCancelled()) return;
+        if (pollLast.scrape_error && (pollLast.count ?? 0) === 0) {
+          releaseScrapeUiIfOwner();
+          return;
+        }
         const result = await scraperBackendApi.getZillowFsboLastResult(finalCityResultOpts());
         finishSearchFromApi(result, { successToast: false });
-        const mappedLen = result.listings?.length ?? 0;
-        if (mappedLen === 0) {
+        if ((result.listings?.length ?? 0) === 0 && !pollHadScrapeErrorRef.current) {
           st.warning(RE_USER_MESSAGES.no_listings_found);
         }
         await saveNewListingsCheckpoint(enrichForSearch(result.listings || []));
