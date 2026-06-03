@@ -2486,7 +2486,10 @@ export default function WebScraper() {
         }
       };
       /** Poll live-results + last-result; every 5 min show/save checkpoint while scrape continues. */
-      const runResultsOnlyPollLoop = async (maxWaitMs: number): Promise<PollSnapshot> => {
+      const runResultsOnlyPollLoop = async (
+        maxWaitMs: number,
+        checkpointMs: number = SCRAPE_CHECKPOINT_MS,
+      ): Promise<PollSnapshot> => {
         const start = Date.now();
         let idleStreak = 0;
         let lastCheckpoint = Date.now();
@@ -2500,7 +2503,7 @@ export default function WebScraper() {
           await new Promise((r) => setTimeout(r, SCRAPE_POLL_MS));
           if (scrapeCancelled()) break;
           last = await pollSearchResultsFromBackend();
-          if (Date.now() - lastCheckpoint >= SCRAPE_CHECKPOINT_MS) {
+          if (Date.now() - lastCheckpoint >= checkpointMs) {
             lastCheckpoint = Date.now();
             if (last.count > 0) {
               st.info(`${last.count} listing(s) so far — still searching…`);
@@ -2759,7 +2762,7 @@ export default function WebScraper() {
         }
         st.info(`Searching ${searchLocation} — listings will appear here as they are found, then saved when the search finishes.`);
         await pollSearchResultsFromBackend();
-        await runResultsOnlyPollLoop(30 * 60 * 1000);
+        await runResultsOnlyPollLoop(30 * 60 * 1000, 3.5 * 60 * 1000);
         if (scrapeCancelled()) return;
         const result = await scraperBackendApi.getApartmentsLastResult(finalCityResultOpts());
         finishSearchFromApi(result);
