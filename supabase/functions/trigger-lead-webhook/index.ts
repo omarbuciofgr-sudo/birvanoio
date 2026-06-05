@@ -108,8 +108,9 @@ Deno.serve(async (req) => {
       lead_ids,
       event_type = 'high_priority_lead',
       trigger_reason = 'manual',
-      webhook_url, // Optional: override to send to specific URL
     } = body;
+    // SECURITY: webhook_url override removed to prevent SSRF / PII exfiltration.
+    // Only URLs pre-registered in client_webhooks (owned by the org) are allowed.
 
     const idsToProcess = lead_ids || (lead_id ? [lead_id] : []);
 
@@ -120,19 +121,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get configured webhooks if no override URL
-    let webhooks: Array<{ id: string; webhook_url: string; secret_hash: string | null }> = [];
-    
-    if (webhook_url) {
-      webhooks = [{ id: 'manual', webhook_url, secret_hash: null }];
-    } else {
-      const { data: configuredWebhooks } = await supabase
-        .from('client_webhooks')
-        .select('id, webhook_url, secret_hash')
-        .eq('is_active', true);
-      
-      webhooks = configuredWebhooks || [];
-    }
+    // Only use pre-configured webhooks from the database
+    const { data: configuredWebhooks } = await supabase
+      .from('client_webhooks')
+      .select('id, webhook_url, secret_hash')
+      .eq('is_active', true);
+
+    const webhooks: Array<{ id: string; webhook_url: string; secret_hash: string | null }> =
+      configuredWebhooks || [];
 
     if (webhooks.length === 0) {
       return new Response(

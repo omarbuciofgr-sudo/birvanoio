@@ -31,6 +31,27 @@ Deno.serve(async (req) => {
     const isWebScraperFormat = Array.isArray(body.messages) && body.context;
 
     if (isWebScraperFormat) {
+      // Require authenticated user for the web-scraper assistant to prevent
+      // unauthenticated AI cost abuse against server-side LLM API keys.
+      const authHeader = req.headers.get("authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Authentication required" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: authErr } = await authClient.auth.getUser();
+      if (authErr || !user) {
+        return new Response(
+          JSON.stringify({ error: "Invalid authentication" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
       return await handleWebScraperChat(body, selectedModel);
     } else {
       return await handleLandingChatbot(body, req, selectedModel);
