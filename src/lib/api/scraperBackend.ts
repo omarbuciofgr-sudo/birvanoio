@@ -75,8 +75,12 @@ export function buildHotpadsUrl(location: string, propertyType: string = "apartm
   slug = slugOverrides[low] ?? slugOverrides[city.toLowerCase()] ?? slug;
   if (!slug) return null;
   const cityStateSlug = `${slug}-${stateAbbrev}`;
+  const pt = (propertyType || "new-apartments").toLowerCase().trim();
+  // Default SERP: newest new-apartment rentals (matches manual trigger-from-url / PowerShell tests).
+  if (pt === "new-apartments" || pt === "new-apartment") {
+    return `https://hotpads.com/${cityStateSlug}/new-apartments-for-rent?orderBy=activated`;
+  }
   // FRBO: Hotpads "for rent by owner" filter (excludes apartment complexes / property management)
-  const pt = (propertyType || "apartments").toLowerCase().trim();
   if (pt === "for-rent-by-owner" || pt === "frbo") {
     return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
   }
@@ -193,22 +197,74 @@ export function buildZillowFsboUrl(location: string): string | null {
   return `https://www.zillow.com/${slug}-${stateAbbrev}/fsbo/`;
 }
 
-/** FSBO.com city search list URL. */
+/** Zillow for-sale city SERP (e.g. Provo, UT → …/provo-ut/). All agent + FSBO listings. */
+export function buildZillowForSaleUrl(location: string): string | null {
+  const fsbo = buildZillowFsboUrl(location);
+  if (!fsbo) return null;
+  return fsbo.replace(/\/fsbo\/?$/, '/');
+}
+
+/** Zillow for-rent city SERP (e.g. Austin, TX → …/austin-tx/rentals/). All rentals, not FRBO-only. */
+export function buildZillowForRentUrl(location: string): string | null {
+  return buildZillowFrboRentalsUrl(location);
+}
+
+/** 2-letter abbrev → FSBO.com state slug (full state name, hyphenated). */
+const fsboStateSlugFromAbbrev: Record<string, string> = Object.fromEntries(
+  Object.entries(stateNameToAbbrev).map(([name, abbrev]) => [abbrev, name.replace(/\s+/g, "-")])
+);
+
+/** FSBO.com city search list URL (e.g. Austin, TX → …/search/list/austin-texas). */
 export function buildFsboSearchUrl(location: string): string | null {
   const loc = (location || "").trim();
   if (!loc) return null;
-  const city = loc.split(",")[0]?.trim();
-  if (!city) return null;
+  const cityToState: Record<string, string> = {
+    minneapolis: "mn", "new york": "ny", "los angeles": "ca", chicago: "il",
+    houston: "tx", phoenix: "az", philadelphia: "pa", "san antonio": "tx",
+    "san diego": "ca", dallas: "tx", austin: "tx", seattle: "wa", denver: "co",
+    boston: "ma", miami: "fl", atlanta: "ga", detroit: "mi", portland: "or",
+    washington: "dc", "san francisco": "ca", "las vegas": "nv",
+  };
+  const low = loc.toLowerCase();
+  let stateAbbrev: string | null = cityToState[low] ?? null;
+  let city = loc;
+  let stateFullSlug: string | null = null;
+  const commaMatch2 = loc.match(/^(.+?),\s*([A-Za-z]{2})\s*$/);
+  if (commaMatch2) {
+    city = commaMatch2[1].trim();
+    stateAbbrev = commaMatch2[2].trim().toLowerCase();
+  }
+  if (!stateAbbrev) {
+    const commaMatchFull = loc.match(/^(.+?),\s*(.+)$/);
+    if (commaMatchFull) {
+      city = commaMatchFull[1].trim();
+      const statePart = commaMatchFull[2].trim().toLowerCase();
+      stateAbbrev = stateNameToAbbrev[statePart] ?? (statePart.length === 2 ? statePart : null);
+      if (!stateAbbrev && statePart.length > 2) {
+        stateFullSlug = statePart.replace(/\s+/g, "-");
+      }
+    }
+  }
+  if (!stateAbbrev) {
+    const spaceMatch = loc.match(/^(.+?)\s+([A-Za-z]{2})\s*$/);
+    if (spaceMatch) {
+      city = spaceMatch[1].trim();
+      stateAbbrev = spaceMatch[2].trim().toLowerCase();
+    }
+  }
+  if (!stateFullSlug && stateAbbrev) {
+    stateFullSlug = fsboStateSlugFromAbbrev[stateAbbrev] ?? null;
+  }
   const citySlug = city
     .toLowerCase()
     .replace(/[^\w\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/^-|-$/g, "");
-  if (!citySlug) return null;
-  return `https://www.forsalebyowner.com/search/list/${citySlug}`;
+  if (!citySlug || !stateFullSlug) return null;
+  return `https://www.forsalebyowner.com/search/list/${citySlug}-${stateFullSlug}`;
 }
 
-/** Apartments.com FRBO SERP for a metro (e.g. Atlanta, GA → …/atlanta-ga/for-rent-by-owner/). */
+/** Apartments.com city rental SERP (e.g. Atlanta, GA → …/atlanta-ga/). */
 export function buildApartmentsFrboUrl(location: string): string | null {
   const loc = (location || "").trim();
   if (!loc) return null;
@@ -249,7 +305,7 @@ export function buildApartmentsFrboUrl(location: string): string | null {
     .replace(/\s+/g, "-")
     .replace(/^-|-$/g, "");
   if (!slug) return null;
-  return `https://www.apartments.com/${slug}-${stateAbbrev}/for-rent-by-owner/`;
+  return `https://www.apartments.com/${slug}-${stateAbbrev}/`;
 }
 
 export function buildTruliaUrl(location: string): string | null {
@@ -286,10 +342,12 @@ export function buildTruliaUrl(location: string): string | null {
     }
   }
   if (!stateAbbrev || !city) return null;
-  // Trulia expects "City,ST" with no space after comma (e.g. Minneapolis,MN); space causes INVALID_LOCATION
-  const locationStr = `${city},${stateAbbrev.toUpperCase()}`;
-  const encoded = encodeURIComponent(locationStr).replace(/%2C/g, ",");
-  return `https://www.trulia.com/for_sale/${encoded}/fsbo_lt/1_als/`;
+  const cityPath = city
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join("-");
+  return `https://www.trulia.com/${stateAbbrev.toUpperCase()}/${cityPath}/`;
 }
 
 /** Backend URL when frontend is at brivano.io, Lovable preview, or any non-local host */
@@ -383,6 +441,20 @@ export type BackendTriggerFromUrlResponse = {
   url?: string;
   location?: string;
   error?: string;
+  status?: 'scraping' | 'cooldown';
+  remaining_time?: string;
+  remaining_minutes?: number;
+  last_scraped_at?: string;
+};
+
+export type ForceRefreshStatusResponse = {
+  success?: boolean;
+  can_force_refresh?: boolean;
+  remaining_minutes?: number;
+  remaining_time?: string | null;
+  last_scraped_at?: string | null;
+  cooldown_hours?: number;
+  error?: string;
 };
 
 export type BackendHotpadsStatusResponse = {
@@ -436,6 +508,13 @@ export type BackendHotpadsLastResultResponse = {
   scrape_error?: string;
   /** Rows in live buffer before location filter */
   total_buffered?: number;
+  /** Latest row timestamp for this city (display TTL) */
+  last_scraped_at?: string | null;
+  /** True when saved city data is older than RE_LISTING_STALE_DAYS */
+  is_stale?: boolean;
+  days_since_scrape?: number | null;
+  /** Set when listings hidden because cache exceeded display TTL */
+  cache_expired?: boolean;
   normalized_location?: {
     search_city?: string | null;
     search_state?: string | null;
@@ -448,7 +527,7 @@ export type BackendHotpadsLastResultResponse = {
 
 export type RealEstateSearchResponse = BackendHotpadsLastResultResponse & {
   success?: boolean;
-  action?: 'cached' | 'needs_scrape' | 'scraping' | 'cached_filtered' | 'invalid_location' | 'error';
+  action?: 'cached' | 'needs_scrape' | 'scraping' | 'cached_filtered' | 'invalid_location' | 'error' | 'stale_needs_scrape';
   normalized?: BackendHotpadsLastResultResponse['normalized_location'];
   scrape_url?: string | null;
 };
@@ -480,6 +559,8 @@ const LIVE_RESULTS_SEGMENT: Record<string, string> = {
   hotpads: "hotpads",
   trulia: "trulia",
   zillow: "zillow-fsbo",
+  zillow_for_sale: "zillow-for-sale",
+  zillow_for_rent: "zillow-for-rent",
   zillow_frbo: "zillow-frbo",
   fsbo: "fsbo",
   apartments: "apartments",
@@ -656,6 +737,10 @@ export const scraperBackendApi = {
         return this.getTruliaLastResult(options);
       case "zillow":
         return this.getZillowFsboLastResult(options);
+      case "zillow_for_sale":
+        return this.getZillowForSaleLastResult(options);
+      case "zillow_for_rent":
+        return this.getZillowForRentLastResult(options);
       case "zillow_frbo":
         return this.getZillowFrboLastResult(options);
       case "fsbo":
@@ -664,6 +749,30 @@ export const scraperBackendApi = {
         return this.getApartmentsLastResult(options);
       default:
         return { listings: [], error: "Unknown platform" };
+    }
+  },
+
+  /** Platform scrape subprocess status (`/api/status-*`). */
+  async getStatusForPlatform(platformKey: string): Promise<BackendHotpadsStatusResponse> {
+    switch (platformKey) {
+      case "hotpads":
+        return this.getHotpadsStatus();
+      case "trulia":
+        return this.getTruliaStatus();
+      case "zillow":
+        return this.getZillowFsboStatus();
+      case "zillow_for_sale":
+        return this.getZillowForSaleStatus();
+      case "zillow_for_rent":
+        return this.getZillowForRentStatus();
+      case "zillow_frbo":
+        return this.getZillowFrboStatus();
+      case "fsbo":
+        return this.getFsboStatus();
+      case "apartments":
+        return this.getApartmentsStatus();
+      default:
+        return { status: "idle" };
     }
   },
 
@@ -779,17 +888,26 @@ export const scraperBackendApi = {
     url: string,
     options?: {
       force?: boolean;
+      /** User-initiated mid-week refresh — bypasses display cache; sets SCRAPE_RESCRAPE on backend */
+      forceRefresh?: boolean;
       /** Save PM/managed contacts to Supabase (matches UI "Include PM / realtor") */
       savePm?: boolean;
       /** Search box city (e.g. Atlanta, GA) — stored on scrape session for last-result */
       location?: string;
+      /** Backend platform key when URL alone is ambiguous (e.g. Zillow /rentals/ FRBO vs For Rent) */
+      platform?: string;
     },
   ): Promise<BackendTriggerFromUrlResponse> {
     const base = getBaseUrl();
     const savePm = options?.savePm === true ? "&save_pm=1" : "";
     const loc = (options?.location || "").trim();
     const locQs = loc ? `&location=${encodeURIComponent(loc)}` : "";
-    const qs = `?url=${encodeURIComponent(url)}${options?.force ? "&force=1" : ""}${savePm}${locQs}`;
+    const forceQs = options?.force ? "&force=1" : "";
+    const forceRefreshQs = options?.forceRefresh ? "&force_refresh=1" : "";
+    const platformQs = (options?.platform || "").trim()
+      ? `&platform=${encodeURIComponent((options?.platform || "").trim())}`
+      : "";
+    const qs = `?url=${encodeURIComponent(url)}${forceQs}${forceRefreshQs}${savePm}${locQs}${platformQs}`;
     try {
       const res = await fetchWithTimeout(
         `${base}/api/trigger-from-url${qs}`,
@@ -799,8 +917,10 @@ export const scraperBackendApi = {
           body: JSON.stringify({
             url,
             force: options?.force === true,
+            force_refresh: options?.forceRefresh === true,
             save_pm: options?.savePm === true,
             location: loc || undefined,
+            platform: (options?.platform || "").trim() || undefined,
           }),
         },
         TRIGGER_FETCH_TIMEOUT_MS,
@@ -812,6 +932,28 @@ export const scraperBackendApi = {
       return data;
     } catch (e: unknown) {
       return { error: e instanceof Error ? e.message : "Network error" };
+    }
+  },
+
+  async getForceRefreshStatus(platform: string, location: string): Promise<ForceRefreshStatusResponse> {
+    const base = getBaseUrl();
+    const params = new URLSearchParams({
+      platform: platform.trim(),
+      location: location.trim(),
+    });
+    try {
+      const res = await fetchWithTimeout(
+        `${base}/api/real-estate/force-refresh-status?${params.toString()}`,
+        {},
+        STATUS_FETCH_TIMEOUT_MS,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { success: false, error: data.error || `Request failed: ${res.status}` };
+      }
+      return data;
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? e.message : "Network error" };
     }
   },
 
@@ -1035,6 +1177,92 @@ export const scraperBackendApi = {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const res = await fetchWithTimeout(`${base}/api/zillow-fsbo/last-result${q}`, {}, API_FETCH_TIMEOUT_MS);
+        const data = await res.json().catch(() => ({ listings: [] }));
+        if (!res.ok) {
+          lastError = data.error || `Request failed: ${res.status}`;
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return data;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : "Network error";
+        if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { listings: [], error: lastError || "Failed after retries" };
+  },
+
+  async getZillowForSaleStatus(): Promise<BackendHotpadsStatusResponse> {
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-zillow-for-sale"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
+    }
+  },
+
+  async resetZillowForSaleStatus(): Promise<{ message?: string; error?: string }> {
+    try {
+      const result = await fetchStatusPath("/api/status-zillow-for-sale?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
+  },
+
+  async getZillowForSaleLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
+    const base = getBaseUrl();
+    const maxAttempts = options?.retries != null ? options.retries + 1 : 3;
+    let lastError: string | undefined;
+    const q = lastResultQuery(options);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetchWithTimeout(`${base}/api/zillow-for-sale/last-result${q}`, {}, API_FETCH_TIMEOUT_MS);
+        const data = await res.json().catch(() => ({ listings: [] }));
+        if (!res.ok) {
+          lastError = data.error || `Request failed: ${res.status}`;
+          if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return data;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : "Network error";
+        if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { listings: [], error: lastError || "Failed after retries" };
+  },
+
+  async getZillowForRentStatus(): Promise<BackendHotpadsStatusResponse> {
+    try {
+      return parseStatusResponse(await fetchStatusPath("/api/status-zillow-for-rent"));
+    } catch (e: unknown) {
+      return { status: "idle", error: e instanceof Error ? e.message : "Network error" };
+    }
+  },
+
+  async resetZillowForRentStatus(): Promise<{ message?: string; error?: string }> {
+    try {
+      const result = await fetchStatusPath("/api/status-zillow-for-rent?reset=1", STATUS_RESET_TIMEOUT_MS, 1);
+      if (!result.ok) {
+        return { error: (result.data.error as string) || `Request failed: ${result.status}` };
+      }
+      return result.data as { message?: string };
+    } catch {
+      return {};
+    }
+  },
+
+  async getZillowForRentLastResult(options?: LastResultFetchOptions): Promise<BackendHotpadsLastResultResponse> {
+    const base = getBaseUrl();
+    const maxAttempts = options?.retries != null ? options.retries + 1 : 3;
+    let lastError: string | undefined;
+    const q = lastResultQuery(options);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetchWithTimeout(`${base}/api/zillow-for-rent/last-result${q}`, {}, API_FETCH_TIMEOUT_MS);
         const data = await res.json().catch(() => ({ listings: [] }));
         if (!res.ok) {
           lastError = data.error || `Request failed: ${res.status}`;

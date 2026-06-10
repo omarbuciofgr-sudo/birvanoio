@@ -11,7 +11,7 @@ const SUPPORTED_PLATFORMS = [
   { name: 'apartments', pattern: /apartments\.com/i, ownerFilter: 'owner', requiresZyte: false, strategy: 'apartments' },
   { name: 'hotpads', pattern: /hotpads\.com/i, ownerFilter: 'owner', requiresZyte: false, strategy: 'hotpads' },
   { name: 'fsbo', pattern: /fsbo\.com/i, ownerFilter: null, requiresZyte: false, strategy: 'generic' },
-  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'trulia' },
+  { name: 'trulia', pattern: /trulia\.com/i, ownerFilter: null, requiresZyte: true, strategy: 'trulia' },
   { name: 'redfin', pattern: /redfin\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'redfin' },
   { name: 'craigslist', pattern: /craigslist\.(org|com)/i, ownerFilter: null, requiresZyte: false, strategy: 'generic' },
   { name: 'realtor', pattern: /realtor\.com/i, ownerFilter: 'fsbo', requiresZyte: true, strategy: 'realtor' },
@@ -36,6 +36,31 @@ function getStateAbbreviation(state: string): string {
   const normalized = state.toLowerCase().trim();
   if (normalized.length === 2) return normalized.toUpperCase();
   return STATE_MAP[normalized] || normalized.toUpperCase().slice(0, 2);
+}
+
+function getStateFullNameSlug(state: string): string {
+  const normalized = state.toLowerCase().trim();
+  if (!normalized) return '';
+  if (normalized.length === 2) {
+    for (const [name, abbrev] of Object.entries(STATE_MAP)) {
+      if (abbrev.toLowerCase() === normalized) {
+        return name.replace(/\s+/g, '-');
+      }
+    }
+    return normalized;
+  }
+  if (STATE_MAP[normalized]) {
+    return normalized.replace(/\s+/g, '-');
+  }
+  return normalized.replace(/\s+/g, '-');
+}
+
+function buildFsboListSlug(location: string): string | null {
+  const { city, state } = parseCityState(location);
+  const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const stateSlug = getStateFullNameSlug(state);
+  if (!citySlug || !stateSlug) return null;
+  return `${citySlug}-${stateSlug}`;
 }
 
 function safeDecodeURIComponent(value: string): string {
@@ -122,17 +147,21 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
       }
     }
     case 'fsbo': {
-      const { city } = parseCityState(decodedLocation);
-      const fsboCity = city.trim().toLowerCase().replace(/\s+/g, '-');
-      return `https://www.forsalebyowner.com/search/list/${fsboCity}`;
+      const fsboSlug = buildFsboListSlug(decodedLocation);
+      return fsboSlug ? `https://www.forsalebyowner.com/search/list/${fsboSlug}` : null;
     }
     case 'trulia': {
       const { city: truliaCity, state: truliaState } = parseCityState(decodedLocation);
-      const truliaLocationStr = `${truliaCity},${getStateAbbreviation(truliaState || '')}`;
-      const truliaEncoded = encodeURIComponent(truliaLocationStr).replace(/%2C/g, ',');
+      const truliaStateAbbrev = getStateAbbreviation(truliaState || '');
+      const truliaCityPath = truliaCity
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join('-');
       return listingType === 'sale'
-        ? `https://www.trulia.com/for_sale/${truliaEncoded}/fsbo_lt/1_als/`
-        : `https://www.trulia.com/for_rent/${truliaEncoded}/`;
+        ? `https://www.trulia.com/${truliaStateAbbrev}/${truliaCityPath}/`
+        : `https://www.trulia.com/for_rent/${truliaCity},${truliaStateAbbrev}/`;
     }
     case 'redfin': {
       const { city, state } = parseCityState(decodedLocation);
@@ -143,7 +172,7 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
     case 'hotpads':
       return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
     case 'apartments':
-      return `https://www.apartments.com/${cityStateSlug}/for-rent-by-owner/`;
+      return `https://www.apartments.com/${cityStateSlug}/`;
     default:
       return null;
   }

@@ -83,6 +83,31 @@ function getStateAbbreviation(state: string): string {
   return STATE_MAP[normalized] || normalized.toUpperCase().slice(0, 2);
 }
 
+function getStateFullNameSlug(state: string): string {
+  const normalized = state.toLowerCase().trim();
+  if (!normalized) return '';
+  if (normalized.length === 2) {
+    for (const [name, abbrev] of Object.entries(STATE_MAP)) {
+      if (abbrev.toLowerCase() === normalized) {
+        return name.replace(/\s+/g, '-');
+      }
+    }
+    return normalized;
+  }
+  if (STATE_MAP[normalized]) {
+    return normalized.replace(/\s+/g, '-');
+  }
+  return normalized.replace(/\s+/g, '-');
+}
+
+function buildFsboListSlug(location: string): string | null {
+  const { city, state } = parseCityState(location);
+  const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const stateSlug = getStateFullNameSlug(state);
+  if (!citySlug || !stateSlug) return null;
+  return `${citySlug}-${stateSlug}`;
+}
+
 function safeDecodeURIComponent(value: string): string {
   try {
     return /%[0-9A-Fa-f]{2}/.test(value) ? decodeURIComponent(value) : value;
@@ -209,14 +234,13 @@ function buildSearchUrl(platform: string, location: string, listingType: 'sale' 
       }
     }
     case 'fsbo': {
-      const { city } = parseCityState(decodedLocation);
-      const fsboCity = city.trim().toLowerCase().replace(/\s+/g, '-');
-      return `https://www.forsalebyowner.com/search/list/${fsboCity}`;
+      const fsboSlug = buildFsboListSlug(decodedLocation);
+      return fsboSlug ? `https://www.forsalebyowner.com/search/list/${fsboSlug}` : null;
     }
     case 'hotpads':
       return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
     case 'apartments':
-      return `https://www.apartments.com/${cityStateSlug}/for-rent-by-owner/`;
+      return `https://www.apartments.com/${cityStateSlug}/`;
     default:
       return null;
   }

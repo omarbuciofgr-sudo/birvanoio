@@ -7,6 +7,9 @@ import { addressMatchesSearch } from '@/components/scraper/ListingsMap';
 export const RE_USER_MESSAGES = {
   invalid_location: 'Please enter a valid city and state.',
   cached_found: 'We found previously saved listings for this area.',
+  stale_needs_scrape: 'Saved listings are over a week old — refreshing from the platform...',
+  force_refresh_started: 'Force update started — pulling live results...',
+  force_refresh_cooldown: 'This area was refreshed recently. Try again in a few minutes.',
   needs_scrape: 'Searching listings for your area...',
   scrape_still_running: 'Searching listings for your area...',
   no_listings_found: 'No listings found for this city on this platform.',
@@ -102,6 +105,8 @@ export function emptyReasonUserMessage(
       return RE_USER_MESSAGES.scrape_still_running;
     case 'no_listings_after_filters':
       return RE_USER_MESSAGES.no_listings_found;
+    case 'cache_expired':
+      return RE_USER_MESSAGES.stale_needs_scrape;
     default:
       return null;
   }

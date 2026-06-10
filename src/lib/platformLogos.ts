@@ -13,6 +13,18 @@ const PLATFORM_CONFIG: Record<string, PlatformConfigEntry> = {
     color: '#006AFF',
     logo: '/platform-logos/zillow.svg',
   },
+  zillow_for_sale: {
+    label: 'Zillow (For Sale)',
+    domain: 'zillow.com',
+    color: '#006AFF',
+    logo: '/platform-logos/zillow.svg',
+  },
+  zillow_for_rent: {
+    label: 'Zillow (For Rent)',
+    domain: 'zillow.com',
+    color: '#006AFF',
+    logo: '/platform-logos/zillow.svg',
+  },
   zillow_frbo: {
     label: 'Zillow (FRBO)',
     domain: 'zillow.com',
@@ -48,6 +60,8 @@ const PLATFORM_CONFIG: Record<string, PlatformConfigEntry> = {
 /** Maps DB / API `source_platform` values to dropdown keys */
 const LISTING_PLATFORM_TO_CONFIG_KEY: Record<string, keyof typeof PLATFORM_CONFIG> = {
   zillow_fsbo: 'zillow',
+  zillow_for_sale: 'zillow_for_sale',
+  zillow_for_rent: 'zillow_for_rent',
   zillow_frbo: 'zillow_frbo',
   fsbo: 'fsbo',
   trulia: 'trulia',
