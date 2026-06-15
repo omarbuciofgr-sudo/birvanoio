@@ -3977,7 +3977,7 @@ export default function WebScraper() {
                     </SelectContent>
                   </Select>
                 </div>
-                  <Button onClick={handleRealEstateScrape} disabled={reLoading} size="sm" className="h-9 px-4">
+                  <Button onClick={() => handleRealEstateScrape()} disabled={reLoading} size="sm" className="h-9 px-4">
                     {reLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-3.5 w-3.5 mr-1.5" /> Find Listings</>}
                   </Button>
                 </div>
