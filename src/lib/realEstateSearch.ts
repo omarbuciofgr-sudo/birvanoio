@@ -17,7 +17,9 @@ export const RE_USER_MESSAGES = {
     'Nothing saved for this city yet. Click Find Listings to search this area (other cities are already in the database).',
   platform_no_coverage: 'This platform currently has no listings available for this area.',
   by_owner_filtered_all:
-    'Listings exist for this area but your By-owner filter removed them. Try Include PM / realtor.',
+    'Saved listings for this area are all property managers or brokers — hidden in By-owner mode. Click Find Listings to scrape owner-only inventory (Hotpads: for-rent-by-owner).',
+  by_owner_all_pm_hidden:
+    'Every saved row for this platform looks like a property manager or broker. Run Find Listings in By-owner mode to scrape owner-only results.',
   temporary_issue: "We couldn't fetch listings right now. Please try again.",
   listings_found: 'Listings found successfully.',
   enter_location: 'Enter a city and state (e.g. Nashville, TN) to search.',

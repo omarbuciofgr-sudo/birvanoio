@@ -82,7 +82,7 @@ export function buildHotpadsUrl(location: string, propertyType: string = "apartm
   }
   // FRBO: Hotpads "for rent by owner" filter (excludes apartment complexes / property management)
   if (pt === "for-rent-by-owner" || pt === "frbo") {
-    return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental`;
+    return `https://hotpads.com/${cityStateSlug}/for-rent-by-owner?isListedByOwner=true&listingTypes=rental&orderBy=score`;
   }
   let pathSegment = pt;
   if (["for-rent", "rent", "rentals", ""].includes(pathSegment)) pathSegment = "apartments";
@@ -264,8 +264,8 @@ export function buildFsboSearchUrl(location: string): string | null {
   return `https://www.forsalebyowner.com/search/list/${citySlug}-${stateFullSlug}`;
 }
 
-/** Apartments.com city rental SERP (e.g. Atlanta, GA → …/atlanta-ga/). */
-export function buildApartmentsFrboUrl(location: string): string | null {
+/** Apartments.com city rental SERP; pass forRentByOwner=true for /for-rent-by-owner/. */
+export function buildApartmentsUrl(location: string, forRentByOwner = false): string | null {
   const loc = (location || "").trim();
   if (!loc) return null;
   const cityToState: Record<string, string> = {
@@ -305,10 +305,18 @@ export function buildApartmentsFrboUrl(location: string): string | null {
     .replace(/\s+/g, "-")
     .replace(/^-|-$/g, "");
   if (!slug) return null;
+  if (forRentByOwner) {
+    return `https://www.apartments.com/${slug}-${stateAbbrev}/for-rent-by-owner/`;
+  }
   return `https://www.apartments.com/${slug}-${stateAbbrev}/`;
 }
 
-export function buildTruliaUrl(location: string): string | null {
+/** @deprecated Use buildApartmentsUrl(location, true) */
+export function buildApartmentsFrboUrl(location: string): string | null {
+  return buildApartmentsUrl(location, true);
+}
+
+export function buildTruliaUrl(location: string, forSaleByOwner = false): string | null {
   const loc = (location || "").trim();
   if (!loc) return null;
   const cityToState: Record<string, string> = {
@@ -347,6 +355,14 @@ export function buildTruliaUrl(location: string): string | null {
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join("-");
+  if (forSaleByOwner) {
+    const cityTitle = city
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+    return `https://www.trulia.com/for_sale/${cityTitle},${stateAbbrev.toUpperCase()}/fsbo_lt/1_als/`;
+  }
   return `https://www.trulia.com/${stateAbbrev.toUpperCase()}/${cityPath}/`;
 }
 
@@ -785,6 +801,26 @@ export const scraperBackendApi = {
     options?: LastResultFetchOptions,
   ): Promise<BackendHotpadsLastResultResponse> {
     const live = await fetchLiveResults(platformKey, options);
+    /** While subprocess is active, show live buffer only — DB may still hold old Include-PM rows. */
+    if (live.scraper_running === true) {
+      return {
+        ...live,
+        listings: live.listings ?? [],
+        total_buffered: live.total_buffered,
+        scraper_running: true,
+      };
+    }
+    /** Trulia by-owner: never merge stale full-city DB rows over an empty/small live buffer. */
+    if (options?.includePm === false && platformKey === "trulia") {
+      return {
+        ...live,
+        listings: live.listings ?? [],
+        total_buffered: live.total_buffered,
+        scraper_running: live.scraper_running,
+        exit_code: live.exit_code,
+        scrape_error: live.scrape_error,
+      };
+    }
     let db: BackendHotpadsLastResultResponse = { listings: [] };
     try {
       db = await this.fetchLastResultForPlatform(platformKey, { ...options, retries: 0 });
@@ -870,12 +906,20 @@ export const scraperBackendApi = {
     return data;
   },
 
-  async searchLocation(platform: string, location: string, propertyType: string = "apartments"): Promise<BackendSearchLocationResponse> {
+  async searchLocation(
+    platform: string,
+    location: string,
+    propertyType: string = "apartments",
+    options?: { includePm?: boolean },
+  ): Promise<BackendSearchLocationResponse> {
     const base = getBaseUrl();
+    const body: Record<string, string | boolean> = { platform, location, property_type: propertyType };
+    if (options?.includePm === true) body.include_pm = true;
+    else if (options?.includePm === false) body.include_pm = false;
     const res = await fetch(`${base}/api/search-location`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ platform, location, property_type: propertyType }),
+      body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
