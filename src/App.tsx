@@ -41,6 +41,7 @@ import Sequences from "./pages/Sequences";
 import Team from "./pages/Team";
 import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import NotFound from "./pages/NotFound";
+import Trust from "./pages/Trust";
 
 const queryClient = new QueryClient();
 
