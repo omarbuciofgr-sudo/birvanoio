@@ -766,6 +766,7 @@ function listingPassesByOwnerVisibility(listing: {
   listing_url?: string | null;
   source_url?: string | null;
   trulia_strict_signal?: string | null;
+  ac_strict_signal?: string | null;
 }) {
   const nameForFilter = ownerNameForByOwnerTableFilter(listing);
   if (isQuasiPublicEntityDisplayName(nameForFilter)) return false;

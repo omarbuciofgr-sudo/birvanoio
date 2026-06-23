@@ -41,6 +41,7 @@ import Sequences from "./pages/Sequences";
 import Team from "./pages/Team";
 import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import NotFound from "./pages/NotFound";
+import Trust from "./pages/Trust";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +88,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/sequences" element={<ProtectedRoute><Sequences /></ProtectedRoute>} />
               <Route path="/dashboard/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
               <Route path="/dashboard/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
+              <Route path="/trust" element={<Trust />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>
           </BrowserRouter>
