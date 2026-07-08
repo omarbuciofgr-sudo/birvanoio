@@ -586,6 +586,7 @@ const Campaigns = () => {
                             <TableHead>Step</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Enrolled</TableHead>
+                            <TableHead className="w-10"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
