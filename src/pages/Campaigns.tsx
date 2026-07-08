@@ -25,7 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock, Sparkles } from "lucide-react";
+import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock, Sparkles, UserPlus, Search } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { AICampaignOptimizer } from "@/components/campaigns/AICampaignOptimizer";
 
