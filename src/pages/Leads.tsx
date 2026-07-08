@@ -773,11 +773,21 @@ const Leads = () => {
             <SheetHeader className="px-5 pt-5 pb-0">
               <SheetTitle className="text-base font-semibold">{selectedLead?.business_name}</SheetTitle>
               {selectedLead && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusConfig[selectedLead.status]?.color}`}>
-                    {selectedLead.status}
-                  </span>
-                  {selectedLead.industry && <Badge variant="outline" className="text-[10px]">{selectedLead.industry}</Badge>}
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusConfig[selectedLead.status]?.color}`}>
+                      {selectedLead.status}
+                    </span>
+                    {selectedLead.industry && <Badge variant="outline" className="text-[10px]">{selectedLead.industry}</Badge>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1 shrink-0"
+                    onClick={() => setCampaignDialogLeadIds([selectedLead.id])}
+                  >
+                    <Send className="w-3 h-3" /> Add to Campaign
+                  </Button>
                 </div>
               )}
             </SheetHeader>
