@@ -104,7 +104,10 @@ const Leads = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "kanban" | "companies">("table");
+  const [activeTab, setActiveTab] = useState<"people" | "companies">("people");
+  const [peopleLayout, setPeopleLayout] = useState<"table" | "kanban">("table");
+  const viewMode: "table" | "kanban" | "companies" =
+    activeTab === "companies" ? "companies" : peopleLayout;
   const [campaignDialogLeadIds, setCampaignDialogLeadIds] = useState<string[] | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
