@@ -172,6 +172,10 @@ const Leads = () => {
     if (industryFilter !== "all") filtered = filtered.filter(l => l.industry === industryFilter);
     if (stateFilter !== "all") filtered = filtered.filter(l => l.state === stateFilter);
     if (companyFilter) filtered = filtered.filter(l => l.business_name === companyFilter);
+    // People tab: only show leads representing an actual person (has contact info)
+    if (activeTab === "people" && !companyFilter) {
+      filtered = filtered.filter(l => !!(l.contact_name || l.email || l.phone));
+    }
     if (scoreFilter !== "all") {
       if (scoreFilter === "hot") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 70);
       else if (scoreFilter === "warm") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 40 && (l.lead_score ?? 0) < 70);
