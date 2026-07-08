@@ -1,45 +1,54 @@
 ## Goal
 
-Make the dashboard Overview page customizable and add call + email timing analytics widgets (best hour to call/email, totals by hour, connect rate).
+Clicking a lead or a company opens a full-screen detail page (Salesforce/Outreach style) with the full contact context, activity, and quick actions — replacing the current side sheet on Leads and upgrading the current Accounts detail page.
 
-## New widgets
+## Lead detail — new page `/dashboard/leads/:id`
 
-1. **Call Performance by Hour**
-   - Source: `voice_agent_calls` (last 30 days, per-user via `client_id`).
-   - Bar chart: total calls per hour of day (0–23, local time).
-   - Line overlay: connect rate per hour = `completed / (completed + no_answer + failed)`.
-   - Callout cards: **Best hour to call** (highest connect rate, min 3 calls), **Overall connect rate**, **Total calls (30d)**, **Avg duration**.
+- **Header**: avatar, name, title, company (linked to account page), status pill, lead score, owner. Actions: **Add to Sequence** (reuses `AddToCampaignDialog`), **Call**, **Email**, **SMS**, **Edit**.
+- **Left rail — About**:
+  - Contact info: email, phone, LinkedIn, website (click-to-copy, mailto/tel links).
+  - **Local time** in the prospect's timezone with a live clock. Timezone derived from (in order) phone country code → US state map → country default. Show source hint on hover; "Unknown timezone" fallback.
+  - Prospect notes (editable, persisted to `leads.notes`).
+  - Sequences enrolled in (from `lead_campaign_enrollments`).
+  - Lead score details, tags, owner, created / last-contacted timestamps.
+- **Main — tabs**:
+  - **Activity** — combined feed (reuses `LeadActivityTimeline`).
+  - **Emails** — outbound + inbound from `conversation_logs` where `type='email'`.
+  - **Calls** — from `voice_agent_calls` and `conversation_logs` where `type='call'` (with duration, outcome, recording link if present).
+  - **SMS** — `conversation_logs` where `type='sms'`.
+  - **Notes** — extended notes editor with timestamps.
+  - **Tasks** — scheduled follow-ups (reuses existing scheduled_messages if present, else placeholder).
+- Route: `/dashboard/leads/:id`. Row click and name click on `Leads.tsx` navigate here instead of opening the Sheet. Bulk-select behavior stays.
 
-2. **Email Performance by Hour**
-   - Source: `conversation_logs` where `type='email'` (last 30 days, per user).
-   - Bar chart: total emails sent per hour.
-   - Since open/reply events aren't tracked yet, reply rate = share of hours with an inbound email reply within 48h of an outbound one to the same `lead_id`. Show as line overlay.
-   - Callout cards: **Best hour to email** (highest reply rate), **Reply rate**, **Total emails (30d)**.
-   - Small note: "Open tracking coming soon" so the metric limitation is transparent.
+## Account (company) detail — upgrade existing `/dashboard/accounts/:name`
 
-3. Both widgets support a range toggle (7d / 30d / 90d) and a timezone note (uses browser local time).
-
-## Customization
-
-- Add a **"Customize"** button in the Overview header that opens a sheet listing all widgets with visibility toggles and drag-to-reorder handles (`@dnd-kit/core` is already in the project — verify; if not, use simple up/down buttons to avoid a dep).
-- Widget catalog (existing + new): Stats cards, Weekly Activity, AI Smart Priority, AI Deal Forecast, AI Churn, AI Weekly Digest, Recent Leads, Notifications, **Call Performance by Hour**, **Email Performance by Hour**.
-- Preferences persist in `localStorage` under `overview_layout_v1` keyed by user id: `{ order: string[], hidden: string[] }`. No schema change.
-- "Reset to default" button in the sheet.
+- **Header**: company logo (Google favicon), name, industry, website, HQ, top-lead score. Actions: **Add to Sequence** (bulk-enrolls all leads in the account), **Export CSV**, **Back**.
+- **Left rail — About**: industry, size, revenue if available, HQ, primary domain, domain-merge hint, account notes (localStorage per-user for Phase 1 — Phase 2 will migrate to a real `accounts` table per the earlier plan).
+- **Main — tabs**:
+  - **Leads** — associated leads table; clicking a row navigates to `/dashboard/leads/:id`.
+  - **Activity** — combined feed for all leads in the account.
+  - **Emails** — `conversation_logs` (type='email') joined across the account's lead IDs.
+  - **Calls** — `voice_agent_calls` + `conversation_logs` (type='call') across the account's lead IDs.
+  - **Notes** — account-level notes (localStorage for now).
+  - **Opportunities** — from `deals` table filtered by the account's lead IDs.
 
 ## Technical plan
 
 New files:
-- `src/components/dashboard/widgets/CallHourWidget.tsx` — fetches `voice_agent_calls`, buckets by hour, renders Recharts `ComposedChart` (bars + line).
-- `src/components/dashboard/widgets/EmailHourWidget.tsx` — fetches `conversation_logs` (`type='email'`), computes hourly totals + reply-rate approximation.
-- `src/components/dashboard/CustomizeOverviewSheet.tsx` — sheet UI, list of widgets with switches and reorder controls.
-- `src/hooks/useOverviewLayout.ts` — read/write layout in localStorage, expose `order`, `hidden`, `toggle`, `move`, `reset`.
+- `src/pages/LeadDetail.tsx` — full-page layout, fetches lead + related activity, wires actions.
+- `src/lib/leadTimezone.ts` — pure helper: `(lead) => { tz: string | null, source: 'phone' | 'state' | 'country' | null }`. Static maps for US states and common countries; phone → country via first digits.
+- `src/components/leads/SequenceEnrollments.tsx` — reads `lead_campaign_enrollments` for a lead id.
+- `src/components/leads/LocalTimeClock.tsx` — renders a live clock in a given IANA tz.
 
 Edits:
-- `src/pages/Dashboard.tsx` — wrap existing widget sections in an id-keyed registry; render in the order from `useOverviewLayout`; skip hidden ones; add "Customize" button in header; insert the two new widgets into the registry.
+- `src/App.tsx` — register `/dashboard/leads/:id` route.
+- `src/pages/Leads.tsx` — row click and name click navigate to `/dashboard/leads/:id`; remove/replace the Sheet drawer (keep bulk actions).
+- `src/pages/AccountDetail.tsx` — expand header with actions; add Emails / Calls / Opportunities tabs sourced from lead-ID joins; make Leads rows navigate to the new lead detail page.
 
-No DB migration, no new dependencies (Recharts + shadcn Sheet already in use). Verify with `tsgo`.
+No new dependencies. No schema changes. Verify with `tsgo`.
 
 ## Out of scope (call out to user)
 
-- Real email open/click tracking (needs Resend/webhook plumbing) — flagged with "coming soon" copy.
-- Cross-device sync of layout preference (would need a `user_preferences` table — can add in a follow-up).
+- Persistent account-level notes (still localStorage until the `accounts` table lands in Phase 2).
+- Real timezone resolution from lat/lng (requires a geocoding call) — the static map covers US + top countries and is instantly available.
+- Two-way email/calendar sync — Emails tab reads whatever is already in `conversation_logs`.
