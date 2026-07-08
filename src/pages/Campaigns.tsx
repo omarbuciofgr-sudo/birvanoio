@@ -556,13 +556,21 @@ const Campaigns = () => {
                 {/* Enrolled Leads */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="w-5 h-5" />
-                      Enrolled Leads
-                    </CardTitle>
-                    <CardDescription>
-                      Leads currently in this campaign
-                    </CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="w-5 h-5" />
+                          Enrolled Leads
+                        </CardTitle>
+                        <CardDescription>
+                          Leads currently in this campaign
+                        </CardDescription>
+                      </div>
+                      <Button size="sm" onClick={openEnrollDialog} className="gap-1.5">
+                        <UserPlus className="w-4 h-4" />
+                        Add Leads
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {enrollments.length === 0 ? (
