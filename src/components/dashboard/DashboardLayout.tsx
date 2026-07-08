@@ -39,6 +39,7 @@ import {
   BarChart3,
   Send,
   Wand2,
+  Building2,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -65,6 +66,7 @@ const navSections: NavSection[] = [
     items: [
       { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "Leads", href: "/dashboard/leads", icon: Users },
+      { name: "Accounts", href: "/dashboard/accounts", icon: Building2 },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
     ],
   },

@@ -548,7 +548,7 @@ const Leads = () => {
                   <Card
                     key={c.name}
                     className="cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
-                    onClick={() => { setCompanyFilter(c.name); setViewMode("table"); }}
+                    onClick={() => navigate(`/dashboard/accounts/${encodeURIComponent(c.name)}`)}
                   >
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">

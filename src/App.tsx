@@ -42,6 +42,8 @@ import Team from "./pages/Team";
 import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import NotFound from "./pages/NotFound";
 import Trust from "./pages/Trust";
+import Accounts from "./pages/Accounts";
+import AccountDetail from "./pages/AccountDetail";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,8 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+              <Route path="/dashboard/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+              <Route path="/dashboard/accounts/:name" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
