@@ -197,7 +197,7 @@ const Leads = () => {
     });
 
     return filtered;
-  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir, companyFilter]);
+  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir, companyFilter, activeTab]);
 
   // Companies aggregation
   const companies = useMemo(() => {
