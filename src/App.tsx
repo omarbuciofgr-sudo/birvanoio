@@ -42,6 +42,8 @@ import Team from "./pages/Team";
 import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import NotFound from "./pages/NotFound";
 import Trust from "./pages/Trust";
+import Accounts from "./pages/Accounts";
+import AccountDetail from "./pages/AccountDetail";
 
 const queryClient = new QueryClient();
 
