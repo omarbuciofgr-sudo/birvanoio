@@ -382,6 +382,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
             prospectResults: null,
             filtersRelaxed: response.filters_relaxed,
             relaxedMessage: response.message,
+            pagination: response.pagination,
           };
         }
         return {
