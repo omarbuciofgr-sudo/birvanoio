@@ -25,7 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock, Sparkles } from "lucide-react";
+import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock, Sparkles, UserPlus, Search } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { AICampaignOptimizer } from "@/components/campaigns/AICampaignOptimizer";
 
@@ -76,6 +77,68 @@ const Campaigns = () => {
   const [stepSubject, setStepSubject] = useState("");
   const [stepBody, setStepBody] = useState("");
   const [stepDelay, setStepDelay] = useState(1);
+
+  // Enroll leads dialog
+  const [isEnrolling, setIsEnrolling] = useState(false);
+  const [availableLeads, setAvailableLeads] = useState<Array<{ id: string; business_name: string; contact_name: string | null; email: string | null }>>([]);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [leadSearch, setLeadSearch] = useState("");
+  const [loadingLeads, setLoadingLeads] = useState(false);
+
+  const openEnrollDialog = async () => {
+    if (!selectedCampaign || !user) return;
+    setIsEnrolling(true);
+    setSelectedLeadIds(new Set());
+    setLeadSearch("");
+    setLoadingLeads(true);
+    const { data: leads } = await supabase
+      .from("leads")
+      .select("id, business_name, contact_name, email")
+      .eq("client_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    const { data: existing } = await supabase
+      .from("lead_campaign_enrollments")
+      .select("lead_id")
+      .eq("campaign_id", selectedCampaign.id);
+    const enrolledIds = new Set((existing || []).map((e: any) => e.lead_id));
+    setAvailableLeads((leads || []).filter((l) => !enrolledIds.has(l.id)));
+    setLoadingLeads(false);
+  };
+
+  const enrollSelectedLeads = async () => {
+    if (!selectedCampaign || selectedLeadIds.size === 0) return;
+    setIsSaving(true);
+    const rows = Array.from(selectedLeadIds).map((lead_id) => ({
+      lead_id,
+      campaign_id: selectedCampaign.id,
+      current_step: 1,
+      status: "active",
+      next_send_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from("lead_campaign_enrollments").insert(rows);
+    if (error) {
+      toast.error(`Failed to enroll: ${error.message}`);
+    } else {
+      toast.success(`Enrolled ${rows.length} lead(s)`);
+      setIsEnrolling(false);
+      fetchEnrollments(selectedCampaign.id);
+    }
+    setIsSaving(false);
+  };
+
+  const removeEnrollment = async (enrollmentId: string) => {
+    const { error } = await supabase
+      .from("lead_campaign_enrollments")
+      .delete()
+      .eq("id", enrollmentId);
+    if (error) {
+      toast.error("Failed to remove lead");
+    } else {
+      toast.success("Lead removed from campaign");
+      setEnrollments(enrollments.filter((e) => e.id !== enrollmentId));
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -493,13 +556,21 @@ const Campaigns = () => {
                 {/* Enrolled Leads */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="w-5 h-5" />
-                      Enrolled Leads
-                    </CardTitle>
-                    <CardDescription>
-                      Leads currently in this campaign
-                    </CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="w-5 h-5" />
+                          Enrolled Leads
+                        </CardTitle>
+                        <CardDescription>
+                          Leads currently in this campaign
+                        </CardDescription>
+                      </div>
+                      <Button size="sm" onClick={openEnrollDialog} className="gap-1.5">
+                        <UserPlus className="w-4 h-4" />
+                        Add Leads
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {enrollments.length === 0 ? (
@@ -515,6 +586,7 @@ const Campaigns = () => {
                             <TableHead>Step</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Enrolled</TableHead>
+                            <TableHead className="w-10"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -542,6 +614,16 @@ const Campaigns = () => {
                               </TableCell>
                               <TableCell className="text-muted-foreground text-sm">
                                 {format(new Date(enrollment.enrolled_at), "MMM d, yyyy")}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => removeEnrollment(enrollment.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -669,6 +751,100 @@ const Campaigns = () => {
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editingStep ? "Update Step" : "Add Step"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Enroll Leads Dialog */}
+      <Dialog open={isEnrolling} onOpenChange={setIsEnrolling}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Leads to Campaign</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={leadSearch}
+                onChange={(e) => setLeadSearch(e.target.value)}
+                placeholder="Search leads by name or email..."
+                className="pl-8"
+              />
+            </div>
+            <div className="border rounded-md max-h-[400px] overflow-auto">
+              {loadingLeads ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                  Loading leads...
+                </div>
+              ) : availableLeads.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  No leads available to enroll
+                </div>
+              ) : (
+                (() => {
+                  const q = leadSearch.trim().toLowerCase();
+                  const filtered = q
+                    ? availableLeads.filter(
+                        (l) =>
+                          l.business_name?.toLowerCase().includes(q) ||
+                          l.contact_name?.toLowerCase().includes(q) ||
+                          l.email?.toLowerCase().includes(q)
+                      )
+                    : availableLeads;
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 p-2 border-b bg-muted/30 text-xs">
+                        <Checkbox
+                          checked={filtered.length > 0 && filtered.every((l) => selectedLeadIds.has(l.id))}
+                          onCheckedChange={(checked) => {
+                            const next = new Set(selectedLeadIds);
+                            if (checked) filtered.forEach((l) => next.add(l.id));
+                            else filtered.forEach((l) => next.delete(l.id));
+                            setSelectedLeadIds(next);
+                          }}
+                        />
+                        <span className="text-muted-foreground">
+                          {selectedLeadIds.size} selected · {filtered.length} shown
+                        </span>
+                      </div>
+                      {filtered.map((lead) => (
+                        <label
+                          key={lead.id}
+                          className="flex items-center gap-3 p-2.5 border-b last:border-b-0 hover:bg-muted/40 cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={selectedLeadIds.has(lead.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedLeadIds);
+                              if (checked) next.add(lead.id);
+                              else next.delete(lead.id);
+                              setSelectedLeadIds(next);
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{lead.business_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {lead.contact_name || "—"} {lead.email ? `· ${lead.email}` : ""}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsEnrolling(false)}>Cancel</Button>
+            <Button
+              onClick={enrollSelectedLeads}
+              disabled={isSaving || selectedLeadIds.size === 0}
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Enroll {selectedLeadIds.size > 0 ? selectedLeadIds.size : ""} Lead{selectedLeadIds.size === 1 ? "" : "s"}
             </Button>
           </DialogFooter>
         </DialogContent>
