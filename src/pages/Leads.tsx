@@ -104,7 +104,10 @@ const Leads = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "kanban" | "companies">("table");
+  const [activeTab, setActiveTab] = useState<"people" | "companies">("people");
+  const [peopleLayout, setPeopleLayout] = useState<"table" | "kanban">("table");
+  const viewMode: "table" | "kanban" | "companies" =
+    activeTab === "companies" ? "companies" : peopleLayout;
   const [campaignDialogLeadIds, setCampaignDialogLeadIds] = useState<string[] | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
@@ -169,6 +172,10 @@ const Leads = () => {
     if (industryFilter !== "all") filtered = filtered.filter(l => l.industry === industryFilter);
     if (stateFilter !== "all") filtered = filtered.filter(l => l.state === stateFilter);
     if (companyFilter) filtered = filtered.filter(l => l.business_name === companyFilter);
+    // People tab: only show leads representing an actual person (has contact info)
+    if (activeTab === "people" && !companyFilter) {
+      filtered = filtered.filter(l => !!(l.contact_name || l.email || l.phone));
+    }
     if (scoreFilter !== "all") {
       if (scoreFilter === "hot") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 70);
       else if (scoreFilter === "warm") filtered = filtered.filter(l => (l.lead_score ?? 0) >= 40 && (l.lead_score ?? 0) < 70);
@@ -190,7 +197,7 @@ const Leads = () => {
     });
 
     return filtered;
-  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir, companyFilter]);
+  }, [leads, searchQuery, statusFilter, industryFilter, stateFilter, scoreFilter, sortField, sortDir, companyFilter, activeTab]);
 
   // Companies aggregation
   const companies = useMemo(() => {
@@ -342,26 +349,33 @@ const Leads = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {activeTab === "companies" ? "Companies" : "Leads"}
+            </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {filteredLeads.length} of {leads.length} leads
+              {activeTab === "companies"
+                ? `${companies.length} compan${companies.length === 1 ? "y" : "ies"} · grouped from your leads`
+                : `${filteredLeads.length} of ${leads.filter(l => !!(l.contact_name || l.email || l.phone)).length} people`}
               {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active`}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as "table" | "kanban" | "companies")}>
-              <ToggleGroupItem value="table" aria-label="All prospects" className="gap-1 h-8 text-xs px-2.5">
-                <List className="w-3.5 h-3.5" /> All
-              </ToggleGroupItem>
-              <ToggleGroupItem value="companies" aria-label="By company" className="gap-1 h-8 text-xs px-2.5">
-                <Building2 className="w-3.5 h-3.5" /> Companies
-              </ToggleGroupItem>
-              <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1 h-8 text-xs px-2.5">
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </ToggleGroupItem>
-            </ToggleGroup>
+            {activeTab === "people" && (
+              <ToggleGroup
+                type="single"
+                value={peopleLayout}
+                onValueChange={(v) => v && setPeopleLayout(v as "table" | "kanban")}
+              >
+                <ToggleGroupItem value="table" aria-label="Table view" className="gap-1 h-8 text-xs px-2.5">
+                  <List className="w-3.5 h-3.5" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1 h-8 text-xs px-2.5">
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
             <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 text-xs h-8">
-              <Plus className="w-3.5 h-3.5" /> Add Lead
+              <Plus className="w-3.5 h-3.5" /> {activeTab === "companies" ? "Add Company" : "Add Lead"}
             </Button>
             <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="gap-1.5 text-xs h-8">
               <Upload className="w-3.5 h-3.5" /> Import
@@ -371,6 +385,24 @@ const Leads = () => {
             </Button>
           </div>
         </div>
+
+        {/* People / Companies tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as "people" | "companies"); setCompanyFilter(null); }}>
+          <TabsList className="h-9">
+            <TabsTrigger value="people" className="gap-1.5 text-xs">
+              <Users className="w-3.5 h-3.5" /> Leads
+              <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[9px]">
+                {leads.filter(l => !!(l.contact_name || l.email || l.phone)).length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="companies" className="gap-1.5 text-xs">
+              <Building2 className="w-3.5 h-3.5" /> Companies
+              <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[9px]">
+                {companies.length}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Search + Filter Bar */}
         <div className="flex items-center gap-2">
