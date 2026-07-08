@@ -15,6 +15,7 @@ import { AISmartReply } from "@/components/leads/AISmartReply";
 import { AISubjectOptimizer } from "@/components/leads/AISubjectOptimizer";
 import { AICallPrep } from "@/components/leads/AICallPrep";
 import { AIMeetingNotes } from "@/components/leads/AIMeetingNotes";
+import { AddToCampaignDialog } from "@/components/leads/AddToCampaignDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +58,7 @@ import {
   LayoutGrid, List, Plus, X, ChevronDown, MoreHorizontal,
   Phone, Mail, Globe, MapPin, Calendar, Building2, Users,
   ArrowUpDown, Trash2, Tag, UserCheck, Eye, EyeOff,
-  CheckCircle, Clock, TrendingUp, AlertTriangle,
+  CheckCircle, Clock, TrendingUp, AlertTriangle, Send,
 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { z } from "zod";
@@ -104,6 +105,7 @@ const Leads = () => {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "kanban" | "companies">("table");
+  const [campaignDialogLeadIds, setCampaignDialogLeadIds] = useState<string[] | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -495,6 +497,14 @@ const Leads = () => {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setCampaignDialogLeadIds(Array.from(selectedLeads))}
+            >
+              <Send className="w-3 h-3" /> Add to Campaign
+            </Button>
             <Button variant="destructive" size="sm" className="h-7 text-xs gap-1" onClick={bulkDelete}>
               <Trash2 className="w-3 h-3" /> Delete
             </Button>
@@ -763,11 +773,21 @@ const Leads = () => {
             <SheetHeader className="px-5 pt-5 pb-0">
               <SheetTitle className="text-base font-semibold">{selectedLead?.business_name}</SheetTitle>
               {selectedLead && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusConfig[selectedLead.status]?.color}`}>
-                    {selectedLead.status}
-                  </span>
-                  {selectedLead.industry && <Badge variant="outline" className="text-[10px]">{selectedLead.industry}</Badge>}
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusConfig[selectedLead.status]?.color}`}>
+                      {selectedLead.status}
+                    </span>
+                    {selectedLead.industry && <Badge variant="outline" className="text-[10px]">{selectedLead.industry}</Badge>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1 shrink-0"
+                    onClick={() => setCampaignDialogLeadIds([selectedLead.id])}
+                  >
+                    <Send className="w-3 h-3" /> Add to Campaign
+                  </Button>
                 </div>
               )}
             </SheetHeader>
@@ -947,6 +967,12 @@ const Leads = () => {
 
         <CSVImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} onImportComplete={fetchLeads} />
         <CreateLeadDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} onLeadCreated={fetchLeads} />
+        <AddToCampaignDialog
+          open={campaignDialogLeadIds !== null}
+          onOpenChange={(o) => { if (!o) setCampaignDialogLeadIds(null); }}
+          leadIds={campaignDialogLeadIds ?? []}
+          onSuccess={() => setSelectedLeads(new Set())}
+        />
       </div>
     </DashboardLayout>
   );
