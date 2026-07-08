@@ -114,6 +114,7 @@ const FUNNEL_COLORS = [
 const Dashboard = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const layout = useOverviewLayout(user?.id);
   const [stats, setStats] = useState<LeadStats>({ total: 0, new: 0, contacted: 0, converted: 0, qualified: 0 });
   const [recentLeads, setRecentLeads] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
