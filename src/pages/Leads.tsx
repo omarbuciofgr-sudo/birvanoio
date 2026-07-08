@@ -532,7 +532,7 @@ const Leads = () => {
         {viewMode === "kanban" ? (
           <LeadKanbanBoard
             leads={filteredLeads}
-            onLeadClick={(lead) => setSelectedLead(lead)}
+            onLeadClick={(lead) => navigate(`/dashboard/leads/${lead.id}`)}
             onLeadsUpdate={fetchLeads}
           />
         ) : viewMode === "companies" ? (
@@ -661,7 +661,7 @@ const Leads = () => {
                         <TableRow
                           key={lead.id}
                           className={`cursor-pointer transition-colors ${selectedLeads.has(lead.id) ? 'bg-primary/[0.04]' : ''}`}
-                          onClick={() => setSelectedLead(lead)}
+                          onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
                         >
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Checkbox
