@@ -1,46 +1,45 @@
-## Accounts (Companies) view
+## Goal
 
-### Goal
-Give users an "Accounts" surface to browse companies and drill into all leads for a given company, without introducing a new database entity yet.
+Make the dashboard Overview page customizable and add call + email timing analytics widgets (best hour to call/email, totals by hour, connect rate).
 
-### Scope
-- **Phase 1 (now):** grouped view derived from the existing `leads` table. No schema changes.
-- **Phase 2 (later, separate request):** a real `accounts` table that owns companies independently and links leads via `account_id`.
+## New widgets
 
-### What ships in Phase 1
+1. **Call Performance by Hour**
+   - Source: `voice_agent_calls` (last 30 days, per-user via `client_id`).
+   - Bar chart: total calls per hour of day (0–23, local time).
+   - Line overlay: connect rate per hour = `completed / (completed + no_answer + failed)`.
+   - Callout cards: **Best hour to call** (highest connect rate, min 3 calls), **Overall connect rate**, **Total calls (30d)**, **Avg duration**.
 
-**1. New page `/dashboard/accounts`**
-- Lists every distinct company aggregated from `leads.business_name` (case-insensitive, trimmed).
-- Per-row summary: company name, lead count, primary industry, locations (top 1–2), top lead score, status breakdown mini-bar, last activity date.
-- Search box + filters (industry, state, has-hot-lead).
-- Sort by lead count / top score / last activity / name.
-- Domain merge hint: when leads under the same normalized name have >1 distinct email/website domain, show a small "multiple domains" badge on the row so users can spot merge candidates. Grouping itself remains name-based.
+2. **Email Performance by Hour**
+   - Source: `conversation_logs` where `type='email'` (last 30 days, per user).
+   - Bar chart: total emails sent per hour.
+   - Since open/reply events aren't tracked yet, reply rate = share of hours with an inbound email reply within 48h of an outbound one to the same `lead_id`. Show as line overlay.
+   - Callout cards: **Best hour to email** (highest reply rate), **Reply rate**, **Total emails (30d)**.
+   - Small note: "Open tracking coming soon" so the metric limitation is transparent.
 
-**2. Account detail view `/dashboard/accounts/:name`**
-- Header: company name, aggregate stats (leads, hot leads, converted, last activity), list of detected domains.
-- Tabs:
-  - **Leads** — table of all leads for that company (reuses the same columns/logic as the Leads table). Row click opens the existing lead detail sheet.
-  - **Activity** — merged timeline of recent lead activity for the company (best-effort using existing `LeadActivityTimeline` data joined across the account's leads).
-  - **Notes** — company-level notes stored client-side for now (localStorage keyed by normalized name) with a note that persistent account notes arrive with Phase 2.
-- Header actions: "Add to Campaign" (uses the existing `AddToCampaignDialog` with all account lead IDs), "Export CSV", "Back to Accounts".
+3. Both widgets support a range toggle (7d / 30d / 90d) and a timezone note (uses browser local time).
 
-**3. Navigation**
-- Add a top-level **Accounts** item in the sidebar under Core, right below Leads (icon: `Building2`).
-- Keep the existing Companies toggle on the Leads page; clicking a company card there now navigates to `/dashboard/accounts/:name` instead of just filtering the table.
+## Customization
 
-### What does NOT change in Phase 1
-- No new tables, RLS, or migrations.
-- No changes to how leads are created or linked.
-- Campaigns, scoring, and other pages are untouched.
+- Add a **"Customize"** button in the Overview header that opens a sheet listing all widgets with visibility toggles and drag-to-reorder handles (`@dnd-kit/core` is already in the project — verify; if not, use simple up/down buttons to avoid a dep).
+- Widget catalog (existing + new): Stats cards, Weekly Activity, AI Smart Priority, AI Deal Forecast, AI Churn, AI Weekly Digest, Recent Leads, Notifications, **Call Performance by Hour**, **Email Performance by Hour**.
+- Preferences persist in `localStorage` under `overview_layout_v1` keyed by user id: `{ order: string[], hidden: string[] }`. No schema change.
+- "Reset to default" button in the sheet.
 
-### Phase 2 preview (not built now)
-When you're ready: add `accounts` table (name, domain, industry, website, owner, notes), add `account_id` FK on `leads`, backfill from current grouping, and switch the Accounts page to read from the table so you can create empty companies and edit them.
+## Technical plan
 
----
+New files:
+- `src/components/dashboard/widgets/CallHourWidget.tsx` — fetches `voice_agent_calls`, buckets by hour, renders Recharts `ComposedChart` (bars + line).
+- `src/components/dashboard/widgets/EmailHourWidget.tsx` — fetches `conversation_logs` (`type='email'`), computes hourly totals + reply-rate approximation.
+- `src/components/dashboard/CustomizeOverviewSheet.tsx` — sheet UI, list of widgets with switches and reorder controls.
+- `src/hooks/useOverviewLayout.ts` — read/write layout in localStorage, expose `order`, `hidden`, `toggle`, `move`, `reset`.
 
-### Technical notes
-- New route in `src/App.tsx`: `/dashboard/accounts` and `/dashboard/accounts/:name` (URL-encoded name), both wrapped in `ProtectedRoute`.
-- New files: `src/pages/Accounts.tsx`, `src/pages/AccountDetail.tsx`.
-- Sidebar item added in `src/components/dashboard/DashboardLayout.tsx` (Core group).
-- Grouping helper reused/extracted from the existing `companies` memo in `src/pages/Leads.tsx`.
-- No new dependencies.
+Edits:
+- `src/pages/Dashboard.tsx` — wrap existing widget sections in an id-keyed registry; render in the order from `useOverviewLayout`; skip hidden ones; add "Customize" button in header; insert the two new widgets into the registry.
+
+No DB migration, no new dependencies (Recharts + shadcn Sheet already in use). Verify with `tsgo`.
+
+## Out of scope (call out to user)
+
+- Real email open/click tracking (needs Resend/webhook plumbing) — flagged with "coming soon" copy.
+- Cross-device sync of layout preference (would need a `user_preferences` table — can add in a follow-up).
