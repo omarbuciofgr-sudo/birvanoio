@@ -755,6 +755,100 @@ const Campaigns = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Enroll Leads Dialog */}
+      <Dialog open={isEnrolling} onOpenChange={setIsEnrolling}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Leads to Campaign</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={leadSearch}
+                onChange={(e) => setLeadSearch(e.target.value)}
+                placeholder="Search leads by name or email..."
+                className="pl-8"
+              />
+            </div>
+            <div className="border rounded-md max-h-[400px] overflow-auto">
+              {loadingLeads ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                  Loading leads...
+                </div>
+              ) : availableLeads.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  No leads available to enroll
+                </div>
+              ) : (
+                (() => {
+                  const q = leadSearch.trim().toLowerCase();
+                  const filtered = q
+                    ? availableLeads.filter(
+                        (l) =>
+                          l.business_name?.toLowerCase().includes(q) ||
+                          l.contact_name?.toLowerCase().includes(q) ||
+                          l.email?.toLowerCase().includes(q)
+                      )
+                    : availableLeads;
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 p-2 border-b bg-muted/30 text-xs">
+                        <Checkbox
+                          checked={filtered.length > 0 && filtered.every((l) => selectedLeadIds.has(l.id))}
+                          onCheckedChange={(checked) => {
+                            const next = new Set(selectedLeadIds);
+                            if (checked) filtered.forEach((l) => next.add(l.id));
+                            else filtered.forEach((l) => next.delete(l.id));
+                            setSelectedLeadIds(next);
+                          }}
+                        />
+                        <span className="text-muted-foreground">
+                          {selectedLeadIds.size} selected · {filtered.length} shown
+                        </span>
+                      </div>
+                      {filtered.map((lead) => (
+                        <label
+                          key={lead.id}
+                          className="flex items-center gap-3 p-2.5 border-b last:border-b-0 hover:bg-muted/40 cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={selectedLeadIds.has(lead.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedLeadIds);
+                              if (checked) next.add(lead.id);
+                              else next.delete(lead.id);
+                              setSelectedLeadIds(next);
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{lead.business_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {lead.contact_name || "—"} {lead.email ? `· ${lead.email}` : ""}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsEnrolling(false)}>Cancel</Button>
+            <Button
+              onClick={enrollSelectedLeads}
+              disabled={isSaving || selectedLeadIds.size === 0}
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Enroll {selectedLeadIds.size > 0 ? selectedLeadIds.size : ""} Lead{selectedLeadIds.size === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
