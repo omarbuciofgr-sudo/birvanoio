@@ -286,8 +286,11 @@ export default function AccountDetail() {
 
         <Tabs defaultValue="leads">
           <TabsList className="h-8">
-            <TabsTrigger value="leads" className="text-xs">Leads</TabsTrigger>
+            <TabsTrigger value="leads" className="text-xs">Leads ({leads.length})</TabsTrigger>
             <TabsTrigger value="activity" className="text-xs">Activity</TabsTrigger>
+            <TabsTrigger value="emails" className="text-xs">Emails ({emails.length})</TabsTrigger>
+            <TabsTrigger value="calls" className="text-xs">Calls ({calls.length})</TabsTrigger>
+            <TabsTrigger value="opportunities" className="text-xs">Opportunities ({deals.length})</TabsTrigger>
             <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
           </TabsList>
 
@@ -370,6 +373,102 @@ export default function AccountDetail() {
                 >
                   Go to Leads →
                 </Link>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="emails" className="mt-3">
+            <Card>
+              <CardContent className="p-0">
+                {emails.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-muted-foreground">No emails yet.</div>
+                ) : (
+                  <ul className="divide-y divide-border/40">
+                    {emails.map((e) => {
+                      const l = leads.find((ld) => ld.id === e.lead_id);
+                      return (
+                        <li key={e.id} className="p-3 hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/dashboard/leads/${e.lead_id}`)}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Badge variant="outline" className="text-[9px]">{e.direction || "outbound"}</Badge>
+                              <p className="text-xs font-medium truncate">{e.subject || "(no subject)"}</p>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground shrink-0">{new Date(e.created_at).toLocaleString()}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            {l?.contact_name || l?.email || "Unknown lead"}
+                          </p>
+                          {e.content && <p className="text-xs text-muted-foreground line-clamp-2 mt-1 whitespace-pre-wrap">{e.content}</p>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="calls" className="mt-3">
+            <Card>
+              <CardContent className="p-0">
+                {calls.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-muted-foreground">No calls yet.</div>
+                ) : (
+                  <ul className="divide-y divide-border/40">
+                    {calls.map((c) => {
+                      const l = leads.find((ld) => ld.id === c.lead_id);
+                      return (
+                        <li key={c.id} className="p-3 hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/dashboard/leads/${c.lead_id}`)}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[9px]">{c.status}</Badge>
+                              {c.call_outcome && <Badge variant="secondary" className="text-[9px]">{c.call_outcome}</Badge>}
+                              {typeof c.duration_seconds === "number" && (
+                                <span className="text-[10px] text-muted-foreground">{c.duration_seconds}s</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">{new Date(c.started_at || c.created_at).toLocaleString()}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">{l?.contact_name || l?.business_name || "Unknown lead"}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="opportunities" className="mt-3">
+            <Card>
+              <CardContent className="p-0">
+                {deals.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-muted-foreground">No opportunities yet.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Lead</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Close date</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {deals.map((d) => {
+                        const l = leads.find((ld) => ld.id === d.lead_id);
+                        return (
+                          <TableRow key={d.id} className="cursor-pointer" onClick={() => navigate(`/dashboard/leads/${d.lead_id}`)}>
+                            <TableCell className="font-medium">{l?.contact_name || l?.business_name || "—"}</TableCell>
+                            <TableCell>{d.deal_value != null ? `$${Number(d.deal_value).toLocaleString()}` : "—"}</TableCell>
+                            <TableCell>{d.close_date ? new Date(d.close_date).toLocaleDateString() : "—"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground truncate max-w-[300px]">{d.notes || "—"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
