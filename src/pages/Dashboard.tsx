@@ -27,6 +27,10 @@ import {
 } from "recharts";
 import OnboardingTour from "@/components/dashboard/OnboardingTour";
 import { scrapedStatusToLeadStatus } from "@/lib/leadSourceFallback";
+import CustomizeOverviewSheet from "@/components/dashboard/CustomizeOverviewSheet";
+import CallHourWidget from "@/components/dashboard/widgets/CallHourWidget";
+import EmailHourWidget from "@/components/dashboard/widgets/EmailHourWidget";
+import { useOverviewLayout, type WidgetId } from "@/hooks/useOverviewLayout";
 
 /** 7-day pipeline chart from CRM or Scout-normalized rows. */
 function computeWeeklyActivityData(data: { created_at: string; status: string }[]) {
