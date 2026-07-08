@@ -78,6 +78,68 @@ const Campaigns = () => {
   const [stepBody, setStepBody] = useState("");
   const [stepDelay, setStepDelay] = useState(1);
 
+  // Enroll leads dialog
+  const [isEnrolling, setIsEnrolling] = useState(false);
+  const [availableLeads, setAvailableLeads] = useState<Array<{ id: string; business_name: string; contact_name: string | null; email: string | null }>>([]);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [leadSearch, setLeadSearch] = useState("");
+  const [loadingLeads, setLoadingLeads] = useState(false);
+
+  const openEnrollDialog = async () => {
+    if (!selectedCampaign || !user) return;
+    setIsEnrolling(true);
+    setSelectedLeadIds(new Set());
+    setLeadSearch("");
+    setLoadingLeads(true);
+    const { data: leads } = await supabase
+      .from("leads")
+      .select("id, business_name, contact_name, email")
+      .eq("client_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    const { data: existing } = await supabase
+      .from("lead_campaign_enrollments")
+      .select("lead_id")
+      .eq("campaign_id", selectedCampaign.id);
+    const enrolledIds = new Set((existing || []).map((e: any) => e.lead_id));
+    setAvailableLeads((leads || []).filter((l) => !enrolledIds.has(l.id)));
+    setLoadingLeads(false);
+  };
+
+  const enrollSelectedLeads = async () => {
+    if (!selectedCampaign || selectedLeadIds.size === 0) return;
+    setIsSaving(true);
+    const rows = Array.from(selectedLeadIds).map((lead_id) => ({
+      lead_id,
+      campaign_id: selectedCampaign.id,
+      current_step: 1,
+      status: "active",
+      next_send_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from("lead_campaign_enrollments").insert(rows);
+    if (error) {
+      toast.error(`Failed to enroll: ${error.message}`);
+    } else {
+      toast.success(`Enrolled ${rows.length} lead(s)`);
+      setIsEnrolling(false);
+      fetchEnrollments(selectedCampaign.id);
+    }
+    setIsSaving(false);
+  };
+
+  const removeEnrollment = async (enrollmentId: string) => {
+    const { error } = await supabase
+      .from("lead_campaign_enrollments")
+      .delete()
+      .eq("id", enrollmentId);
+    if (error) {
+      toast.error("Failed to remove lead");
+    } else {
+      toast.success("Lead removed from campaign");
+      setEnrollments(enrollments.filter((e) => e.id !== enrollmentId));
+    }
+  };
+
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");
