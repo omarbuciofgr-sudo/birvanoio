@@ -967,6 +967,12 @@ const Leads = () => {
 
         <CSVImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} onImportComplete={fetchLeads} />
         <CreateLeadDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} onLeadCreated={fetchLeads} />
+        <AddToCampaignDialog
+          open={campaignDialogLeadIds !== null}
+          onOpenChange={(o) => { if (!o) setCampaignDialogLeadIds(null); }}
+          leadIds={campaignDialogLeadIds ?? []}
+          onSuccess={() => setSelectedLeads(new Set())}
+        />
       </div>
     </DashboardLayout>
   );
