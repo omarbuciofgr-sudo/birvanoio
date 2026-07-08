@@ -39,6 +39,7 @@ import {
   BarChart3,
   Send,
   Wand2,
+  Building2,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
