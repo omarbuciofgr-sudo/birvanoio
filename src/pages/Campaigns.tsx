@@ -615,6 +615,16 @@ const Campaigns = () => {
                               <TableCell className="text-muted-foreground text-sm">
                                 {format(new Date(enrollment.enrolled_at), "MMM d, yyyy")}
                               </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => removeEnrollment(enrollment.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
