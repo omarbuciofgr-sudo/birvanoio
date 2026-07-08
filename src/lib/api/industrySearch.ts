@@ -126,6 +126,12 @@ export interface PeopleSearchResponse {
   message?: string;
   /** Backend dropped these filter keys to return matches */
   filters_relaxed?: string[];
+  pagination?: {
+    page: number;
+    per_page: number;
+    total_entries: number;
+    total_pages: number;
+  };
 }
 
 export interface JobSearchResponse {

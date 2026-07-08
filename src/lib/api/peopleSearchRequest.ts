@@ -47,6 +47,7 @@ export type PeopleSearchRequestBody = {
   years_experience_min?: number;
   years_experience_max?: number;
   limit?: number;
+  page?: number;
 };
 
 const RESTRICTIVE_KEYS: (keyof PeopleSearchRequestBody)[] = [

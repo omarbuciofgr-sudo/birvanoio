@@ -345,6 +345,7 @@ export function BrivanoLens({ onSaveProspects, externalFilters, onSwitchTab, onS
           years_experience_min: peopleFilters.yearsExperienceMin ? parseInt(peopleFilters.yearsExperienceMin) : undefined,
           years_experience_max: peopleFilters.yearsExperienceMax ? parseInt(peopleFilters.yearsExperienceMax) : undefined,
           limit: peopleFilters.limit,
+          page,
         });
 
         if (response.success && Array.isArray(response.people) && response.people.length > 0) {
