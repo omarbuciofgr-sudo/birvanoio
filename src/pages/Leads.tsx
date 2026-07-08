@@ -497,6 +497,14 @@ const Leads = () => {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setCampaignDialogLeadIds(Array.from(selectedLeads))}
+            >
+              <Send className="w-3 h-3" /> Add to Campaign
+            </Button>
             <Button variant="destructive" size="sm" className="h-7 text-xs gap-1" onClick={bulkDelete}>
               <Trash2 className="w-3 h-3" /> Delete
             </Button>
