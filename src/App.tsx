@@ -61,6 +61,8 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+              <Route path="/dashboard/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+              <Route path="/dashboard/accounts/:name" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
