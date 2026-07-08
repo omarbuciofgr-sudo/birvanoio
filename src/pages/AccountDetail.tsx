@@ -95,6 +95,25 @@ export default function AccountDetail() {
     }
   }, [decodedName]);
 
+  useEffect(() => {
+    const ids = leads.map((l) => l.id);
+    if (ids.length === 0) {
+      setEmails([]); setCalls([]); setDeals([]);
+      return;
+    }
+    (async () => {
+      const [{ data: conv }, { data: vc }, { data: dl }] = await Promise.all([
+        supabase.from("conversation_logs").select("id,lead_id,subject,content,direction,created_at,type").in("lead_id", ids).order("created_at", { ascending: false }),
+        supabase.from("voice_agent_calls").select("id,lead_id,status,call_outcome,duration_seconds,created_at,started_at").in("lead_id", ids).order("created_at", { ascending: false }),
+        supabase.from("deals").select("id,lead_id,deal_value,close_date,notes").in("lead_id", ids),
+      ]);
+      const convRows = (conv ?? []) as Array<{ id: string; lead_id: string; subject: string | null; content: string | null; direction: string | null; created_at: string; type: string }>;
+      setEmails(convRows.filter((r) => r.type === "email"));
+      setCalls((vc ?? []) as typeof calls);
+      setDeals((dl ?? []) as typeof deals);
+    })();
+  }, [leads]);
+
   const stats = useMemo(() => {
     const hot = leads.filter((l) => (l.lead_score ?? 0) >= 70).length;
     const converted = leads.filter((l) => l.status === "converted").length;
