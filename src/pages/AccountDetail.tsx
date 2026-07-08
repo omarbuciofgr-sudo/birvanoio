@@ -293,7 +293,7 @@ export default function AccountDetail() {
                         <TableRow
                           key={l.id}
                           className="cursor-pointer"
-                          onClick={() => navigate(`/dashboard/leads?lead=${l.id}`)}
+                          onClick={() => navigate(`/dashboard/leads/${l.id}`)}
                         >
                           <TableCell className="font-medium">
                             {l.contact_name || "—"}
