@@ -65,6 +65,9 @@ export default function AccountDetail() {
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
+  const [emails, setEmails] = useState<Array<{ id: string; lead_id: string; subject: string | null; content: string | null; direction: string | null; created_at: string }>>([]);
+  const [calls, setCalls] = useState<Array<{ id: string; lead_id: string; status: string; call_outcome: string | null; duration_seconds: number | null; created_at: string; started_at: string | null }>>([]);
+  const [deals, setDeals] = useState<Array<{ id: string; lead_id: string; deal_value: number | null; close_date: string | null; notes: string | null }>>([]);
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
