@@ -15,6 +15,7 @@ import { AISmartReply } from "@/components/leads/AISmartReply";
 import { AISubjectOptimizer } from "@/components/leads/AISubjectOptimizer";
 import { AICallPrep } from "@/components/leads/AICallPrep";
 import { AIMeetingNotes } from "@/components/leads/AIMeetingNotes";
+import { AddToCampaignDialog } from "@/components/leads/AddToCampaignDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
