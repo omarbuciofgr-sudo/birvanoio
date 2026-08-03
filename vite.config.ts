@@ -2,6 +2,8 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/supabase/vite";
+
 
 /** Never expose SUPABASE_SERVICE_KEY here. */
 function pickEnv(file: Record<string, string>, keys: string[]): string {
@@ -107,7 +109,7 @@ export default defineConfig(({ mode }) => {
         port: 5173,
       },
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), mode === "development" && componentTagger(), mcpPlugin()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

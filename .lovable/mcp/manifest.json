@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://eotfijnsfwroukhjwsbe.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "brivano-leads",
+      "version": "0.1.0",
+      "title": "Brivano Leads"
+    },
+    "tools": [
+      {
+        "name": "search_leads",
+        "title": "Search leads",
+        "description": "Search the signed-in user's Brivano leads by free text, status, industry, city or state. Returns contact details, company, score and status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Free text matched against company name, contact name and email."
+            },
+            "status": {
+              "type": "string",
+              "description": "Lead status filter, e.g. new, contacted, qualified, converted."
+            },
+            "industry": {
+              "type": "string",
+              "description": "Industry filter (partial match)."
+            },
+            "city": {
+              "type": "string",
+              "description": "City filter (partial match)."
+            },
+            "state": {
+              "type": "string",
+              "description": "State filter (partial match)."
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Max rows to return (default 25, max 100)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_account_leads",
+        "title": "Get account leads",
+        "description": "List every Brivano lead associated with a company / account name, so you can see all contacts at that company.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "company_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Company / account name (partial match is allowed)."
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Max rows to return (default 50, max 200)."
+            }
+          },
+          "required": [
+            "company_name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_lead",
+        "title": "Get lead",
+        "description": "Fetch one Brivano lead by id, including its full contact details, score, status and notes.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "lead_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The lead's UUID."
+            }
+          },
+          "required": [
+            "lead_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_lead",
+        "title": "Create lead",
+        "description": "Create a new lead in Brivano for the signed-in user. Company (business) name is required; every other field is optional.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "business_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Company / account name."
+            },
+            "contact_name": {
+              "type": "string",
+              "description": "Full name of the person."
+            },
+            "email": {
+              "type": "string",
+              "description": "Contact email address."
+            },
+            "phone": {
+              "type": "string",
+              "description": "Contact phone number."
+            },
+            "website": {
+              "type": "string",
+              "description": "Company website URL."
+            },
+            "linkedin_url": {
+              "type": "string",
+              "description": "LinkedIn profile URL."
+            },
+            "industry": {
+              "type": "string",
+              "description": "Industry of the company."
+            },
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string",
+              "description": "Free-form notes about the lead."
+            }
+          },
+          "required": [
+            "business_name"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_lead",
+        "title": "Update lead",
+        "description": "Update an existing Brivano lead: change its status, score, notes or contact details. Only the provided fields are changed.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "lead_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The lead's UUID."
+            },
+            "status": {
+              "type": "string",
+              "description": "New status, e.g. new, contacted, qualified, converted, rejected."
+            },
+            "contact_name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "website": {
+              "type": "string"
+            },
+            "linkedin_url": {
+              "type": "string"
+            },
+            "industry": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "lead_score": {
+              "type": "number",
+              "description": "Lead score between 0 and 100."
+            },
+            "notes": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_campaigns",
+        "title": "List campaigns",
+        "description": "List the signed-in user's Brivano email campaigns with their id, name, description and active state.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "active_only": {
+              "type": "boolean",
+              "description": "When true, return only campaigns that are currently active."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "enroll_lead_in_campaign",
+        "title": "Enroll lead in campaign",
+        "description": "Enroll one of the signed-in user's Brivano leads into an email campaign so it starts receiving the sequence.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "lead_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The lead's UUID."
+            },
+            "campaign_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The campaign's UUID."
+            }
+          },
+          "required": [
+            "lead_id",
+            "campaign_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

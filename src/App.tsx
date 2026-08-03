@@ -45,6 +45,8 @@ import Trust from "./pages/Trust";
 import Accounts from "./pages/Accounts";
 import AccountDetail from "./pages/AccountDetail";
 import LeadDetail from "./pages/LeadDetail";
+import OAuthConsent from "./pages/OAuthConsent";
+
 
 const queryClient = new QueryClient();
 
@@ -60,6 +62,8 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
               <Route path="/dashboard/leads/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
