@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
@@ -49,24 +50,30 @@ const Auth = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Only allow same-origin relative paths as a post-auth redirect target.
+  const rawNext = searchParams.get("next") ?? "";
+  const nextPath = /^\/(?!\/)/.test(rawNext) ? rawNext : "/dashboard";
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session?.user) {
-          navigate("/dashboard");
+          navigate(nextPath);
         }
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        navigate("/dashboard");
+        navigate(nextPath);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, nextPath]);
+
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -105,7 +112,11 @@ const Auth = () => {
     setIsGoogleLoading(true);
     try {
       const { error } = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri:
+          nextPath === "/dashboard"
+            ? window.location.origin
+            : `${window.location.origin}/auth?next=${encodeURIComponent(nextPath)}`,
+
       });
       if (error) throw error;
     } catch (error: any) {
@@ -130,7 +141,7 @@ const Auth = () => {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/`,
+            emailRedirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(nextPath)}`,
             data: {
               first_name: firstName,
               last_name: lastName,
