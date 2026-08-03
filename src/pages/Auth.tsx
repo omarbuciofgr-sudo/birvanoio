@@ -112,7 +112,11 @@ const Auth = () => {
     setIsGoogleLoading(true);
     try {
       const { error } = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri:
+          nextPath === "/dashboard"
+            ? window.location.origin
+            : `${window.location.origin}/auth?next=${encodeURIComponent(nextPath)}`,
+
       });
       if (error) throw error;
     } catch (error: any) {
