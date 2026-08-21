@@ -59,6 +59,36 @@ export type Database = {
         }
         Relationships: []
       }
+      app_user_connections: {
+        Row: {
+          account_email: string | null
+          connection_key_ciphertext: string
+          connector_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_email?: string | null
+          connection_key_ciphertext: string
+          connector_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_email?: string | null
+          connection_key_ciphertext?: string
+          connector_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -2238,6 +2268,9 @@ export type Database = {
       }
       realtor_deals: {
         Row: {
+          anniversary_event_id: string | null
+          calendar_synced_at: string | null
+          checkin_event_id: string | null
           client_email: string | null
           client_name: string
           client_phone: string | null
@@ -2256,6 +2289,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          anniversary_event_id?: string | null
+          calendar_synced_at?: string | null
+          checkin_event_id?: string | null
           client_email?: string | null
           client_name: string
           client_phone?: string | null
@@ -2274,6 +2310,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          anniversary_event_id?: string | null
+          calendar_synced_at?: string | null
+          checkin_event_id?: string | null
           client_email?: string | null
           client_name?: string
           client_phone?: string | null
