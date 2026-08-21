@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
-import { usePersona } from "@/hooks/usePersona";
   LayoutDashboard, Users, Mail, Globe, Sparkles, Zap,
   Bot, FileText, ClipboardList, Settings, X, ArrowRight,
   ArrowLeft, Rocket, CheckCircle, Phone, Search, BarChart3,
 } from "lucide-react";
+import { usePersona } from "@/hooks/usePersona";
 
 interface TourStep {
   title: string;
