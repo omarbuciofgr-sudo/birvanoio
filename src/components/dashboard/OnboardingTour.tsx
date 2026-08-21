@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,19 +96,43 @@ interface OnboardingTourProps {
 const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const [anyDialogOpen, setAnyDialogOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   // The persona setup dialog is a modal that blocks all clicks outside of it.
   // Never run the tour while it is open, or the tour becomes unclickable.
   const { needsSetup, loading: personaLoading } = usePersona();
 
+  // Safety net: detect any open Radix Dialog so the tour never renders on top
+  // of (and blocks) another modal such as the persona setup dialog.
   useEffect(() => {
+    const checkDialogs = () => {
+      const openDialogs = document.querySelectorAll('[data-state="open"][role="dialog"]');
+      const foreignDialogOpen = Array.from(openDialogs).some(
+        (el) => !containerRef.current?.contains(el)
+      );
+      setAnyDialogOpen(foreignDialogOpen);
+    };
+    checkDialogs();
+    const observer = new MutationObserver(checkDialogs);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-state"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    // Never show while persona setup or any other modal is still on screen.
+    if (personaLoading || needsSetup || anyDialogOpen) {
+      setIsVisible(false);
+      return;
+    }
     if (forceShow) {
       setIsVisible(true);
       setCurrentStep(0);
-      return;
-    }
-    if (personaLoading || needsSetup) {
-      setIsVisible(false);
       return;
     }
     const completed = localStorage.getItem(TOUR_STORAGE_KEY);
@@ -117,7 +141,20 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [forceShow, needsSetup, personaLoading]);
+  }, [forceShow, needsSetup, personaLoading, anyDialogOpen]);
+
+  // Escape key closes the tour immediately.
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        skipTour();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isVisible]);
 
   const completeTour = () => {
     localStorage.setItem(TOUR_STORAGE_KEY, "true");
