@@ -177,7 +177,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
-  if (!isVisible || (!forceShow && needsSetup)) return null;
+  if (!isVisible || needsSetup || anyDialogOpen) return null;
 
   const step = tourSteps[currentStep];
   const progress = ((currentStep + 1) / tourSteps.length) * 100;
@@ -185,7 +185,13 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   const isLast = currentStep === tourSteps.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Onboarding tour"
+    >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={skipTour} />
 
@@ -194,13 +200,15 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
         <CardContent className="p-0">
           {/* Header with icon */}
           <div className="relative p-6 pb-4">
-            {/* Skip button */}
+            {/* Close button — always visible and clearly labeled */}
             <button
               onClick={skipTour}
-              className="absolute top-4 right-4 h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title="Skip tour"
+              className="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Close tour (Esc)"
+              aria-label="Close tour"
             >
               <X className="h-4 w-4" />
+              <span className="hidden sm:inline">Close</span>
             </button>
 
             {/* Step counter */}
