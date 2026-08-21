@@ -9,6 +9,10 @@ import {
   ArrowLeft, Rocket, CheckCircle, Phone, Search, BarChart3,
 } from "lucide-react";
 import { usePersona } from "@/hooks/usePersona";
+import { useAuth } from "@/hooks/useAuth";
+
+// Accounts that should never see the onboarding tour.
+const TOUR_EXCLUDED_EMAILS = ["info@brivano.io"];
 
 interface TourStep {
   title: string;
