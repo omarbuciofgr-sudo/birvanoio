@@ -139,7 +139,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
 
   useEffect(() => {
     // Never show while persona setup or any other modal is still on screen.
-    if (personaLoading || needsSetup || anyDialogOpen) {
+    if (personaLoading || authLoading || tourExcluded || needsSetup || anyDialogOpen) {
       setIsVisible(false);
       return;
     }
