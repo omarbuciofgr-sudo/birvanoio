@@ -154,7 +154,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [forceShow, needsSetup, personaLoading, anyDialogOpen]);
+  }, [forceShow, needsSetup, personaLoading, anyDialogOpen, authLoading, tourExcluded]);
 
   // Escape key closes the tour immediately.
   useEffect(() => {
@@ -198,7 +198,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
     }
   }, [currentStep, isVisible]);
 
-  if (!isVisible || needsSetup || anyDialogOpen) return null;
+  if (!isVisible || tourExcluded || needsSetup || anyDialogOpen) return null;
 
   const step = tourSteps[currentStep];
   const progress = ((currentStep + 1) / tourSteps.length) * 100;
