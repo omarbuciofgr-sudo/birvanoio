@@ -370,6 +370,7 @@ const Settings = () => {
 
           {/* Integrations Tab */}
           <TabsContent value="integrations" className="space-y-6">
+            <GoogleCalendarCard />
             <WebhookIntegrations userId={user.id} />
           </TabsContent>
         </Tabs>
