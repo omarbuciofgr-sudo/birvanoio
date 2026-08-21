@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { allowedNavHrefs } from "@/lib/persona";
+import { trackPersonaEvent } from "@/lib/analytics/personaAnalytics";
 
 export type PersonaState = {
   role: string | null;
