@@ -1470,6 +1470,62 @@ export type Database = {
           },
         ]
       }
+      gmail_followups: {
+        Row: {
+          calendar_event_id: string | null
+          contact_email: string
+          contact_name: string | null
+          created_at: string
+          deal_id: string | null
+          follow_up_at: string | null
+          id: string
+          lead_id: string | null
+          message_id: string
+          subject: string | null
+          thread_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calendar_event_id?: string | null
+          contact_email: string
+          contact_name?: string | null
+          created_at?: string
+          deal_id?: string | null
+          follow_up_at?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id: string
+          subject?: string | null
+          thread_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calendar_event_id?: string | null
+          contact_email?: string
+          contact_name?: string | null
+          created_at?: string
+          deal_id?: string | null
+          follow_up_at?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string
+          subject?: string | null
+          thread_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_followups_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "realtor_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intent_signals: {
         Row: {
           confidence_score: number | null
