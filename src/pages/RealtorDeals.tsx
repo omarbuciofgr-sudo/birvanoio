@@ -926,6 +926,12 @@ const RealtorDeals = () => {
             <TabsTrigger value="report" className="text-xs">
               Reporting
             </TabsTrigger>
+            <TabsTrigger value="signals" className="text-xs">
+              Signal performance
+            </TabsTrigger>
+            <TabsTrigger value="triggers" className="text-xs">
+              Follow-up settings
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="board" className="mt-0">
@@ -1250,6 +1256,31 @@ const RealtorDeals = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="signals" className="mt-0">
+            <IntelSignalPerformance
+              tasks={tasks.map((t) => ({
+                id: t.id,
+                deal_id: t.deal_id,
+                kind: t.kind,
+                signal_key: t.signal_key ?? null,
+                notes: t.notes,
+                created_at: t.created_at,
+                scheduled_at: t.scheduled_at,
+                completed_at: t.completed_at,
+                outcome: t.outcome ?? null,
+                outcome_at: t.outcome_at ?? null,
+              }))}
+            />
+          </TabsContent>
+
+          <TabsContent value="triggers" className="mt-0">
+            <IntelTriggerSettings
+              onSaved={() => {
+                setSettingsVersion((v) => v + 1);
+                void loadTasks();
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>
