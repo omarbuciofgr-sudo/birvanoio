@@ -26,7 +26,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useGoogleCalendar, scheduleDealFollowUps } from "@/hooks/useGoogleCalendar";
+import { useGoogleCalendar, scheduleDealFollowUps, scheduleFollowUpTask } from "@/hooks/useGoogleCalendar";
+import IntelTriggerSettings from "@/components/realtor/IntelTriggerSettings";
+import IntelSignalPerformance from "@/components/realtor/IntelSignalPerformance";
+import { loadIntelSettings } from "@/lib/ownerIntelSettings";
 import GuardedContactButton from "@/components/contacts/GuardedContactButton";
 import { syncIntelTasksForDeals, readRecentListings } from "@/lib/ownerIntelTasks";
 import {
@@ -46,6 +49,9 @@ import {
   ClipboardCheck,
   Sparkles,
   Check,
+  CalendarClock,
+  FileText,
+  MessageSquareReply,
 } from "lucide-react";
 
 export type RealtorDeal = {
@@ -162,8 +168,15 @@ type DealTask = {
   title: string;
   kind: string;
   notes: string | null;
+  body?: string | null;
+  signal_key?: string | null;
   scheduled_at: string | null;
   completed_at: string | null;
+  calendar_event_id?: string | null;
+  calendar_synced_at?: string | null;
+  outcome?: string | null;
+  outcome_at?: string | null;
+  created_at: string;
 };
 
 const RealtorDeals = () => {
@@ -177,6 +190,10 @@ const RealtorDeals = () => {
   const [syncingDealId, setSyncingDealId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<DealTask[]>([]);
   const [scanningIntel, setScanningIntel] = useState(false);
+  const [schedulingTaskId, setSchedulingTaskId] = useState<string | null>(null);
+  const [openScriptId, setOpenScriptId] = useState<string | null>(null);
+  const [settingsVersion, setSettingsVersion] = useState(0);
+
 
   /** Create the 6-month + 1-year reminders on the user's own Google Calendar. */
   const syncDealToCalendar = useCallback(
@@ -218,7 +235,9 @@ const RealtorDeals = () => {
     if (!user?.id) return;
     const { data } = await supabase
       .from("realtor_deal_events" as any)
-      .select("id, deal_id, title, kind, notes, scheduled_at, completed_at")
+      .select(
+        "id, deal_id, title, kind, notes, body, signal_key, scheduled_at, completed_at, calendar_event_id, calendar_synced_at, outcome, outcome_at, created_at",
+      )
       .order("scheduled_at", { ascending: true })
       .limit(300);
     setTasks(((data as any) ?? []) as DealTask[]);
@@ -230,7 +249,13 @@ const RealtorDeals = () => {
       if (!user?.id || !deals.length) return;
       setScanningIntel(true);
       try {
-        const created = await syncIntelTasksForDeals(user.id, deals, readRecentListings());
+        const created = await syncIntelTasksForDeals(user.id, deals, readRecentListings(), {
+          settings: loadIntelSettings(),
+          agentName:
+            (user.user_metadata as Record<string, string> | undefined)?.first_name ||
+            user.email?.split("@")[0] ||
+            null,
+        });
         if (created > 0) {
           await loadTasks();
           toast.success(`${created} follow-up step${created === 1 ? "" : "s"} created from listing intel`);
@@ -243,16 +268,53 @@ const RealtorDeals = () => {
         setScanningIntel(false);
       }
     },
-    [user?.id, deals, loadTasks],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id, deals, loadTasks, settingsVersion],
   );
 
-  const completeTask = async (id: string) => {
-    setTasks((t) => t.map((x) => (x.id === id ? { ...x, completed_at: new Date().toISOString() } : x)));
+  const completeTask = async (id: string, outcome?: "replied" | "converted" | "no_reply") => {
+    const now = new Date().toISOString();
+    setTasks((t) =>
+      t.map((x) =>
+        x.id === id
+          ? { ...x, completed_at: now, outcome: outcome ?? x.outcome ?? null, outcome_at: outcome ? now : x.outcome_at }
+          : x,
+      ),
+    );
     await supabase
       .from("realtor_deal_events" as any)
-      .update({ completed_at: new Date().toISOString() } as any)
+      .update({
+        completed_at: now,
+        ...(outcome ? { outcome, outcome_at: now } : {}),
+      } as any)
       .eq("id", id);
   };
+
+  /** Put a follow-up on the calendar with reminders attached. */
+  const scheduleTask = async (task: DealTask) => {
+    setSchedulingTaskId(task.id);
+    try {
+      const startAt = task.scheduled_at ?? new Date(Date.now() + 3_600_000).toISOString();
+      const res = await scheduleFollowUpTask(task.id, startAt);
+      if (!res?.connected) {
+        toast.error("Connect Google Calendar in Settings to schedule follow-ups.");
+        return;
+      }
+      setTasks((t) =>
+        t.map((x) =>
+          x.id === task.id
+            ? { ...x, calendar_event_id: res.eventId ?? x.calendar_event_id, calendar_synced_at: new Date().toISOString(), scheduled_at: res.startAt ?? x.scheduled_at }
+            : x,
+        ),
+      );
+      toast.success("Added to your calendar with reminders");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not schedule this follow-up");
+    } finally {
+      setSchedulingTaskId(null);
+    }
+  };
+
 
   useEffect(() => {
     load();
@@ -452,25 +514,85 @@ const RealtorDeals = () => {
                 <Sparkles className="h-3 w-3" /> Suggested follow-ups
               </p>
               {open.map((t) => (
-                <div key={t.id} className="flex items-start gap-2">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-5 w-5 shrink-0 mt-0.5"
-                    title="Mark done"
-                    onClick={() => completeTask(t.id)}
-                  >
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <div className="min-w-0">
-                    <p className="text-xs leading-snug">{t.title}</p>
-                    {t.scheduled_at && (
-                      <p className="text-[10px] text-muted-foreground">
-                        Due {new Date(t.scheduled_at).toLocaleDateString()}
-                      </p>
-                    )}
+                <div key={t.id} className="space-y-1">
+                  <div className="flex items-start gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 shrink-0 mt-0.5"
+                      title="Mark done"
+                      onClick={() => completeTask(t.id)}
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs leading-snug">{t.title}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {t.scheduled_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Due {new Date(t.scheduled_at).toLocaleDateString()}
+                          </span>
+                        )}
+                        {t.calendar_event_id && (
+                          <Badge variant="secondary" className="text-[9px]">
+                            On calendar
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          onClick={() => setOpenScriptId(openScriptId === t.id ? null : t.id)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Script
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          disabled={schedulingTaskId === t.id}
+                          onClick={() => scheduleTask(t)}
+                        >
+                          <CalendarClock className="h-3 w-3 mr-1" />
+                          {t.calendar_event_id ? "Reschedule" : "Schedule"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          title="Owner replied"
+                          onClick={() => completeTask(t.id, "replied")}
+                        >
+                          <MessageSquareReply className="h-3 w-3 mr-1" />
+                          Replied
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          title="Turned into a deal"
+                          onClick={() => completeTask(t.id, "converted")}
+                        >
+                          <Trophy className="h-3 w-3 mr-1" />
+                          Converted
+                        </Button>
+                      </div>
+                      {openScriptId === t.id && (
+                        <Textarea
+                          readOnly
+                          rows={5}
+                          className="mt-1 text-[11px]"
+                          value={t.body || t.notes || ""}
+                          onFocus={(e) => e.currentTarget.select()}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
+
               ))}
             </div>
           );
@@ -804,6 +926,12 @@ const RealtorDeals = () => {
             <TabsTrigger value="report" className="text-xs">
               Reporting
             </TabsTrigger>
+            <TabsTrigger value="signals" className="text-xs">
+              Signal performance
+            </TabsTrigger>
+            <TabsTrigger value="triggers" className="text-xs">
+              Follow-up settings
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="board" className="mt-0">
@@ -1128,6 +1256,31 @@ const RealtorDeals = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="signals" className="mt-0">
+            <IntelSignalPerformance
+              tasks={tasks.map((t) => ({
+                id: t.id,
+                deal_id: t.deal_id,
+                kind: t.kind,
+                signal_key: t.signal_key ?? null,
+                notes: t.notes,
+                created_at: t.created_at,
+                scheduled_at: t.scheduled_at,
+                completed_at: t.completed_at,
+                outcome: t.outcome ?? null,
+                outcome_at: t.outcome_at ?? null,
+              }))}
+            />
+          </TabsContent>
+
+          <TabsContent value="triggers" className="mt-0">
+            <IntelTriggerSettings
+              onSaved={() => {
+                setSettingsVersion((v) => v + 1);
+                void loadTasks();
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>

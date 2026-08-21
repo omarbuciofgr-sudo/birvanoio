@@ -123,3 +123,17 @@ export async function scheduleDealFollowUps(dealId: string) {
   if (data?.error) throw new Error(data.error);
   return data as { connected: boolean; checkinDate?: string; anniversaryDate?: string };
 }
+
+/** Put a suggested follow-up on the calendar with reminders attached. */
+export async function scheduleFollowUpTask(
+  taskId: string,
+  startAt?: string,
+  durationMinutes = 30,
+) {
+  const { data, error } = await supabase.functions.invoke("google-calendar-schedule-task", {
+    body: { taskId, startAt, durationMinutes },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data as { connected: boolean; eventId?: string; startAt?: string };
+}
