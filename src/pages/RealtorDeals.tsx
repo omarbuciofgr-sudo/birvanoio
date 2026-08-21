@@ -25,8 +25,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useGoogleCalendar, scheduleDealFollowUps } from "@/hooks/useGoogleCalendar";
 import {
   CalendarPlus,
+  CalendarCheck,
+  RefreshCw,
   Home,
   Plus,
   Trophy,
@@ -47,6 +50,7 @@ export type RealtorDeal = {
   deal_value: number | null;
   timeline_date: string | null;
   closed_at: string | null;
+  calendar_synced_at?: string | null;
   follow_up_at: string | null;
   notes: string | null;
   created_at: string;
@@ -113,6 +117,32 @@ const RealtorDeals = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
+  const { status: calendarStatus, connect: connectCalendar } = useGoogleCalendar();
+  const [syncingDealId, setSyncingDealId] = useState<string | null>(null);
+
+  /** Create the 6-month + 1-year reminders on the user's own Google Calendar. */
+  const syncDealToCalendar = useCallback(
+    async (dealId: string, opts?: { silent?: boolean }) => {
+      setSyncingDealId(dealId);
+      try {
+        const res = await scheduleDealFollowUps(dealId);
+        if (!res?.connected) {
+          if (!opts?.silent) {
+            toast.info("Connect Google Calendar in Settings to add reminders automatically.");
+          }
+          return false;
+        }
+        toast.success("Check-in and anniversary reminders added to your Google Calendar");
+        return true;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not add calendar reminders");
+        return false;
+      } finally {
+        setSyncingDealId(null);
+      }
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -185,10 +215,13 @@ const RealtorDeals = () => {
     toast.success("Deal removed");
   };
 
-  const markClosed = (deal: RealtorDeal) => {
+  const markClosed = async (deal: RealtorDeal) => {
     const today = new Date().toISOString().slice(0, 10);
     updateDeal(deal.id, { stage: "closed", closed_at: today });
     toast.success(`${deal.client_name} marked as closed`);
+    if (calendarStatus.connected) {
+      await syncDealToCalendar(deal.id, { silent: true });
+    }
   };
 
   const pipelineValue = active.reduce((sum, d) => sum + Number(d.deal_value ?? 0), 0);
@@ -526,9 +559,34 @@ const RealtorDeals = () => {
                             <CalendarPlus className="h-3.5 w-3.5" /> 1-year anniversary gift
                           </a>
                         </Button>
-                        <span className="text-[11px] text-muted-foreground">
-                          Adds the reminder to your Google Calendar ({stageLabel(deal.stage)})
-                        </span>
+                        {calendarStatus.connected ? (
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs gap-1.5"
+                            disabled={syncingDealId === deal.id}
+                            onClick={() => syncDealToCalendar(deal.id)}
+                          >
+                            {syncingDealId === deal.id ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CalendarCheck className="h-3.5 w-3.5" />
+                            )}
+                            {deal.calendar_synced_at ? "Re-sync reminders" : "Add both to my calendar"}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={() =>
+                              connectCalendar().catch((e) =>
+                                toast.error(e instanceof Error ? e.message : "Connection failed"),
+                              )
+                            }
+                          >
+                            <CalendarCheck className="h-3.5 w-3.5" /> Connect Google Calendar
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

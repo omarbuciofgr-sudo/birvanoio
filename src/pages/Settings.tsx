@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send, RotateCcw, AlertCircle, Play } from "lucide-react";
 import { WebhookIntegrations } from "@/components/integrations/WebhookIntegrations";
+import GoogleCalendarCard from "@/components/settings/GoogleCalendarCard";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { EmailAccountsManager } from "@/components/settings/EmailAccountsManager";
@@ -369,6 +370,7 @@ const Settings = () => {
 
           {/* Integrations Tab */}
           <TabsContent value="integrations" className="space-y-6">
+            <GoogleCalendarCard />
             <WebhookIntegrations userId={user.id} />
           </TabsContent>
         </Tabs>
