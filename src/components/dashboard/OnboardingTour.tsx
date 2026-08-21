@@ -111,6 +111,10 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   // The persona setup dialog is a modal that blocks all clicks outside of it.
   // Never run the tour while it is open, or the tour becomes unclickable.
   const { needsSetup, loading: personaLoading } = usePersona();
+  const { user, loading: authLoading } = useAuth();
+  const tourExcluded = TOUR_EXCLUDED_EMAILS.includes(
+    (user?.email ?? "").trim().toLowerCase()
+  );
 
   // Safety net: detect any open Radix Dialog so the tour never renders on top
   // of (and blocks) another modal such as the persona setup dialog.
