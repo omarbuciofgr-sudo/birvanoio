@@ -9,6 +9,10 @@ import {
   ArrowLeft, Rocket, CheckCircle, Phone, Search, BarChart3,
 } from "lucide-react";
 import { usePersona } from "@/hooks/usePersona";
+import { useAuth } from "@/hooks/useAuth";
+
+// Accounts that should never see the onboarding tour.
+const TOUR_EXCLUDED_EMAILS = ["info@brivano.io"];
 
 interface TourStep {
   title: string;
@@ -107,6 +111,10 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   // The persona setup dialog is a modal that blocks all clicks outside of it.
   // Never run the tour while it is open, or the tour becomes unclickable.
   const { needsSetup, loading: personaLoading } = usePersona();
+  const { user, loading: authLoading } = useAuth();
+  const tourExcluded = TOUR_EXCLUDED_EMAILS.includes(
+    (user?.email ?? "").trim().toLowerCase()
+  );
 
   // Safety net: detect any open Radix Dialog so the tour never renders on top
   // of (and blocks) another modal such as the persona setup dialog.
@@ -131,7 +139,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
 
   useEffect(() => {
     // Never show while persona setup or any other modal is still on screen.
-    if (personaLoading || needsSetup || anyDialogOpen) {
+    if (personaLoading || authLoading || tourExcluded || needsSetup || anyDialogOpen) {
       setIsVisible(false);
       return;
     }
@@ -146,7 +154,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [forceShow, needsSetup, personaLoading, anyDialogOpen]);
+  }, [forceShow, needsSetup, personaLoading, anyDialogOpen, authLoading, tourExcluded]);
 
   // Escape key closes the tour immediately.
   useEffect(() => {
@@ -190,7 +198,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
     }
   }, [currentStep, isVisible]);
 
-  if (!isVisible || needsSetup || anyDialogOpen) return null;
+  if (!isVisible || tourExcluded || needsSetup || anyDialogOpen) return null;
 
   const step = tourSteps[currentStep];
   const progress = ((currentStep + 1) / tourSteps.length) * 100;
