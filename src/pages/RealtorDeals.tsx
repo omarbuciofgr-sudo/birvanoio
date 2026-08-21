@@ -229,7 +229,9 @@ const RealtorDeals = () => {
     if (!user?.id) return;
     const { data } = await supabase
       .from("realtor_deal_events" as any)
-      .select("id, deal_id, title, kind, notes, scheduled_at, completed_at")
+      .select(
+        "id, deal_id, title, kind, notes, body, signal_key, scheduled_at, completed_at, calendar_event_id, calendar_synced_at, outcome, outcome_at, created_at",
+      )
       .order("scheduled_at", { ascending: true })
       .limit(300);
     setTasks(((data as any) ?? []) as DealTask[]);
@@ -241,7 +243,13 @@ const RealtorDeals = () => {
       if (!user?.id || !deals.length) return;
       setScanningIntel(true);
       try {
-        const created = await syncIntelTasksForDeals(user.id, deals, readRecentListings());
+        const created = await syncIntelTasksForDeals(user.id, deals, readRecentListings(), {
+          settings: loadIntelSettings(),
+          agentName:
+            (user.user_metadata as Record<string, string> | undefined)?.first_name ||
+            user.email?.split("@")[0] ||
+            null,
+        });
         if (created > 0) {
           await loadTasks();
           toast.success(`${created} follow-up step${created === 1 ? "" : "s"} created from listing intel`);
@@ -254,16 +262,53 @@ const RealtorDeals = () => {
         setScanningIntel(false);
       }
     },
-    [user?.id, deals, loadTasks],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id, deals, loadTasks, settingsVersion],
   );
 
-  const completeTask = async (id: string) => {
-    setTasks((t) => t.map((x) => (x.id === id ? { ...x, completed_at: new Date().toISOString() } : x)));
+  const completeTask = async (id: string, outcome?: "replied" | "converted" | "no_reply") => {
+    const now = new Date().toISOString();
+    setTasks((t) =>
+      t.map((x) =>
+        x.id === id
+          ? { ...x, completed_at: now, outcome: outcome ?? x.outcome ?? null, outcome_at: outcome ? now : x.outcome_at }
+          : x,
+      ),
+    );
     await supabase
       .from("realtor_deal_events" as any)
-      .update({ completed_at: new Date().toISOString() } as any)
+      .update({
+        completed_at: now,
+        ...(outcome ? { outcome, outcome_at: now } : {}),
+      } as any)
       .eq("id", id);
   };
+
+  /** Put a follow-up on the calendar with reminders attached. */
+  const scheduleTask = async (task: DealTask) => {
+    setSchedulingTaskId(task.id);
+    try {
+      const startAt = task.scheduled_at ?? new Date(Date.now() + 3_600_000).toISOString();
+      const res = await scheduleFollowUpTask(task.id, startAt);
+      if (!res?.connected) {
+        toast.error("Connect Google Calendar in Settings to schedule follow-ups.");
+        return;
+      }
+      setTasks((t) =>
+        t.map((x) =>
+          x.id === task.id
+            ? { ...x, calendar_event_id: res.eventId ?? x.calendar_event_id, calendar_synced_at: new Date().toISOString(), scheduled_at: res.startAt ?? x.scheduled_at }
+            : x,
+        ),
+      );
+      toast.success("Added to your calendar with reminders");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not schedule this follow-up");
+    } finally {
+      setSchedulingTaskId(null);
+    }
+  };
+
 
   useEffect(() => {
     load();
