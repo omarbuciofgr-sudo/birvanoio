@@ -86,7 +86,7 @@ function writeStore(store: SnapshotStore) {
     if (keys.length > MAX_SNAPSHOTS) {
       // Drop the oldest half so the store never grows without bound.
       keys
-        .sort((a, b) => (store[a].at(-1)?.seen || "").localeCompare(store[b].at(-1)?.seen || ""))
+        .sort((a, b) => ((store[a][store[a].length - 1]?.seen) || "").localeCompare((store[b][store[b].length - 1]?.seen) || ""))
         .slice(0, keys.length - MAX_SNAPSHOTS / 2)
         .forEach((k) => delete store[k]);
     }
@@ -110,7 +110,7 @@ export function recordListingSnapshots(listings: ListingIntelInput[]): SnapshotS
     if (price === null && dom === null) continue;
 
     const history = store[key] || [];
-    const last = history.at(-1);
+    const last = history[history.length - 1];
     if (last && last.price === price && last.dom === dom) continue;
     history.push({ price, dom, seen: now });
     store[key] = history.slice(-6);
