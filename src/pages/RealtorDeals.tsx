@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useGoogleCalendar, scheduleDealFollowUps } from "@/hooks/useGoogleCalendar";
+import GuardedContactButton from "@/components/contacts/GuardedContactButton";
 import {
   CalendarPlus,
   CalendarCheck,
@@ -380,24 +381,36 @@ const RealtorDeals = () => {
         <div className="flex items-center gap-1">
           {deal.client_phone && (
             <>
-              <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" asChild>
-                <a href={`tel:${deal.client_phone}`}>
-                  <Phone className="h-3 w-3" /> Call
-                </a>
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" asChild>
-                <a href={`sms:${deal.client_phone}`}>
-                  <MessageSquare className="h-3 w-3" /> Text
-                </a>
-              </Button>
+              <GuardedContactButton
+                value={deal.client_phone}
+                type="phone"
+                channel="call"
+                href={`tel:${deal.client_phone}`}
+                label="Call"
+                contactName={deal.client_name}
+                icon={<Phone className="h-3 w-3" />}
+              />
+              <GuardedContactButton
+                value={deal.client_phone}
+                type="phone"
+                channel="text"
+                href={`sms:${deal.client_phone}`}
+                label="Text"
+                contactName={deal.client_name}
+                icon={<MessageSquare className="h-3 w-3" />}
+              />
             </>
           )}
           {deal.client_email && (
-            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" asChild>
-              <a href={`mailto:${deal.client_email}`}>
-                <Mail className="h-3 w-3" /> Email
-              </a>
-            </Button>
+            <GuardedContactButton
+              value={deal.client_email}
+              type="email"
+              channel="email"
+              href={`mailto:${deal.client_email}`}
+              label="Email"
+              contactName={deal.client_name}
+              icon={<Mail className="h-3 w-3" />}
+            />
           )}
         </div>
 
