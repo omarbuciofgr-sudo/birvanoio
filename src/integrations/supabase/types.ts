@@ -2409,37 +2409,55 @@ export type Database = {
       }
       realtor_deal_events: {
         Row: {
+          body: string | null
+          calendar_event_id: string | null
+          calendar_synced_at: string | null
           completed_at: string | null
           created_at: string
           deal_id: string
           id: string
           kind: string
           notes: string | null
+          outcome: string | null
+          outcome_at: string | null
           scheduled_at: string | null
+          signal_key: string | null
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          body?: string | null
+          calendar_event_id?: string | null
+          calendar_synced_at?: string | null
           completed_at?: string | null
           created_at?: string
           deal_id: string
           id?: string
           kind?: string
           notes?: string | null
+          outcome?: string | null
+          outcome_at?: string | null
           scheduled_at?: string | null
+          signal_key?: string | null
           title: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          body?: string | null
+          calendar_event_id?: string | null
+          calendar_synced_at?: string | null
           completed_at?: string | null
           created_at?: string
           deal_id?: string
           id?: string
           kind?: string
           notes?: string | null
+          outcome?: string | null
+          outcome_at?: string | null
           scheduled_at?: string | null
+          signal_key?: string | null
           title?: string
           updated_at?: string
           user_id?: string
