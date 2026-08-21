@@ -16,6 +16,7 @@ import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplates
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { EmailAccountsManager } from "@/components/settings/EmailAccountsManager";
 import { PhoneNumbersManager } from "@/components/settings/PhoneNumbersManager";
+import { WorkspaceFocusCard } from "@/components/settings/WorkspaceFocusCard";
 
 // E.164 phone number validation (optional field)
 const e164Regex = /^\+[1-9]\d{1,14}$/;
@@ -215,6 +216,8 @@ const Settings = () => {
                 </Button>
               </CardContent>
             </Card>
+
+            <WorkspaceFocusCard />
 
             {/* Restart Onboarding Tour */}
             <Card className="border-border/60">
