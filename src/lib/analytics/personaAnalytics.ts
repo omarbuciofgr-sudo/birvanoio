@@ -10,7 +10,12 @@ import {
   type PersonaRoleId,
 } from "@/lib/persona";
 
-export type PersonaEventType = "persona_selected" | "activation" | "conversion";
+export type PersonaEventType =
+  | "persona_selected"
+  | "activation"
+  | "conversion"
+  | "recommendation_shown"
+  | "recommendation_applied";
 
 export type PersonaRoleStat = {
   id: string;
@@ -111,16 +116,38 @@ export type PersonaRecommendation = {
   hasEnoughData: boolean;
 };
 
+/** Knobs the A/B experiment varies. Defaults reproduce the original behaviour. */
+export type RecommendationTuning = {
+  minSample: number;
+  rank: "conversion" | "activation" | "blended";
+  roleSwitchThreshold: number;
+  maxGoals: number;
+};
+
+export const DEFAULT_TUNING: RecommendationTuning = {
+  minSample: MIN_SAMPLE,
+  rank: "conversion",
+  roleSwitchThreshold: 0.15,
+  maxGoals: 2,
+};
+
+const scoreBy = (tuning: RecommendationTuning, stat: PersonaRoleStat) => {
+  if (tuning.rank === "activation") return activationRate(stat);
+  if (tuning.rank === "blended") return 0.5 * activationRate(stat) + 0.5 * conversionRate(stat);
+  return conversionRate(stat);
+};
+
 export function buildRecommendations(
   analytics: PersonaAnalytics,
   currentRole: string | null,
   currentGoals: string[],
+  tuning: RecommendationTuning = DEFAULT_TUNING,
 ): PersonaRecommendation {
   const roleStats = new Map(analytics.roles.map((r) => [r.id, r]));
   const current = currentRole ? roleStats.get(currentRole) : undefined;
   const currentRate = current ? conversionRate(current) : null;
 
-  const eligibleRoles = analytics.roles.filter((r) => r.users >= MIN_SAMPLE);
+  const eligibleRoles = analytics.roles.filter((r) => r.users >= tuning.minSample);
   const hasEnoughData = eligibleRoles.length > 0;
 
   // Goal suggestions: goals within the user's role that beat their current mix.
@@ -133,8 +160,8 @@ export function buildRecommendations(
 
   const selectedRates = currentGoals
     .map((id) => goalStats.get(id))
-    .filter((s): s is PersonaGoalStat => !!s && s.users >= MIN_SAMPLE)
-    .map(conversionRate);
+    .filter((s): s is PersonaGoalStat => !!s && s.users >= tuning.minSample)
+    .map((stat) => scoreBy(tuning, stat));
   const baseline = selectedRates.length
     ? selectedRates.reduce((a, b) => a + b, 0) / selectedRates.length
     : 0;
@@ -142,23 +169,23 @@ export function buildRecommendations(
   const suggestedGoals = roleGoals
     .filter((g) => !currentGoals.includes(g.id))
     .map((g) => ({ goal: g, stat: goalStats.get(g.id) }))
-    .filter(({ stat }) => !!stat && stat.users >= MIN_SAMPLE)
+    .filter(({ stat }) => !!stat && stat.users >= tuning.minSample)
     .map(({ goal, stat }) => ({
       id: goal.id,
       label: goal.label,
-      rate: conversionRate(stat),
+      rate: scoreBy(tuning, stat!),
       users: stat!.users,
     }))
     .filter((g) => g.rate > baseline)
     .sort((a, b) => b.rate - a.rate)
-    .slice(0, 2);
+    .slice(0, tuning.maxGoals);
 
   // Role suggestion: only when another cohort converts at least 15pp better.
   let suggestedRole: PersonaRecommendation["suggestedRole"] = null;
   const best = [...eligibleRoles]
     .filter((r) => r.id !== currentRole)
     .sort((a, b) => conversionRate(b) - conversionRate(a))[0];
-  if (best && conversionRate(best) - (currentRate ?? 0) >= 0.15) {
+  if (best && conversionRate(best) - (currentRate ?? 0) >= tuning.roleSwitchThreshold) {
     suggestedRole = {
       id: best.id,
       label: getRole(best.id)?.label ?? best.id,
