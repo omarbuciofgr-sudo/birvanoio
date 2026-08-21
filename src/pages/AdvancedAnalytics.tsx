@@ -190,6 +190,7 @@ export default function AdvancedAnalytics() {
             <TabsTrigger value="leads">Leads</TabsTrigger>
             <TabsTrigger value="deals">Deals</TabsTrigger>
             <TabsTrigger value="outreach">Outreach</TabsTrigger>
+            <TabsTrigger value="personas">Personas</TabsTrigger>
           </TabsList>
 
           {/* Leads Tab */}
