@@ -88,6 +88,8 @@ const tourSteps: TourStep[] = [
 
 const TOUR_STORAGE_KEY = "brivano_onboarding_complete";
 
+import { usePersona } from "@/hooks/usePersona";
+
 interface OnboardingTourProps {
   forceShow?: boolean;
 }
@@ -96,11 +98,18 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const navigate = useNavigate();
+  // The persona setup dialog is a modal that blocks all clicks outside of it.
+  // Never run the tour while it is open, or the tour becomes unclickable.
+  const { needsSetup, loading: personaLoading } = usePersona();
 
   useEffect(() => {
     if (forceShow) {
       setIsVisible(true);
       setCurrentStep(0);
+      return;
+    }
+    if (personaLoading || needsSetup) {
+      setIsVisible(false);
       return;
     }
     const completed = localStorage.getItem(TOUR_STORAGE_KEY);
@@ -109,7 +118,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [forceShow]);
+  }, [forceShow, needsSetup, personaLoading]);
 
   const completeTour = () => {
     localStorage.setItem(TOUR_STORAGE_KEY, "true");
@@ -132,7 +141,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
-  if (!isVisible) return null;
+  if (!isVisible || (!forceShow && needsSetup)) return null;
 
   const step = tourSteps[currentStep];
   const progress = ((currentStep + 1) / tourSteps.length) * 100;
