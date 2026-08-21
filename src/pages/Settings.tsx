@@ -219,24 +219,52 @@ const Settings = () => {
 
             <WorkspaceFocusCard />
 
-            {/* Restart Onboarding Tour */}
+            {/* Restart / Resume Onboarding Tour */}
             <Card className="border-border/60">
               <CardHeader>
-                <CardTitle className="text-foreground">Onboarding Tour</CardTitle>
-                <CardDescription>Revisit the guided tour to learn about all platform features.</CardDescription>
+                <CardTitle className="text-foreground flex items-center gap-2">
+                  <RotateCcw className="h-4 w-4" />
+                  Onboarding Tour
+                </CardTitle>
+                <CardDescription>Revisit the guided tour or recover if it gets stuck.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  className="gap-2 text-xs"
-                  onClick={() => {
-                    localStorage.removeItem("brivano_onboarding_complete");
-                    toast.success("Tour reset! Navigate to the Dashboard to start the tour.");
-                    navigate("/dashboard");
-                  }}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" /> Restart Tour
-                </Button>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    className="gap-2 text-xs"
+                    onClick={() => {
+                      localStorage.removeItem("brivano_onboarding_complete");
+                      localStorage.removeItem("brivano_onboarding_step");
+                      toast.success("Tour reset! It will start from the beginning on the Dashboard.");
+                      navigate("/dashboard");
+                    }}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Reset tour
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2 text-xs"
+                    onClick={() => {
+                      localStorage.removeItem("brivano_onboarding_complete");
+                      const savedStep = localStorage.getItem("brivano_onboarding_step");
+                      if (!savedStep) {
+                        toast.info("No saved step found. The tour will start from the beginning.");
+                      } else {
+                        toast.success(`Tour resumed from step ${parseInt(savedStep, 10) + 1}.`);
+                      }
+                      navigate("/dashboard");
+                    }}
+                  >
+                    <Play className="h-3.5 w-3.5" /> Reopen last step
+                  </Button>
+                </div>
+                <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
+                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-800 dark:text-amber-400/90">
+                    Onboarding stuck? Press <kbd className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-900/50 font-mono text-[10px]">Esc</kbd> inside the tour to close it, or use <strong>Reset tour</strong> to start over.
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
