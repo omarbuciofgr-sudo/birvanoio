@@ -367,6 +367,11 @@ export default function AdvancedAnalytics() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Personas Tab */}
+          <TabsContent value="personas" className="space-y-6">
+            <PersonaPerformanceCard />
+          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
