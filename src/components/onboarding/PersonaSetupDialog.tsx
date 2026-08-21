@@ -49,10 +49,9 @@ export const PersonaSetupDialog = ({
   return (
     <Dialog open={open} onOpenChange={(o) => (!o && dismissible ? onClose?.() : undefined)}>
       <DialogContent
-        className="max-w-2xl"
+        className={`max-w-2xl ${dismissible ? "" : "[&>button]:hidden"}`}
         onInteractOutside={(e) => !dismissible && e.preventDefault()}
         onEscapeKeyDown={(e) => !dismissible && e.preventDefault()}
-        hideClose={!dismissible}
       >
         <DialogHeader>
           <DialogTitle className="text-xl">
