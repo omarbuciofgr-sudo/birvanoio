@@ -121,11 +121,29 @@ export function recordListingSnapshots(listings: ListingIntelInput[]): SnapshotS
   return store;
 }
 
-function freshnessFor(dom: number | null): ListingIntel["freshness"] {
+export type IntelThresholds = {
+  freshThresholdDays: number;
+  agingThresholdDays: number;
+  staleThresholdDays: number;
+  relistDomDropDays: number;
+  priceDropWindowDays: number;
+  priceDropMinPct: number;
+};
+
+const DEFAULT_THRESHOLDS: IntelThresholds = {
+  freshThresholdDays: 7,
+  agingThresholdDays: 30,
+  staleThresholdDays: 60,
+  relistDomDropDays: 7,
+  priceDropWindowDays: 30,
+  priceDropMinPct: 1,
+};
+
+function freshnessFor(dom: number | null, t: IntelThresholds): ListingIntel["freshness"] {
   if (dom === null) return null;
-  if (dom <= 7) return "fresh";
-  if (dom < 30) return "active";
-  if (dom < 60) return "aging";
+  if (dom <= t.freshThresholdDays) return "fresh";
+  if (dom < t.agingThresholdDays) return "active";
+  if (dom < t.staleThresholdDays) return "aging";
   return "stale";
 }
 
@@ -133,7 +151,9 @@ function freshnessFor(dom: number | null): ListingIntel["freshness"] {
 export function computeListingIntel(
   listing: ListingIntelInput,
   store: SnapshotStore = readStore(),
+  thresholds: Partial<IntelThresholds> = {},
 ): ListingIntel {
+  const t = { ...DEFAULT_THRESHOLDS, ...thresholds };
   const key = listingIntelKey(listing);
   const history = (key && store[key]) || [];
   const dom = parseDom(listing.days_on_market);
@@ -141,28 +161,34 @@ export function computeListingIntel(
 
   let priceDrop: number | null = null;
   let priceDropPct: number | null = null;
-  const priced = history.filter((h) => h.price !== null);
+  const windowStart = Date.now() - t.priceDropWindowDays * 86_400_000;
+  const priced = history.filter(
+    (h) => h.price !== null && new Date(h.seen).getTime() >= windowStart,
+  );
   const firstPrice = priced[0]?.price ?? null;
   if (price !== null && firstPrice !== null && firstPrice > price) {
-    priceDrop = Math.round(firstPrice - price);
-    priceDropPct = Math.round(((firstPrice - price) / firstPrice) * 1000) / 10;
+    const pct = Math.round(((firstPrice - price) / firstPrice) * 1000) / 10;
+    if (pct >= t.priceDropMinPct) {
+      priceDrop = Math.round(firstPrice - price);
+      priceDropPct = pct;
+    }
   }
 
   // Re-listed: days-on-market dropped meaningfully versus a previous sighting.
   const domHistory = history.filter((h) => h.dom !== null).map((h) => h.dom as number);
   const maxPrevDom = domHistory.length > 1 ? Math.max(...domHistory.slice(0, -1)) : null;
-  const relisted = dom !== null && maxPrevDom !== null && maxPrevDom - dom >= 7;
+  const relisted = dom !== null && maxPrevDom !== null && maxPrevDom - dom >= t.relistDomDropDays;
 
-  const freshness = freshnessFor(dom);
+  const freshness = freshnessFor(dom, t);
   const reasons: string[] = [];
   let score = 40;
 
   if (freshness === "stale") {
     score += 25;
-    reasons.push("On market 60+ days — owner likely motivated");
+    reasons.push(`On market ${t.staleThresholdDays}+ days — owner likely motivated`);
   } else if (freshness === "aging") {
     score += 15;
-    reasons.push("Aging listing (30-59 days)");
+    reasons.push(`Aging listing (${t.agingThresholdDays}-${t.staleThresholdDays - 1} days)`);
   } else if (freshness === "fresh") {
     score += 10;
     reasons.push("Just listed — be first to call");
@@ -187,6 +213,7 @@ export function computeListingIntel(
     reasons,
   };
 }
+
 
 export function readSnapshotStore(): SnapshotStore {
   return readStore();
