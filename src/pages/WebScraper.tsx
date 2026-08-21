@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
+import { usePersona } from '@/hooks/usePersona';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -1448,7 +1449,13 @@ export default function WebScraper() {
   const [externalFilters, setExternalFilters] = useState<Record<string, any> | null>(null);
 
   // Tab state (controlled)
-  const [activeTab, setActiveTab] = useState('ai-chat');
+  const { isRealtor } = usePersona();
+  const [activeTab, setActiveTab] = useState(() => (isRealtor ? 'real-estate' : 'ai-chat'));
+
+  // Realtors only get the real estate search tool inside Scout.
+  useEffect(() => {
+    if (isRealtor && activeTab !== 'real-estate') setActiveTab('real-estate');
+  }, [isRealtor, activeTab]);
   const [lensSearchTypeActive, setLensSearchTypeActive] = useState(false);
 
   // AI Chat state
@@ -3307,13 +3314,13 @@ export default function WebScraper() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Brivano Scout</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Find prospects, scrape listings, and enrich your pipeline</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{isRealtor ? 'Search FSBO / FRBO listings and turn owners into leads' : 'Find prospects, scrape listings, and enrich your pipeline'}</p>
           </div>
         </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className={lensSearchTypeActive && activeTab === 'prospect-search' ? '' : 'space-y-4'}>
-          {!(lensSearchTypeActive && activeTab === 'prospect-search') && (
+          {!(lensSearchTypeActive && activeTab === 'prospect-search') && !isRealtor && (
             <TabsList className="h-10 p-1 bg-muted/40 border border-border/30 gap-0.5">
               <TabsTrigger value="ai-chat" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Sparkles className="h-3.5 w-3.5" /> AI Assistant

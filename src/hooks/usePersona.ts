@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { allowedNavHrefs } from "@/lib/persona";
+import { allowedNavHrefs, ALWAYS_VISIBLE_NAV } from "@/lib/persona";
 import { trackPersonaEvent } from "@/lib/analytics/personaAnalytics";
 
 export type PersonaState = {
@@ -12,13 +12,49 @@ export type PersonaState = {
 
 const EMPTY: PersonaState = { role: null, goals: [], completedAt: null };
 
+/**
+ * Module-level cache so the sidebar keeps the same allowed-nav set when a route
+ * remounts the layout. Without it, every tab switch briefly rendered the full
+ * (unfiltered) nav while the profile query was in flight.
+ */
+const personaCache = new Map<string, PersonaState>();
+const CACHE_KEY = "brivano:persona";
+
+function readCachedPersona(userId?: string | null): PersonaState | null {
+  if (!userId) return null;
+  const inMemory = personaCache.get(userId);
+  if (inMemory) return inMemory;
+  try {
+    const raw = window.localStorage.getItem(`${CACHE_KEY}:${userId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PersonaState;
+      personaCache.set(userId, parsed);
+      return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeCachedPersona(userId: string, state: PersonaState) {
+  personaCache.set(userId, state);
+  try {
+    window.localStorage.setItem(`${CACHE_KEY}:${userId}`, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Internal accounts that always see every tool and skip persona setup.
 const FULL_ACCESS_EMAILS = ["info@brivano.io"];
 
 export const usePersona = () => {
   const { user, loading: authLoading } = useAuth();
-  const [persona, setPersona] = useState<PersonaState>(EMPTY);
-  const [loading, setLoading] = useState(true);
+  const [persona, setPersona] = useState<PersonaState>(
+    () => readCachedPersona(user?.id) ?? EMPTY,
+  );
+  const [loading, setLoading] = useState(() => !readCachedPersona(user?.id));
   const hasFullAccess = FULL_ACCESS_EMAILS.includes(
     (user?.email ?? "").trim().toLowerCase(),
   );
@@ -36,19 +72,27 @@ export const usePersona = () => {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    setPersona({
+    const next: PersonaState = {
       role: (data as any)?.persona_role ?? null,
       goals: ((data as any)?.persona_goals as string[] | null) ?? [],
       completedAt: (data as any)?.persona_completed_at ?? null,
-    });
+    };
+    writeCachedPersona(user.id, next);
+    setPersona(next);
     setLoading(false);
   }, [user?.id]);
 
   useEffect(() => {
     if (authLoading) return;
-    setLoading(true);
+    const cached = readCachedPersona(user?.id);
+    if (cached) {
+      setPersona(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     refresh();
-  }, [authLoading, refresh]);
+  }, [authLoading, refresh, user?.id]);
 
   const savePersona = useCallback(
     async (role: string, goals: string[]) => {
@@ -63,7 +107,9 @@ export const usePersona = () => {
         .eq("user_id", user.id);
       if (!error) {
         const previousRole = persona.role;
-        setPersona({ role, goals, completedAt: new Date().toISOString() });
+        const next: PersonaState = { role, goals, completedAt: new Date().toISOString() };
+        writeCachedPersona(user.id, next);
+        setPersona(next);
         trackPersonaEvent("persona_selected", {
           role,
           goals,
@@ -82,8 +128,13 @@ export const usePersona = () => {
     refresh,
     needsSetup:
       !hasFullAccess && !loading && !authLoading && !!user && !persona.completedAt,
+    isRealtor: !hasFullAccess && persona.role === "realtor",
     // null = no restriction (every nav item visible)
-    allowedNav: hasFullAccess ? null : allowedNavHrefs(persona.role, persona.goals),
+    allowedNav: hasFullAccess
+      ? null
+      : loading && !persona.completedAt
+        ? new Set(ALWAYS_VISIBLE_NAV)
+        : allowedNavHrefs(persona.role, persona.goals),
   };
 };
 

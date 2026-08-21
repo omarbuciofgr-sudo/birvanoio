@@ -2236,6 +2236,71 @@ export type Database = {
         }
         Relationships: []
       }
+      realtor_deals: {
+        Row: {
+          client_email: string | null
+          client_name: string
+          client_phone: string | null
+          closed_at: string | null
+          created_at: string
+          deal_type: string
+          deal_value: number | null
+          follow_up_at: string | null
+          id: string
+          lead_id: string | null
+          notes: string | null
+          property_address: string | null
+          stage: string
+          timeline_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_email?: string | null
+          client_name: string
+          client_phone?: string | null
+          closed_at?: string | null
+          created_at?: string
+          deal_type?: string
+          deal_value?: number | null
+          follow_up_at?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          property_address?: string | null
+          stage?: string
+          timeline_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_email?: string | null
+          client_name?: string
+          client_phone?: string | null
+          closed_at?: string | null
+          created_at?: string
+          deal_type?: string
+          deal_value?: number | null
+          follow_up_at?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          property_address?: string | null
+          stage?: string
+          timeline_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "realtor_deals_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_searches: {
         Row: {
           created_at: string
