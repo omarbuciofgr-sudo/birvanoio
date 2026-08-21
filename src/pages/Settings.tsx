@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send, RotateCcw } from "lucide-react";
+import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send, RotateCcw, AlertCircle, Play } from "lucide-react";
 import { WebhookIntegrations } from "@/components/integrations/WebhookIntegrations";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
