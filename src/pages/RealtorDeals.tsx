@@ -26,7 +26,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useGoogleCalendar, scheduleDealFollowUps } from "@/hooks/useGoogleCalendar";
+import { useGoogleCalendar, scheduleDealFollowUps, scheduleFollowUpTask } from "@/hooks/useGoogleCalendar";
+import IntelTriggerSettings from "@/components/realtor/IntelTriggerSettings";
+import IntelSignalPerformance from "@/components/realtor/IntelSignalPerformance";
+import { loadIntelSettings } from "@/lib/ownerIntelSettings";
 import GuardedContactButton from "@/components/contacts/GuardedContactButton";
 import { syncIntelTasksForDeals, readRecentListings } from "@/lib/ownerIntelTasks";
 import {
@@ -46,6 +49,9 @@ import {
   ClipboardCheck,
   Sparkles,
   Check,
+  CalendarClock,
+  FileText,
+  MessageSquareReply,
 } from "lucide-react";
 
 export type RealtorDeal = {
