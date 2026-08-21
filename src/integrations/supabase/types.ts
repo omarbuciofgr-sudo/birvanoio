@@ -2109,6 +2109,9 @@ export type Database = {
           id: string
           industry: string | null
           last_name: string | null
+          persona_completed_at: string | null
+          persona_goals: string[]
+          persona_role: string | null
           phone: string | null
           role_title: string | null
           sender_email: string | null
@@ -2126,6 +2129,9 @@ export type Database = {
           id?: string
           industry?: string | null
           last_name?: string | null
+          persona_completed_at?: string | null
+          persona_goals?: string[]
+          persona_role?: string | null
           phone?: string | null
           role_title?: string | null
           sender_email?: string | null
@@ -2143,6 +2149,9 @@ export type Database = {
           id?: string
           industry?: string | null
           last_name?: string | null
+          persona_completed_at?: string | null
+          persona_goals?: string[]
+          persona_role?: string | null
           phone?: string | null
           role_title?: string | null
           sender_email?: string | null

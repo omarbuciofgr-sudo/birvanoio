@@ -1,0 +1,4 @@
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS persona_role TEXT,
+  ADD COLUMN IF NOT EXISTS persona_goals TEXT[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS persona_completed_at TIMESTAMPTZ;
