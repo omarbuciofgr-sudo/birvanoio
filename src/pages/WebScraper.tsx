@@ -18,6 +18,7 @@ import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
 import OwnerIntelBadges from '@/components/realtor/OwnerIntelBadges';
 import { computeListingIntel, recordListingSnapshots, readSnapshotStore } from '@/lib/realEstateOwnerIntel';
+import { cacheRecentListings } from '@/lib/ownerIntelTasks';
 import {
   scraperBackendApi,
   buildHotpadsUrl,
@@ -1324,6 +1325,7 @@ export default function WebScraper() {
   useEffect(() => {
     if (!reListings.length) return;
     setListingIntelStore(recordListingSnapshots(reListings));
+    cacheRecentListings(reListings);
   }, [reListings]);
 
   const reListingsFilteredForDisplay = useMemo(() => {

@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { useGoogleCalendar, scheduleDealFollowUps } from "@/hooks/useGoogleCalendar";
 import GuardedContactButton from "@/components/contacts/GuardedContactButton";
+import { syncIntelTasksForDeals, readRecentListings } from "@/lib/ownerIntelTasks";
 import {
   CalendarPlus,
   CalendarCheck,
@@ -43,6 +44,8 @@ import {
   Mail,
   Gift,
   ClipboardCheck,
+  Sparkles,
+  Check,
 } from "lucide-react";
 
 export type RealtorDeal = {
@@ -153,6 +156,16 @@ const emptyForm = {
   notes: "",
 };
 
+type DealTask = {
+  id: string;
+  deal_id: string;
+  title: string;
+  kind: string;
+  notes: string | null;
+  scheduled_at: string | null;
+  completed_at: string | null;
+};
+
 const RealtorDeals = () => {
   const { user } = useAuth();
   const [deals, setDeals] = useState<RealtorDeal[]>([]);
@@ -162,6 +175,8 @@ const RealtorDeals = () => {
   const [saving, setSaving] = useState(false);
   const { status: calendarStatus, connect: connectCalendar } = useGoogleCalendar();
   const [syncingDealId, setSyncingDealId] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<DealTask[]>([]);
+  const [scanningIntel, setScanningIntel] = useState(false);
 
   /** Create the 6-month + 1-year reminders on the user's own Google Calendar. */
   const syncDealToCalendar = useCallback(
@@ -199,9 +214,60 @@ const RealtorDeals = () => {
     setLoading(false);
   }, [user?.id]);
 
+  const loadTasks = useCallback(async () => {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from("realtor_deal_events" as any)
+      .select("id, deal_id, title, kind, notes, scheduled_at, completed_at")
+      .order("scheduled_at", { ascending: true })
+      .limit(300);
+    setTasks(((data as any) ?? []) as DealTask[]);
+  }, [user?.id]);
+
+  /** Create follow-up steps from listing intel (price drop, stale, re-listed). */
+  const scanIntel = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!user?.id || !deals.length) return;
+      setScanningIntel(true);
+      try {
+        const created = await syncIntelTasksForDeals(user.id, deals, readRecentListings());
+        if (created > 0) {
+          await loadTasks();
+          toast.success(`${created} follow-up step${created === 1 ? "" : "s"} created from listing intel`);
+        } else if (!opts?.silent) {
+          toast.info("No new listing signals since your last scan.");
+        }
+      } catch (e) {
+        if (!opts?.silent) toast.error(e instanceof Error ? e.message : "Could not create follow-ups");
+      } finally {
+        setScanningIntel(false);
+      }
+    },
+    [user?.id, deals, loadTasks],
+  );
+
+  const completeTask = async (id: string) => {
+    setTasks((t) => t.map((x) => (x.id === id ? { ...x, completed_at: new Date().toISOString() } : x)));
+    await supabase
+      .from("realtor_deal_events" as any)
+      .update({ completed_at: new Date().toISOString() } as any)
+      .eq("id", id);
+  };
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  // Auto-create follow-ups whenever the deal list changes — no manual work needed.
+  useEffect(() => {
+    if (!deals.length) return;
+    scanIntel({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deals.length, user?.id]);
 
   const active = useMemo(
     () => deals.filter((d) => d.stage !== "closed" && d.stage !== "lost"),
@@ -376,6 +442,39 @@ const RealtorDeals = () => {
             </span>
           )}
         </div>
+
+        {(() => {
+          const open = tasks.filter((t) => t.deal_id === deal.id && !t.completed_at).slice(0, 3);
+          if (!open.length) return null;
+          return (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-2 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wide font-semibold text-primary flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> Suggested follow-ups
+              </p>
+              {open.map((t) => (
+                <div key={t.id} className="flex items-start gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-5 w-5 shrink-0 mt-0.5"
+                    title="Mark done"
+                    onClick={() => completeTask(t.id)}
+                  >
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <div className="min-w-0">
+                    <p className="text-xs leading-snug">{t.title}</p>
+                    {t.scheduled_at && (
+                      <p className="text-[10px] text-muted-foreground">
+                        Due {new Date(t.scheduled_at).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Quick contact — realtors live on text and calls */}
         <div className="flex items-center gap-1">
