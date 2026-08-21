@@ -69,11 +69,12 @@ const money = (v: number | null) =>
     ? v.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })
     : "—";
 
-const addYears = (iso: string, years: number) => {
+const addMonths = (iso: string, months: number) => {
   const d = new Date(`${iso}T09:00:00`);
-  d.setFullYear(d.getFullYear() + years);
+  d.setMonth(d.getMonth() + months);
   return d;
 };
+const addYears = (iso: string, years: number) => addMonths(iso, years * 12);
 
 /** Build a Google Calendar event link (works with any Gmail account, no setup). */
 function googleCalendarUrl(opts: {
@@ -502,7 +503,7 @@ const RealtorDeals = () => {
                               details: `Follow-up check-in for ${
                                 deal.property_address || "their property"
                               }. Added from Brivano.`,
-                              start: addYears(closedOn, 0.5 as unknown as number),
+                              start: addMonths(closedOn, 6),
                             })}
                             target="_blank"
                             rel="noreferrer"

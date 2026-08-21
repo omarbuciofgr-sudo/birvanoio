@@ -40,6 +40,7 @@ import {
   Send,
   Wand2,
   Building2,
+  Handshake,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -69,6 +70,7 @@ const navSections: NavSection[] = [
       { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
       { name: "Leads", href: "/dashboard/leads", icon: Users },
       { name: "Accounts", href: "/dashboard/accounts", icon: Building2 },
+      { name: "Deals", href: "/dashboard/deals", icon: Handshake },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
     ],
   },
@@ -116,7 +118,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { persona, needsSetup, savePersona, allowedNav } = usePersona();
+  const { persona, needsSetup, savePersona, allowedNav, isRealtor } = usePersona();
 
   // Collapsible group state — persisted in localStorage, auto-open the group
   // containing the active route
@@ -263,6 +265,9 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
               const filteredItems = section.items.filter(
                 (item: any) =>
                   (!item.adminOnly || isAdmin) &&
+                  // Realtors use Deals instead of Accounts
+                  !(isRealtor && item.href === "/dashboard/accounts") &&
+                  !(!isRealtor && !isAdmin && item.href === "/dashboard/deals") &&
                   (isAdmin || !allowedNav || allowedNav.has(item.href))
               );
               if (filteredItems.length === 0) return null;
