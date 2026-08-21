@@ -163,6 +163,7 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
 
   const completeTour = () => {
     localStorage.setItem(TOUR_STORAGE_KEY, "true");
+    localStorage.removeItem(TOUR_STEP_KEY);
     setIsVisible(false);
   };
 
@@ -181,6 +182,13 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   const prevStep = () => {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
+
+  // Persist the current step so users can resume from Settings if they get stuck.
+  useEffect(() => {
+    if (isVisible) {
+      localStorage.setItem(TOUR_STEP_KEY, String(currentStep));
+    }
+  }, [currentStep, isVisible]);
 
   if (!isVisible || needsSetup || anyDialogOpen) return null;
 
