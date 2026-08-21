@@ -60,6 +60,41 @@ export const WorkspaceFocusCard = () => {
                 )}
               </div>
             </div>
+            {showRecs && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Suggested for better results
+                </p>
+                {recommendations.suggestedRole && (
+                  <p className="text-xs text-muted-foreground">
+                    Accounts using{" "}
+                    <span className="text-foreground font-medium">
+                      {recommendations.suggestedRole.label}
+                    </span>{" "}
+                    convert at {Math.round(recommendations.suggestedRole.rate * 100)}%.
+                  </p>
+                )}
+                {recommendations.suggestedGoals.map((g) => (
+                  <div key={g.id} className="flex items-center justify-between gap-2">
+                    <span className="text-xs">
+                      {g.label}{" "}
+                      <span className="text-muted-foreground">
+                        · {Math.round(g.rate * 100)}% convert
+                      </span>
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[11px]"
+                      onClick={() => applyGoal(g.id)}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
             <Button variant="outline" size="sm" className="text-xs" onClick={() => setEditing(true)}>
               Change role & goals
             </Button>
