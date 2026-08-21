@@ -80,7 +80,10 @@ export const usePersona = () => {
     loading: loading || authLoading,
     savePersona,
     refresh,
-    needsSetup: !loading && !authLoading && !!user && !persona.completedAt,
-    allowedNav: allowedNavHrefs(persona.role, persona.goals),
+    needsSetup:
+      !hasFullAccess && !loading && !authLoading && !!user && !persona.completedAt,
+    // null = no restriction (every nav item visible)
+    allowedNav: hasFullAccess ? null : allowedNavHrefs(persona.role, persona.goals),
   };
 };
+
