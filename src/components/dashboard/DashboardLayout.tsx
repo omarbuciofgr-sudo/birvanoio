@@ -46,6 +46,8 @@ import brivanoIcon from "@/assets/brivano-b-icon.png";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
 import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import { usePersona } from "@/hooks/usePersona";
+import PersonaSetupDialog from "@/components/onboarding/PersonaSetupDialog";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -114,6 +116,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { persona, needsSetup, savePersona, allowedNav } = usePersona();
 
   // Collapsible group state — persisted in localStorage, auto-open the group
   // containing the active route
@@ -208,6 +211,12 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
 
   return (
     <div className="min-h-screen bg-background">
+      <PersonaSetupDialog
+        open={needsSetup}
+        initialRole={persona.role}
+        initialGoals={persona.goals}
+        onSave={savePersona}
+      />
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -252,7 +261,9 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
           <nav className="flex-1 min-h-0 px-3 py-4 space-y-4 overflow-y-auto overflow-x-hidden">
             {navSections.map((section) => {
               const filteredItems = section.items.filter(
-                (item: any) => !item.adminOnly || isAdmin
+                (item: any) =>
+                  (!item.adminOnly || isAdmin) &&
+                  (isAdmin || !allowedNav || allowedNav.has(item.href))
               );
               if (filteredItems.length === 0) return null;
 
