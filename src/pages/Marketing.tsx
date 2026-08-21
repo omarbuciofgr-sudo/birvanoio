@@ -12,6 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Copy, Megaphone, Printer, RotateCcw } from "lucide-react";
 import ListingFlyer, { emptyFlyer, type FlyerData } from "@/components/realtor/ListingFlyer";
+import {
+  FLYER_TEMPLATES,
+  HEADING_FONT_OPTIONS,
+  getTemplate,
+} from "@/components/realtor/flyerTemplates";
 
 const STORAGE_KEY = "brivano:marketing:flyer";
 
@@ -172,6 +177,94 @@ export default function Marketing() {
                     </div>
                   )}
 
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    <Label className="text-xs">Template</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {FLYER_TEMPLATES.map((t) => {
+                        const active = t.id === (data.templateId || FLYER_TEMPLATES[0].id);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => set({ templateId: t.id })}
+                            title={t.description}
+                            className={`rounded-md border p-2 text-left transition ${
+                              active ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <span
+                              className="block h-8 w-full rounded-sm mb-1.5 flex items-center justify-center"
+                              style={{ background: t.bg, border: `1px solid ${t.border}` }}
+                            >
+                              <span className="h-1.5 w-8 rounded-full" style={{ background: t.accent }} />
+                            </span>
+                            <span className="text-[11px] font-medium leading-tight block truncate">{t.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Brand name</Label>
+                        <Input
+                          className="h-9"
+                          value={data.brandName}
+                          onChange={(e) => set({ brandName: e.target.value })}
+                          placeholder="Brivano Realty"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Accent color</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="color"
+                            className="h-9 w-12 p-1"
+                            value={data.accentColor || getTemplate(data.templateId).accent}
+                            onChange={(e) => set({ accentColor: e.target.value })}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-9 px-2 text-xs"
+                            onClick={() => set({ accentColor: "" })}
+                          >
+                            Reset
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Logo URL</Label>
+                      <Input
+                        className="h-9"
+                        value={data.logoUrl}
+                        onChange={(e) => set({ logoUrl: e.target.value })}
+                        placeholder="https://…/logo.png"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Heading font</Label>
+                      <Select
+                        value={data.headingFont || "default"}
+                        onValueChange={(v) => set({ headingFont: v === "default" ? "" : v })}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="z-[9999]">
+                          {HEADING_FONT_OPTIONS.map((f) => (
+                            <SelectItem key={f.id || "default"} value={f.id || "default"}>
+                              {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Headline</Label>
@@ -306,7 +399,15 @@ export default function Marketing() {
                       variant="ghost"
                       className="h-8"
                       onClick={() => {
-                        setData({ ...emptyFlyer, agentEmail: user?.email || "" });
+                        setData((d) => ({
+                          ...emptyFlyer,
+                          agentEmail: user?.email || "",
+                          templateId: d.templateId,
+                          brandName: d.brandName,
+                          logoUrl: d.logoUrl,
+                          accentColor: d.accentColor,
+                          headingFont: d.headingFont,
+                        }));
                         setHighlightsText("");
                       }}
                     >
