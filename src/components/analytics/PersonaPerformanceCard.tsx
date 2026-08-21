@@ -9,6 +9,7 @@ import {
 import { PERSONA_ROLES } from "@/lib/persona";
 import { goalChartRows, roleChartRows, MIN_SAMPLE } from "@/lib/analytics/personaAnalytics";
 import { usePersonaAnalytics } from "@/hooks/usePersonaAnalytics";
+import RecommendationExperimentCard from "@/components/analytics/RecommendationExperimentCard";
 
 export const PersonaPerformanceCard = () => {
   const { analytics, recommendations, isLoading } = usePersonaAnalytics();
@@ -171,6 +172,8 @@ export const PersonaPerformanceCard = () => {
           )}
         </CardContent>
       </Card>
+
+      <RecommendationExperimentCard />
     </div>
   );
 };
