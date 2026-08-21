@@ -162,8 +162,15 @@ type DealTask = {
   title: string;
   kind: string;
   notes: string | null;
+  body?: string | null;
+  signal_key?: string | null;
   scheduled_at: string | null;
   completed_at: string | null;
+  calendar_event_id?: string | null;
+  calendar_synced_at?: string | null;
+  outcome?: string | null;
+  outcome_at?: string | null;
+  created_at: string;
 };
 
 const RealtorDeals = () => {
@@ -177,6 +184,10 @@ const RealtorDeals = () => {
   const [syncingDealId, setSyncingDealId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<DealTask[]>([]);
   const [scanningIntel, setScanningIntel] = useState(false);
+  const [schedulingTaskId, setSchedulingTaskId] = useState<string | null>(null);
+  const [openScriptId, setOpenScriptId] = useState<string | null>(null);
+  const [settingsVersion, setSettingsVersion] = useState(0);
+
 
   /** Create the 6-month + 1-year reminders on the user's own Google Calendar. */
   const syncDealToCalendar = useCallback(
