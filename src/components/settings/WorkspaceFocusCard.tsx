@@ -2,14 +2,26 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Compass } from "lucide-react";
+import { Compass, Sparkles } from "lucide-react";
 import { usePersona } from "@/hooks/usePersona";
 import { getGoalsForRole, getRole } from "@/lib/persona";
+import { usePersonaAnalytics } from "@/hooks/usePersonaAnalytics";
 import PersonaSetupDialog from "@/components/onboarding/PersonaSetupDialog";
 
 export const WorkspaceFocusCard = () => {
   const { persona, savePersona, loading } = usePersona();
+  const { recommendations, isLoading: recsLoading } = usePersonaAnalytics();
   const [editing, setEditing] = useState(false);
+
+  const applyGoal = async (goalId: string) => {
+    if (!persona.role) return;
+    await savePersona(persona.role, Array.from(new Set([...persona.goals, goalId])));
+  };
+
+  const showRecs =
+    !recsLoading &&
+    recommendations.hasEnoughData &&
+    (recommendations.suggestedGoals.length > 0 || !!recommendations.suggestedRole);
 
   const role = getRole(persona.role);
   const goals = getGoalsForRole(persona.role).filter((g) => persona.goals.includes(g.id));
