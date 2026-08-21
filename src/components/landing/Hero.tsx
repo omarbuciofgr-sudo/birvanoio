@@ -32,7 +32,7 @@ const Hero = React.forwardRef<HTMLElement>(function Hero(_props, ref) {
           <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-foreground">
             Find, enrich & close
             <br />
-            <span className="gradient-text">leads with AI.</span>
+            <span className="gradient-text">leads with Brivano.</span>
           </h1>
 
           {/* Subheadline */}
