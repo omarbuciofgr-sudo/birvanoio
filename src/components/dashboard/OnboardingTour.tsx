@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -88,27 +88,56 @@ const tourSteps: TourStep[] = [
 ];
 
 const TOUR_STORAGE_KEY = "brivano_onboarding_complete";
+const TOUR_STEP_KEY = "brivano_onboarding_step";
 
 interface OnboardingTourProps {
   forceShow?: boolean;
 }
 
 const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem(TOUR_STEP_KEY) : null;
+    const parsed = saved ? parseInt(saved, 10) : 0;
+    return !isNaN(parsed) && parsed >= 0 && parsed < tourSteps.length ? parsed : 0;
+  });
   const [isVisible, setIsVisible] = useState(false);
+  const [anyDialogOpen, setAnyDialogOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   // The persona setup dialog is a modal that blocks all clicks outside of it.
   // Never run the tour while it is open, or the tour becomes unclickable.
   const { needsSetup, loading: personaLoading } = usePersona();
 
+  // Safety net: detect any open Radix Dialog so the tour never renders on top
+  // of (and blocks) another modal such as the persona setup dialog.
   useEffect(() => {
+    const checkDialogs = () => {
+      const openDialogs = document.querySelectorAll('[data-state="open"][role="dialog"]');
+      const foreignDialogOpen = Array.from(openDialogs).some(
+        (el) => !containerRef.current?.contains(el)
+      );
+      setAnyDialogOpen(foreignDialogOpen);
+    };
+    checkDialogs();
+    const observer = new MutationObserver(checkDialogs);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-state"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    // Never show while persona setup or any other modal is still on screen.
+    if (personaLoading || needsSetup || anyDialogOpen) {
+      setIsVisible(false);
+      return;
+    }
     if (forceShow) {
       setIsVisible(true);
       setCurrentStep(0);
-      return;
-    }
-    if (personaLoading || needsSetup) {
-      setIsVisible(false);
       return;
     }
     const completed = localStorage.getItem(TOUR_STORAGE_KEY);
@@ -117,10 +146,24 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [forceShow, needsSetup, personaLoading]);
+  }, [forceShow, needsSetup, personaLoading, anyDialogOpen]);
+
+  // Escape key closes the tour immediately.
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        skipTour();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isVisible]);
 
   const completeTour = () => {
     localStorage.setItem(TOUR_STORAGE_KEY, "true");
+    localStorage.removeItem(TOUR_STEP_KEY);
     setIsVisible(false);
   };
 
@@ -140,7 +183,14 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
-  if (!isVisible || (!forceShow && needsSetup)) return null;
+  // Persist the current step so users can resume from Settings if they get stuck.
+  useEffect(() => {
+    if (isVisible) {
+      localStorage.setItem(TOUR_STEP_KEY, String(currentStep));
+    }
+  }, [currentStep, isVisible]);
+
+  if (!isVisible || needsSetup || anyDialogOpen) return null;
 
   const step = tourSteps[currentStep];
   const progress = ((currentStep + 1) / tourSteps.length) * 100;
@@ -148,7 +198,13 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
   const isLast = currentStep === tourSteps.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Onboarding tour"
+    >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={skipTour} />
 
@@ -157,13 +213,15 @@ const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
         <CardContent className="p-0">
           {/* Header with icon */}
           <div className="relative p-6 pb-4">
-            {/* Skip button */}
+            {/* Close button — always visible and clearly labeled */}
             <button
               onClick={skipTour}
-              className="absolute top-4 right-4 h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title="Skip tour"
+              className="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Close tour (Esc)"
+              aria-label="Close tour"
             >
               <X className="h-4 w-4" />
+              <span className="hidden sm:inline">Close</span>
             </button>
 
             {/* Step counter */}
