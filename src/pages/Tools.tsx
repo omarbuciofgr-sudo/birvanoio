@@ -4,16 +4,60 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Cpu, Target, Globe, Mail, FileSpreadsheet, ListFilter, ExternalLink } from 'lucide-react';
+import { Cpu, Target, Globe, Mail, FileSpreadsheet, ListFilter, ExternalLink, Phone } from 'lucide-react';
 import { TechnographicsSearch } from '@/components/scout/TechnographicsSearch';
 import { LookalikeSearch } from '@/components/scout/LookalikeSearch';
 import { DomainResolver } from '@/components/scout/DomainResolver';
 import { BulkEmailFinder } from '@/components/scout/BulkEmailFinder';
 import { DynamicLists } from '@/components/scout/DynamicLists';
+import { OwnerPhoneFinder } from '@/components/scout/OwnerPhoneFinder';
+import { usePersona } from '@/hooks/usePersona';
+
+const triggerClass =
+  'text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm';
 
 const Tools = () => {
-  const [activeTab, setActiveTab] = useState('tech-search');
+  const { isRealtor } = usePersona();
+  const [activeTab, setActiveTab] = useState(isRealtor ? 'email-finder' : 'tech-search');
   const navigate = useNavigate();
+
+  // Realtors only need contact discovery — email + owner phone lookup.
+  if (isRealtor) {
+    return (
+      <DashboardLayout fullWidth>
+        <div className="space-y-5">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Contact Finder</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Find owner emails and phone numbers for the listings you're working
+            </p>
+          </div>
+
+          <Tabs
+            value={activeTab === 'phone-finder' ? 'phone-finder' : 'email-finder'}
+            onValueChange={setActiveTab}
+            className="space-y-4"
+          >
+            <TabsList className="h-10 p-1 bg-muted/40 border border-border/30 gap-0.5">
+              <TabsTrigger value="email-finder" className={triggerClass}>
+                <Mail className="h-3.5 w-3.5" /> Email Finder
+              </TabsTrigger>
+              <TabsTrigger value="phone-finder" className={triggerClass}>
+                <Phone className="h-3.5 w-3.5" /> Phone Finder
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="email-finder" className="mt-0">
+              <BulkEmailFinder />
+            </TabsContent>
+            <TabsContent value="phone-finder" className="mt-0">
+              <OwnerPhoneFinder />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout fullWidth>
@@ -25,22 +69,22 @@ const Tools = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="h-10 p-1 bg-muted/40 border border-border/30 gap-0.5">
-            <TabsTrigger value="tech-search" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="tech-search" className={triggerClass}>
               <Cpu className="h-3.5 w-3.5" /> Tech Stack
             </TabsTrigger>
-            <TabsTrigger value="lookalike" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="lookalike" className={triggerClass}>
               <Target className="h-3.5 w-3.5" /> Lookalikes
             </TabsTrigger>
-            <TabsTrigger value="domain-resolve" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="domain-resolve" className={triggerClass}>
               <Globe className="h-3.5 w-3.5" /> Domains
             </TabsTrigger>
-            <TabsTrigger value="email-finder" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="email-finder" className={triggerClass}>
               <Mail className="h-3.5 w-3.5" /> Email Finder
             </TabsTrigger>
-            <TabsTrigger value="csv-enrichment" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="csv-enrichment" className={triggerClass}>
               <FileSpreadsheet className="h-3.5 w-3.5" /> CSV Enrichment
             </TabsTrigger>
-            <TabsTrigger value="lists" className="text-xs gap-1.5 px-3 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="lists" className={triggerClass}>
               <ListFilter className="h-3.5 w-3.5" /> Lists
             </TabsTrigger>
           </TabsList>

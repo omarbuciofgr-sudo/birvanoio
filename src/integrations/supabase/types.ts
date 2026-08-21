@@ -2322,25 +2322,80 @@ export type Database = {
         }
         Relationships: []
       }
+      realtor_deal_events: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          deal_id: string
+          id: string
+          kind: string
+          notes: string | null
+          scheduled_at: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          deal_id: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          scheduled_at?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          deal_id?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          scheduled_at?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "realtor_deal_events_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "realtor_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       realtor_deals: {
         Row: {
           anniversary_event_id: string | null
           calendar_synced_at: string | null
           checkin_event_id: string | null
+          checklist: Json
           client_email: string | null
           client_name: string
           client_phone: string | null
           closed_at: string | null
+          commission_flat: number | null
+          commission_pct: number | null
           created_at: string
           deal_type: string
           deal_value: number | null
           follow_up_at: string | null
           id: string
           lead_id: string | null
+          lease_end_date: string | null
           notes: string | null
           property_address: string | null
+          referral_requested_at: string | null
+          source: string | null
           stage: string
+          stage_changed_at: string | null
           timeline_date: string | null
+          tour_at: string | null
           updated_at: string
           user_id: string
         }
@@ -2348,20 +2403,28 @@ export type Database = {
           anniversary_event_id?: string | null
           calendar_synced_at?: string | null
           checkin_event_id?: string | null
+          checklist?: Json
           client_email?: string | null
           client_name: string
           client_phone?: string | null
           closed_at?: string | null
+          commission_flat?: number | null
+          commission_pct?: number | null
           created_at?: string
           deal_type?: string
           deal_value?: number | null
           follow_up_at?: string | null
           id?: string
           lead_id?: string | null
+          lease_end_date?: string | null
           notes?: string | null
           property_address?: string | null
+          referral_requested_at?: string | null
+          source?: string | null
           stage?: string
+          stage_changed_at?: string | null
           timeline_date?: string | null
+          tour_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -2369,20 +2432,28 @@ export type Database = {
           anniversary_event_id?: string | null
           calendar_synced_at?: string | null
           checkin_event_id?: string | null
+          checklist?: Json
           client_email?: string | null
           client_name?: string
           client_phone?: string | null
           closed_at?: string | null
+          commission_flat?: number | null
+          commission_pct?: number | null
           created_at?: string
           deal_type?: string
           deal_value?: number | null
           follow_up_at?: string | null
           id?: string
           lead_id?: string | null
+          lease_end_date?: string | null
           notes?: string | null
           property_address?: string | null
+          referral_requested_at?: string | null
+          source?: string | null
           stage?: string
+          stage_changed_at?: string | null
           timeline_date?: string | null
+          tour_at?: string | null
           updated_at?: string
           user_id?: string
         }
