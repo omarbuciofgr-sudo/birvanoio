@@ -55,7 +55,13 @@ export const usePersona = () => {
         } as any)
         .eq("user_id", user.id);
       if (!error) {
+        const previousRole = persona.role;
         setPersona({ role, goals, completedAt: new Date().toISOString() });
+        trackPersonaEvent("persona_selected", {
+          role,
+          goals,
+          metadata: { previous_role: previousRole, changed: previousRole !== role },
+        });
       }
       return { error };
     },
