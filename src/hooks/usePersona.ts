@@ -65,7 +65,7 @@ export const usePersona = () => {
       }
       return { error };
     },
-    [user?.id],
+    [user?.id, persona.role],
   );
 
   return {
