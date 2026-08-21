@@ -514,25 +514,85 @@ const RealtorDeals = () => {
                 <Sparkles className="h-3 w-3" /> Suggested follow-ups
               </p>
               {open.map((t) => (
-                <div key={t.id} className="flex items-start gap-2">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-5 w-5 shrink-0 mt-0.5"
-                    title="Mark done"
-                    onClick={() => completeTask(t.id)}
-                  >
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <div className="min-w-0">
-                    <p className="text-xs leading-snug">{t.title}</p>
-                    {t.scheduled_at && (
-                      <p className="text-[10px] text-muted-foreground">
-                        Due {new Date(t.scheduled_at).toLocaleDateString()}
-                      </p>
-                    )}
+                <div key={t.id} className="space-y-1">
+                  <div className="flex items-start gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 shrink-0 mt-0.5"
+                      title="Mark done"
+                      onClick={() => completeTask(t.id)}
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs leading-snug">{t.title}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {t.scheduled_at && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Due {new Date(t.scheduled_at).toLocaleDateString()}
+                          </span>
+                        )}
+                        {t.calendar_event_id && (
+                          <Badge variant="secondary" className="text-[9px]">
+                            On calendar
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          onClick={() => setOpenScriptId(openScriptId === t.id ? null : t.id)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Script
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          disabled={schedulingTaskId === t.id}
+                          onClick={() => scheduleTask(t)}
+                        >
+                          <CalendarClock className="h-3 w-3 mr-1" />
+                          {t.calendar_event_id ? "Reschedule" : "Schedule"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          title="Owner replied"
+                          onClick={() => completeTask(t.id, "replied")}
+                        >
+                          <MessageSquareReply className="h-3 w-3 mr-1" />
+                          Replied
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          title="Turned into a deal"
+                          onClick={() => completeTask(t.id, "converted")}
+                        >
+                          <Trophy className="h-3 w-3 mr-1" />
+                          Converted
+                        </Button>
+                      </div>
+                      {openScriptId === t.id && (
+                        <Textarea
+                          readOnly
+                          rows={5}
+                          className="mt-1 text-[11px]"
+                          value={t.body || t.notes || ""}
+                          onFocus={(e) => e.currentTarget.select()}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
+
               ))}
             </div>
           );
