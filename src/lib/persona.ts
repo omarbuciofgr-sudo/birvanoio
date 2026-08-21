@@ -56,7 +56,7 @@ export const PERSONA_GOALS: Record<PersonaRoleId, PersonaGoal[]> = {
       id: "fsbo_frbo",
       label: "Find FSBO / FRBO listings",
       description: "Owner-listed properties for sale or rent by owner.",
-      tools: ["/dashboard/scraper", "/dashboard/accounts"],
+      tools: ["/dashboard/scraper", "/dashboard/deals"],
     },
     {
       id: "owner_contact",
@@ -74,7 +74,7 @@ export const PERSONA_GOALS: Record<PersonaRoleId, PersonaGoal[]> = {
       id: "listing_pipeline",
       label: "Track listings through a pipeline",
       description: "Stages from new owner lead to signed listing.",
-      tools: ["/dashboard/pipeline", "/dashboard/reports"],
+      tools: ["/dashboard/pipeline", "/dashboard/reports", "/dashboard/deals"],
     },
   ],
   sales_rep: [
@@ -201,6 +201,8 @@ export function allowedNavHrefs(
   const selected = goals.filter((g) => (goalIds ?? []).includes(g.id));
   const active = selected.length > 0 ? selected : goals;
   const allowed = new Set(ALWAYS_VISIBLE_NAV);
+  // Realtors get the Deals workspace in place of Accounts.
+  if (roleId === "realtor") allowed.add("/dashboard/deals");
   for (const goal of active) goal.tools.forEach((t) => allowed.add(t));
   return allowed;
 }
