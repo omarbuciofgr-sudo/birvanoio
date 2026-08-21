@@ -12,10 +12,17 @@ export type PersonaState = {
 
 const EMPTY: PersonaState = { role: null, goals: [], completedAt: null };
 
+// Internal accounts that always see every tool and skip persona setup.
+const FULL_ACCESS_EMAILS = ["info@brivano.io"];
+
 export const usePersona = () => {
   const { user, loading: authLoading } = useAuth();
   const [persona, setPersona] = useState<PersonaState>(EMPTY);
   const [loading, setLoading] = useState(true);
+  const hasFullAccess = FULL_ACCESS_EMAILS.includes(
+    (user?.email ?? "").trim().toLowerCase(),
+  );
+
 
   const refresh = useCallback(async () => {
     if (!user?.id) {
