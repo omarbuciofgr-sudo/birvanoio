@@ -16,6 +16,7 @@ import {
   Phone, Zap, Loader2, Calendar,
 } from "lucide-react";
 import { subDays, format, startOfWeek, eachDayOfInterval } from "date-fns";
+import PersonaPerformanceCard from "@/components/analytics/PersonaPerformanceCard";
 
 const COLORS = ["hsl(var(--primary))", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
@@ -190,6 +191,7 @@ export default function AdvancedAnalytics() {
             <TabsTrigger value="leads">Leads</TabsTrigger>
             <TabsTrigger value="deals">Deals</TabsTrigger>
             <TabsTrigger value="outreach">Outreach</TabsTrigger>
+            <TabsTrigger value="personas">Personas</TabsTrigger>
           </TabsList>
 
           {/* Leads Tab */}
@@ -366,6 +368,11 @@ export default function AdvancedAnalytics() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Personas Tab */}
+          <TabsContent value="personas" className="space-y-6">
+            <PersonaPerformanceCard />
           </TabsContent>
         </Tabs>
       </div>

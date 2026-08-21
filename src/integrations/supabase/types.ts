@@ -2026,6 +2026,39 @@ export type Database = {
         }
         Relationships: []
       }
+      persona_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          persona_goals: string[]
+          persona_role: string | null
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          persona_goals?: string[]
+          persona_role?: string | null
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          persona_goals?: string[]
+          persona_role?: string | null
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       pipeline_stages: {
         Row: {
           color: string
@@ -4191,6 +4224,7 @@ export type Database = {
           webhook_url: string
         }[]
       }
+      get_persona_analytics: { Args: never; Returns: Json }
       get_user_organization: { Args: { p_user_id: string }; Returns: string }
       get_user_workspace_id: { Args: { _user_id: string }; Returns: string }
       get_user_workspace_role: {

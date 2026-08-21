@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { trackActivation, trackConversion } from "@/lib/analytics/personaAnalytics";
 import {
   Select,
   SelectContent,
@@ -265,7 +266,16 @@ const Leads = () => {
     const ids = Array.from(selectedLeads);
     const { error } = await supabase.from("leads").update({ status }).in("id", ids);
     if (error) toast.error("Failed to update");
-    else { toast.success(`Updated ${ids.length} leads to ${status}`); fetchLeads(); setSelectedLeads(new Set()); }
+    else {
+      toast.success(`Updated ${ids.length} leads to ${status}`);
+      if (status === "converted") {
+        trackConversion("lead_converted", { count: ids.length });
+      } else if (status === "qualified" || status === "contacted") {
+        trackActivation("lead_worked", { status, count: ids.length });
+      }
+      fetchLeads();
+      setSelectedLeads(new Set());
+    }
   };
 
   const bulkDelete = async () => {
