@@ -88,13 +88,18 @@ const tourSteps: TourStep[] = [
 ];
 
 const TOUR_STORAGE_KEY = "brivano_onboarding_complete";
+const TOUR_STEP_KEY = "brivano_onboarding_step";
 
 interface OnboardingTourProps {
   forceShow?: boolean;
 }
 
 const OnboardingTour = ({ forceShow = false }: OnboardingTourProps) => {
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem(TOUR_STEP_KEY) : null;
+    const parsed = saved ? parseInt(saved, 10) : 0;
+    return !isNaN(parsed) && parsed >= 0 && parsed < tourSteps.length ? parsed : 0;
+  });
   const [isVisible, setIsVisible] = useState(false);
   const [anyDialogOpen, setAnyDialogOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
