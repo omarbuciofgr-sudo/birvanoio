@@ -121,7 +121,7 @@ export async function syncIntelTasksForDeals(
     .in("deal_id", dealIds);
 
   const seen = new Set(
-    ((existing as { deal_id: string; notes: string | null }[]) || []).map(
+    ((existing as unknown as { deal_id: string; notes: string | null }[]) || []).map(
       (e) => `${e.deal_id}::${(e.notes || "").match(/\[intel:[^\]]+\]/)?.[0] ?? ""}`,
     ),
   );
