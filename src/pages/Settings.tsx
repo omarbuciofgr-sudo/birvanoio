@@ -14,6 +14,7 @@ import { Phone, Mail, Info, User, Zap, MessageSquare, Clock, Send, RotateCcw, Al
 import { WebhookIntegrations } from "@/components/integrations/WebhookIntegrations";
 import GoogleCalendarCard from "@/components/settings/GoogleCalendarCard";
 import GmailCard from "@/components/settings/GmailCard";
+import ContactGuardCard from "@/components/settings/ContactGuardCard";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { EmailAccountsManager } from "@/components/settings/EmailAccountsManager";
@@ -373,6 +374,7 @@ const Settings = () => {
           <TabsContent value="integrations" className="space-y-6">
             <GoogleCalendarCard />
             <GmailCard />
+            <ContactGuardCard />
             <WebhookIntegrations userId={user.id} />
           </TabsContent>
         </Tabs>

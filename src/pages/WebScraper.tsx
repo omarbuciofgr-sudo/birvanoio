@@ -16,6 +16,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
+import OwnerIntelBadges from '@/components/realtor/OwnerIntelBadges';
+import { computeListingIntel, recordListingSnapshots, readSnapshotStore } from '@/lib/realEstateOwnerIntel';
 import {
   scraperBackendApi,
   buildHotpadsUrl,
@@ -1316,6 +1318,14 @@ export default function WebScraper() {
   );
 
   // Platform + optional city (Match) + optional by-owner table filter
+  // Owner intel: snapshot each listing's price / days-on-market so we can flag
+  // price drops and re-listings across searches.
+  const [listingIntelStore, setListingIntelStore] = useState(() => readSnapshotStore());
+  useEffect(() => {
+    if (!reListings.length) return;
+    setListingIntelStore(recordListingSnapshots(reListings));
+  }, [reListings]);
+
   const reListingsFilteredForDisplay = useMemo(() => {
     let rows = reListings.map((listing, index) => ({ listing, realIndex: index }));
     rows = rows.filter(({ listing }) => listingMatchesRealEstatePlatform(listing, rePlatform));
@@ -4530,6 +4540,7 @@ export default function WebScraper() {
                                     <Badge variant="outline" className="text-[10px] h-4 shrink-0">Not Found</Badge>
                                   )}
                                 </div>
+                                <OwnerIntelBadges intel={computeListingIntel(listing, listingIntelStore)} />
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                   {[listing.property_type, listing.bedrooms && `${listing.bedrooms} bed`, listing.bathrooms && `${listing.bathrooms} bath`, listing.square_feet && `${listing.square_feet.toLocaleString()} sqft`].filter(Boolean).join(' · ')}
                                 </p>

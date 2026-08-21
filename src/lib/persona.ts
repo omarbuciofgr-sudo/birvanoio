@@ -23,6 +23,7 @@ export type PersonaGoal = {
 export const ALWAYS_VISIBLE_NAV = [
   "/dashboard",
   "/dashboard/leads",
+  "/dashboard/marketing",
   "/dashboard/billing",
   "/dashboard/settings",
 ];
