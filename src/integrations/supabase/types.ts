@@ -473,6 +473,91 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_suppression: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          id: string
+          reason: string | null
+          source: string
+          value_normalized: string
+          value_type: string
+          workspace_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          source?: string
+          value_normalized: string
+          value_type: string
+          workspace_id: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          source?: string
+          value_normalized?: string
+          value_type?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_suppression_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_touches: {
+        Row: {
+          channel: string
+          contact_name: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          user_id: string
+          value_normalized: string
+          value_type: string
+          workspace_id: string
+        }
+        Insert: {
+          channel?: string
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          user_id: string
+          value_normalized: string
+          value_type: string
+          workspace_id: string
+        }
+        Update: {
+          channel?: string
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+          value_normalized?: string
+          value_type?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_touches_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_logs: {
         Row: {
           call_sid: string | null
