@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { brokeredPreviewStorage } from './previewAuthStorage';
 import { resolveSupabaseAnonKey, resolveSupabaseUrl } from './constants';
 
 /** Env (`VITE_*` / vite.config `define`) overrides; otherwise `constants.ts` defaults (brivano.io project). */
@@ -40,7 +41,7 @@ if (urlRef && keyRef && urlRef !== keyRef) {
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: brokeredPreviewStorage(),
     persistSession: true,
     autoRefreshToken: true,
   }
