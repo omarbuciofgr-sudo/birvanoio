@@ -367,7 +367,7 @@ export function buildTruliaUrl(location: string, forSaleByOwner = false): string
 }
 
 /** Backend URL when frontend is at brivano.io, Lovable preview, or any non-local host */
-const PRODUCTION_BACKEND = "https://resplendent-empathy-production.up.railway.app";
+const PRODUCTION_BACKEND = "https://brivano-production.up.railway.app";
 
 function isProductionHost(): boolean {
   if (typeof window === "undefined") return import.meta.env.PROD;

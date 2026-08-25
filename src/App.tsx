@@ -21,6 +21,7 @@ import Contacts from "./pages/Contacts";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import WebScraper from "./pages/WebScraper";
+import RentCastListings from "./pages/RentCastListings";
 import SchemaTemplates from "./pages/admin/SchemaTemplates";
 import ClientOrganizations from "./pages/admin/ClientOrganizations";
 import ScrapeJobs from "./pages/admin/ScrapeJobs";
@@ -85,6 +86,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
               <Route path="/dashboard/contacts" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
               <Route path="/dashboard/scraper" element={<ProtectedRoute><WebScraper /></ProtectedRoute>} />
+              <Route path="/dashboard/rentcast" element={<ProtectedRoute><RentCastListings /></ProtectedRoute>} />
               <Route path="/admin/schema-templates" element={<ProtectedRoute><SchemaTemplates /></ProtectedRoute>} />
               <Route path="/admin/clients" element={<ProtectedRoute><ClientOrganizations /></ProtectedRoute>} />
               <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />

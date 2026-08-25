@@ -42,6 +42,7 @@ import {
   Building2,
   Handshake,
   Megaphone,
+  Home,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -92,6 +93,7 @@ const navSections: NavSection[] = [
     groupIcon: Wand2,
     items: [
       { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
+      { name: "RentCast FSBO/FRBO", href: "/dashboard/rentcast", icon: Home },
       { name: "Enrichment Tools", href: "/dashboard/tools", icon: Wrench },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
       { name: "Signals", href: "/dashboard/signals", icon: Zap },
