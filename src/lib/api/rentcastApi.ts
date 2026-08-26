@@ -30,6 +30,17 @@ export type RentCastListing = {
   listing_office_name?: string | null;
   owner_name?: string | null;
   owner_mailing_address?: string | null;
+  owner_phone?: string | null;
+  owner_email?: string | null;
+  skip_trace_confidence?: number | null;
+  fsbo_confidence?: number | null;
+  enriched_at?: string | null;
+  listing_text_signals?: {
+    text_mentions_owner_listed?: boolean;
+    matched_keywords?: string[];
+    snippet?: string | null;
+  } | null;
+  imported_lead_id?: string | null;
   search_location?: string | null;
 };
 
@@ -41,6 +52,25 @@ export type RentCastStats = {
   likely_frbo?: number;
   agent_listed?: number;
   likely_owner_listed?: number;
+};
+
+export type RentCastEnrichSummary = {
+  requested?: number;
+  enriched?: number;
+  partial?: number;
+  no_contact?: number;
+  failed?: number;
+};
+
+export type RentCastEnrichResult = {
+  rentcast_id?: string;
+  address?: string;
+  status?: string;
+  owner_name?: string | null;
+  owner_phone?: string | null;
+  owner_email?: string | null;
+  fsbo_confidence?: number | null;
+  listing?: RentCastListing;
 };
 
 async function parseJson(res: Response) {
@@ -113,7 +143,12 @@ export const rentcastApi = {
     }>;
   },
 
-  async enrich(body: { location?: string; limit?: number }) {
+  async enrich(body: {
+    location?: string;
+    limit?: number;
+    rentcast_ids?: string[];
+    likely_only?: boolean;
+  }) {
     const base = scraperBackendApi.getBaseUrl();
     const res = await fetch(`${base}/api/rentcast/enrich`, {
       method: "POST",
@@ -123,7 +158,9 @@ export const rentcastApi = {
     return parseJson(res) as Promise<{
       success?: boolean;
       error?: string | null;
-      results?: unknown[];
+      results?: RentCastEnrichResult[];
+      listings?: RentCastListing[];
+      summary?: RentCastEnrichSummary;
       total?: number;
     }>;
   },

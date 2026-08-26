@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -20,8 +20,7 @@ import AdminImport from "./pages/AdminImport";
 import Contacts from "./pages/Contacts";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
-import WebScraper from "./pages/WebScraper";
-import RentCastListings from "./pages/RentCastListings";
+import BrivanoScout from "./pages/BrivanoScout";
 import SchemaTemplates from "./pages/admin/SchemaTemplates";
 import ClientOrganizations from "./pages/admin/ClientOrganizations";
 import ScrapeJobs from "./pages/admin/ScrapeJobs";
@@ -85,8 +84,8 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
               <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
               <Route path="/dashboard/contacts" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
-              <Route path="/dashboard/scraper" element={<ProtectedRoute><WebScraper /></ProtectedRoute>} />
-              <Route path="/dashboard/rentcast" element={<ProtectedRoute><RentCastListings /></ProtectedRoute>} />
+              <Route path="/dashboard/scraper" element={<ProtectedRoute><BrivanoScout /></ProtectedRoute>} />
+              <Route path="/dashboard/rentcast" element={<Navigate to="/dashboard/scraper?tab=rentcast" replace />} />
               <Route path="/admin/schema-templates" element={<ProtectedRoute><SchemaTemplates /></ProtectedRoute>} />
               <Route path="/admin/clients" element={<ProtectedRoute><ClientOrganizations /></ProtectedRoute>} />
               <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />
