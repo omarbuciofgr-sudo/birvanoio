@@ -345,12 +345,14 @@ export default function RentCastListingsContent({
         }
 
         if (leadId && row.rentcast_id) {
-          await supabase
-            .from("rentcast_listings")
-            .update({ imported_lead_id: leadId })
-            .eq("rentcast_id", row.rentcast_id)
-            .then(() => undefined)
-            .catch(() => undefined);
+          try {
+            await (supabase as any)
+              .from("rentcast_listings")
+              .update({ imported_lead_id: leadId })
+              .eq("rentcast_id", row.rentcast_id);
+          } catch {
+            /* listing table optional */
+          }
           patchListings([{ ...row, imported_lead_id: leadId }]);
         }
       }
