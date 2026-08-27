@@ -83,13 +83,13 @@ export const PERSONA_GOALS: Record<PersonaRoleId, PersonaGoal[]> = {
       id: "icp_leads",
       label: "Find companies that fit my ICP",
       description: "Target accounts by industry, size and location.",
-      tools: ["/dashboard/scraper", "/dashboard/accounts"],
+      tools: ["/dashboard/prospect-search", "/dashboard/scraper", "/dashboard/accounts"],
     },
     {
       id: "find_poc",
       label: "Find the right point of contact",
       description: "Decision-makers by title at a target account.",
-      tools: ["/dashboard/scraper", "/dashboard/accounts"],
+      tools: ["/dashboard/prospect-search", "/dashboard/scraper", "/dashboard/accounts"],
     },
     {
       id: "poc_contact_info",
@@ -133,7 +133,7 @@ export const PERSONA_GOALS: Record<PersonaRoleId, PersonaGoal[]> = {
       id: "team_sourcing",
       label: "Source leads for the team",
       description: "Prospecting and enrichment for reps.",
-      tools: ["/dashboard/scraper", "/dashboard/tools", "/dashboard/accounts"],
+      tools: ["/dashboard/prospect-search", "/dashboard/scraper", "/dashboard/tools", "/dashboard/accounts"],
     },
     {
       id: "team_outbound",
@@ -147,7 +147,7 @@ export const PERSONA_GOALS: Record<PersonaRoleId, PersonaGoal[]> = {
       id: "founder_sourcing",
       label: "Find leads that fit my ICP",
       description: "Companies, people and local businesses.",
-      tools: ["/dashboard/scraper", "/dashboard/accounts"],
+      tools: ["/dashboard/prospect-search", "/dashboard/scraper", "/dashboard/accounts"],
     },
     {
       id: "founder_contact",
