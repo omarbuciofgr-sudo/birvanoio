@@ -91,6 +91,7 @@ const navSections: NavSection[] = [
     collapsible: true,
     groupIcon: Wand2,
     items: [
+      { name: "Brivano Lens", href: "/dashboard/prospect-search", icon: Search },
       { name: "Brivano Scout", href: "/dashboard/scraper", icon: Globe },
       { name: "Enrichment Tools", href: "/dashboard/tools", icon: Wrench },
       { name: "AI Agents", href: "/dashboard/ai-agents", icon: Sparkles },
