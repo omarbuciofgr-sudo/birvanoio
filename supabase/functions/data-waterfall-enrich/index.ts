@@ -876,7 +876,7 @@ async function enrichWithContactOut(
     if (currentData.full_name || input.company_name) {
       const searchParams: Record<string, string> = {};
       if (currentData.full_name) searchParams.name = currentData.full_name;
-      if (input.company_name || input.domain) searchParams.company = input.company_name || input.domain;
+      if (input.company_name || input.domain) searchParams.company = (input.company_name || input.domain) as string;
 
       const queryString = new URLSearchParams(searchParams).toString();
       const response = await fetchWithRetry(`https://api.contactout.com/v1/people/search?${queryString}`, {
