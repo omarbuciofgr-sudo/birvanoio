@@ -3,10 +3,27 @@
  */
 import type { RentCastListing } from "@/lib/api/rentcastApi";
 
+function parseReasonCodesForNotes(raw: RentCastListing["reason_codes"]): string | null {
+  if (!raw) return null;
+  let codes: string[] = [];
+  if (Array.isArray(raw)) codes = raw;
+  else if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      codes = Array.isArray(parsed) ? parsed : raw.split(",").map((s) => s.trim()).filter(Boolean);
+    } catch {
+      codes = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  return codes.length ? `Signals: ${codes.join(", ")}` : null;
+}
+
 export function buildLeadNotes(row: RentCastListing): string {
   const lines = [
     row.qualification ? `Qualification: ${row.qualification}` : null,
-    row.fsbo_confidence != null ? `Confidence: ${row.fsbo_confidence}%` : null,
+    row.confidence_score != null ? `Confidence: ${row.confidence_score}% (${row.confidence_band || "—"})` : null,
+    row.classification ? `Classification: ${row.classification}` : null,
+    parseReasonCodesForNotes(row.reason_codes),
     row.qualification_reason ? `Reason: ${row.qualification_reason}` : null,
     row.listing_kind ? `Listing type: ${row.listing_kind}` : null,
     row.price != null ? `Price: $${Number(row.price).toLocaleString()}` : null,
@@ -26,7 +43,7 @@ export function buildLeadFromRentCast(row: RentCastListing, clientId: string) {
     state: row.state?.trim() || null,
     zip_code: row.zip_code?.trim() || null,
     source_url: row.listing_url?.trim() || null,
-    lead_score: row.fsbo_confidence ?? null,
+    lead_score: row.confidence_score ?? row.fsbo_confidence ?? null,
     industry: "Real Estate",
     notes: buildLeadNotes(row),
     status: "new" as const,

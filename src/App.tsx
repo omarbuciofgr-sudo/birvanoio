@@ -20,7 +20,7 @@ import AdminImport from "./pages/AdminImport";
 import Contacts from "./pages/Contacts";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
-import BrivanoScout from "./pages/BrivanoScout";
+import WebScraper from "./pages/WebScraper";
 import SchemaTemplates from "./pages/admin/SchemaTemplates";
 import ClientOrganizations from "./pages/admin/ClientOrganizations";
 import ScrapeJobs from "./pages/admin/ScrapeJobs";
@@ -84,8 +84,8 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
               <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
               <Route path="/dashboard/contacts" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
-              <Route path="/dashboard/scraper" element={<ProtectedRoute><BrivanoScout /></ProtectedRoute>} />
-              <Route path="/dashboard/rentcast" element={<Navigate to="/dashboard/scraper?tab=rentcast" replace />} />
+              <Route path="/dashboard/scraper" element={<ProtectedRoute><WebScraper /></ProtectedRoute>} />
+              <Route path="/dashboard/rentcast" element={<Navigate to="/dashboard/scraper?tab=real-estate" replace />} />
               <Route path="/admin/schema-templates" element={<ProtectedRoute><SchemaTemplates /></ProtectedRoute>} />
               <Route path="/admin/clients" element={<ProtectedRoute><ClientOrganizations /></ProtectedRoute>} />
               <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />

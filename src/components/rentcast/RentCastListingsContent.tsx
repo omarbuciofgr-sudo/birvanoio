@@ -52,6 +52,7 @@ import {
 
 type FilterTab = "all" | "likely_fsbo" | "likely_frbo";
 type ListingType = "both" | "sale" | "rental";
+type ConfidenceFilter = "likely" | "high" | "all";
 
 type RentCastListingsContentProps = {
   /** When true, omit standalone page title (used inside Brivano Scout shell). */
@@ -77,12 +78,30 @@ function QualBadge({ q }: { q?: string }) {
   return <Badge variant="secondary">Agent listed</Badge>;
 }
 
-function ConfidenceBadge({ score }: { score?: number | null }) {
+function rowScore(row: RentCastListing): number {
+  return Number(row.confidence_score ?? row.fsbo_confidence ?? 0);
+}
+
+function parseReasonCodes(raw: RentCastListing["reason_codes"]): string[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : raw.split(",").map((s) => s.trim()).filter(Boolean);
+    } catch {
+      return raw.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function ConfidenceBadge({ score, band }: { score?: number | null; band?: string | null }) {
   if (score == null) return <span className="text-xs text-muted-foreground">—</span>;
   return (
-    <Badge className={confidenceBadgeClass(score)}>
-      {Math.round(score)}%
-    </Badge>
+    <div className="flex flex-col gap-0.5">
+      <Badge className={confidenceBadgeClass(score)}>{Math.round(score)}%</Badge>
+      {band ? <span className="text-[10px] text-muted-foreground">{band}</span> : null}
+    </div>
   );
 }
 
@@ -104,8 +123,8 @@ export default function RentCastListingsContent({
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("Naperville, IL");
   const [listingType, setListingType] = useState<ListingType>("both");
-  const [limit, setLimit] = useState("25");
-  const [likelyOnly, setLikelyOnly] = useState(true);
+  const [limit, setLimit] = useState("50");
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("likely");
   const [filter, setFilter] = useState<FilterTab>("all");
   const [listings, setListings] = useState<RentCastListing[]>([]);
   const [stats, setStats] = useState<RentCastStats | null>(null);
@@ -121,10 +140,7 @@ export default function RentCastListingsContent({
   }, [listings, filter]);
 
   const likelyInView = useMemo(
-    () =>
-      filtered.filter((r) =>
-        ["likely_fsbo", "likely_frbo"].includes(r.qualification || ""),
-      ),
+    () => filtered.filter((r) => rowScore(r) >= 60),
     [filtered],
   );
 
@@ -179,12 +195,15 @@ export default function RentCastListingsContent({
         toast.error("Scraper backend not reachable. Start it on port 8080 (or set backend URL).");
         return;
       }
+      const minConfidence =
+        confidenceFilter === "high" ? 80 : confidenceFilter === "likely" ? 60 : 0;
       const res = await rentcastApi.search({
         location: loc,
         type: listingType,
-        limit: Math.max(1, Math.min(Number(limit) || 25, 100)),
+        limit: Math.max(1, Math.min(Number(limit) || 50, 200)),
         save: true,
-        likely_only: likelyOnly,
+        likely_only: minConfidence >= 60,
+        min_confidence: minConfidence,
       });
       if (!res.success && !res.listings?.length) {
         toast.error(res.error || "RentCast search failed");
@@ -384,7 +403,7 @@ export default function RentCastListingsContent({
   return (
     <>
       <div className="space-y-5">
-        {!embedded && (
+        {!embedded ? (
           <div>
             <h1 className="text-xl font-semibold tracking-tight">RentCast FSBO / FRBO</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -392,6 +411,11 @@ export default function RentCastListingsContent({
               BatchData), and import into CRM.
             </p>
           </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            RentCast-powered FSBO/FRBO search with confidence scoring. Apartments and institutional
+            operators are filtered out of FRBO results.
+          </p>
         )}
 
         <div className="flex flex-col gap-3 rounded-lg border border-border/40 bg-muted/20 p-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -421,10 +445,22 @@ export default function RentCastListingsContent({
             <label className="text-[11px] text-muted-foreground">Limit</label>
             <Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" />
           </div>
-          <label className="flex items-center gap-2 text-xs pb-2 cursor-pointer">
-            <Checkbox checked={likelyOnly} onCheckedChange={(v) => setLikelyOnly(v === true)} />
-            Likely FSBO/FRBO only
-          </label>
+          <div className="w-full space-y-1 sm:w-40">
+            <label className="text-[11px] text-muted-foreground">Confidence</label>
+            <Select
+              value={confidenceFilter}
+              onValueChange={(v) => setConfidenceFilter(v as ConfidenceFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="likely">Likely (60%+)</SelectItem>
+                <SelectItem value="high">High (80%+)</SelectItem>
+                <SelectItem value="all">All scored</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={onSearch} disabled={!!busy} className="gap-1.5">
               {busy === "search" ? (
@@ -486,7 +522,8 @@ export default function RentCastListingsContent({
             <Badge variant="outline">Rental {stats.rental ?? 0}</Badge>
             <Badge variant="outline">Likely FSBO {stats.likely_fsbo ?? 0}</Badge>
             <Badge variant="outline">Likely FRBO {stats.likely_frbo ?? 0}</Badge>
-            <Badge variant="outline">Agent {stats.agent_listed ?? 0}</Badge>
+            <Badge variant="outline">High {stats.high_confidence ?? 0}</Badge>
+            <Badge variant="outline">Likely band {stats.likely_band ?? 0}</Badge>
           </div>
         )}
 
@@ -569,7 +606,7 @@ export default function RentCastListingsContent({
                         <QualBadge q={row.qualification} />
                       </TableCell>
                       <TableCell>
-                        <ConfidenceBadge score={row.fsbo_confidence} />
+                        <ConfidenceBadge score={rowScore(row)} band={row.confidence_band} />
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">{money(row.price)}</TableCell>
                       <TableCell className="text-xs">
@@ -635,7 +672,10 @@ export default function RentCastListingsContent({
               <div className="mt-4 space-y-4 text-sm">
                 <div className="flex flex-wrap gap-2">
                   <QualBadge q={detailRow.qualification} />
-                  <ConfidenceBadge score={detailRow.fsbo_confidence} />
+                  <ConfidenceBadge score={rowScore(detailRow)} band={detailRow.confidence_band} />
+                  {detailRow.classification && (
+                    <Badge variant="outline">{detailRow.classification}</Badge>
+                  )}
                   {detailRow.listing_kind && (
                     <Badge variant="outline" className="capitalize">
                       {detailRow.listing_kind}
@@ -659,7 +699,14 @@ export default function RentCastListingsContent({
                 <Separator />
 
                 <div>
-                  <div className="text-xs font-medium mb-1">Qualification reason</div>
+                  <div className="text-xs font-medium mb-1">Why Brivano scored this lead</div>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {parseReasonCodes(detailRow.reason_codes).map((code) => (
+                      <Badge key={code} variant="secondary" className="text-[10px]">
+                        {code}
+                      </Badge>
+                    ))}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {detailRow.qualification_reason || "—"}
                   </p>
@@ -676,6 +723,9 @@ export default function RentCastListingsContent({
                   <div className="text-xs font-medium mb-2">Owner & contact</div>
                   <div className="space-y-1 text-xs">
                     <div>Name: {detailRow.owner_name || "—"}</div>
+                    {detailRow.owner_portfolio_count != null && (
+                      <div>Owner active rentals (batch): {detailRow.owner_portfolio_count}</div>
+                    )}
                     <div>Phone: {detailRow.owner_phone || "—"}</div>
                     <div>Email: {detailRow.owner_email || "—"}</div>
                     <div>Mailing: {detailRow.owner_mailing_address || "—"}</div>

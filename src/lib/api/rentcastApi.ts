@@ -34,6 +34,12 @@ export type RentCastListing = {
   owner_email?: string | null;
   skip_trace_confidence?: number | null;
   fsbo_confidence?: number | null;
+  classification?: string | null;
+  confidence_score?: number | null;
+  confidence_band?: string | null;
+  reason_codes?: string[] | string | null;
+  owner_normalized_name?: string | null;
+  owner_portfolio_count?: number | null;
   enriched_at?: string | null;
   listing_text_signals?: {
     text_mentions_owner_listed?: boolean;
@@ -52,6 +58,8 @@ export type RentCastStats = {
   likely_frbo?: number;
   agent_listed?: number;
   likely_owner_listed?: number;
+  high_confidence?: number;
+  likely_band?: number;
 };
 
 export type RentCastEnrichSummary = {
@@ -96,6 +104,7 @@ export const rentcastApi = {
     limit?: number;
     save?: boolean;
     likely_only?: boolean;
+    min_confidence?: number;
     fetch_owners_for_likely?: boolean;
   }) {
     const base = scraperBackendApi.getBaseUrl();
@@ -111,6 +120,8 @@ export const rentcastApi = {
       stats?: RentCastStats;
       saved?: number;
       search_location?: string;
+      pipeline?: Record<string, unknown>;
+      min_confidence?: number;
     }>;
   },
 
