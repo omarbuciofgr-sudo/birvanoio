@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import {
+  Download,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -37,6 +38,7 @@ import {
 import { toast } from "sonner";
 import {
   rentcastApi,
+  type RentCastDiagnostic,
   type RentCastListing,
   type RentCastStats,
 } from "@/lib/api/rentcastApi";
@@ -49,6 +51,11 @@ import {
   listingExternalLinks,
   normalizeAddressKey,
 } from "@/lib/rentcast/mapRentCastToLead";
+import { downloadDiagnosticPdf } from "@/lib/rentcast/downloadDiagnosticPdf";
+import {
+  CALIBRATION_LABELS,
+  downloadCalibrationCsv,
+} from "@/lib/rentcast/downloadCalibrationCsv";
 
 type FilterTab = "all" | "likely_fsbo" | "likely_frbo";
 type ListingType = "both" | "sale" | "rental";
@@ -105,6 +112,76 @@ function ConfidenceBadge({ score, band }: { score?: number | null; band?: string
   );
 }
 
+function ownerMatchLabel(status?: string | null) {
+  switch ((status || "").toLowerCase()) {
+    case "verified":
+      return "Verified";
+    case "probable":
+      return "Probable";
+    case "missing":
+      return "Missing";
+    default:
+      return status || "—";
+  }
+}
+
+function contactStatusLabel(status?: string | null) {
+  switch ((status || "").toLowerCase()) {
+    case "phone_email":
+      return "Phone + Email";
+    case "phone_only":
+      return "Phone only";
+    case "email_only":
+      return "Email only";
+    case "mailing_only":
+      return "Mailing only";
+    case "none":
+      return "Needs enrichment";
+    default:
+      return status || "—";
+  }
+}
+
+function verificationLabel(status?: string | null) {
+  switch ((status || "").toLowerCase()) {
+    case "confirmed_frbo":
+      return "Verified FRBO";
+    case "confirmed_fsbo":
+      return "Verified FSBO";
+    case "match_owner_unknown":
+      return "Match · owner unknown";
+    case "agent_listed":
+      return "Agent listed (ext)";
+    case "no_match":
+      return "No external match";
+    case "not_checked":
+      return "Not checked";
+    default:
+      return status ? `Verify: ${status}` : "Not checked";
+  }
+}
+
+function OwnerStatusBadges({ row }: { row: RentCastListing }) {
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      <Badge variant="outline" className="text-[10px] font-normal">
+        Owner: {ownerMatchLabel(row.owner_match_status)}
+      </Badge>
+      <Badge variant="outline" className="text-[10px] font-normal">
+        {contactStatusLabel(row.contact_status)}
+      </Badge>
+      {row.needs_ownership_fallback ? (
+        <Badge variant="outline" className="text-[10px] font-normal">
+          Ownership fallback
+        </Badge>
+      ) : null}
+      <Badge variant="outline" className="text-[10px] font-normal">
+        {verificationLabel(row.external_verification_status)}
+      </Badge>
+    </div>
+  );
+}
+
 function mergeListings(
   current: RentCastListing[],
   updates: RentCastListing[],
@@ -125,13 +202,22 @@ export default function RentCastListingsContent({
   const [listingType, setListingType] = useState<ListingType>("both");
   const [limit, setLimit] = useState("50");
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("likely");
+  const [diagnosticMode, setDiagnosticMode] = useState(false);
+  const [diagnostic, setDiagnostic] = useState<RentCastDiagnostic | null>(null);
+  const [poolStats, setPoolStats] = useState<RentCastStats | null>(null);
+  const [maxFetch, setMaxFetch] = useState<number | null>(null);
+  const [maxScan, setMaxScan] = useState<string>("500");
+  // Production: hide verify / export / diagnostic UI (handlers kept below)
+  const showOpsUi = false;
+  const [marketTotal, setMarketTotal] = useState<number | null>(null);
+  const [pagesFetched, setPagesFetched] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [listings, setListings] = useState<RentCastListing[]>([]);
   const [stats, setStats] = useState<RentCastStats | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailRow, setDetailRow] = useState<RentCastListing | null>(null);
   const [busy, setBusy] = useState<
-    "search" | "load" | "enrich" | "import" | null
+    "search" | "load" | "enrich" | "verify" | "import" | null
   >(null);
 
   const filtered = useMemo(() => {
@@ -204,19 +290,38 @@ export default function RentCastListingsContent({
         save: true,
         likely_only: minConfidence >= 60,
         min_confidence: minConfidence,
+        diagnostic: diagnosticMode,
+        debug_pipeline: true,
+        max_scan: Number(maxScan) || 500,
       });
       if (!res.success && !res.listings?.length) {
         toast.error(res.error || "RentCast search failed");
         applyResult([], res.stats || null);
+        setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
+        setPoolStats(res.pool_stats || null);
+        setMaxFetch(res.max_fetch ?? null);
+        setMarketTotal(res.rentcast_total_count ?? res.diagnostic?.rentcast_total_count ?? null);
+        setPagesFetched(res.pages_fetched ?? res.diagnostic?.pages_fetched ?? null);
         return;
       }
       applyResult(res.listings, res.stats || null);
+      setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
+      setPoolStats(res.pool_stats || null);
+      setMaxFetch(res.max_fetch ?? null);
+      setMarketTotal(res.rentcast_total_count ?? res.diagnostic?.rentcast_total_count ?? null);
+      setPagesFetched(res.pages_fetched ?? res.diagnostic?.pages_fetched ?? null);
       const st = res.stats;
+      const diag = res.diagnostic;
+      const poolLikely =
+        (res.pool_stats?.likely_frbo ?? 0) + (res.pool_stats?.likely_fsbo ?? 0);
       toast.success(
         `Found ${st?.total ?? res.listings?.length ?? 0} listings` +
           (res.saved != null ? ` · saved ${res.saved}` : "") +
           (st
             ? ` · Likely FRBO ${st.likely_frbo ?? 0} · Likely FSBO ${st.likely_fsbo ?? 0}`
+            : "") +
+          (diag || res.pool_stats
+            ? ` · scanned ${diag?.total_scored ?? res.pool_stats?.total ?? "—"} · max score ${diag?.highest_score ?? "—"} · pool likely ${poolLikely}`
             : ""),
       );
       if (res.error) toast.message(String(res.error));
@@ -265,8 +370,11 @@ export default function RentCastListingsContent({
       }
       const summary = res.summary;
       if (summary) {
+        const skipped = summary.skipped_below_60
+          ? ` · skipped <60: ${summary.skipped_below_60}`
+          : "";
         toast.success(
-          `Enrich done: ${summary.enriched ?? 0} with contact · ${summary.partial ?? 0} partial · ${summary.no_contact ?? 0} no contact · ${summary.failed ?? 0} failed`,
+          `Enrich done: ${summary.enriched ?? 0} with contact · ${summary.partial ?? 0} partial · ${summary.no_contact ?? 0} no contact · ${summary.failed ?? 0} failed${skipped}`,
         );
       } else {
         toast.success(`Processed ${res.total ?? res.results?.length ?? 0} rows`);
@@ -299,6 +407,60 @@ export default function RentCastListingsContent({
       return;
     }
     return runEnrich(ids);
+  };
+
+  const runVerify = async (ids?: string[]) => {
+    setBusy("verify");
+    try {
+      const res = await rentcastApi.verify({
+        location: ids?.length ? undefined : location.trim() || undefined,
+        rentcast_ids: ids?.length ? ids : undefined,
+        limit: ids?.length ? Math.min(ids.length, 50) : Math.min(likelyInView.length || 20, 20),
+        likely_only: !ids?.length,
+        min_score: 60,
+      });
+      if (!res.success) {
+        toast.error(res.error || "Verification failed");
+        return;
+      }
+      const s = res.summary;
+      if (s) {
+        toast.success(
+          `Verify: FRBO ${s.confirmed_frbo ?? 0} · FSBO ${s.confirmed_fsbo ?? 0} · unknown ${s.match_owner_unknown ?? 0} · agent ${s.agent_listed ?? 0} · no match ${s.no_match ?? 0} · not checked ${s.not_checked ?? 0}` +
+            (s.configured === false ? " (provider not configured)" : ""),
+        );
+      } else {
+        toast.success(`Verified ${res.total ?? res.results?.length ?? 0} rows`);
+      }
+      if (res.listings?.length) {
+        patchListings(res.listings);
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Verification failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onVerifySelected = () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) {
+      toast.error("Select at least one row to verify");
+      return;
+    }
+    return runVerify(ids);
+  };
+
+  const onVerifyTopLikely = () => {
+    const ids = likelyInView
+      .slice(0, 20)
+      .map((r) => r.rentcast_id)
+      .filter(Boolean) as string[];
+    if (!ids.length) {
+      toast.error("No likely FSBO/FRBO rows in the current view");
+      return;
+    }
+    return runVerify(ids);
   };
 
   const importRowsToCrm = async (rows: RentCastListing[]) => {
@@ -400,6 +562,30 @@ export default function RentCastListingsContent({
   const selectedCount = selectedIds.size;
   const likelyCount = likelyInView.length;
 
+  const onExportLabelsCsv = () => {
+    try {
+      const selected = filtered.filter(
+        (r) => r.rentcast_id && selectedIds.has(r.rentcast_id),
+      );
+      // Prefer selection → Likely in view → all visible (for All scored calibration mix)
+      const rows =
+        selected.length > 0
+          ? selected
+          : likelyInView.length > 0
+            ? likelyInView
+            : filtered;
+      const n = downloadCalibrationCsv({
+        rows,
+        location: location.trim() || "rentcast",
+      });
+      toast.success(
+        `Exported ${n} row(s). Fill human_label: ${CALIBRATION_LABELS.join(" | ")}`,
+      );
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "CSV export failed");
+    }
+  };
+
   return (
     <>
       <div className="space-y-5">
@@ -413,13 +599,14 @@ export default function RentCastListingsContent({
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            RentCast-powered FSBO/FRBO search with confidence scoring. Apartments and institutional
-            operators are filtered out of FRBO results.
+            RentCast-powered FSBO/FRBO search with confidence scoring. Apartments use a
+            secondary classifier (building concentration + owner unlock); institutional
+            operators are capped out of Likely.
           </p>
         )}
 
-        <div className="flex flex-col gap-3 rounded-lg border border-border/40 bg-muted/20 p-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="min-w-[200px] flex-1 space-y-1">
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border/40 bg-muted/20 p-3">
+          <div className="w-full space-y-1 sm:w-52">
             <label className="text-[11px] text-muted-foreground">City, State</label>
             <Input
               value={location}
@@ -461,58 +648,123 @@ export default function RentCastListingsContent({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={onSearch} disabled={!!busy} className="gap-1.5">
-              {busy === "search" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              Search RentCast
-            </Button>
-            <Button variant="outline" onClick={onLoadSaved} disabled={!!busy} className="gap-1.5">
-              {busy === "load" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Load saved
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={onEnrichSelected}
-              disabled={!!busy || selectedCount === 0}
-              className="gap-1.5"
-            >
-              {busy === "enrich" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              Enrich selected ({selectedCount})
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={onEnrichAllLikely}
-              disabled={!!busy || likelyCount === 0}
-              className="gap-1.5"
-            >
-              Enrich all likely ({likelyCount})
-            </Button>
+          <div className="w-full space-y-1 sm:w-36">
+            <label className="text-[11px] text-muted-foreground">Scan depth</label>
+            <Select value={maxScan} onValueChange={setMaxScan}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="500">500</SelectItem>
+                <SelectItem value="1000">1000</SelectItem>
+                <SelectItem value="1500">1500</SelectItem>
+                <SelectItem value="2000">2000</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {showOpsUi && (
+            <label className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={diagnosticMode}
+                onCheckedChange={(v) => setDiagnosticMode(v === true)}
+              />
+              Diagnostic
+            </label>
+          )}
+          <Button onClick={onSearch} disabled={!!busy} className="gap-1.5">
+            {busy === "search" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            Search RentCast
+          </Button>
+          <Button variant="outline" onClick={onLoadSaved} disabled={!!busy} className="gap-1.5">
+            {busy === "load" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Load saved
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={onEnrichSelected}
+            disabled={!!busy || selectedCount === 0}
+            className="gap-1.5"
+          >
+            {busy === "enrich" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Enrich selected ({selectedCount})
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={onEnrichAllLikely}
+            disabled={!!busy || likelyCount === 0}
+            className="gap-1.5"
+          >
+            Enrich all likely ({likelyCount})
+          </Button>
+          {showOpsUi && (
+            <>
+              <Button
+                variant="secondary"
+                onClick={onVerifySelected}
+                disabled={!!busy || selectedCount === 0}
+                className="gap-1.5"
+              >
+                {busy === "verify" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                Verify selected ({selectedCount})
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={onVerifyTopLikely}
+                disabled={!!busy || likelyCount === 0}
+                className="gap-1.5"
+              >
+                Verify top likely ({Math.min(likelyCount, 20)})
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            onClick={onImportSelected}
+            disabled={!!busy || selectedCount === 0}
+            className="gap-1.5"
+          >
+            {busy === "import" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="h-4 w-4" />
+            )}
+            Add to CRM ({selectedCount})
+          </Button>
+          {showOpsUi && (
             <Button
               variant="outline"
-              onClick={onImportSelected}
-              disabled={!!busy || selectedCount === 0}
+              onClick={onExportLabelsCsv}
+              disabled={!!busy || filtered.length === 0}
               className="gap-1.5"
+              title={`Phase 6 labels: ${CALIBRATION_LABELS.join(" | ")}`}
             >
-              {busy === "import" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <UserPlus className="h-4 w-4" />
-              )}
-              Add to CRM ({selectedCount})
+              <Download className="h-4 w-4" />
+              Export labels CSV
+              {selectedCount > 0
+                ? ` (${selectedCount})`
+                : likelyCount > 0
+                  ? ` (${likelyCount} likely)`
+                  : filtered.length > 0
+                    ? ` (${filtered.length})`
+                    : ""}
             </Button>
-          </div>
+          )}
         </div>
 
         {stats && (
@@ -524,6 +776,150 @@ export default function RentCastListingsContent({
             <Badge variant="outline">Likely FRBO {stats.likely_frbo ?? 0}</Badge>
             <Badge variant="outline">High {stats.high_confidence ?? 0}</Badge>
             <Badge variant="outline">Likely band {stats.likely_band ?? 0}</Badge>
+            {maxFetch != null && <Badge variant="outline">Scan pool {maxFetch}</Badge>}
+            {marketTotal != null && (
+              <Badge variant="outline">Market total {marketTotal.toLocaleString()}</Badge>
+            )}
+            {pagesFetched != null && pagesFetched > 0 && (
+              <Badge variant="outline">Pages {pagesFetched}</Badge>
+            )}
+            {poolStats && (
+              <Badge variant="outline">
+                Pool likely {(poolStats.likely_frbo ?? 0) + (poolStats.likely_fsbo ?? 0)}
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {showOpsUi && diagnostic && (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-medium text-sm">Diagnostic report</div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5"
+                onClick={() => {
+                  try {
+                    downloadDiagnosticPdf({
+                      location: location.trim(),
+                      listingType,
+                      confidenceFilter,
+                      limit,
+                      maxFetch,
+                      maxScan: Number(maxScan) || maxFetch,
+                      marketTotal,
+                      pagesFetched,
+                      stats,
+                      poolStats,
+                      diagnostic,
+                      calibrationRows: likelyInView.length > 0 ? likelyInView : filtered,
+                    });
+                    toast.success("Diagnostic PDF downloaded");
+                  } catch (e: unknown) {
+                    toast.error(e instanceof Error ? e.message : "PDF download failed");
+                  }
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download PDF
+              </Button>
+            </div>
+            <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+              <div>Retrieved: {diagnostic.total_rentcast_retrieved ?? "—"}</div>
+              <div>Market total: {diagnostic.rentcast_total_count ?? marketTotal ?? "—"}</div>
+              <div>Pages fetched: {diagnostic.pages_fetched ?? pagesFetched ?? "—"}</div>
+              <div>Scan depth: {diagnostic.max_scan ?? maxScan ?? "—"}</div>
+              <div>Active: {diagnostic.total_active ?? "—"}</div>
+              <div>Scored: {diagnostic.total_scored ?? "—"}</div>
+              <div>Apartments seen: {diagnostic.apartments_seen ?? "—"}</div>
+              <div>Apartments scored: {diagnostic.apartments_scored ?? "—"}</div>
+              <div>
+                Apt complexes excluded:{" "}
+                {diagnostic.apartments_excluded_as_complex ?? diagnostic.apartments_excluded ?? "—"}
+              </div>
+              <div>No MLS #: {diagnostic.no_mls_number ?? "—"}</div>
+              <div>No MLS name: {diagnostic.no_mls_name ?? "—"}</div>
+              <div>No meaningful agent: {diagnostic.no_meaningful_agent ?? "—"}</div>
+              <div>No meaningful office: {diagnostic.no_meaningful_office ?? "—"}</div>
+              <div>
+                Owner lookup: {diagnostic.owner_lookup?.success ?? 0} ok /{" "}
+                {diagnostic.owner_lookup?.failed ?? 0} fail /{" "}
+                {diagnostic.owner_lookup?.attempted ?? 0} attempted
+                {diagnostic.owner_lookup?.capped ? " (capped)" : ""}
+              </div>
+              <div>With owner name: {diagnostic.rows_with_owner_name ?? "—"}</div>
+              <div>Individual owners: {diagnostic.individual_owners ?? "—"}</div>
+              <div>Org owners: {diagnostic.organization_owners ?? "—"}</div>
+              <div>OwnerOcc=false: {diagnostic.owner_occupied_false ?? "—"}</div>
+              <div>PM/institutional hits: {diagnostic.pm_institutional_keyword_hits ?? "—"}</div>
+              <div>Capped no owner signal: {diagnostic.capped_no_owner_signal ?? "—"}</div>
+              <div>Owner match missing: {diagnostic.owner_match_missing ?? "—"}</div>
+              <div>Owner match verified: {diagnostic.owner_match_verified ?? "—"}</div>
+              <div>Score 20+: {diagnostic.score_20_plus ?? "—"}</div>
+              <div>Score 40+: {diagnostic.score_40_plus ?? "—"}</div>
+              <div>Score 50+: {diagnostic.score_50_plus ?? "—"}</div>
+              <div>Score 60+: {diagnostic.score_60_plus ?? "—"}</div>
+              <div>Score 70+: {diagnostic.score_70_plus ?? "—"}</div>
+              <div>Highest: {diagnostic.highest_score ?? "—"}</div>
+              <div>Average: {diagnostic.average_score ?? "—"}</div>
+            </div>
+            {diagnostic.verification && (
+              <div className="text-muted-foreground">
+                External verify — FRBO {diagnostic.verification.confirmed_frbo ?? 0}, FSBO{" "}
+                {diagnostic.verification.confirmed_fsbo ?? 0}, unknown{" "}
+                {diagnostic.verification.match_owner_unknown ?? 0}, agent{" "}
+                {diagnostic.verification.agent_listed ?? 0}, no match{" "}
+                {diagnostic.verification.no_match ?? 0}, not checked{" "}
+                {diagnostic.verification.not_checked ?? 0}
+              </div>
+            )}
+            {diagnostic.building_concentration_buckets && (
+              <div className="text-muted-foreground">
+                Building concentration — 1: {diagnostic.building_concentration_buckets["1"] ?? 0}, 2–3:{" "}
+                {diagnostic.building_concentration_buckets["2_3"] ?? 0}, 4–5:{" "}
+                {diagnostic.building_concentration_buckets["4_5"] ?? 0}, 6–9:{" "}
+                {diagnostic.building_concentration_buckets["6_9"] ?? 0}, 10+:{" "}
+                {diagnostic.building_concentration_buckets["10_plus"] ?? 0}
+              </div>
+            )}
+            {diagnostic.property_types && (
+              <div className="text-muted-foreground">
+                Types — SF {diagnostic.property_types.single_family ?? 0}, Condo{" "}
+                {diagnostic.property_types.condo ?? 0}, TH {diagnostic.property_types.townhouse ?? 0}, MF{" "}
+                {diagnostic.property_types.multi_family ?? 0}, Apt{" "}
+                {diagnostic.property_types.apartment ?? 0}
+              </div>
+            )}
+            {!!diagnostic.top_properties?.length && (
+              <div className="space-y-2">
+                <div className="font-medium">Top {diagnostic.top_properties.length} scores</div>
+                <div className="max-h-64 space-y-2 overflow-y-auto">
+                  {diagnostic.top_properties.map((p, idx) => (
+                    <div key={`${p.address}-${idx}`} className="rounded border bg-background p-2">
+                      <div className="font-medium">
+                        {p.address || "—"} — Score {p.score ?? 0}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {p.listing_kind} · {p.property_type || "—"} · {p.qualification || "—"} ·{" "}
+                        {p.owner_name || "Not yet identified"} · Match: {p.owner_match_status || "—"}
+                      </div>
+                      {!!p.score_breakdown?.length && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {p.score_breakdown.map((part, i) => (
+                            <Badge key={`${part.code}-${i}`} variant="outline" className="font-mono">
+                              {(part.points ?? 0) >= 0 ? "+" : ""}
+                              {part.points ?? 0} {part.code}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -625,11 +1021,12 @@ export default function RentCastListingsContent({
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs max-w-[180px]">
-                        <div className="truncate">{row.owner_name || "—"}</div>
+                      <TableCell className="text-xs max-w-[200px]">
+                        <div className="truncate">{row.owner_name || "Not yet identified"}</div>
                         <div className="text-muted-foreground truncate">
                           {row.owner_phone || row.owner_email || row.owner_mailing_address || ""}
                         </div>
+                        <OwnerStatusBadges row={row} />
                       </TableCell>
                       <TableCell className="text-xs">
                         {row.imported_lead_id ? (
@@ -681,6 +1078,13 @@ export default function RentCastListingsContent({
                       {detailRow.listing_kind}
                     </Badge>
                   )}
+                  {detailRow.frbo_score != null && (
+                    <Badge variant="outline">FRBO {detailRow.frbo_score}</Badge>
+                  )}
+                  {detailRow.fsbo_score != null && (
+                    <Badge variant="outline">FSBO {detailRow.fsbo_score}</Badge>
+                  )}
+                  <OwnerStatusBadges row={detailRow} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -722,7 +1126,12 @@ export default function RentCastListingsContent({
                 <div>
                   <div className="text-xs font-medium mb-2">Owner & contact</div>
                   <div className="space-y-1 text-xs">
-                    <div>Name: {detailRow.owner_name || "—"}</div>
+                    <div>Name: {detailRow.owner_name || "Not yet identified"}</div>
+                    <div>Owner match: {ownerMatchLabel(detailRow.owner_match_status)}</div>
+                    <div>Contact: {contactStatusLabel(detailRow.contact_status)}</div>
+                    <div>
+                      External verify: {verificationLabel(detailRow.external_verification_status)}
+                    </div>
                     {detailRow.owner_portfolio_count != null && (
                       <div>Owner active rentals (batch): {detailRow.owner_portfolio_count}</div>
                     )}

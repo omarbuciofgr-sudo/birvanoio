@@ -22,6 +22,10 @@ export function buildLeadNotes(row: RentCastListing): string {
   const lines = [
     row.qualification ? `Qualification: ${row.qualification}` : null,
     row.confidence_score != null ? `Confidence: ${row.confidence_score}% (${row.confidence_band || "—"})` : null,
+    row.frbo_score != null ? `FRBO score: ${row.frbo_score}` : null,
+    row.fsbo_score != null ? `FSBO score: ${row.fsbo_score}` : null,
+    row.owner_match_status ? `Owner match: ${row.owner_match_status}` : null,
+    row.contact_status ? `Contact status: ${row.contact_status}` : null,
     row.classification ? `Classification: ${row.classification}` : null,
     parseReasonCodesForNotes(row.reason_codes),
     row.qualification_reason ? `Reason: ${row.qualification_reason}` : null,
