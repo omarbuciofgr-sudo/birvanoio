@@ -23,6 +23,12 @@ export type RentCastListing = {
   status?: string | null;
   listed_date?: string | null;
   days_on_market?: number | null;
+  last_seen_active?: string | null;
+  removed_date?: string | null;
+  /** Phase C: on_market | off_market */
+  market_status?: string | null;
+  /** Phase C: fresh | aging | stale_risk (Active only) */
+  freshness?: string | null;
   listing_url?: string | null;
   mls_number?: string | null;
   mls_name?: string | null;
@@ -64,10 +70,15 @@ export type RentCastStats = {
   rental?: number;
   likely_fsbo?: number;
   likely_frbo?: number;
+  fsbo_candidate?: number;
+  frbo_candidate?: number;
   agent_listed?: number;
   likely_owner_listed?: number;
+  candidate_owner_listed?: number;
+  qualified_60_plus?: number;
   high_confidence?: number;
   likely_band?: number;
+  candidate_band?: number;
 };
 
 export type RentCastScorePart = { code?: string; points?: number };
@@ -85,6 +96,11 @@ export type RentCastDiagnostic = {
   pages_fetched?: number;
   max_scan?: number;
   scan_exhausted?: boolean;
+  /** Phase A: sale | rental | both */
+  query_type?: string;
+  /** Phase A: RentCast paths actually called */
+  endpoints_called?: string[];
+  listing_kinds_in_results?: string[];
   verification?: {
     confirmed_frbo?: number;
     confirmed_fsbo?: number;
@@ -144,10 +160,25 @@ export type RentCastDiagnostic = {
   }>;
 };
 
+/** Phase F: owner-lookup budget usage for a search */
+export type RentCastOwnerLookupStats = {
+  attempted?: number;
+  success?: number;
+  failed?: number;
+  skipped_excluded?: number;
+  capped?: boolean;
+  by_property_id?: number;
+  by_address?: number;
+  max_lookups?: number | null;
+};
+
 export type RentCastEnrichSummary = {
   requested?: number;
   eligible?: number;
   skipped_below_60?: number;
+  /** Phase F */
+  max_enrich?: number;
+  skipped_budget_cap?: number;
   enriched?: number;
   partial?: number;
   no_contact?: number;
@@ -160,12 +191,15 @@ export type RentCastVerifySummary = {
   eligible?: number;
   skipped_below_60?: number;
   configured?: boolean;
+  batch_cap?: number;
   confirmed_frbo?: number;
   confirmed_fsbo?: number;
   match_owner_unknown?: number;
   agent_listed?: number;
+  conflicting?: number;
   no_match?: number;
   not_checked?: number;
+  market_status_conflict?: number;
 };
 
 export type RentCastEnrichResult = {
@@ -193,7 +227,16 @@ export const rentcastApi = {
   async health() {
     const base = scraperBackendApi.getBaseUrl();
     const res = await fetch(`${base}/api/rentcast/health`, { cache: "no-store" });
-    return parseJson(res);
+    return parseJson(res) as Promise<{
+      success?: boolean;
+      rentcast_configured?: boolean;
+      /** Phase E: true when FIRECRAWL_API_KEY is set (boolean only, never the key) */
+      marketplace_verify_configured?: boolean;
+      verify_url?: string;
+      search_url?: string;
+      leads_url?: string;
+      enrich_url?: string;
+    }>;
   },
 
   async search(body: {
@@ -208,6 +251,10 @@ export const rentcastApi = {
     debug_pipeline?: boolean;
     /** Phase 3: 500 | 1000 | 1500 | 2000 */
     max_scan?: number;
+    /** Phase C: active | inactive | all */
+    market_status?: "active" | "inactive" | "all";
+    /** Phase F: override the owner-lookup budget for this search */
+    max_owner_lookups?: number;
   }) {
     const base = scraperBackendApi.getBaseUrl();
     const res = await fetch(`${base}/api/rentcast/search`, {
@@ -231,15 +278,27 @@ export const rentcastApi = {
       pages_fetched?: number;
       scan_exhausted?: boolean;
       min_confidence?: number;
+      query_type?: string;
+      endpoints_called?: string[];
+      listing_kinds_in_results?: string[];
+      owner_lookup?: RentCastOwnerLookupStats | null;
+      max_owner_lookups?: number;
     }>;
   },
 
-  async leads(params?: { location?: string; qualification?: string; limit?: number }) {
+  async leads(params?: {
+    location?: string;
+    qualification?: string;
+    limit?: number;
+    /** Phase A: sale | rental | both — filters saved rows by listing_kind */
+    type?: "sale" | "rental" | "both";
+  }) {
     const base = scraperBackendApi.getBaseUrl();
     const q = new URLSearchParams();
     if (params?.location) q.set("location", params.location);
     if (params?.qualification) q.set("qualification", params.qualification);
     if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.type) q.set("type", params.type);
     const qs = q.toString();
     const res = await fetch(`${base}/api/rentcast/leads${qs ? `?${qs}` : ""}`, { cache: "no-store" });
     return parseJson(res) as Promise<{
@@ -248,6 +307,10 @@ export const rentcastApi = {
       listings?: RentCastListing[];
       stats?: RentCastStats;
       total?: number;
+      query_type?: string;
+      endpoints_called?: string[];
+      listing_kinds_in_results?: string[];
+      source?: string;
     }>;
   },
 
@@ -268,6 +331,8 @@ export const rentcastApi = {
     limit?: number;
     rentcast_ids?: string[];
     likely_only?: boolean;
+    /** Phase F: cap how many rows are skip-traced in this batch */
+    max_enrich?: number;
   }) {
     const base = scraperBackendApi.getBaseUrl();
     const res = await fetch(`${base}/api/rentcast/enrich`, {

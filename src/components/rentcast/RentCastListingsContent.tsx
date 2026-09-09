@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,9 +57,10 @@ import {
   downloadCalibrationCsv,
 } from "@/lib/rentcast/downloadCalibrationCsv";
 
-type FilterTab = "all" | "likely_fsbo" | "likely_frbo";
+type FilterTab = "all" | "likely_fsbo" | "likely_frbo" | "fsbo_candidate" | "frbo_candidate";
 type ListingType = "both" | "sale" | "rental";
-type ConfidenceFilter = "likely" | "high" | "all";
+type ConfidenceFilter = "qualified" | "likely" | "high" | "all";
+type MarketStatusFilter = "active" | "inactive" | "all";
 
 type RentCastListingsContentProps = {
   /** When true, omit standalone page title (used inside Brivano Scout shell). */
@@ -75,12 +76,54 @@ function money(n: number | null | undefined) {
   }).format(Number(n));
 }
 
-function QualBadge({ q }: { q?: string }) {
+function MarketStatusBadge({ status }: { status?: string | null }) {
+  const s = (status || "").toLowerCase();
+  if (s === "off_market") {
+    return (
+      <Badge variant="outline" className="border-slate-500 text-slate-300">
+        OFF MARKET
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-emerald-700/80 hover:bg-emerald-700/80 text-[10px]">
+      ON MARKET
+    </Badge>
+  );
+}
+
+function FreshnessBadge({ freshness }: { freshness?: string | null }) {
+  const f = (freshness || "").toLowerCase();
+  if (!f) return null;
+  if (f === "fresh") {
+    return <span className="text-[10px] text-emerald-500">Fresh</span>;
+  }
+  if (f === "aging") {
+    return <span className="text-[10px] text-amber-500">Aging</span>;
+  }
+  if (f === "stale_risk") {
+    return <span className="text-[10px] text-rose-400">Stale Risk</span>;
+  }
+  return <span className="text-[10px] text-muted-foreground">{freshness}</span>;
+}
+
+function QualBadge({ q, band }: { q?: string; band?: string | null }) {
   if (q === "likely_fsbo") {
-    return <Badge className="bg-emerald-600 hover:bg-emerald-600">Likely FSBO</Badge>;
+    const label = band === "High" ? "High Confidence FSBO" : "Likely FSBO";
+    return <Badge className="bg-emerald-600 hover:bg-emerald-600">{label}</Badge>;
   }
   if (q === "likely_frbo") {
-    return <Badge className="bg-sky-600 hover:bg-sky-600">Likely FRBO</Badge>;
+    const label = band === "High" ? "High Confidence FRBO" : "Likely FRBO";
+    return <Badge className="bg-sky-600 hover:bg-sky-600">{label}</Badge>;
+  }
+  if (q === "fsbo_candidate") {
+    return <Badge className="bg-amber-600 hover:bg-amber-600">FSBO Candidate</Badge>;
+  }
+  if (q === "frbo_candidate") {
+    return <Badge className="bg-amber-600 hover:bg-amber-600">FRBO Candidate</Badge>;
+  }
+  if (q === "possible_owner_listed") {
+    return <Badge variant="secondary">Possible</Badge>;
   }
   return <Badge variant="secondary">Agent listed</Badge>;
 }
@@ -152,6 +195,8 @@ function verificationLabel(status?: string | null) {
       return "Match · owner unknown";
     case "agent_listed":
       return "Agent listed (ext)";
+    case "conflicting":
+      return "Conflicting";
     case "no_match":
       return "No external match";
     case "not_checked":
@@ -159,6 +204,27 @@ function verificationLabel(status?: string | null) {
     default:
       return status ? `Verify: ${status}` : "Not checked";
   }
+}
+
+function bestEvidenceUrl(row: RentCastListing): string | null {
+  const detail = row.external_verification_detail;
+  if (!detail || typeof detail !== "object") return null;
+  const direct = (detail as { best_direct_url?: string }).best_direct_url;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const evidence = (detail as { evidence?: Array<{ url?: string }> }).evidence;
+  if (Array.isArray(evidence)) {
+    for (const e of evidence) {
+      if (e?.url?.trim()) return e.url.trim();
+    }
+  }
+  return null;
+}
+
+function marketConflictWarning(row: RentCastListing): string | null {
+  const detail = row.external_verification_detail;
+  if (!detail || typeof detail !== "object") return null;
+  const w = (detail as { market_status_conflict?: string | null }).market_status_conflict;
+  return typeof w === "string" && w.trim() ? w.trim() : null;
 }
 
 function OwnerStatusBadges({ row }: { row: RentCastListing }) {
@@ -201,16 +267,20 @@ export default function RentCastListingsContent({
   const [location, setLocation] = useState("Naperville, IL");
   const [listingType, setListingType] = useState<ListingType>("both");
   const [limit, setLimit] = useState("50");
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("likely");
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("qualified");
   const [diagnosticMode, setDiagnosticMode] = useState(false);
   const [diagnostic, setDiagnostic] = useState<RentCastDiagnostic | null>(null);
   const [poolStats, setPoolStats] = useState<RentCastStats | null>(null);
   const [maxFetch, setMaxFetch] = useState<number | null>(null);
   const [maxScan, setMaxScan] = useState<string>("500");
-  // Production: hide verify / export / diagnostic UI (handlers kept below)
+  const [marketStatus, setMarketStatus] = useState<MarketStatusFilter>("active");
+  // Production: Diagnostic / Export stay hidden. Verify is health-gated (Phase E).
   const showOpsUi = false;
+  const [verifyEnabled, setVerifyEnabled] = useState(false);
   const [marketTotal, setMarketTotal] = useState<number | null>(null);
   const [pagesFetched, setPagesFetched] = useState<number | null>(null);
+  const [queryType, setQueryType] = useState<string | null>(null);
+  const [endpointsCalled, setEndpointsCalled] = useState<string[]>([]);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [listings, setListings] = useState<RentCastListing[]>([]);
   const [stats, setStats] = useState<RentCastStats | null>(null);
@@ -219,6 +289,23 @@ export default function RentCastListingsContent({
   const [busy, setBusy] = useState<
     "search" | "load" | "enrich" | "verify" | "import" | null
   >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const h = await rentcastApi.health();
+        if (!cancelled) {
+          setVerifyEnabled(Boolean(h?.marketplace_verify_configured));
+        }
+      } catch {
+        if (!cancelled) setVerifyEnabled(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     if (filter === "all") return listings;
@@ -268,6 +355,21 @@ export default function RentCastListingsContent({
     });
   };
 
+  const applyQueryMeta = (res: {
+    query_type?: string;
+    endpoints_called?: string[];
+    diagnostic?: RentCastDiagnostic | null;
+  }) => {
+    setQueryType(res.query_type || res.diagnostic?.query_type || null);
+    setEndpointsCalled(
+      res.endpoints_called?.length
+        ? res.endpoints_called
+        : res.diagnostic?.endpoints_called?.length
+          ? res.diagnostic.endpoints_called
+          : [],
+    );
+  };
+
   const onSearch = async () => {
     const loc = location.trim();
     if (!loc) {
@@ -282,7 +384,13 @@ export default function RentCastListingsContent({
         return;
       }
       const minConfidence =
-        confidenceFilter === "high" ? 80 : confidenceFilter === "likely" ? 60 : 0;
+        confidenceFilter === "high"
+          ? 90
+          : confidenceFilter === "likely"
+            ? 70
+            : confidenceFilter === "qualified"
+              ? 60
+              : 0;
       const res = await rentcastApi.search({
         location: loc,
         type: listingType,
@@ -293,7 +401,9 @@ export default function RentCastListingsContent({
         diagnostic: diagnosticMode,
         debug_pipeline: true,
         max_scan: Number(maxScan) || 500,
+        market_status: marketStatus,
       });
+      applyQueryMeta(res);
       if (!res.success && !res.listings?.length) {
         toast.error(res.error || "RentCast search failed");
         applyResult([], res.stats || null);
@@ -312,17 +422,31 @@ export default function RentCastListingsContent({
       setPagesFetched(res.pages_fetched ?? res.diagnostic?.pages_fetched ?? null);
       const st = res.stats;
       const diag = res.diagnostic;
-      const poolLikely =
-        (res.pool_stats?.likely_frbo ?? 0) + (res.pool_stats?.likely_fsbo ?? 0);
+      const src =
+        res.endpoints_called?.length
+          ? ` · ${res.query_type || listingType}: ${res.endpoints_called.join(", ")}`
+          : "";
+      const poolQualified =
+        (res.pool_stats?.qualified_60_plus ?? 0) ||
+        (res.pool_stats?.likely_frbo ?? 0) +
+          (res.pool_stats?.likely_fsbo ?? 0) +
+          (res.pool_stats?.frbo_candidate ?? 0) +
+          (res.pool_stats?.fsbo_candidate ?? 0);
+      const ol = res.owner_lookup;
+      const ownerNote = ol?.attempted
+        ? ` · owners ${ol.success ?? 0}/${ol.attempted}${ol.capped ? " (budget cap)" : ""}`
+        : "";
       toast.success(
         `Found ${st?.total ?? res.listings?.length ?? 0} listings` +
           (res.saved != null ? ` · saved ${res.saved}` : "") +
+          ownerNote +
           (st
-            ? ` · Likely FRBO ${st.likely_frbo ?? 0} · Likely FSBO ${st.likely_fsbo ?? 0}`
+            ? ` · Likely FRBO ${st.likely_frbo ?? 0} · Candidate FRBO ${st.frbo_candidate ?? 0} · Likely FSBO ${st.likely_fsbo ?? 0} · Candidate FSBO ${st.fsbo_candidate ?? 0}`
             : "") +
           (diag || res.pool_stats
-            ? ` · scanned ${diag?.total_scored ?? res.pool_stats?.total ?? "—"} · max score ${diag?.highest_score ?? "—"} · pool likely ${poolLikely}`
-            : ""),
+            ? ` · scanned ${diag?.total_scored ?? res.pool_stats?.total ?? "—"} · max score ${diag?.highest_score ?? "—"} · pool 60+ ${poolQualified}`
+            : "") +
+          src,
       );
       if (res.error) toast.message(String(res.error));
     } catch (e: unknown) {
@@ -336,18 +460,28 @@ export default function RentCastListingsContent({
     setBusy("load");
     try {
       const qualification =
-        filter === "likely_fsbo" || filter === "likely_frbo" ? filter : undefined;
+        filter === "likely_fsbo" ||
+        filter === "likely_frbo" ||
+        filter === "fsbo_candidate" ||
+        filter === "frbo_candidate"
+          ? filter
+          : undefined;
       const res = await rentcastApi.leads({
         location: location.trim() || undefined,
         qualification,
+        type: listingType,
         limit: 100,
       });
+      applyQueryMeta(res);
       if (!res.success && !res.listings?.length) {
         toast.error(res.error || "Failed to load saved leads");
         return;
       }
       applyResult(res.listings, res.stats || null);
-      toast.success(`Loaded ${res.listings?.length ?? 0} saved rows`);
+      toast.success(
+        `Loaded ${res.listings?.length ?? 0} saved rows` +
+          (res.query_type ? ` · ${res.query_type}` : ""),
+      );
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Load failed");
     } finally {
@@ -415,7 +549,7 @@ export default function RentCastListingsContent({
       const res = await rentcastApi.verify({
         location: ids?.length ? undefined : location.trim() || undefined,
         rentcast_ids: ids?.length ? ids : undefined,
-        limit: ids?.length ? Math.min(ids.length, 50) : Math.min(likelyInView.length || 20, 20),
+        limit: ids?.length ? Math.min(ids.length, 25) : Math.min(likelyInView.length || 20, 20),
         likely_only: !ids?.length,
         min_score: 60,
       });
@@ -426,7 +560,7 @@ export default function RentCastListingsContent({
       const s = res.summary;
       if (s) {
         toast.success(
-          `Verify: FRBO ${s.confirmed_frbo ?? 0} · FSBO ${s.confirmed_fsbo ?? 0} · unknown ${s.match_owner_unknown ?? 0} · agent ${s.agent_listed ?? 0} · no match ${s.no_match ?? 0} · not checked ${s.not_checked ?? 0}` +
+          `Verify: FRBO ${s.confirmed_frbo ?? 0} · FSBO ${s.confirmed_fsbo ?? 0} · unknown ${s.match_owner_unknown ?? 0} · agent ${s.agent_listed ?? 0} · conflict ${s.conflicting ?? 0} · no match ${s.no_match ?? 0} · not checked ${s.not_checked ?? 0}` +
             (s.configured === false ? " (provider not configured)" : ""),
         );
       } else {
@@ -642,9 +776,26 @@ export default function RentCastListingsContent({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="likely">Likely (60%+)</SelectItem>
-                <SelectItem value="high">High (80%+)</SelectItem>
+                <SelectItem value="qualified">Qualified (60%+)</SelectItem>
+                <SelectItem value="likely">Likely (70%+)</SelectItem>
+                <SelectItem value="high">High (90%+)</SelectItem>
                 <SelectItem value="all">All scored</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full space-y-1 sm:w-36">
+            <label className="text-[11px] text-muted-foreground">Market</label>
+            <Select
+              value={marketStatus}
+              onValueChange={(v) => setMarketStatus(v as MarketStatusFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">On Market</SelectItem>
+                <SelectItem value="inactive">Off Market</SelectItem>
+                <SelectItem value="all">All</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -708,7 +859,7 @@ export default function RentCastListingsContent({
           >
             Enrich all likely ({likelyCount})
           </Button>
-          {showOpsUi && (
+          {verifyEnabled && (
             <>
               <Button
                 variant="secondary"
@@ -769,25 +920,21 @@ export default function RentCastListingsContent({
 
         {stats && (
           <div className="flex flex-wrap gap-2 text-xs">
+            {queryType && (
+              <Badge variant="secondary">Query {queryType}</Badge>
+            )}
+            {/* Source endpoint chip hidden from production UI; still tracked in state/toast */}
             <Badge variant="outline">Total {stats.total ?? 0}</Badge>
             <Badge variant="outline">Sale {stats.sale ?? 0}</Badge>
             <Badge variant="outline">Rental {stats.rental ?? 0}</Badge>
             <Badge variant="outline">Likely FSBO {stats.likely_fsbo ?? 0}</Badge>
             <Badge variant="outline">Likely FRBO {stats.likely_frbo ?? 0}</Badge>
+            <Badge variant="outline">Candidate FSBO {stats.fsbo_candidate ?? 0}</Badge>
+            <Badge variant="outline">Candidate FRBO {stats.frbo_candidate ?? 0}</Badge>
             <Badge variant="outline">High {stats.high_confidence ?? 0}</Badge>
             <Badge variant="outline">Likely band {stats.likely_band ?? 0}</Badge>
-            {maxFetch != null && <Badge variant="outline">Scan pool {maxFetch}</Badge>}
-            {marketTotal != null && (
-              <Badge variant="outline">Market total {marketTotal.toLocaleString()}</Badge>
-            )}
-            {pagesFetched != null && pagesFetched > 0 && (
-              <Badge variant="outline">Pages {pagesFetched}</Badge>
-            )}
-            {poolStats && (
-              <Badge variant="outline">
-                Pool likely {(poolStats.likely_frbo ?? 0) + (poolStats.likely_fsbo ?? 0)}
-              </Badge>
-            )}
+            <Badge variant="outline">Candidate band {stats.candidate_band ?? 0}</Badge>
+            {/* Scan pool / Market total / Pages / Pool 60+ hidden from UI; still in state/backend */}
           </div>
         )}
 
@@ -924,13 +1071,15 @@ export default function RentCastListingsContent({
         )}
 
         <div className="flex flex-wrap gap-2">
-          {(
-            [
-              ["all", "All"],
-              ["likely_fsbo", "Likely FSBO"],
-              ["likely_frbo", "Likely FRBO"],
-            ] as const
-          ).map(([key, label]) => (
+            {(
+              [
+                ["all", "All"],
+                ["likely_fsbo", "Likely FSBO"],
+                ["likely_frbo", "Likely FRBO"],
+                ["fsbo_candidate", "FSBO Candidate"],
+                ["frbo_candidate", "FRBO Candidate"],
+              ] as const
+            ).map(([key, label]) => (
             <Button
               key={key}
               size="sm"
@@ -955,6 +1104,7 @@ export default function RentCastListingsContent({
                 </TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>Kind</TableHead>
+                <TableHead>Market</TableHead>
                 <TableHead>Flag</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Price</TableHead>
@@ -999,7 +1149,13 @@ export default function RentCastListingsContent({
                       </TableCell>
                       <TableCell className="text-xs capitalize">{row.listing_kind || "—"}</TableCell>
                       <TableCell>
-                        <QualBadge q={row.qualification} />
+                        <div className="flex flex-col gap-0.5">
+                          <MarketStatusBadge status={row.market_status} />
+                          <FreshnessBadge freshness={row.freshness} />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <QualBadge q={row.qualification} band={row.confidence_band} />
                       </TableCell>
                       <TableCell>
                         <ConfidenceBadge score={rowScore(row)} band={row.confidence_band} />
@@ -1068,7 +1224,9 @@ export default function RentCastListingsContent({
               </SheetHeader>
               <div className="mt-4 space-y-4 text-sm">
                 <div className="flex flex-wrap gap-2">
-                  <QualBadge q={detailRow.qualification} />
+                  <MarketStatusBadge status={detailRow.market_status} />
+                  <FreshnessBadge freshness={detailRow.freshness} />
+                  <QualBadge q={detailRow.qualification} band={detailRow.confidence_band} />
                   <ConfidenceBadge score={rowScore(detailRow)} band={detailRow.confidence_band} />
                   {detailRow.classification && (
                     <Badge variant="outline">{detailRow.classification}</Badge>
@@ -1097,6 +1255,22 @@ export default function RentCastListingsContent({
                     <div>
                       {detailRow.bedrooms ?? "—"} bd · {detailRow.bathrooms ?? "—"} ba
                     </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Listed</span>
+                    <div>{detailRow.listed_date || "—"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Last seen active</span>
+                    <div>{detailRow.last_seen_active || "—"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Days on market</span>
+                    <div>{detailRow.days_on_market ?? "—"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Removed / delisted</span>
+                    <div>{detailRow.removed_date || "—"}</div>
                   </div>
                 </div>
 
@@ -1132,6 +1306,24 @@ export default function RentCastListingsContent({
                     <div>
                       External verify: {verificationLabel(detailRow.external_verification_status)}
                     </div>
+                    {bestEvidenceUrl(detailRow) ? (
+                      <div>
+                        Evidence:{" "}
+                        <a
+                          href={bestEvidenceUrl(detailRow)!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline underline-offset-2"
+                        >
+                          Open listing page
+                        </a>
+                      </div>
+                    ) : null}
+                    {marketConflictWarning(detailRow) ? (
+                      <div className="text-amber-700 dark:text-amber-400">
+                        Market warning: {marketConflictWarning(detailRow)} (badge not changed)
+                      </div>
+                    ) : null}
                     {detailRow.owner_portfolio_count != null && (
                       <div>Owner active rentals (batch): {detailRow.owner_portfolio_count}</div>
                     )}

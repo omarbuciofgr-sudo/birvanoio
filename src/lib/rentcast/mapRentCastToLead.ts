@@ -79,8 +79,9 @@ export function listingExternalLinks(row: RentCastListing): { label: string; url
 
 export function confidenceBadgeClass(score?: number | null): string {
   const n = Number(score ?? 0);
-  if (n >= 75) return "bg-emerald-600 hover:bg-emerald-600";
-  if (n >= 50) return "bg-amber-600 hover:bg-amber-600";
+  if (n >= 90) return "bg-emerald-600 hover:bg-emerald-600";
+  if (n >= 70) return "bg-sky-600 hover:bg-sky-600";
+  if (n >= 60) return "bg-amber-600 hover:bg-amber-600";
   return "bg-slate-500 hover:bg-slate-500";
 }
 
