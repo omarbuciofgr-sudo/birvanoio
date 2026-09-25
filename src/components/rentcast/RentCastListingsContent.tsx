@@ -41,12 +41,12 @@ import {
   type RentCastDiagnostic,
   type RentCastListing,
   type RentCastStats,
+  type ZillowSearchStats,
 } from "@/lib/api/rentcastApi";
 import { scraperBackendApi } from "@/lib/api/scraperBackend";
 import { supabase } from "@/integrations/supabase/client";
 import {
   buildLeadFromRentCast,
-  confidenceBadgeClass,
   hasContactInfo,
   listingExternalLinks,
   normalizeAddressKey,
@@ -57,7 +57,8 @@ import {
   downloadCalibrationCsv,
 } from "@/lib/rentcast/downloadCalibrationCsv";
 
-type FilterTab = "all" | "likely_fsbo" | "likely_frbo" | "fsbo_candidate" | "frbo_candidate";
+type FilterTab = "all" | "rental" | "sale";
+type SourceMode = "zillow" | "rentcast";
 type ListingType = "both" | "sale" | "rental";
 type ConfidenceFilter = "qualified" | "likely" | "high" | "all";
 type MarketStatusFilter = "active" | "inactive" | "all";
@@ -107,25 +108,36 @@ function FreshnessBadge({ freshness }: { freshness?: string | null }) {
   return <span className="text-[10px] text-muted-foreground">{freshness}</span>;
 }
 
-function QualBadge({ q, band }: { q?: string; band?: string | null }) {
-  if (q === "likely_fsbo") {
-    const label = band === "High" ? "High Confidence FSBO" : "Likely FSBO";
-    return <Badge className="bg-emerald-600 hover:bg-emerald-600">{label}</Badge>;
+/**
+ * Customer-facing label from the source, never from the score.
+ * Zillow rows carry the final label in `classification` (set at ingest and after enrichment).
+ * Legacy RentCast rows are still score-based, so they read as unverified candidates.
+ */
+const LEGACY_PM = new Set(["Institutional/PM", "Professionally Listed"]);
+function customerLabel(row: RentCastListing): string {
+  if (row.source === "zillow_serpapi") {
+    return row.classification || (row.listing_kind === "sale" ? "Zillow Owner Posted / FSBO" : "Zillow FRBO");
   }
-  if (q === "likely_frbo") {
-    const label = band === "High" ? "High Confidence FRBO" : "Likely FRBO";
-    return <Badge className="bg-sky-600 hover:bg-sky-600">{label}</Badge>;
-  }
-  if (q === "fsbo_candidate") {
-    return <Badge className="bg-amber-600 hover:bg-amber-600">FSBO Candidate</Badge>;
-  }
-  if (q === "frbo_candidate") {
-    return <Badge className="bg-amber-600 hover:bg-amber-600">FRBO Candidate</Badge>;
-  }
-  if (q === "possible_owner_listed") {
-    return <Badge variant="secondary">Possible</Badge>;
-  }
-  return <Badge variant="secondary">Agent listed</Badge>;
+  if (row.classification && LEGACY_PM.has(row.classification)) return "Professionally Managed";
+  if (row.qualification === "agent_listed") return "Agent listed";
+  return "Unverified Candidate";
+}
+
+function LabelBadge({ row }: { row: RentCastListing }) {
+  const label = customerLabel(row);
+  const cls =
+    label === "Professionally Managed" || label === "Agent listed"
+      ? "bg-slate-500 hover:bg-slate-500"
+      : label === "Unable to Verify"
+        ? "bg-rose-600 hover:bg-rose-600"
+        : label === "Unverified Candidate"
+          ? "bg-amber-600 hover:bg-amber-600"
+          : "bg-sky-600 hover:bg-sky-600";
+  return (
+    <Badge className={cls} title={label === "Zillow FRBO" ? "Zillow: For Rent By Owner" : undefined}>
+      {label}
+    </Badge>
+  );
 }
 
 function rowScore(row: RentCastListing): number {
@@ -145,16 +157,6 @@ function parseReasonCodes(raw: RentCastListing["reason_codes"]): string[] {
   return [];
 }
 
-function ConfidenceBadge({ score, band }: { score?: number | null; band?: string | null }) {
-  if (score == null) return <span className="text-xs text-muted-foreground">—</span>;
-  return (
-    <div className="flex flex-col gap-0.5">
-      <Badge className={confidenceBadgeClass(score)}>{Math.round(score)}%</Badge>
-      {band ? <span className="text-[10px] text-muted-foreground">{band}</span> : null}
-    </div>
-  );
-}
-
 function ownerMatchLabel(status?: string | null) {
   switch ((status || "").toLowerCase()) {
     case "verified":
@@ -163,6 +165,8 @@ function ownerMatchLabel(status?: string | null) {
       return "Probable";
     case "missing":
       return "Missing";
+    case "pending":
+      return "Pending";
     default:
       return status || "—";
   }
@@ -180,6 +184,8 @@ function contactStatusLabel(status?: string | null) {
       return "Mailing only";
     case "none":
       return "Needs enrichment";
+    case "pending":
+      return "Pending";
     default:
       return status || "—";
   }
@@ -236,6 +242,11 @@ function OwnerStatusBadges({ row }: { row: RentCastListing }) {
       <Badge variant="outline" className="text-[10px] font-normal">
         {contactStatusLabel(row.contact_status)}
       </Badge>
+      {row.source === "zillow_serpapi" ? (
+        <Badge variant="outline" className="text-[10px] font-normal">
+          Enrichment: {row.enriched_at ? "Done" : "Pending"}
+        </Badge>
+      ) : null}
       {row.needs_ownership_fallback ? (
         <Badge variant="outline" className="text-[10px] font-normal">
           Ownership fallback
@@ -265,7 +276,11 @@ export default function RentCastListingsContent({
   embedded = false,
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("Naperville, IL");
-  const [listingType, setListingType] = useState<ListingType>("both");
+  const [source, setSource] = useState<SourceMode>("zillow");
+  const [listingType, setListingType] = useState<ListingType>("rental");
+  const [zillowStats, setZillowStats] = useState<ZillowSearchStats | null>(null);
+  /** Rows stored in the DB for the current location/type, from the last Load saved */
+  const [storedTotal, setStoredTotal] = useState<number | null>(null);
   const [limit, setLimit] = useState("50");
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("qualified");
   const [diagnosticMode, setDiagnosticMode] = useState(false);
@@ -309,7 +324,7 @@ export default function RentCastListingsContent({
 
   const filtered = useMemo(() => {
     if (filter === "all") return listings;
-    return listings.filter((r) => r.qualification === filter);
+    return listings.filter((r) => r.listing_kind === filter);
   }, [listings, filter]);
 
   const likelyInView = useMemo(
@@ -383,6 +398,38 @@ export default function RentCastListingsContent({
         toast.error("Scraper backend not reachable. Start it on port 8080 (or set backend URL).");
         return;
       }
+      if (source === "zillow") {
+        const zType = listingType === "sale" ? "sale" : "rental";
+        const res = await rentcastApi.zillowSearch({ location: loc, type: zType, save: true });
+        setZillowStats(res.stats || null);
+        // Always reload from the DB: merged rows show once with their label, and a blocked
+        // search (daily limit) still shows what was saved earlier for this market.
+        const saved = await rentcastApi.leads({ location: loc, type: zType, limit: 500 });
+        applyResult(saved.success ? saved.listings : res.listings || [], saved.stats || null);
+        setStoredTotal(saved.success ? saved.stored_total ?? saved.listings?.length ?? null : null);
+        setQueryType(zType);
+        if (!res.success && !res.listings?.length) {
+          toast.error(
+            (res.error || "Zillow search failed") +
+              (saved.listings?.length ? ` · showing ${saved.listings.length} saved rows` : ""),
+          );
+          return;
+        }
+        const s = res.stats;
+        toast.success(
+          `Zillow: ${s?.kept ?? res.listings?.length ?? 0} owner-posted listings` +
+            (res.saved != null ? ` · saved ${res.saved}` : "") +
+            (res.merged_into_existing ? ` · merged ${res.merged_into_existing}` : "") +
+            (s
+              ? ` · pages ${s.pages_fetched ?? 0}/${s.total_pages ?? "?"}` +
+                (s.cached_pages ? ` (${s.cached_pages} from cache)` : "") +
+                ` · credits today ${s.requests_today ?? "?"}/${s.daily_limit ?? "?"}`
+              : ""),
+        );
+        if (res.error) toast.message(String(res.error));
+        return;
+      }
+      setStoredTotal(null); // RentCast search results come from the API, not the DB
       const minConfidence =
         confidenceFilter === "high"
           ? 90
@@ -459,18 +506,10 @@ export default function RentCastListingsContent({
   const onLoadSaved = async () => {
     setBusy("load");
     try {
-      const qualification =
-        filter === "likely_fsbo" ||
-        filter === "likely_frbo" ||
-        filter === "fsbo_candidate" ||
-        filter === "frbo_candidate"
-          ? filter
-          : undefined;
       const res = await rentcastApi.leads({
         location: location.trim() || undefined,
-        qualification,
-        type: listingType,
-        limit: 100,
+        type: filter === "all" ? listingType : filter,
+        limit: 500,
       });
       applyQueryMeta(res);
       if (!res.success && !res.listings?.length) {
@@ -478,8 +517,9 @@ export default function RentCastListingsContent({
         return;
       }
       applyResult(res.listings, res.stats || null);
+      setStoredTotal(res.stored_total ?? res.listings?.length ?? null);
       toast.success(
-        `Loaded ${res.listings?.length ?? 0} saved rows` +
+        `Loaded ${res.listings?.length ?? 0} of ${res.stored_total ?? res.listings?.length ?? 0} stored rows` +
           (res.query_type ? ` · ${res.query_type}` : ""),
       );
     } catch (e: unknown) {
@@ -725,17 +765,17 @@ export default function RentCastListingsContent({
       <div className="space-y-5">
         {!embedded ? (
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">RentCast FSBO / FRBO</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Owner-posted listings (FRBO / FSBO)</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Pull active listings from RentCast, score likely FSBO/FRBO, enrich owners (RentCast +
-              BatchData), and import into CRM.
+              Zillow finds listings posted by owners (For Rent By Owner, Owner Posted). RentCast and
+              BatchData enrich property and owner data. Import into CRM.
             </p>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            RentCast-powered FSBO/FRBO search with confidence scoring. Apartments use a
-            secondary classifier (building concentration + owner unlock); institutional
-            operators are capped out of Likely.
+            Zillow&apos;s own owner-posted filters find FRBO / FSBO listings; RentCast + BatchData
+            enrich property and owner data. Labels reflect the source, not a score. RentCast search is
+            kept as a legacy option.
           </p>
         )}
 
@@ -749,6 +789,24 @@ export default function RentCastListingsContent({
               onKeyDown={(e) => e.key === "Enter" && onSearch()}
             />
           </div>
+          <div className="w-full space-y-1 sm:w-44">
+            <label className="text-[11px] text-muted-foreground">Source</label>
+            <Select
+              value={source}
+              onValueChange={(v) => {
+                setSource(v as SourceMode);
+                if (v === "zillow" && listingType === "both") setListingType("rental");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zillow">Zillow (owner-posted)</SelectItem>
+                <SelectItem value="rentcast">RentCast (legacy)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="w-full space-y-1 sm:w-36">
             <label className="text-[11px] text-muted-foreground">Type</label>
             <Select value={listingType} onValueChange={(v) => setListingType(v as ListingType)}>
@@ -756,12 +814,14 @@ export default function RentCastListingsContent({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="both">Sale + Rental</SelectItem>
-                <SelectItem value="sale">Sale only</SelectItem>
-                <SelectItem value="rental">Rental only</SelectItem>
+                {source === "rentcast" && <SelectItem value="both">Sale + Rental</SelectItem>}
+                <SelectItem value="rental">Rental (FRBO)</SelectItem>
+                <SelectItem value="sale">Sale (FSBO)</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {source === "rentcast" && (
+          <>
           <div className="w-full space-y-1 sm:w-24">
             <label className="text-[11px] text-muted-foreground">Limit</label>
             <Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" />
@@ -813,6 +873,8 @@ export default function RentCastListingsContent({
               </SelectContent>
             </Select>
           </div>
+          </>
+          )}
           {showOpsUi && (
             <label className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">
               <Checkbox
@@ -828,7 +890,7 @@ export default function RentCastListingsContent({
             ) : (
               <Search className="h-4 w-4" />
             )}
-            Search RentCast
+            {source === "zillow" ? "Search Zillow" : "Search RentCast"}
           </Button>
           <Button variant="outline" onClick={onLoadSaved} disabled={!!busy} className="gap-1.5">
             {busy === "load" ? (
@@ -918,7 +980,31 @@ export default function RentCastListingsContent({
           )}
         </div>
 
-        {stats && (
+        {zillowStats && source === "zillow" && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="secondary">Zillow owner-posted</Badge>
+            <Badge variant="outline">Found {zillowStats.kept ?? 0}</Badge>
+            <Badge variant="outline">
+              Pages {zillowStats.pages_fetched ?? 0}/{zillowStats.total_pages ?? "?"}
+              {zillowStats.cached_pages ? ` (${zillowStats.cached_pages} cached, free)` : ""}
+            </Badge>
+            <Badge variant="outline">Zillow total {zillowStats.total_results ?? "?"}</Badge>
+            <Badge variant="outline">
+              Buildings dropped{" "}
+              {(zillowStats.buildings_dropped ?? 0) + (zillowStats.community_units_dropped ?? 0)}
+            </Badge>
+            <Badge variant="outline">Out of market {zillowStats.out_of_market ?? 0}</Badge>
+            <Badge variant="outline">
+              Credits today {zillowStats.requests_today ?? "?"}/{zillowStats.daily_limit ?? "?"}
+            </Badge>
+            {zillowStats.page_cap_reached && <Badge variant="destructive">Page cap reached</Badge>}
+            {zillowStats.daily_limit_reached && (
+              <Badge variant="destructive">Daily limit reached</Badge>
+            )}
+          </div>
+        )}
+
+        {stats && source === "rentcast" && (
           <div className="flex flex-wrap gap-2 text-xs">
             {queryType && (
               <Badge variant="secondary">Query {queryType}</Badge>
@@ -1070,14 +1156,24 @@ export default function RentCastListingsContent({
           </div>
         )}
 
+        {(listings.length > 0 || storedTotal != null) && (
+          <p className="text-xs text-muted-foreground">
+            Showing {filtered.length} of {listings.length} loaded
+            {storedTotal != null ? ` · ${storedTotal} stored for this search` : ""}
+            {` · ${listings.filter((r) => r.listing_kind === "rental").length} rentals · ${listings.filter((r) => r.listing_kind === "sale").length} sales`}
+            {` · ${listings.filter((r) => r.enriched_at).length} enriched · ${listings.filter((r) => !r.enriched_at).length} pending enrichment`}
+            {storedTotal != null && storedTotal > listings.length
+              ? ` · showing the newest ${listings.length}`
+              : ""}
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-2">
             {(
               [
                 ["all", "All"],
-                ["likely_fsbo", "Likely FSBO"],
-                ["likely_frbo", "Likely FRBO"],
-                ["fsbo_candidate", "FSBO Candidate"],
-                ["frbo_candidate", "FRBO Candidate"],
+                ["rental", "Rentals (FRBO)"],
+                ["sale", "Sales (FSBO)"],
               ] as const
             ).map(([key, label]) => (
             <Button
@@ -1105,8 +1201,7 @@ export default function RentCastListingsContent({
                 <TableHead>Address</TableHead>
                 <TableHead>Kind</TableHead>
                 <TableHead>Market</TableHead>
-                <TableHead>Flag</TableHead>
-                <TableHead>Score</TableHead>
+                <TableHead>Classification</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Listing</TableHead>
                 <TableHead>Owner / Contact</TableHead>
@@ -1117,7 +1212,7 @@ export default function RentCastListingsContent({
               {filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
-                    No rows yet. Search RentCast or Load saved.
+                    No rows yet. Search or Load saved.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1155,10 +1250,7 @@ export default function RentCastListingsContent({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <QualBadge q={row.qualification} band={row.confidence_band} />
-                      </TableCell>
-                      <TableCell>
-                        <ConfidenceBadge score={rowScore(row)} band={row.confidence_band} />
+                        <LabelBadge row={row} />
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">{money(row.price)}</TableCell>
                       <TableCell className="text-xs">
@@ -1226,21 +1318,23 @@ export default function RentCastListingsContent({
                 <div className="flex flex-wrap gap-2">
                   <MarketStatusBadge status={detailRow.market_status} />
                   <FreshnessBadge freshness={detailRow.freshness} />
-                  <QualBadge q={detailRow.qualification} band={detailRow.confidence_band} />
-                  <ConfidenceBadge score={rowScore(detailRow)} band={detailRow.confidence_band} />
-                  {detailRow.classification && (
-                    <Badge variant="outline">{detailRow.classification}</Badge>
-                  )}
+                  <LabelBadge row={detailRow} />
+                  <Badge variant="outline">
+                    Source: {detailRow.source === "zillow_serpapi" ? "Zillow" : "RentCast"}
+                    {(detailRow.sources?.length ?? 0) > 1 ? " + merged" : ""}
+                  </Badge>
                   {detailRow.listing_kind && (
                     <Badge variant="outline" className="capitalize">
                       {detailRow.listing_kind}
                     </Badge>
                   )}
-                  {detailRow.frbo_score != null && (
-                    <Badge variant="outline">FRBO {detailRow.frbo_score}</Badge>
-                  )}
-                  {detailRow.fsbo_score != null && (
-                    <Badge variant="outline">FSBO {detailRow.fsbo_score}</Badge>
+                  {showOpsUi && (
+                    <Badge variant="outline">
+                      Internal score {Math.round(rowScore(detailRow))}
+                      {detailRow.confidence_band ? ` · ${detailRow.confidence_band}` : ""}
+                      {detailRow.frbo_score != null ? ` · FRBO ${detailRow.frbo_score}` : ""}
+                      {detailRow.fsbo_score != null ? ` · FSBO ${detailRow.fsbo_score}` : ""}
+                    </Badge>
                   )}
                   <OwnerStatusBadges row={detailRow} />
                 </div>

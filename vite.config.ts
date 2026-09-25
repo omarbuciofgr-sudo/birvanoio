@@ -82,10 +82,20 @@ function resolveScraperBackendForClient(mode: string): string {
   return stripQuotes(raw);
 }
 
+/** Shared secret the Flask API expects in X-Scraper-Key (when SCRAPER_API_KEY is set there). Same Lovable note as above. */
+function resolveScraperApiKeyForClient(mode: string): string {
+  const file = loadEnv(mode, process.cwd(), "");
+  const raw =
+    pickEnv(file, ["VITE_SCRAPER_API_KEY", "SCRAPER_API_KEY", "scraper_api_key"]) ||
+    pickEnvCi(file, ["vite_scraper_api_key", "scraper_api_key"]);
+  return raw.trim().replace(/^["']|["']$/g, "");
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const { url: supabaseUrl, key: supabaseAnon } = resolveSupabaseForClient(mode);
   const scraperBackend = resolveScraperBackendForClient(mode);
+  const scraperApiKey = resolveScraperApiKeyForClient(mode);
 
   // Only map non-empty values. Always defining "" overwrites Vite/Lovable-injected `import.meta.env` and causes a blank production app.
   const define: Record<string, string> = {};
@@ -97,6 +107,9 @@ export default defineConfig(({ mode }) => {
   }
   if (scraperBackend) {
     define["import.meta.env.VITE_SCRAPER_BACKEND_URL"] = JSON.stringify(scraperBackend);
+  }
+  if (scraperApiKey) {
+    define["import.meta.env.VITE_SCRAPER_API_KEY"] = JSON.stringify(scraperApiKey);
   }
 
   return {

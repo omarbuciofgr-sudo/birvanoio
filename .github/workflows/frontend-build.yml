@@ -20,3 +20,5 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Shared secret for the Flask scraper API (must match SCRAPER_API_KEY on Railway)
+          VITE_SCRAPER_API_KEY: ${{ secrets.VITE_SCRAPER_API_KEY }}

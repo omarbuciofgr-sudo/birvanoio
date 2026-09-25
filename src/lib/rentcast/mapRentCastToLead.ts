@@ -60,15 +60,21 @@ export function normalizeAddressKey(address?: string | null): string {
 
 export function listingExternalLinks(row: RentCastListing): { label: string; url: string }[] {
   const links: { label: string; url: string }[] = [];
-  if (row.listing_url) {
+  const fromZillow = row.source === "zillow_serpapi";
+  if (fromZillow && row.listing_url) {
+    // The exact Zillow property the row came from, so the user can verify it directly
+    links.push({ label: "View on Zillow", url: row.listing_url });
+  } else if (row.listing_url) {
     links.push({ label: "Live listing", url: row.listing_url });
   }
   const q = encodeURIComponent((row.address || "").trim());
   if (q) {
-    links.push({
-      label: "Zillow",
-      url: `https://www.zillow.com/homes/${q}_rb/`,
-    });
+    if (!fromZillow) {
+      links.push({
+        label: "Zillow",
+        url: `https://www.zillow.com/homes/${q}_rb/`,
+      });
+    }
     links.push({
       label: "Realtor.com",
       url: `https://www.realtor.com/realestateandhomes-search/${q}`,

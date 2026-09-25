@@ -1266,9 +1266,14 @@ Deno.serve(async (req) => {
       .replace(/\/$/, "");
     if (scraperBase) {
       try {
+        const scraperKey = (Deno.env.get("SCRAPER_API_KEY") || "").trim();
         const fr = await fetch(`${scraperBase}/api/waterfall-enrich`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            // Shared secret the Flask API requires once SCRAPER_API_KEY is set on Railway
+            ...(scraperKey ? { "X-Scraper-Key": scraperKey } : {}),
+          },
           body: JSON.stringify(body),
         });
         const text = await fr.text();

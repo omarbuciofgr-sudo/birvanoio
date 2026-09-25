@@ -62,6 +62,31 @@ export type RentCastListing = {
   } | null;
   imported_lead_id?: string | null;
   search_location?: string | null;
+  /** Zillow-via-SerpApi merge: which side created the row, every side that contributed, Zillow id */
+  source?: "rentcast" | "zillow_serpapi" | string | null;
+  sources?: string[] | null;
+  zpid?: string | null;
+};
+
+export type ZillowSearchStats = {
+  pages_fetched?: number;
+  total_results?: number | null;
+  total_pages?: number | null;
+  organic?: number;
+  kept?: number;
+  buildings_dropped?: number;
+  community_units_dropped?: number;
+  out_of_market?: number;
+  duplicates?: number;
+  relaxed_ignored?: number;
+  credits_used?: number;
+  /** Pages SerpApi served from its cache; free, not counted against the daily limit */
+  cached_pages?: number;
+  requests_today?: number | null;
+  daily_limit?: number;
+  daily_limit_reached?: boolean;
+  page_cap?: number;
+  page_cap_reached?: boolean;
 };
 
 export type RentCastStats = {
@@ -286,6 +311,40 @@ export const rentcastApi = {
     }>;
   },
 
+  /** Zillow owner-posted discovery (SerpApi). Rows are merged into rentcast_listings; reload with leads(). */
+  async zillowSearch(body: {
+    location: string;
+    type: "rental" | "sale";
+    save?: boolean;
+    /** May lower the server cap (ZILLOW_MAX_PAGES_PER_SEARCH), never raise it */
+    max_pages?: number;
+  }) {
+    const base = scraperBackendApi.getBaseUrl();
+    const res = await fetch(`${base}/api/zillow/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return parseJson(res) as Promise<{
+      success?: boolean;
+      error?: string | null;
+      source?: string;
+      listing_kind?: string;
+      search_location?: string;
+      area?: {
+        region_id?: string;
+        map_bounds?: string;
+        region_name?: string | null;
+        how?: string;
+        cached?: boolean;
+      };
+      listings?: RentCastListing[];
+      saved?: number;
+      merged_into_existing?: number;
+      stats?: ZillowSearchStats;
+    }>;
+  },
+
   async leads(params?: {
     location?: string;
     qualification?: string;
@@ -307,6 +366,8 @@ export const rentcastApi = {
       listings?: RentCastListing[];
       stats?: RentCastStats;
       total?: number;
+      /** Rows stored in the DB for these filters, regardless of the load limit */
+      stored_total?: number;
       query_type?: string;
       endpoints_called?: string[];
       listing_kinds_in_results?: string[];

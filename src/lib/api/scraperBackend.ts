@@ -411,6 +411,48 @@ function getConfiguredScraperBaseUrl(): string {
 /** First localhost:port that passed /api/health (fixes VITE on 8081 while Flask runs on 8080). */
 let resolvedScraperBaseUrl: string | null = null;
 
+/** Shared secret the Flask API checks in X-Scraper-Key once SCRAPER_API_KEY is set there. Empty = backend runs open. */
+export function authHeaders(): Record<string, string> {
+  const key = (import.meta.env.VITE_SCRAPER_API_KEY as string | undefined)?.trim();
+  return key ? { "X-Scraper-Key": key } : {};
+}
+
+function isScraperBackendUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url, typeof window !== "undefined" ? window.location.href : "http://localhost");
+  } catch {
+    return false;
+  }
+  if (!u.pathname.startsWith("/api/")) return false;
+  const host = u.hostname.toLowerCase();
+  const local = (host === "localhost" || host === "127.0.0.1") && (u.port === "8080" || u.port === "8081");
+  const known = [getConfiguredScraperBaseUrl(), resolvedScraperBaseUrl, PRODUCTION_BACKEND]
+    .filter(Boolean)
+    .some((b) => u.origin === new URL(b as string).origin);
+  return local || known || host.endsWith(".up.railway.app");
+}
+
+// Attach the key to every request aimed at the scraper backend, wherever in the app it is made.
+// ponytail: one global fetch hook instead of editing ~18 call sites; switch to a backendFetch()
+// helper if a second interceptor ever needs to exist.
+(function installScraperAuthHook() {
+  if (typeof window === "undefined" || !authHeaders()["X-Scraper-Key"]) return;
+  const w = window as Window & { __scraperAuthHook?: boolean };
+  if (w.__scraperAuthHook) return;
+  w.__scraperAuthHook = true;
+  const rawFetch = window.fetch.bind(window);
+  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (isScraperBackendUrl(url)) {
+      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+      for (const [k, v] of Object.entries(authHeaders())) headers.set(k, v);
+      init = { ...init, headers };
+    }
+    return rawFetch(input, init);
+  }) as typeof window.fetch;
+})();
+
 function isLocalhostScraperUrl(url: string): boolean {
   try {
     const u = new URL(url);
