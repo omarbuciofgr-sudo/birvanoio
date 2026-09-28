@@ -588,7 +588,6 @@ export default function RentCastListingsContent({
         toast.error(SAFE_RESULTS_ERROR);
         return;
       }
-      await spendCredits("enrich", count, "find-owners");
       const summary = res.summary;
       if (summary) {
         const skipped = summary.skipped_below_60
