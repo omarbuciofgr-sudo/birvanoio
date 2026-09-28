@@ -122,16 +122,11 @@ export function useCredits() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return false;
 
-    // Insert usage records
-    const records = Array.from({ length: count }, () => ({
-      user_id: session.user.id,
-      action,
-      credits_spent: cost,
-      reference_id: referenceId || null,
-    }));
-
-    const { error } = await supabase.from("credit_usage").insert(records);
-    if (error) return false;
+    const actionKey = `action_${mappedAction}`;
+    const { data, error } = await supabase.functions.invoke("consume-credits", {
+      body: { actionKey, units: count, referenceId },
+    });
+    if (error || !data?.success) return false;
 
     setCreditsUsed(prev => prev + totalCost);
     return true;

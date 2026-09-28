@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { chargeCredits } from '../_shared/billing.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -385,9 +386,16 @@ Deno.serve(async (req) => {
     // 1. Try BatchData first
     result = await tryBatchData(addressData);
     if (result?.data?.fullName || (result?.data?.phones && result.data.phones.length > 0)) {
+      const charge = await chargeCredits(userId, 'action_owner_contact', 1, body.fullAddress || body.address);
+      if (!charge.success) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'You need 10 credits to reveal this owner contact.' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       console.log('[Skip Trace] Success via BatchData');
       return new Response(
-        JSON.stringify(result),
+        JSON.stringify({ ...result, credits_spent: 10 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
