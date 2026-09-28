@@ -71,7 +71,7 @@ const Settings = () => {
     if (user) {
       fetchProfile();
     }
-  }, [user]);
+  }, [user, workspaceId]);
 
   const fetchProfile = async () => {
     const { data, error } = await supabase
@@ -328,7 +328,7 @@ const Settings = () => {
                   <p className="text-xs text-muted-foreground">Used in your campaign email footer instead of the workspace address.</p>
                 </div>
 
-                {(workspaceRole === "owner" || workspaceRole === "admin") && (
+                {workspaceRole === "owner" && (
                   <div className="space-y-2 border-t border-border pt-4">
                     <label className="block text-sm font-medium text-foreground">Workspace mailing address</label>
                     <Textarea value={workspaceMailingAddress} onChange={(e) => setWorkspaceMailingAddress(e.target.value)} placeholder="Street address, PO box, or registered private mailbox" rows={3} />

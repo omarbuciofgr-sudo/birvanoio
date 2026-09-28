@@ -455,6 +455,7 @@ const VoiceAgent = () => {
                 <ElevenLabsVoiceAgent
                   agentId={elevenLabsAgentId}
                   leadId={selectedLeadId}
+                  beforeStart={requireAcceptance}
                   leadName={selectedLead?.contact_name || selectedLead?.business_name}
                   onTranscriptUpdate={(transcript) => setLiveTranscript(transcript)}
                   onCallEnd={async (summary) => {

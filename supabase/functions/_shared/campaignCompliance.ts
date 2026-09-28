@@ -21,6 +21,6 @@ export async function appendComplianceFooter(client: SupabaseClient, userId: str
     if (error || !created?.token) throw new Error("Could not create unsubscribe link");
     token = created.token;
   }
-  const appUrl = (Deno.env.get("APP_URL") || "https://brivano.io").replace(/\/$/, "");
-  return `${html}<div style="margin-top:32px;padding-top:16px;border-top:1px solid #d1d5db;color:#6b7280;font-size:12px;line-height:1.5"><div>${escapeHtml(mailingAddress)}</div><div><a href="${appUrl}/unsubscribe?token=${encodeURIComponent(token)}">Unsubscribe</a> from future marketing emails.</div></div>`;
+  const functionsUrl = `${(Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "")}/functions/v1`;
+  return `${html}<div style="margin-top:32px;padding-top:16px;border-top:1px solid #d1d5db;color:#6b7280;font-size:12px;line-height:1.5"><div>${escapeHtml(mailingAddress)}</div><div><a href="${functionsUrl}/email-unsubscribe?token=${encodeURIComponent(token)}">Unsubscribe</a> from future marketing emails.</div></div>`;
 }

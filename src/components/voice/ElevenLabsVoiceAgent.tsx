@@ -11,6 +11,7 @@ interface ElevenLabsVoiceAgentProps {
   agentId: string;
   leadName?: string;
   leadId: string;
+  beforeStart?: (start: () => void) => void;
   onTranscriptUpdate?: (transcript: string) => void;
   onCallEnd?: (summary: string) => void;
 }
@@ -19,6 +20,7 @@ export function ElevenLabsVoiceAgent({
   agentId,
   leadName,
   leadId,
+  beforeStart,
   onTranscriptUpdate,
   onCallEnd,
 }: ElevenLabsVoiceAgentProps) {
@@ -173,7 +175,7 @@ export function ElevenLabsVoiceAgent({
         <div className="flex gap-3">
           {!isConnected ? (
             <Button
-              onClick={startConversation}
+              onClick={() => beforeStart ? beforeStart(() => { void startConversation(); }) : void startConversation()}
               disabled={isConnecting}
               className="flex-1 gap-2"
             >
