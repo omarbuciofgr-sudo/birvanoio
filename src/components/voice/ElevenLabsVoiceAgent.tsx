@@ -1,5 +1,5 @@
 import { useConversation } from "@elevenlabs/react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +23,11 @@ export function ElevenLabsVoiceAgent({
   const [isConnecting, setIsConnecting] = useState(false);
   const [transcript, setTranscript] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const startedAt = useRef<number | null>(null);
 
   const conversation = useConversation({
     onConnect: () => {
+      startedAt.current = Date.now();
       console.log("Connected to ElevenLabs agent");
       toast.success("Connected to AI voice agent");
       setError(null);
@@ -35,6 +37,15 @@ export function ElevenLabsVoiceAgent({
       const fullTranscript = transcript.join("\n");
       if (onCallEnd && fullTranscript) {
         onCallEnd(fullTranscript);
+      }
+      if (startedAt.current) {
+        const minutes = Math.max(1, Math.ceil((Date.now() - startedAt.current) / 60000));
+        startedAt.current = null;
+        void supabase.functions.invoke("consume-credits", {
+          body: { actionKey: "action_voice_minute", units: minutes, referenceId: "elevenlabs-call" },
+        }).then(({ data, error }) => {
+          if (error || !data?.success) toast.error("The call ended, but its credits could not be updated.");
+        });
       }
     },
     onMessage: (message: any) => {
@@ -172,7 +183,7 @@ export function ElevenLabsVoiceAgent({
               ) : (
                 <>
                   <Phone className="w-4 h-4" />
-                  Start AI Call
+                   Start AI Call · 10 credits/min
                 </>
               )}
             </Button>
