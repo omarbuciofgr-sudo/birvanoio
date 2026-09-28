@@ -37,6 +37,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { ElevenLabsVoiceAgent } from "@/components/voice/ElevenLabsVoiceAgent";
 import { AudioRecordingPlayer } from "@/components/leads/AudioRecordingPlayer";
 import { GatedVoiceAgentPage } from "@/components/voice/GatedVoiceAgent";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 interface VoiceCall {
   id: string;
@@ -85,6 +86,7 @@ const VoiceAgent = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isInitiating, setIsInitiating] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
 
   // Form state
   const [selectedLeadId, setSelectedLeadId] = useState("");
@@ -101,9 +103,8 @@ const VoiceAgent = () => {
 
   useEffect(() => {
     if (user) {
-      fetchCalls();
-      fetchLeads();
-      fetchProfile();
+      setDataLoading(true);
+      Promise.all([fetchCalls(), fetchLeads(), fetchProfile()]).finally(() => setDataLoading(false));
     }
   }, [user]);
 
@@ -241,13 +242,7 @@ const VoiceAgent = () => {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || dataLoading) return <DataPageSkeleton />;
 
   if (!user) return null;
 

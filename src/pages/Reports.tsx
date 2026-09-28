@@ -35,7 +35,8 @@ import {
 import { AINLReports } from "@/components/dashboard/AINLReports";
 import { AIAnomalyDetection } from "@/components/dashboard/AIAnomalyDetection";
 import type { Database } from "@/integrations/supabase/types";
-import { scrapedRowsToSyntheticLeads } from "@/lib/leadSourceFallback";
+import { useLeadsData } from "@/hooks/useLeadsData";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -120,9 +121,7 @@ export default function Reports() {
   const [saving, setSaving] = useState(false);
   const [loadingReports, setLoadingReports] = useState(true);
 
-  // Analytics data (CRM `leads`, or synthetic rows from `scraped_leads` when CRM is empty)
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [overviewUsesScoutData, setOverviewUsesScoutData] = useState(false);
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
 
   const performanceData = buildPerformanceDataFromLeads(leads);
 
@@ -133,33 +132,8 @@ export default function Reports() {
   useEffect(() => {
     if (user) {
       fetchReports();
-      fetchLeads();
     }
   }, [user]);
-
-  const fetchLeads = async () => {
-    const { data: crm, error } = await supabase.from("leads").select("*");
-    if (!error && crm && crm.length > 0) {
-      setLeads(crm);
-      setOverviewUsesScoutData(false);
-      return;
-    }
-    if (!user?.id) {
-      setLeads(crm ?? []);
-      setOverviewUsesScoutData(false);
-      return;
-    }
-    const { data: scraped, error: scErr } = await supabase
-      .from("scraped_leads")
-      .select("id, created_at, status, full_name, domain, best_email");
-    if (!scErr && scraped && scraped.length > 0) {
-      setLeads(scrapedRowsToSyntheticLeads(scraped, user.id));
-      setOverviewUsesScoutData(true);
-    } else {
-      setLeads(crm ?? []);
-      setOverviewUsesScoutData(false);
-    }
-  };
 
   const REPORTS_TABLE = "custom_reports";
   const fetchReports = async () => {
@@ -211,7 +185,7 @@ export default function Reports() {
     setSelectedMetrics(prev => prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]);
   };
 
-  if (authLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Loading...</div></div>;
+  if (authLoading || leadsLoading) return <DataPageSkeleton />;
   if (!user) return null;
 
   // Analytics computed data (real from leads)
@@ -275,11 +249,6 @@ export default function Reports() {
             <h1 className="text-2xl font-semibold tracking-tight">Reports & Analytics</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Performance insights, analytics, and custom reports
-              {overviewUsesScoutData && (
-                <span className="block text-amber-600 dark:text-amber-500/90 mt-1 text-xs">
-                  Overview metrics use Brivano Scout data — CRM Leads is empty. Add CRM leads or import to switch.
-                </span>
-              )}
             </p>
           </div>
           <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => setCreateDialogOpen(true)}>
@@ -542,7 +511,9 @@ export default function Reports() {
           {/* Saved Reports Tab */}
           <TabsContent value="saved" className="space-y-4 mt-0">
             {loadingReports ? (
-              <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              <div className="space-y-3" aria-label="Loading saved reports" aria-busy="true">
+                {[0, 1, 2].map((item) => <div key={item} className="h-28 animate-pulse rounded-md bg-muted" />)}
+              </div>
             ) : savedReports.length === 0 ? (
               <Card className="border-border/40">
                 <CardContent className="p-12 text-center">

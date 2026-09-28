@@ -332,26 +332,6 @@ const Settings = () => {
               </CardContent>
             </Card>
 
-            {/* Subscription Info */}
-            <Card className="border-border/60">
-              <CardHeader>
-                <CardTitle className="text-foreground">Subscription</CardTitle>
-                <CardDescription>Your current plan and billing information.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div>
-                    <p className="font-medium text-foreground">Current Plan</p>
-                    <p className="text-sm text-muted-foreground">
-                      Contact us to upgrade or manage your subscription.
-                    </p>
-                  </div>
-                  <Button variant="outline" asChild>
-                    <a href="mailto:hello@brivano.io">Contact Support</a>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* Templates Tab */}
