@@ -26,6 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Download,
   ExternalLink,
@@ -34,6 +35,7 @@ import {
   Search,
   Sparkles,
   UserPlus,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -56,12 +58,33 @@ import {
   CALIBRATION_LABELS,
   downloadCalibrationCsv,
 } from "@/lib/rentcast/downloadCalibrationCsv";
+import { CREDIT_COSTS, useCredits } from "@/hooks/useCredits";
 
-type FilterTab = "all" | "rental" | "sale";
+type FilterTab = "sale-strong" | "sale-possible" | "rental-strong" | "rental-possible";
 type SourceMode = "zillow" | "rentcast";
 type ListingType = "both" | "sale" | "rental";
 type ConfidenceFilter = "qualified" | "likely" | "high" | "all";
 type MarketStatusFilter = "active" | "inactive" | "all";
+type ResultView = "best" | "all";
+
+const SAFE_RESULTS_ERROR = "We couldn't load your results. Please try again in a minute.";
+
+function reportAdminError(context: string, error: unknown) {
+  console.error(`[Find Owners] ${context}`, error);
+}
+
+function resultCategory(row: RentCastListing): FilterTab {
+  const sale = row.listing_kind === "sale";
+  const text = `${row.classification || ""} ${row.qualification || ""}`.toLowerCase();
+  const strong = text.includes("likely") || text.includes("strong") || rowScore(row) >= 70;
+  return `${sale ? "sale" : "rental"}-${strong ? "strong" : "possible"}` as FilterTab;
+}
+
+function formatListedDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+}
 
 type RentCastListingsContentProps = {
   /** When true, omit standalone page title (used inside Brivano Scout shell). */
@@ -277,7 +300,7 @@ export default function RentCastListingsContent({
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("Naperville, IL");
   const [source, setSource] = useState<SourceMode>("zillow");
-  const [listingType, setListingType] = useState<ListingType>("rental");
+  const [listingType, setListingType] = useState<ListingType>("both");
   const [zillowStats, setZillowStats] = useState<ZillowSearchStats | null>(null);
   /** Rows stored in the DB for the current location/type, from the last Load saved */
   const [storedTotal, setStoredTotal] = useState<number | null>(null);
@@ -296,7 +319,8 @@ export default function RentCastListingsContent({
   const [pagesFetched, setPagesFetched] = useState<number | null>(null);
   const [queryType, setQueryType] = useState<string | null>(null);
   const [endpointsCalled, setEndpointsCalled] = useState<string[]>([]);
-  const [filter, setFilter] = useState<FilterTab>("all");
+  const [filter, setFilter] = useState<FilterTab>("sale-strong");
+  const [resultView, setResultView] = useState<ResultView>("best");
   const [listings, setListings] = useState<RentCastListing[]>([]);
   const [stats, setStats] = useState<RentCastStats | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -304,6 +328,7 @@ export default function RentCastListingsContent({
   const [busy, setBusy] = useState<
     "search" | "load" | "enrich" | "verify" | "import" | null
   >(null);
+  const { canAfford, spendCredits } = useCredits();
 
   useEffect(() => {
     let cancelled = false;
@@ -323,9 +348,11 @@ export default function RentCastListingsContent({
   }, []);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return listings;
-    return listings.filter((r) => r.listing_kind === filter);
-  }, [listings, filter]);
+    return listings.filter((row) => {
+      if (resultView === "best" && rowScore(row) < 60) return false;
+      return resultCategory(row) === filter;
+    });
+  }, [listings, filter, resultView]);
 
   const likelyInView = useMemo(
     () => filtered.filter((r) => rowScore(r) >= 60),
@@ -340,6 +367,26 @@ export default function RentCastListingsContent({
     setListings(Array.isArray(rows) ? rows : []);
     if (s) setStats(s);
     setSelectedIds(new Set());
+  };
+
+  const saveSearchResults = async (rows: RentCastListing[], searchLocation: string) => {
+    if (!rows.length) return;
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    const payload = rows
+      .filter((row) => row.rentcast_id || row.address)
+      .map((row) => ({
+        user_id: auth.user!.id,
+        external_id: row.rentcast_id || normalizeAddressKey(row.address),
+        search_location: searchLocation,
+        listing_kind: row.listing_kind || null,
+        listing_data: row,
+      }));
+    if (!payload.length) return;
+    const { error } = await (supabase as any)
+      .from("owner_search_results")
+      .upsert(payload, { onConflict: "user_id,external_id" });
+    if (error) reportAdminError("Unable to save search history", error);
   };
 
   const patchListings = (updates: RentCastListing[]) => {
@@ -399,34 +446,24 @@ export default function RentCastListingsContent({
         return;
       }
       if (source === "zillow") {
-        const zType = listingType === "sale" ? "sale" : "rental";
-        const res = await rentcastApi.zillowSearch({ location: loc, type: zType, save: true });
-        setZillowStats(res.stats || null);
-        // Always reload from the DB: merged rows show once with their label, and a blocked
-        // search (daily limit) still shows what was saved earlier for this market.
-        const saved = await rentcastApi.leads({ location: loc, type: zType, limit: 500 });
-        applyResult(saved.success ? saved.listings : res.listings || [], saved.stats || null);
-        setStoredTotal(saved.success ? saved.stored_total ?? saved.listings?.length ?? null : null);
-        setQueryType(zType);
-        if (!res.success && !res.listings?.length) {
-          toast.error(
-            (res.error || "Zillow search failed") +
-              (saved.listings?.length ? ` · showing ${saved.listings.length} saved rows` : ""),
-          );
+        const types = listingType === "both" ? (["sale", "rental"] as const) : [listingType];
+        const responses = await Promise.all(
+          types.map((type) => rentcastApi.zillowSearch({ location: loc, type, save: true })),
+        );
+        const rows = responses.flatMap((res) => res.listings || []).slice(0, Math.max(1, Number(limit) || 50));
+        const failed = responses.filter((res) => !res.success && !res.listings?.length);
+        if (failed.length === responses.length) {
+          failed.forEach((res) => reportAdminError("Owner search failed", res.error));
+          toast.error(SAFE_RESULTS_ERROR);
+          applyResult([]);
           return;
         }
-        const s = res.stats;
-        toast.success(
-          `Zillow: ${s?.kept ?? res.listings?.length ?? 0} owner-posted listings` +
-            (res.saved != null ? ` · saved ${res.saved}` : "") +
-            (res.merged_into_existing ? ` · merged ${res.merged_into_existing}` : "") +
-            (s
-              ? ` · pages ${s.pages_fetched ?? 0}/${s.total_pages ?? "?"}` +
-                (s.cached_pages ? ` (${s.cached_pages} from cache)` : "") +
-                ` · credits today ${s.requests_today ?? "?"}/${s.daily_limit ?? "?"}`
-              : ""),
-        );
-        if (res.error) toast.message(String(res.error));
+        setZillowStats(responses[0]?.stats || null);
+        applyResult(rows);
+        setStoredTotal(rows.length);
+        setQueryType(listingType);
+        await saveSearchResults(rows, loc);
+        toast.success(`Found ${rows.length} owner listings`);
         return;
       }
       setStoredTotal(null); // RentCast search results come from the API, not the DB
@@ -452,7 +489,8 @@ export default function RentCastListingsContent({
       });
       applyQueryMeta(res);
       if (!res.success && !res.listings?.length) {
-        toast.error(res.error || "RentCast search failed");
+        reportAdminError("Owner search failed", res.error);
+        toast.error(SAFE_RESULTS_ERROR);
         applyResult([], res.stats || null);
         setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
         setPoolStats(res.pool_stats || null);
@@ -462,6 +500,7 @@ export default function RentCastListingsContent({
         return;
       }
       applyResult(res.listings, res.stats || null);
+      await saveSearchResults(res.listings || [], loc);
       setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
       setPoolStats(res.pool_stats || null);
       setMaxFetch(res.max_fetch ?? null);
@@ -495,9 +534,10 @@ export default function RentCastListingsContent({
             : "") +
           src,
       );
-      if (res.error) toast.message(String(res.error));
+      if (res.error) reportAdminError("Owner search warning", res.error);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Search failed");
+      reportAdminError("Owner search exception", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
@@ -506,30 +546,35 @@ export default function RentCastListingsContent({
   const onLoadSaved = async () => {
     setBusy("load");
     try {
-      const res = await rentcastApi.leads({
-        location: location.trim() || undefined,
-        type: filter === "all" ? listingType : filter,
-        limit: 500,
-      });
-      applyQueryMeta(res);
-      if (!res.success && !res.listings?.length) {
-        toast.error(res.error || "Failed to load saved leads");
-        return;
-      }
-      applyResult(res.listings, res.stats || null);
-      setStoredTotal(res.stored_total ?? res.listings?.length ?? null);
-      toast.success(
-        `Loaded ${res.listings?.length ?? 0} of ${res.stored_total ?? res.listings?.length ?? 0} stored rows` +
-          (res.query_type ? ` · ${res.query_type}` : ""),
-      );
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Not authenticated");
+      let query = (supabase as any)
+        .from("owner_search_results")
+        .select("listing_data")
+        .eq("user_id", auth.user.id)
+        .order("updated_at", { ascending: false })
+        .limit(500);
+      if (location.trim()) query = query.ilike("search_location", location.trim());
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = (data || []).map((record: { listing_data: RentCastListing }) => record.listing_data);
+      applyResult(rows);
+      setStoredTotal(rows.length);
+      toast.success(`Loaded ${rows.length} saved results`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Load failed");
+      reportAdminError("Saved searches failed", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
   };
 
   const runEnrich = async (ids?: string[]) => {
+    const count = ids?.length || Math.max(likelyInView.length, 10);
+    if (!canAfford("enrich", count)) {
+      toast.error(`You need ${count * CREDIT_COSTS.enrich} credits to get this contact info.`);
+      return;
+    }
     setBusy("enrich");
     try {
       const res = await rentcastApi.enrich({
@@ -539,9 +584,11 @@ export default function RentCastListingsContent({
         likely_only: !ids?.length,
       });
       if (!res.success) {
-        toast.error(res.error || "Enrich failed");
+        reportAdminError("Contact enrichment failed", res.error);
+        toast.error(SAFE_RESULTS_ERROR);
         return;
       }
+      await spendCredits("enrich", count, "find-owners");
       const summary = res.summary;
       if (summary) {
         const skipped = summary.skipped_below_60
@@ -559,7 +606,8 @@ export default function RentCastListingsContent({
         await onLoadSaved();
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Enrich failed");
+      reportAdminError("Contact enrichment exception", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
