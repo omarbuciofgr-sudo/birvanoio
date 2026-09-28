@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -198,6 +199,16 @@ export default function LeadDetail() {
     }
   };
 
+  const setVoiceConsent = async (checked: boolean) => {
+    const voiceConsentAt = checked ? new Date().toISOString() : null;
+    const { error } = await supabase.from("leads").update({ voice_consent_at: voiceConsentAt }).eq("id", lead.id);
+    if (error) toast.error("Failed to update voice consent");
+    else {
+      setLead({ ...lead, voice_consent_at: voiceConsentAt });
+      toast.success(checked ? "Voice-call consent recorded" : "Voice-call consent removed");
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-4">
@@ -300,6 +311,10 @@ export default function LeadDetail() {
                   <Button size="sm" className="h-7 text-xs gap-1" onClick={saveContact} disabled={saving}>
                     <Save className="w-3 h-3" /> Save
                   </Button>
+                </div>
+                <div className="flex items-start gap-2 border-t border-border pt-3">
+                  <Checkbox id="voice-consent" checked={Boolean(lead.voice_consent_at)} onCheckedChange={(value) => void setVoiceConsent(value === true)} />
+                  <label htmlFor="voice-consent" className="text-xs leading-5 text-muted-foreground">This lead has given consent to receive AI voice calls.</label>
                 </div>
               </CardContent>
             </Card>

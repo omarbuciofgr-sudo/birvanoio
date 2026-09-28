@@ -23,6 +23,7 @@ import { SentimentBadge } from "./SentimentBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
 
 interface ConversationLog {
   id: string;
@@ -70,6 +71,7 @@ export function CommunicationPanel({
   leadName,
   businessName,
 }: CommunicationPanelProps) {
+  const { requireAcceptance, complianceDialog } = useCommunicationCompliance();
   const [logs, setLogs] = useState<ConversationLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -121,7 +123,7 @@ export function CommunicationPanel({
     setIsLoading(false);
   };
 
-  const handleCall = async () => {
+  const startCall = async () => {
     if (!leadPhone) {
       toast.error("No phone number available");
       return;
@@ -148,6 +150,8 @@ export function CommunicationPanel({
       setCallDialogOpen(false);
     }
   };
+
+  const handleCall = () => requireAcceptance(() => { void startCall(); });
 
   const handleEndCall = () => {
     fetchLogs();
@@ -239,7 +243,7 @@ export function CommunicationPanel({
     }
   };
 
-  const handleSMS = () => {
+  const openSmsComposer = () => {
     if (!leadPhone) {
       toast.error("No phone number available");
       return;
@@ -253,6 +257,8 @@ export function CommunicationPanel({
     setSmsMessage("");
     setSmsDialogOpen(true);
   };
+
+  const handleSMS = () => requireAcceptance(openSmsComposer);
 
   const sendSMS = async () => {
     if (!leadPhone) {
@@ -354,7 +360,7 @@ export function CommunicationPanel({
     }
   };
 
-  const sendRecapSms = async () => {
+  const sendRecapSmsNow = async () => {
     if (!leadPhone || !recapSms) {
       toast.error("Missing SMS content");
       return;
@@ -375,6 +381,8 @@ export function CommunicationPanel({
       setIsSending(false);
     }
   };
+
+  const sendRecapSms = () => requireAcceptance(() => { void sendRecapSmsNow(); });
 
   const saveLog = async () => {
     const validation = logSchema.safeParse(newLog);
@@ -447,6 +455,7 @@ export function CommunicationPanel({
 
   return (
     <>
+      {complianceDialog}
       {/* Call Dialog */}
       <CallDialog
         open={callDialogOpen}

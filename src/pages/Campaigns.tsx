@@ -228,13 +228,28 @@ const Campaigns = () => {
   };
 
   const toggleCampaignActive = async (campaign: Campaign) => {
+    if (!campaign.is_active && user) {
+      const [{ data: profile }, { data: membership }] = await Promise.all([
+        supabase.from("profiles").select("mailing_address").eq("user_id", user.id).maybeSingle(),
+        supabase.from("workspace_memberships").select("workspace_id").eq("user_id", user.id).limit(1).maybeSingle(),
+      ]);
+      let hasAddress = Boolean(profile?.mailing_address?.trim());
+      if (!hasAddress && membership?.workspace_id) {
+        const { data: settings } = await supabase.from("workspace_settings").select("mailing_address").eq("workspace_id", membership.workspace_id).maybeSingle();
+        hasAddress = Boolean(settings?.mailing_address?.trim());
+      }
+      if (!hasAddress) {
+        toast.error("Add your business mailing address before sending. It's required by law in every marketing email.");
+        return;
+      }
+    }
     const { error } = await supabase
       .from("email_campaigns")
       .update({ is_active: !campaign.is_active })
       .eq("id", campaign.id);
 
     if (error) {
-      toast.error("Failed to update campaign");
+      toast.error(error.message.includes("business mailing address") ? "Add your business mailing address before sending. It's required by law in every marketing email." : "Failed to update campaign");
     } else {
       setCampaigns(campaigns.map(c => 
         c.id === campaign.id ? { ...c, is_active: !c.is_active } : c
