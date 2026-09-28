@@ -829,9 +829,12 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {layout.order.filter((id) => layout.isVisible(id)).map((id) => (
+        {layout.order
+          .filter((id) => layout.isVisible(id))
+          .filter((id) => hasTwoWeeksActivity || (id !== "callHour" && id !== "emailHour"))
+          .map((id) => (
           <div key={id}>{sections[id]}</div>
-        ))}
+          ))}
       </div>
     </DashboardLayout>
   );
