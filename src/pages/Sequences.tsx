@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { OutreachTabs } from "@/components/outreach/OutreachTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -324,6 +325,7 @@ export default function Sequences() {
   if (activeSeq) {
     return (
       <DashboardLayout fullWidth>
+        <OutreachTabs />
         <SequenceDetail
           seq={activeSeq}
           steps={steps}
@@ -355,6 +357,7 @@ export default function Sequences() {
   // ============================ LIST VIEW ============================
   return (
     <DashboardLayout>
+      <OutreachTabs />
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">

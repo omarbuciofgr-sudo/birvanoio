@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { OutreachTabs } from "@/components/outreach/OutreachTabs";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,6 +30,7 @@ const Templates = () => {
 
   return (
     <DashboardLayout>
+      <OutreachTabs />
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>

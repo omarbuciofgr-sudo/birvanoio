@@ -16,3 +16,11 @@
 - [x] Add Who we help nav dropdown and three audience pages
 - [x] Update public and dashboard browser titles
 - [x] Verify landing page and routes
+
+## Real Estate workspace
+- [x] Limit the Real Estate sidebar to five ordered items
+- [x] Consolidate Campaigns, Sequences, and Templates under Outreach tabs
+- [x] Put the Pipeline board toggle inside My Leads
+- [x] Add server-validated admin route protection
+- [x] Verify database policies, signed-out route denial, and build health
+- [ ] Verify signed-in Real Estate navigation and non-admin route denial (blocked: no matching preview account)
