@@ -38,6 +38,7 @@ import { ElevenLabsVoiceAgent } from "@/components/voice/ElevenLabsVoiceAgent";
 import { AudioRecordingPlayer } from "@/components/leads/AudioRecordingPlayer";
 import { GatedVoiceAgentPage } from "@/components/voice/GatedVoiceAgent";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
+import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
 
 interface VoiceCall {
   id: string;
@@ -88,6 +89,7 @@ const VoiceAgent = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isInitiating, setIsInitiating] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const { requireAcceptance, complianceDialog } = useCommunicationCompliance();
 
   // Form state
   const [selectedLeadId, setSelectedLeadId] = useState("");
@@ -197,6 +199,10 @@ const VoiceAgent = () => {
       toast.error("Selected lead has no phone number");
       return;
     }
+    if (!selectedLead.voice_consent_at) {
+      toast.error("AI Voice Agent calls require recorded consent from this lead.");
+      return;
+    }
 
     setIsInitiating(true);
     try {
@@ -253,6 +259,7 @@ const VoiceAgent = () => {
   return (
     <DashboardLayout>
       <GatedVoiceAgentPage>
+      {complianceDialog}
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
