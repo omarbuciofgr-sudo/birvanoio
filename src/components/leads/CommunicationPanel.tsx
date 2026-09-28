@@ -277,7 +277,7 @@ export function CommunicationPanel({
       });
       
       if (error) throw error;
-      toast.success("SMS sent successfully");
+      toast.success("SMS sent successfully · 1 credit used");
       setSmsDialogOpen(false);
       setSmsMessage("");
       fetchLogs();

@@ -41,17 +41,17 @@
 
 ## Credit pricing and fair use
 - [x] Centralize plan allowances, action costs, fair-use limits, cache TTL, and add-on pricing
-- [ ] Align landing Pricing and Billing with the centralized rules
-- [ ] Enforce successful-action charging and AI fair-use limits server-side
-- [ ] Reuse matching city searches for 24 hours
-- [ ] Show credit costs on every credit-spending action
+- [x] Align landing Pricing and Billing with the centralized rules
+- [x] Enforce successful-action charging and AI fair-use limits server-side
+- [x] Reuse matching city searches for 24 hours
+- [x] Show credit costs on every credit-spending action
 - [ ] Verify types, build, and key pricing flows
-- [ ] Centralize plan allowances, action costs, AI message limits, and add-on pricing in database settings
-- [ ] Update landing pricing and Billing plan displays with real-estate descriptions and credit explanations
-- [ ] Charge city searches, successful owner contact lookups, SMS, and voice minutes from centralized costs
-- [ ] Keep AI messages credit-free while enforcing monthly per-seat fair-use limits
-- [ ] Show AI message monthly usage in Billing and clear limit messaging
-- [ ] Add 500-credit / $25 add-on purchase option
-- [ ] Cache city owner searches for 24 hours without repeat provider calls
-- [ ] Show credit costs on every credit-consuming action
+- [x] Centralize plan allowances, action costs, AI message limits, and add-on pricing in database settings
+- [x] Update landing pricing and Billing plan displays with real-estate descriptions and credit explanations
+- [x] Charge city searches, successful owner contact lookups, SMS, and voice minutes from centralized costs
+- [x] Keep AI messages credit-free while enforcing monthly per-seat fair-use limits
+- [x] Show AI message monthly usage in Billing and clear limit messaging
+- [x] Add 500-credit / $25 add-on purchase option
+- [x] Cache city owner searches for 24 hours without repeat provider calls
+- [x] Show credit costs on every credit-consuming action
 - [ ] Verify build and key pricing flows

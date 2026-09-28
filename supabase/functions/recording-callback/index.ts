@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.190.0/crypto/mod.ts";
 import { encode as encodeBase64 } from "https://deno.land/std@0.190.0/encoding/base64.ts";
+import { chargeCredits } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -130,18 +131,26 @@ serve(async (req) => {
       });
 
       // Update the conversation log with the recording URL
-      const { error: updateError } = await supabase
+      const { data: callLog, error: updateError } = await supabase
         .from("conversation_logs")
         .update({ 
           recording_url: fullRecordingUrl,
           duration_seconds: parseInt(recordingDuration) || null,
         })
-        .eq("call_sid", callSid);
+        .eq("call_sid", callSid)
+        .select("client_id")
+        .maybeSingle();
 
       if (updateError) {
         console.error("Error updating conversation log with recording:", updateError);
       } else {
         console.log("Successfully updated conversation log with recording URL");
+        const seconds = Math.max(1, parseInt(recordingDuration) || 1);
+        const minutes = Math.ceil(seconds / 60);
+        if (callLog?.client_id) {
+          const charge = await chargeCredits(callLog.client_id, "action_voice_minute", minutes, callSid);
+          if (!charge.success) console.error("Voice credit charge failed", { callSid, reason: charge.error });
+        }
       }
     }
 

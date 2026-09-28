@@ -460,7 +460,7 @@ export default function RentCastListingsContent({
         if (cachedRows.length) {
           applyResult(cachedRows.slice(0, Math.max(1, Number(limit) || 50)));
           setStoredTotal(cachedRows.length);
-          toast.success(`Loaded ${cachedRows.length} saved listings from the last 24 hours`);
+          toast.success(`Loaded ${cachedRows.length} saved listings from the last 24 hours · no credit used`);
           return;
         }
       }
