@@ -23,6 +23,7 @@ import LocalTimeClock from "@/components/leads/LocalTimeClock";
 import SequenceEnrollments from "@/components/leads/SequenceEnrollments";
 import { resolveLeadTimezone } from "@/lib/leadTimezone";
 import type { Database } from "@/integrations/supabase/types";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"] & { lead_score?: number | null };
 type LeadStatus = Database["public"]["Enums"]["lead_status"];
@@ -138,13 +139,7 @@ export default function LeadDetail() {
     [lead],
   );
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-      </DashboardLayout>
-    );
-  }
+  if (loading || (!lead && !notFound)) return <DataPageSkeleton />;
   if (notFound) {
     return (
       <DashboardLayout>

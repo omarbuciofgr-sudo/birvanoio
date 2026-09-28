@@ -7,6 +7,7 @@ import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplates
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Clock } from "lucide-react";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const Templates = () => {
   const { user, loading } = useAuth();
@@ -18,13 +19,7 @@ const Templates = () => {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <DataPageSkeleton />;
 
   if (!user) return null;
 

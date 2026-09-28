@@ -20,6 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Zap, Plus, Search, Trash2, Loader2, Pause, Play } from 'lucide-react';
 import { CompanyNewsSignals } from '@/components/scout/CompanyNewsSignals';
@@ -173,9 +174,7 @@ export default function Signals() {
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              <div className="space-y-3 py-2">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
             ) : filteredSubs.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
                 You haven't created any signals yet.

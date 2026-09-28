@@ -21,6 +21,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import DataPageSkeleton from '@/components/dashboard/DataPageSkeleton';
 import {
   Plus,
   MoreVertical,
@@ -263,13 +265,7 @@ const Pipeline = () => {
   const wonValue = wonDeals.reduce((sum, d) => sum + (d.deal_value || 0), 0);
 
   if (loading) {
-    return (
-      <DashboardLayout fullWidth>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      </DashboardLayout>
-    );
+    return <DataPageSkeleton />;
   }
 
   return (
@@ -456,9 +452,7 @@ const Pipeline = () => {
             <ScrollArea className="h-40 border border-border/40 rounded-lg">
               <div className="p-1.5 space-y-0.5">
                 {leadsLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  </div>
+                  <div className="space-y-2 p-2">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-10 w-full" />)}</div>
                 ) : availableLeads.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-4">No available leads found</p>
                 ) : (

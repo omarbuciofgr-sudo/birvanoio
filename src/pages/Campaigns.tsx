@@ -26,6 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 import { Plus, Mail, Trash2, Edit, Users, Wand2, Loader2, Clock, Sparkles, UserPlus, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
@@ -70,6 +72,7 @@ const Campaigns = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [campaignsLoading, setCampaignsLoading] = useState(true);
 
   // Form state
   const [campaignName, setCampaignName] = useState("");
@@ -161,6 +164,7 @@ const Campaigns = () => {
   }, [selectedCampaign]);
 
   const fetchCampaigns = async () => {
+    setCampaignsLoading(true);
     const { data, error } = await supabase
       .from("email_campaigns")
       .select("*")
@@ -169,6 +173,7 @@ const Campaigns = () => {
     if (!error && data) {
       setCampaigns(data);
     }
+    setCampaignsLoading(false);
   };
 
   const fetchSteps = async (campaignId: string) => {
@@ -369,13 +374,7 @@ const Campaigns = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || (user && campaignsLoading)) return <DataPageSkeleton />;
 
   if (!user) return null;
 
@@ -776,10 +775,7 @@ const Campaigns = () => {
             </div>
             <div className="border rounded-md max-h-[400px] overflow-auto">
               {loadingLeads ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-                  Loading leads...
-                </div>
+                <div className="space-y-2 p-3">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-11 w-full" />)}</div>
               ) : availableLeads.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground text-sm">
                   No leads available to enroll

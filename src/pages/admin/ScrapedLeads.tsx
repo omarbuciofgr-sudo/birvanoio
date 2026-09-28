@@ -41,6 +41,7 @@ import { Search, Download, Users, MoreHorizontal, Eye, Trash2, ExternalLink, Che
 import { scrapedLeadsApi, scrapeJobsApi, clientOrganizationsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { LeadDetailSheet } from '@/components/scraper/LeadDetailSheet';
 import { LeadEditDialog } from '@/components/scraper/LeadEditDialog';
@@ -599,7 +600,7 @@ export default function ScrapedLeads() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading leads...</div>
+              <div className="space-y-3 py-2">{[0, 1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
             ) : totalLeads === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No leads found. Run a scrape job to get started.

@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { usePersona } from '@/hooks/usePersona';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import DataPageSkeleton from '@/components/dashboard/DataPageSkeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1802,11 +1803,7 @@ export default function WebScraper() {
     reLastApiIncludePm !== null ? reLastApiIncludePm : !reByOwnerStrict;
 
   if (authLoading || adminLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div>
-      </DashboardLayout>
-    );
+    return <DataPageSkeleton />;
   }
 
   if (!user) {

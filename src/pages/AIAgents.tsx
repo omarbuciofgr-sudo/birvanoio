@@ -19,6 +19,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Bot, Plus, Search, Play, Trash2, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 
@@ -175,9 +176,7 @@ export default function AIAgents() {
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              <div className="space-y-3 py-2">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
             ) : filteredAgents.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
                 You haven't created any agents yet.

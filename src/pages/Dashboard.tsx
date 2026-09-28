@@ -32,6 +32,8 @@ import CallHourWidget from "@/components/dashboard/widgets/CallHourWidget";
 import EmailHourWidget from "@/components/dashboard/widgets/EmailHourWidget";
 import { useOverviewLayout, type WidgetId } from "@/hooks/useOverviewLayout";
 import { useCredits } from "@/hooks/useCredits";
+import { useLeadsData } from "@/hooks/useLeadsData";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 /** 7-day pipeline chart from CRM or Scout-normalized rows. */
 function computeWeeklyActivityData(data: { created_at: string; status: string }[]) {
@@ -124,15 +126,13 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const layout = useOverviewLayout(user?.id);
   const credits = useCredits();
-  const [stats, setStats] = useState<LeadStats>({ total: 0, new: 0, contacted: 0, converted: 0, qualified: 0 });
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(user?.id);
   const [recentLeads, setRecentLeads] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [scrapedLeadsCount, setScrapedLeadsCount] = useState<number | null>(null);
-  /** True when pipeline stats/chart use `scraped_leads` because CRM `leads` is empty. */
-  const [pipelineFromScout, setPipelineFromScout] = useState(false);
   const [savedLeadCount, setSavedLeadCount] = useState(0);
   const [hasTwoWeeksActivity, setHasTwoWeeksActivity] = useState(false);
   const [gettingStarted, setGettingStarted] = useState<GettingStartedState>({
@@ -148,7 +148,6 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (user) {
-      fetchStats();
       fetchRecentLeads();
       fetchNotifications();
       fetchActivities();
@@ -157,38 +156,6 @@ const Dashboard = () => {
       fetchHomeEligibility();
     }
   }, [user]);
-
-  const fetchStats = async () => {
-    const { data: leadRows, error: leadErr } = await supabase.from("leads").select("status");
-    if (!leadErr && leadRows && leadRows.length > 0) {
-      setPipelineFromScout(false);
-      setStats({
-        total: leadRows.length,
-        new: leadRows.filter((l) => l.status === "new").length,
-        contacted: leadRows.filter((l) => l.status === "contacted").length,
-        converted: leadRows.filter((l) => l.status === "converted").length,
-        qualified: leadRows.filter((l) => l.status === "qualified").length,
-      });
-      return;
-    }
-    const { data: scraped, error: scErr } = await supabase.from("scraped_leads").select("status");
-    if (scErr || !scraped?.length) {
-      setPipelineFromScout(false);
-      if (!leadErr && leadRows) {
-        setStats({ total: 0, new: 0, contacted: 0, converted: 0, qualified: 0 });
-      }
-      return;
-    }
-    setPipelineFromScout(true);
-    const mapped = scraped.map((s) => scrapedStatusToLeadStatus(s.status));
-    setStats({
-      total: scraped.length,
-      new: mapped.filter((s) => s === "new").length,
-      contacted: mapped.filter((s) => s === "contacted").length,
-      converted: mapped.filter((s) => s === "converted").length,
-      qualified: mapped.filter((s) => s === "qualified").length,
-    });
-  };
 
   const fetchRecentLeads = async () => {
     const { data: leads } = await supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(5);
@@ -364,16 +331,17 @@ const Dashboard = () => {
     setUnreadCount(prev => Math.max(0, prev - 1));
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || leadsLoading) return <DataPageSkeleton />;
 
   if (!user) return null;
 
+  const stats: LeadStats = {
+    total: leads.length,
+    new: leads.filter((lead) => lead.status === "new").length,
+    contacted: leads.filter((lead) => lead.status === "contacted").length,
+    converted: leads.filter((lead) => lead.status === "converted").length,
+    qualified: leads.filter((lead) => lead.status === "qualified").length,
+  };
   const conversionRate = stats.total > 0 ? ((stats.converted / stats.total) * 100).toFixed(1) : "0";
   const contactRate = stats.total > 0 ? ((stats.contacted / stats.total) * 100).toFixed(1) : "0";
 
@@ -799,11 +767,6 @@ const Dashboard = () => {
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Here's your pipeline summary for {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.
-              {pipelineFromScout && (
-                <span className="block text-xs text-amber-600 dark:text-amber-500/90 mt-1">
-                  Summary uses Brivano Scout leads — CRM Leads is empty. Import or add leads to track the sales pipeline separately.
-                </span>
-              )}
             </p>
           </div>
           <div className="flex items-center gap-2">

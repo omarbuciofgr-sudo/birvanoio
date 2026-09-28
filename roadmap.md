@@ -32,3 +32,9 @@
 - [x] Show remaining credits with a Billing link
 - [x] Verify type safety and build health
 - [ ] Verify signed-in new-user and established-user states (blocked: no matching preview account)
+
+## Data consistency
+- [x] Use one shared leads query for Home, My Leads, and Reports totals
+- [x] Prevent empty-state flashes and replace Voice Agent loading text with skeletons
+- [x] Remove subscription management from Settings
+- [ ] Verify affected signed-in pages in the browser (blocked: preview account access required)

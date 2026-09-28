@@ -20,6 +20,7 @@ import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { EmailAccountsManager } from "@/components/settings/EmailAccountsManager";
 import { PhoneNumbersManager } from "@/components/settings/PhoneNumbersManager";
 import { WorkspaceFocusCard } from "@/components/settings/WorkspaceFocusCard";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 // E.164 phone number validation (optional field)
 const e164Regex = /^\+[1-9]\d{1,14}$/;
@@ -53,6 +54,7 @@ const Settings = () => {
     sender_email: "",
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -82,6 +84,7 @@ const Settings = () => {
         sender_email: data.sender_email || "",
       });
     }
+    setProfileLoading(false);
   };
 
   const handleSave = async () => {
@@ -113,13 +116,7 @@ const Settings = () => {
     setIsSaving(false);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || (user && profileLoading)) return <DataPageSkeleton />;
 
   if (!user) return null;
 
@@ -332,26 +329,6 @@ const Settings = () => {
               </CardContent>
             </Card>
 
-            {/* Subscription Info */}
-            <Card className="border-border/60">
-              <CardHeader>
-                <CardTitle className="text-foreground">Subscription</CardTitle>
-                <CardDescription>Your current plan and billing information.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div>
-                    <p className="font-medium text-foreground">Current Plan</p>
-                    <p className="text-sm text-muted-foreground">
-                      Contact us to upgrade or manage your subscription.
-                    </p>
-                  </div>
-                  <Button variant="outline" asChild>
-                    <a href="mailto:hello@brivano.io">Contact Support</a>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* Templates Tab */}

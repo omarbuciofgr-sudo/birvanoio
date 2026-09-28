@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   CreditCard,
   Users,
@@ -414,7 +415,7 @@ const Billing = () => {
           </CardHeader>
           <CardContent>
             {loadingMembers ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Loading members…</p>
+              <div className="space-y-3 py-2">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
             ) : members.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No members found.</p>
             ) : (
