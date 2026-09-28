@@ -11,7 +11,7 @@ const ProductDemo = React.forwardRef<HTMLElement>(function ProductDemo(_props, r
             See it in action
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            A CRM built for closing deals — not managing spreadsheets.
+            Find owners, save leads, and track every conversation without managing spreadsheets.
           </p>
         </div>
 

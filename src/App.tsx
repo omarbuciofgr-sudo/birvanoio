@@ -50,6 +50,7 @@ import GmailReturn from "./pages/oauth/GmailReturn";
 import AccountDetail from "./pages/AccountDetail";
 import LeadDetail from "./pages/LeadDetail";
 import OAuthConsent from "./pages/OAuthConsent";
+import RealEstateAudience from "./pages/RealEstateAudience";
 
 
 const queryClient = new QueryClient();
@@ -108,6 +109,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
               <Route path="/dashboard/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
               <Route path="/trust" element={<Trust />} />
+              <Route path="/who-we-help/:audience" element={<RealEstateAudience />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>
           </BrowserRouter>

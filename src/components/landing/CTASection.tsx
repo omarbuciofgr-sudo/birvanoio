@@ -14,10 +14,10 @@ const CTASection = React.forwardRef<HTMLDivElement>(function CTASection(_props, 
       <div ref={scrollRef} className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Ready to scale your pipeline?
+            Ready to find your next owner opportunity?
           </h2>
           <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-            Start scraping and enriching leads in under 2 minutes. No credit card required.
+            Search a city, get owner contact information, and keep every follow-up organized.
           </p>
 
           <Button
