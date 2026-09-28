@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { Search, Building2, Sparkles, ArrowUpDown, MapPin, Flame, GitMerge } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import { useLeadsData } from "@/hooks/useLeadsData";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -61,7 +62,7 @@ function extractDomain(value: string | null | undefined): string | null {
 export default function Accounts() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
   const [search, setSearch] = useState("");
   const [industryFilter, setIndustryFilter] = useState("all");
   const [stateFilter, setStateFilter] = useState("all");
@@ -71,17 +72,6 @@ export default function Accounts() {
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("leads")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setLeads(data);
-      });
-  }, [user]);
 
   const accounts: Account[] = useMemo(() => {
     const map = new Map<string, Account>();
@@ -170,13 +160,7 @@ export default function Accounts() {
     return out;
   }, [accounts, search, industryFilter, stateFilter, hotOnly, sortBy]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || leadsLoading) return <DataPageSkeleton />;
   if (!user) return null;
 
   return (

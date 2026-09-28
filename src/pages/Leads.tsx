@@ -64,6 +64,8 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { useLeadsData } from "@/hooks/useLeadsData";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
 
@@ -88,6 +90,7 @@ type SortDir = "asc" | "desc";
 const Leads = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { data: sharedLeads = [], isLoading: leadsLoading, refetch: refetchLeads } = useLeadsData(Boolean(user));
   const [leads, setLeads] = useState<Lead[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -134,8 +137,8 @@ const Leads = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (user) fetchLeads();
-  }, [user]);
+    setLeads(sharedLeads);
+  }, [sharedLeads]);
 
   useEffect(() => {
     if (!selectedLead) return;
@@ -146,8 +149,7 @@ const Leads = () => {
   }, [selectedLead]);
 
   const fetchLeads = async () => {
-    const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
-    if (!error && data) setLeads(data);
+    await refetchLeads();
   };
 
   // Derived data for filters
@@ -343,13 +345,7 @@ const Leads = () => {
     toast.success("Leads exported!");
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || leadsLoading) return <DataPageSkeleton />;
 
   if (!user) return null;
 
@@ -365,7 +361,7 @@ const Leads = () => {
             <p className="text-xs text-muted-foreground mt-0.5">
               {activeTab === "companies"
                 ? `${companies.length} compan${companies.length === 1 ? "y" : "ies"} · grouped from your leads`
-                : `${filteredLeads.length} of ${leads.filter(l => !!(l.contact_name || l.email || l.phone)).length} people`}
+                : `${filteredLeads.length} of ${leads.length} leads`}
               {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active`}
             </p>
           </div>

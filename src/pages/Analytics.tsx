@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart,
@@ -19,13 +18,15 @@ import {
 import type { Database } from "@/integrations/supabase/types";
 import { AINLReports } from "@/components/dashboard/AINLReports";
 import { AIAnomalyDetection } from "@/components/dashboard/AIAnomalyDetection";
+import { useLeadsData } from "@/hooks/useLeadsData";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
 const Analytics = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
 
   useEffect(() => {
     if (!loading && !user) {
@@ -33,29 +34,7 @@ const Analytics = () => {
     }
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (user) {
-      fetchLeads();
-    }
-  }, [user]);
-
-  const fetchLeads = async () => {
-    const { data, error } = await supabase
-      .from("leads")
-      .select("*");
-
-    if (!error && data) {
-      setLeads(data);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || leadsLoading) return <DataPageSkeleton />;
 
   if (!user) return null;
 

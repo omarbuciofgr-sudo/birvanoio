@@ -16,6 +16,7 @@ import {
   UserPlus, Bell, TrendingUp, Target,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type TeamActivity = {
   id: string;
@@ -85,7 +86,7 @@ export default function Team() {
   });
 
   // Fetch workspace members
-  const { data: members = [] } = useQuery({
+  const { data: members = [], isLoading: loadingMembers } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -189,7 +190,7 @@ export default function Team() {
               </CardHeader>
               <CardContent>
                 {loadingActivity ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                  <div className="space-y-3 py-4">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-14 w-full" />)}</div>
                 ) : activities.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <Activity className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -232,7 +233,7 @@ export default function Team() {
               </CardHeader>
               <CardContent>
                 {loadingComments ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                  <div className="space-y-3 py-4">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-16 w-full" />)}</div>
                 ) : comments.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -274,7 +275,9 @@ export default function Team() {
                 <CardDescription>People in your workspace</CardDescription>
               </CardHeader>
               <CardContent>
-                {members.length === 0 ? (
+                {loadingMembers ? (
+                  <div className="space-y-3 py-4">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-16 w-full" />)}</div>
+                ) : members.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm">No team members found. Invite people from Settings to collaborate.</p>
