@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription, SubscriptionTier } from "@/contexts/SubscriptionContext";
+import { DEFAULT_ACTION_COSTS, DEFAULT_PLAN_RULES, usePricingSettings } from "@/hooks/usePricingSettings";
 
 /**
  * Local-only escape hatch: set `VITE_BYPASS_CREDITS=true` in `.env` and restart Vite.
@@ -12,16 +13,16 @@ export const creditsBypassed =
 
 // Credit costs per action
 export const CREDIT_COSTS = {
-  scrape: 1,
+  scrape: DEFAULT_ACTION_COSTS.city_search,
   enrich: 2,
   search: 0, // finding companies is free — enrichment costs credits
   lead_score: 1,
   sentiment: 1,
-  skip_trace: 5,
+  skip_trace: DEFAULT_ACTION_COSTS.owner_contact,
   // These are unlimited (no credit cost)
   email: 0,
-  sms: 0,
-  call: 0,
+  sms: DEFAULT_ACTION_COSTS.sms,
+  call: DEFAULT_ACTION_COSTS.voice_minute,
 } as const;
 
 export type CreditAction = keyof typeof CREDIT_COSTS;
@@ -29,9 +30,9 @@ export type CreditAction = keyof typeof CREDIT_COSTS;
 // Monthly credit allowance per tier
 const TIER_CREDITS: Record<string, number> = {
   free: 50,
-  starter: 500,
-  growth: 2000,
-  scale: 10000,
+  starter: DEFAULT_PLAN_RULES.starter.credits,
+  growth: DEFAULT_PLAN_RULES.growth.credits,
+  scale: DEFAULT_PLAN_RULES.scale.credits,
   enterprise: Infinity,
 };
 
@@ -47,12 +48,13 @@ export interface CreditState {
 
 export function useCredits() {
   const { tier, subscribed } = useSubscription();
+  const { actionCosts, plans } = usePricingSettings();
   const [creditsUsed, setCreditsUsed] = useState(0);
   const [bonusCredits, setBonusCredits] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const effectiveTier = (subscribed && tier) ? tier : "free";
-  const monthlyAllowance = TIER_CREDITS[effectiveTier] ?? 50;
+  const monthlyAllowance = plans[effectiveTier as keyof typeof plans]?.credits ?? TIER_CREDITS[effectiveTier] ?? 50;
   const totalAvailable = monthlyAllowance + bonusCredits;
   const remaining = monthlyAllowance === Infinity ? Infinity : Math.max(0, totalAvailable - creditsUsed);
   const isAtLimit =
@@ -101,16 +103,18 @@ export function useCredits() {
 
   const canAfford = useCallback((action: CreditAction, count: number = 1): boolean => {
     if (creditsBypassed) return true;
-    const cost = CREDIT_COSTS[action] * count;
+    const mappedAction = action === "scrape" ? "city_search" : action === "skip_trace" ? "owner_contact" : action === "call" ? "voice_minute" : action;
+    const cost = (actionCosts[mappedAction as keyof typeof actionCosts] ?? CREDIT_COSTS[action]) * count;
     if (cost === 0) return true; // unlimited actions
     if (monthlyAllowance === Infinity) return true;
     return remaining >= cost;
-  }, [remaining, monthlyAllowance]);
+  }, [remaining, monthlyAllowance, actionCosts]);
 
   const spendCredits = useCallback(async (action: CreditAction, count: number = 1, referenceId?: string): Promise<boolean> => {
     if (creditsBypassed) return true;
 
-    const cost = CREDIT_COSTS[action];
+    const mappedAction = action === "scrape" ? "city_search" : action === "skip_trace" ? "owner_contact" : action === "call" ? "voice_minute" : action;
+    const cost = actionCosts[mappedAction as keyof typeof actionCosts] ?? CREDIT_COSTS[action];
     if (cost === 0) return true; // unlimited actions
 
     const totalCost = cost * count;
@@ -118,20 +122,15 @@ export function useCredits() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return false;
 
-    // Insert usage records
-    const records = Array.from({ length: count }, () => ({
-      user_id: session.user.id,
-      action,
-      credits_spent: cost,
-      reference_id: referenceId || null,
-    }));
-
-    const { error } = await supabase.from("credit_usage").insert(records);
-    if (error) return false;
+    const actionKey = `action_${mappedAction}`;
+    const { data, error } = await supabase.functions.invoke("consume-credits", {
+      body: { actionKey, units: count, referenceId },
+    });
+    if (error || !data?.success) return false;
 
     setCreditsUsed(prev => prev + totalCost);
     return true;
-  }, []);
+  }, [actionCosts]);
 
   useEffect(() => {
     fetchUsage();

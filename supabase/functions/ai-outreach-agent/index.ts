@@ -1,3 +1,6 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AI_LIMIT_MESSAGE, getAiAllowance, recordAiMessage } from "../_shared/billing.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -7,6 +10,21 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const authClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: authData, error: authError } = await authClient.auth.getUser(authHeader.replace("Bearer ", ""));
+    if (authError || !authData.user) {
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const allowance = await getAiAllowance(authData.user.id);
+    if (allowance.used >= allowance.limit) {
+      return new Response(JSON.stringify({ error: AI_LIMIT_MESSAGE, used: allowance.used, limit: allowance.limit }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const { lead, channels, tone, goal } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -101,14 +119,18 @@ Goal: ${goal || "book a meeting"}`;
     
     if (toolCall?.function?.arguments) {
       const result = JSON.parse(toolCall.function.arguments);
-      return new Response(JSON.stringify(result), {
+      const usage = await recordAiMessage(authData.user.id);
+      if (!usage.success) return new Response(JSON.stringify({ error: AI_LIMIT_MESSAGE }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ...result, ai_usage: { used: usage.used, limit: usage.limit } }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Fallback: try to parse content directly
     const content = data.choices?.[0]?.message?.content || "[]";
-    return new Response(JSON.stringify({ steps: JSON.parse(content) }), {
+    const usage = await recordAiMessage(authData.user.id);
+    if (!usage.success) return new Response(JSON.stringify({ error: AI_LIMIT_MESSAGE }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ steps: JSON.parse(content), ai_usage: { used: usage.used, limit: usage.limit } }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

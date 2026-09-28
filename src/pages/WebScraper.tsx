@@ -3077,7 +3077,7 @@ export default function WebScraper() {
     !isBackendRealEstatePlatform(rePlatform) ||
     isZillowFrboUsCountryLocation(reLocation.trim());
 
-  const forceRefreshTitle = 'Bypass saved cache and pull live listings now';
+  const forceRefreshTitle = 'Bypass saved cache and pull live listings now (1 credit)';
 
   const exportListingsToCSV = () => {
     if (reListings.length === 0) return;

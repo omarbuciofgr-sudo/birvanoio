@@ -24,9 +24,9 @@ const TIER_MAP: Record<string, string> = {
 
 // Credits per seat per month by tier
 const CREDITS_PER_SEAT: Record<string, number> = {
-  starter: 500,
-  growth: 2000,
-  scale: 10000,
+  starter: 1000,
+  growth: 2500,
+  scale: 7500,
   enterprise: 999999,
 };
 
@@ -189,6 +189,25 @@ async function allocateMonthlyCredits(
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   log("checkout.session.completed", { sessionId: session.id });
+
+  if (session.mode === "payment" && session.metadata?.checkout_type === "credit_addon") {
+    const userId = session.metadata.supabase_user_id;
+    const credits = Number(session.metadata.credits || 0);
+    if (!userId || !Number.isInteger(credits) || credits <= 0 || session.payment_status !== "paid") return;
+    const { data: existing } = await supabase.from("credit_purchases").select("status")
+      .eq("stripe_session_id", session.id).maybeSingle();
+    if (existing?.status === "completed") return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: monthly } = await supabase.from("user_monthly_credits").select("id, topup_credits")
+      .eq("user_id", userId).lte("period_start", today).gte("period_end", today).maybeSingle();
+    if (!monthly) throw new Error("No active credit period found for add-on purchase");
+    const { error: creditError } = await supabase.from("user_monthly_credits")
+      .update({ topup_credits: monthly.topup_credits + credits }).eq("id", monthly.id);
+    if (creditError) throw creditError;
+    await supabase.from("credit_purchases").update({ status: "completed" }).eq("stripe_session_id", session.id);
+    log("Credit add-on fulfilled", { userId, credits });
+    return;
+  }
 
   if (session.mode !== "subscription") {
     log("Skipping non-subscription checkout");

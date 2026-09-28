@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AI_LIMIT_MESSAGE, getAiAllowance, recordAiMessage } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,6 +35,13 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Invalid authentication token" }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
+    }
+
+    const allowance = await getAiAllowance(data.user.id);
+    if (allowance.used >= allowance.limit) {
+      return new Response(JSON.stringify({ error: AI_LIMIT_MESSAGE, used: allowance.used, limit: allowance.limit }), {
+        status: 429, headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -139,9 +147,17 @@ Context: ${context || "Initial outreach"}`
       }
     }
 
+    const usage = await recordAiMessage(data.user.id);
+    if (!usage.success) {
+      return new Response(JSON.stringify({ error: AI_LIMIT_MESSAGE, used: usage.used, limit: usage.limit }), {
+        status: 429, headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true,
+        ai_usage: { used: usage.used, limit: usage.limit },
         ...result
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }

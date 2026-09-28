@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.22.4";
+import { chargeCredits } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -187,6 +188,15 @@ serve(async (req) => {
 
     console.log("SMS sent successfully:", twilioData.sid);
 
+    const charge = await chargeCredits(user.id, "action_sms", 1, twilioData.sid);
+    if (!charge.success) {
+      console.error("SMS sent but credit charge failed", { userId: user.id, sid: twilioData.sid, reason: charge.error });
+      return new Response(
+        JSON.stringify({ error: "SMS sent, but your credit balance could not be updated. Contact support." }),
+        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     // Log the conversation
     if (leadId) {
       const { error: logError } = await supabase.from("conversation_logs").insert({
@@ -203,7 +213,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, sid: twilioData.sid }),
+      JSON.stringify({ success: true, sid: twilioData.sid, credits_spent: 1 }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {

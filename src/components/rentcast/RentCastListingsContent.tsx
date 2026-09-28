@@ -444,6 +444,26 @@ export default function RentCastListingsContent({
     }
     setBusy("search");
     try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth.user) {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: cached } = await (supabase as any)
+          .from("owner_search_results")
+          .select("listing_data, listing_kind")
+          .eq("user_id", auth.user.id)
+          .ilike("search_location", loc)
+          .gte("updated_at", cutoff)
+          .order("updated_at", { ascending: false });
+        const cachedRows = (cached ?? [])
+          .filter((row: { listing_kind?: string }) => listingType === "both" || row.listing_kind === listingType)
+          .map((row: { listing_data: RentCastListing }) => row.listing_data);
+        if (cachedRows.length) {
+          applyResult(cachedRows.slice(0, Math.max(1, Number(limit) || 50)));
+          setStoredTotal(cachedRows.length);
+          toast.success(`Loaded ${cachedRows.length} saved listings from the last 24 hours · no credit used`);
+          return;
+        }
+      }
       const ok = await scraperBackendApi.isScraperBackendReachable();
       if (!ok) {
         reportAdminError("Search service unreachable", new Error("Health check failed"));

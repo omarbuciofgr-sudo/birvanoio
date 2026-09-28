@@ -277,7 +277,7 @@ export function CommunicationPanel({
       });
       
       if (error) throw error;
-      toast.success("SMS sent successfully");
+      toast.success("SMS sent successfully · 1 credit used");
       setSmsDialogOpen(false);
       setSmsMessage("");
       fetchLogs();
@@ -490,7 +490,7 @@ export function CommunicationPanel({
             </Button>
             <Button onClick={sendSMS} disabled={isSending || !smsMessage}>
               {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-              Send SMS
+              Send SMS · 1 credit
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -597,7 +597,7 @@ export function CommunicationPanel({
                     disabled={isSending || !leadPhone || !recapSms}
                   >
                     {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                    Send SMS
+                    Send SMS · 1 credit
                   </Button>
                 </div>
                 <Textarea
@@ -634,7 +634,7 @@ export function CommunicationPanel({
             className="flex-1 gap-2"
           >
             {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
-            Call
+            Call · 10 credits/min
           </Button>
           <Button
             variant="outline"

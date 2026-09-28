@@ -59,6 +59,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_message_usage: {
+        Row: {
+          created_at: string
+          messages_used: number
+          period_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          messages_used?: number
+          period_start: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          messages_used?: number
+          period_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_user_connections: {
         Row: {
           account_email: string | null
@@ -2335,6 +2359,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_settings: {
+        Row: {
+          ai_messages_per_seat: number | null
+          created_at: string
+          credits: number | null
+          is_active: boolean
+          label: string
+          metadata: Json
+          monthly_credits_per_seat: number | null
+          price_cents: number | null
+          setting_key: string
+          setting_type: string
+          updated_at: string
+        }
+        Insert: {
+          ai_messages_per_seat?: number | null
+          created_at?: string
+          credits?: number | null
+          is_active?: boolean
+          label: string
+          metadata?: Json
+          monthly_credits_per_seat?: number | null
+          price_cents?: number | null
+          setting_key: string
+          setting_type: string
+          updated_at?: string
+        }
+        Update: {
+          ai_messages_per_seat?: number | null
+          created_at?: string
+          credits?: number | null
+          is_active?: boolean
+          label?: string
+          metadata?: Json
+          monthly_credits_per_seat?: number | null
+          price_cents?: number | null
+          setting_key?: string
+          setting_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -4559,6 +4625,28 @@ export type Database = {
       check_chat_rate_limit: {
         Args: { session_uuid: string }
         Returns: boolean
+      }
+      consume_action_credits: {
+        Args: {
+          p_action_key: string
+          p_reference_id?: string
+          p_units?: number
+        }
+        Returns: Json
+      }
+      consume_action_credits_for_user: {
+        Args: {
+          p_action_key: string
+          p_reference_id?: string
+          p_units?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      consume_ai_message: { Args: never; Returns: Json }
+      consume_ai_message_for_user: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
       get_organization_api_keys: {
         Args: { p_organization_id: string }
