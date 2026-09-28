@@ -2161,6 +2161,39 @@ export type Database = {
         }
         Relationships: []
       }
+      owner_search_results: {
+        Row: {
+          created_at: string
+          external_id: string
+          id: string
+          listing_data: Json
+          listing_kind: string | null
+          search_location: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_id: string
+          id?: string
+          listing_data?: Json
+          listing_kind?: string | null
+          search_location: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string
+          id?: string
+          listing_data?: Json
+          listing_kind?: string | null
+          search_location?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       performance_metrics: {
         Row: {
           endpoint: string | null
