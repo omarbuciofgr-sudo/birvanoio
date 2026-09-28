@@ -4634,7 +4634,20 @@ export type Database = {
         }
         Returns: Json
       }
+      consume_action_credits_for_user: {
+        Args: {
+          p_action_key: string
+          p_reference_id?: string
+          p_units?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
       consume_ai_message: { Args: never; Returns: Json }
+      consume_ai_message_for_user: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       get_organization_api_keys: {
         Args: { p_organization_id: string }
         Returns: {
