@@ -13,6 +13,8 @@ const plans = [
     monthlyPrice: 0,
     yearlyPrice: 0,
     creditsPerSeat: 50,
+    ownerLookups: 5,
+    aiMessages: 20,
     description: "Try with no commitment.",
     features: [
       "1 seat included",
@@ -30,11 +32,15 @@ const plans = [
     name: "Starter",
     monthlyPrice: 49,
     yearlyPrice: 39,
-    creditsPerSeat: 500,
-    description: "For solo reps ramping up.",
+    creditsPerSeat: 1000,
+    ownerLookups: 100,
+    aiMessages: 300,
+    description: "For solo agents",
     features: [
       "Per-seat pricing",
-      "500 credits/seat/month",
+      "1,000 credits/seat/month",
+      "About 100 owner contact lookups",
+      "300 AI-written messages/month",
       "Everything in Free",
       "CSV import & export",
       "Message templates",
@@ -49,11 +55,15 @@ const plans = [
     name: "Growth",
     monthlyPrice: 99,
     yearlyPrice: 79,
-    creditsPerSeat: 2000,
-    description: "For teams that need AI tools.",
+    creditsPerSeat: 2500,
+    ownerLookups: 250,
+    aiMessages: 1000,
+    description: "For busy agents and small teams",
     features: [
       "Per-seat pricing",
-      "2,000 credits/seat/month",
+      "2,500 credits/seat/month",
+      "About 250 owner contact lookups",
+      "1,000 AI-written messages/month",
       "Everything in Starter",
       "AI call recaps",
       "AI lead scoring & sentiment",
@@ -68,11 +78,15 @@ const plans = [
     name: "Scale",
     monthlyPrice: 249,
     yearlyPrice: 199,
-    creditsPerSeat: 10000,
-    description: "For agencies at volume.",
+    creditsPerSeat: 7500,
+    ownerLookups: 750,
+    aiMessages: 3000,
+    description: "For brokerages and property management companies",
     features: [
       "Per-seat pricing",
-      "10,000 credits/seat/month",
+      "7,500 credits/seat/month",
+      "About 750 owner contact lookups",
+      "3,000 AI-written messages/month",
       "Everything in Growth",
       "Prospect & industry search",
       "Skip tracing",
@@ -133,7 +147,7 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
             Per-seat, credit-based pricing
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto mb-8">
-            Pay per seat. Each seat includes a monthly credit allowance. Unlimited calls, email & SMS on all paid plans.
+            Pay per seat. Each seat includes a monthly credit allowance. Calls, email & SMS included (standard carrier limits apply).
           </p>
 
           {/* Billing toggle */}
@@ -245,6 +259,29 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-12 border-t border-border pt-10">
+          <div className="mb-5 text-center">
+            <h3 className="font-display text-xl font-bold text-foreground">What does a credit get me?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Credits are charged only when the listed action succeeds.</p>
+          </div>
+          <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
+            {[
+              ["Search a city", "1 credit"],
+              ["Owner contact lookup", "10 credits on a match"],
+              ["AI-written message", "0 credits · monthly limit applies"],
+              ["Send an SMS", "1 credit"],
+              ["Voice call", "10 credits per started minute"],
+              ["Send an email", "Free"],
+            ].map(([action, cost], index) => (
+              <div key={action} className={`flex items-center justify-between gap-4 px-4 py-3 text-sm ${index > 0 ? "border-t border-border" : ""}`}>
+                <span className="text-foreground">{action}</span>
+                <span className="text-right font-medium text-foreground">{cost}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-sm text-muted-foreground">Need more? Add 500 credits for $25 from Billing.</p>
         </div>
 
         <div className="mt-10 text-center">
