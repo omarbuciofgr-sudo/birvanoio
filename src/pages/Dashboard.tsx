@@ -829,8 +829,11 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {savedLeadCount < 5 ? sections.kpis : null}
+
         {layout.order
           .filter((id) => layout.isVisible(id))
+          .filter((id) => savedLeadCount >= 5 || id !== "kpis")
           .filter((id) => hasTwoWeeksActivity || (id !== "callHour" && id !== "emailHour"))
           .map((id) => (
           <div key={id}>{sections[id]}</div>
