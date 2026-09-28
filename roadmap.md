@@ -38,3 +38,14 @@
 - [x] Prevent empty-state flashes and replace Voice Agent loading text with skeletons
 - [x] Remove subscription management from Settings
 - [ ] Verify affected signed-in pages in the browser (blocked: preview account access required)
+
+## Credit pricing and fair use
+- [ ] Centralize plan allowances, action costs, AI message limits, and add-on pricing in database settings
+- [ ] Update landing pricing and Billing plan displays with real-estate descriptions and credit explanations
+- [ ] Charge city searches, successful owner contact lookups, SMS, and voice minutes from centralized costs
+- [ ] Keep AI messages credit-free while enforcing monthly per-seat fair-use limits
+- [ ] Show AI message monthly usage in Billing and clear limit messaging
+- [ ] Add 500-credit / $25 add-on purchase option
+- [ ] Cache city owner searches for 24 hours without repeat provider calls
+- [ ] Show credit costs on every credit-consuming action
+- [ ] Verify build and key pricing flows
