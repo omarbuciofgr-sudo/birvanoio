@@ -22,4 +22,5 @@
 - [x] Consolidate Campaigns, Sequences, and Templates under Outreach tabs
 - [x] Put the Pipeline board toggle inside My Leads
 - [x] Add server-validated admin route protection
-- [ ] Verify database policies, navigation, direct-route denial, and build health
+- [x] Verify database policies, signed-out route denial, and build health
+- [ ] Verify signed-in Real Estate navigation and non-admin route denial (blocked: no matching preview account)
