@@ -325,6 +325,7 @@ export default function Sequences() {
   if (activeSeq) {
     return (
       <DashboardLayout fullWidth>
+        <OutreachTabs />
         <SequenceDetail
           seq={activeSeq}
           steps={steps}
