@@ -4681,7 +4681,6 @@ export type Database = {
       }
     }
     Functions: {
-      accept_communication_compliance: { Args: never; Returns: string }
       check_chat_rate_limit: {
         Args: { session_uuid: string }
         Returns: boolean
