@@ -24,6 +24,7 @@ import { Search, Download, ExternalLink, Check, FileJson, Brain, Loader2, PhoneC
 import { scrapedLeadsApi } from '@/lib/api/scraper';
 import { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
@@ -390,7 +391,7 @@ export default function ClientLeads() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading leads...</div>
+              <div className="space-y-3 py-2">{[0, 1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
             ) : filteredLeads.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No leads assigned to you yet.

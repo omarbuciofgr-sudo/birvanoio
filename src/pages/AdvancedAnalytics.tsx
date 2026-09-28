@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { subDays, format, startOfWeek, eachDayOfInterval } from "date-fns";
 import PersonaPerformanceCard from "@/components/analytics/PersonaPerformanceCard";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const COLORS = ["hsl(var(--primary))", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
@@ -152,11 +153,7 @@ export default function AdvancedAnalytics() {
   );
 
   if (isLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-      </DashboardLayout>
-    );
+    return <DataPageSkeleton />;
   }
 
   return (

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
   Mail,
@@ -426,8 +427,8 @@ export default function Sequences() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
+                    <td colSpan={7} className="p-4">
+                      <div className="space-y-3">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-11 w-full" />)}</div>
                     </td>
                   </tr>
                 ) : filteredSequences.length === 0 ? (

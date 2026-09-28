@@ -8,6 +8,7 @@ import { Plus, Play, Pause, StopCircle, Eye, Trash2, RefreshCw, Activity, Histor
 import { scrapeJobsApi, schemaTemplatesApi } from '@/lib/api/scraper';
 import { ScrapeJob, ScrapeJobStatus } from '@/types/scraper';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { CreateJobDialog } from '@/components/scraper/CreateJobDialog';
 import { JobProgressCard } from '@/components/scraper/JobProgressCard';
@@ -216,7 +217,7 @@ export default function ScrapeJobs() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading jobs...</div>
+              <div className="space-y-3 py-2">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-12 w-full" />)}</div>
             ) : jobs.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No jobs yet. Create your first scraping job.

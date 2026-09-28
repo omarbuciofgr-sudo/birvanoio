@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useGoogleCalendar, scheduleDealFollowUps, scheduleFollowUpTask } from "@/hooks/useGoogleCalendar";
 import IntelTriggerSettings from "@/components/realtor/IntelTriggerSettings";
 import IntelSignalPerformance from "@/components/realtor/IntelSignalPerformance";
@@ -936,7 +937,7 @@ const RealtorDeals = () => {
 
           <TabsContent value="board" className="mt-0">
             {loading ? (
-              <p className="text-sm text-muted-foreground">Loading deals…</p>
+              <div className="grid gap-3 md:grid-cols-3">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-56 w-full" />)}</div>
             ) : active.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="p-8 text-center space-y-2">
