@@ -811,21 +811,12 @@ export default function RentCastListingsContent({
   return (
     <>
       <div className="space-y-5">
-        {!embedded ? (
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Owner-posted listings (FRBO / FSBO)</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Zillow finds listings posted by owners (For Rent By Owner, Owner Posted). RentCast and
-              BatchData enrich property and owner data. Import into CRM.
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Zillow&apos;s own owner-posted filters find FRBO / FSBO listings; RentCast + BatchData
-            enrich property and owner data. Labels reflect the source, not a score. RentCast search is
-            kept as a legacy option.
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Find Owners</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Search any US city to find homeowners selling or renting their property without an agent.
           </p>
-        )}
+        </div>
 
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border/40 bg-muted/20 p-3">
           <div className="w-full space-y-1 sm:w-52">
@@ -837,60 +828,42 @@ export default function RentCastListingsContent({
               onKeyDown={(e) => e.key === "Enter" && onSearch()}
             />
           </div>
-          <div className="w-full space-y-1 sm:w-44">
-            <label className="text-[11px] text-muted-foreground">Source</label>
-            <Select
-              value={source}
-              onValueChange={(v) => {
-                setSource(v as SourceMode);
-                if (v === "zillow" && listingType === "both") setListingType("rental");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zillow">Zillow (owner-posted)</SelectItem>
-                <SelectItem value="rentcast">RentCast (legacy)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="w-full space-y-1 sm:w-36">
-            <label className="text-[11px] text-muted-foreground">Type</label>
+            <label className="text-[11px] text-muted-foreground">Looking for</label>
             <Select value={listingType} onValueChange={(v) => setListingType(v as ListingType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {source === "rentcast" && <SelectItem value="both">Sale + Rental</SelectItem>}
-                <SelectItem value="rental">Rental (FRBO)</SelectItem>
-                <SelectItem value="sale">Sale (FSBO)</SelectItem>
+                <SelectItem value="sale">Selling</SelectItem>
+                <SelectItem value="rental">Renting</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {source === "rentcast" && (
-          <>
           <div className="w-full space-y-1 sm:w-24">
-            <label className="text-[11px] text-muted-foreground">Limit</label>
+            <label className="text-[11px] text-muted-foreground">Number of results</label>
             <Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" />
           </div>
           <div className="w-full space-y-1 sm:w-40">
-            <label className="text-[11px] text-muted-foreground">Confidence</label>
-            <Select
-              value={confidenceFilter}
-              onValueChange={(v) => setConfidenceFilter(v as ConfidenceFilter)}
-            >
+            <label className="text-[11px] text-muted-foreground">Show</label>
+            <Select value={resultView} onValueChange={(v) => setResultView(v as ResultView)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="qualified">Qualified (60%+)</SelectItem>
-                <SelectItem value="likely">Likely (70%+)</SelectItem>
-                <SelectItem value="high">High (90%+)</SelectItem>
-                <SelectItem value="all">All scored</SelectItem>
+                <SelectItem value="best">Best matches (today&apos;s 60%+)</SelectItem>
+                <SelectItem value="all">All results</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          <Collapsible className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="gap-1.5 px-0 text-muted-foreground">
+                Advanced options <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="flex flex-wrap gap-2 pt-2">
           <div className="w-full space-y-1 sm:w-36">
             <label className="text-[11px] text-muted-foreground">Market</label>
             <Select
@@ -921,8 +894,8 @@ export default function RentCastListingsContent({
               </SelectContent>
             </Select>
           </div>
-          </>
-          )}
+            </CollapsibleContent>
+          </Collapsible>
           {showOpsUi && (
             <label className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">
               <Checkbox
@@ -938,7 +911,7 @@ export default function RentCastListingsContent({
             ) : (
               <Search className="h-4 w-4" />
             )}
-            {source === "zillow" ? "Search Zillow" : "Search RentCast"}
+            Find Owners
           </Button>
           <Button variant="outline" onClick={onLoadSaved} disabled={!!busy} className="gap-1.5">
             {busy === "load" ? (
@@ -946,7 +919,7 @@ export default function RentCastListingsContent({
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            Load saved
+            My past searches
           </Button>
           <Button
             variant="secondary"
@@ -959,15 +932,7 @@ export default function RentCastListingsContent({
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Enrich selected ({selectedCount})
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={onEnrichAllLikely}
-            disabled={!!busy || likelyCount === 0}
-            className="gap-1.5"
-          >
-            Enrich all likely ({likelyCount})
+            Get contact info ({selectedCount} selected · {selectedCount * CREDIT_COSTS.enrich} credits)
           </Button>
           {verifyEnabled && (
             <>
@@ -1005,7 +970,7 @@ export default function RentCastListingsContent({
             ) : (
               <UserPlus className="h-4 w-4" />
             )}
-            Add to CRM ({selectedCount})
+            Save to My Leads ({selectedCount})
           </Button>
           {showOpsUi && (
             <Button
@@ -1030,16 +995,10 @@ export default function RentCastListingsContent({
 
         {zillowStats && source === "zillow" && (
           <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary">Zillow owner-posted</Badge>
             <Badge variant="outline">Found {zillowStats.kept ?? 0}</Badge>
             <Badge variant="outline">
               Pages {zillowStats.pages_fetched ?? 0}/{zillowStats.total_pages ?? "?"}
               {zillowStats.cached_pages ? ` (${zillowStats.cached_pages} cached, free)` : ""}
-            </Badge>
-            <Badge variant="outline">Zillow total {zillowStats.total_results ?? "?"}</Badge>
-            <Badge variant="outline">
-              Buildings dropped{" "}
-              {(zillowStats.buildings_dropped ?? 0) + (zillowStats.community_units_dropped ?? 0)}
             </Badge>
             <Badge variant="outline">Out of market {zillowStats.out_of_market ?? 0}</Badge>
             <Badge variant="outline">
@@ -1156,15 +1115,6 @@ export default function RentCastListingsContent({
                 {diagnostic.verification.not_checked ?? 0}
               </div>
             )}
-            {diagnostic.building_concentration_buckets && (
-              <div className="text-muted-foreground">
-                Building concentration — 1: {diagnostic.building_concentration_buckets["1"] ?? 0}, 2–3:{" "}
-                {diagnostic.building_concentration_buckets["2_3"] ?? 0}, 4–5:{" "}
-                {diagnostic.building_concentration_buckets["4_5"] ?? 0}, 6–9:{" "}
-                {diagnostic.building_concentration_buckets["6_9"] ?? 0}, 10+:{" "}
-                {diagnostic.building_concentration_buckets["10_plus"] ?? 0}
-              </div>
-            )}
             {diagnostic.property_types && (
               <div className="text-muted-foreground">
                 Types — SF {diagnostic.property_types.single_family ?? 0}, Condo{" "}
@@ -1219,9 +1169,10 @@ export default function RentCastListingsContent({
         <div className="flex flex-wrap gap-2">
             {(
               [
-                ["all", "All"],
-                ["rental", "Rentals (FRBO)"],
-                ["sale", "Sales (FSBO)"],
+                ["sale-strong", "Selling – strong match"],
+                ["sale-possible", "Selling – possible"],
+                ["rental-strong", "Renting – strong match"],
+                ["rental-possible", "Renting – possible"],
               ] as const
             ).map(([key, label]) => (
             <Button
@@ -1247,26 +1198,24 @@ export default function RentCastListingsContent({
                   />
                 </TableHead>
                 <TableHead>Address</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Market</TableHead>
-                <TableHead>Classification</TableHead>
+                <TableHead>Selling or Renting</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Listing</TableHead>
-                <TableHead>Owner / Contact</TableHead>
-                <TableHead>CRM</TableHead>
+                <TableHead>Date listed</TableHead>
+                <TableHead>Match</TableHead>
+                <TableHead>Owner &amp; contact</TableHead>
+                <TableHead>Saved</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
-                    No rows yet. Search or Load saved.
+                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-10">
+                    Enter a city and click Find Owners. Most searches return results in under a minute.
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((row) => {
                   const id = row.rentcast_id || row.address || "";
-                  const links = listingExternalLinks(row);
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -1290,33 +1239,10 @@ export default function RentCastListingsContent({
                             .join(" · ")}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs capitalize">{row.listing_kind || "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <MarketStatusBadge status={row.market_status} />
-                          <FreshnessBadge freshness={row.freshness} />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <LabelBadge row={row} />
-                      </TableCell>
+                      <TableCell className="text-xs">{row.listing_kind === "sale" ? "Selling" : "Renting"}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">{money(row.price)}</TableCell>
-                      <TableCell className="text-xs">
-                        <div className="flex flex-wrap gap-1">
-                          {links.slice(0, 2).map((link) => (
-                            <a
-                              key={link.label}
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-0.5 text-primary hover:underline"
-                            >
-                              {link.label}
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ))}
-                        </div>
-                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{formatListedDate(row.listed_date)}</TableCell>
+                      <TableCell><Badge variant={rowScore(row) >= 70 ? "default" : "secondary"}>{rowScore(row) >= 70 ? "High" : "Medium"}</Badge></TableCell>
                       <TableCell className="text-xs max-w-[200px]">
                         <div className="truncate">{row.owner_name || "Not yet identified"}</div>
                         <div className="text-muted-foreground truncate">
@@ -1330,7 +1256,7 @@ export default function RentCastListingsContent({
                             to="/dashboard/leads"
                             className="text-primary hover:underline"
                           >
-                            In CRM
+                            Saved
                           </Link>
                         ) : (
                           <Button
@@ -1340,7 +1266,7 @@ export default function RentCastListingsContent({
                             disabled={!!busy}
                             onClick={() => onImportOne(row)}
                           >
-                            Add
+                            Save
                           </Button>
                         )}
                       </TableCell>
@@ -1367,10 +1293,6 @@ export default function RentCastListingsContent({
                   <MarketStatusBadge status={detailRow.market_status} />
                   <FreshnessBadge freshness={detailRow.freshness} />
                   <LabelBadge row={detailRow} />
-                  <Badge variant="outline">
-                    Source: {detailRow.source === "zillow_serpapi" ? "Zillow" : "RentCast"}
-                    {(detailRow.sources?.length ?? 0) > 1 ? " + merged" : ""}
-                  </Badge>
                   {detailRow.listing_kind && (
                     <Badge variant="outline" className="capitalize">
                       {detailRow.listing_kind}
@@ -1514,7 +1436,7 @@ export default function RentCastListingsContent({
                     className="gap-1.5"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Enrich
+                    Get contact info ({CREDIT_COSTS.enrich} credits)
                   </Button>
                   <Button
                     size="sm"
@@ -1523,11 +1445,11 @@ export default function RentCastListingsContent({
                     className="gap-1.5"
                   >
                     <UserPlus className="h-3.5 w-3.5" />
-                    Add to CRM
+                    Save to My Leads
                   </Button>
                   {detailRow.imported_lead_id && (
                     <Button size="sm" variant="outline" asChild>
-                      <Link to="/dashboard/leads">View in CRM</Link>
+                      <Link to="/dashboard/leads">View in My Leads</Link>
                     </Button>
                   )}
                 </div>
