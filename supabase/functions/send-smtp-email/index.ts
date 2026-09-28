@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.22.4";
 import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
-import { appendComplianceFooter } from "../_shared/campaignCompliance.ts";
+import { appendComplianceFooter, assertEmailNotSuppressed } from "../_shared/campaignCompliance.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +54,7 @@ serve(async (req) => {
 
     const { to, subject, body, leadId, emailAccountId, isCampaign } = validation.data;
     if (isCampaign && !leadId) return new Response(JSON.stringify({ error: "Campaign emails require a lead" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    if (isCampaign) await assertEmailNotSuppressed(supabase, user.id, to);
     // Verify lead ownership
     if (leadId) {
       const { data: lead } = await supabase.from("leads").select("client_id").eq("id", leadId).single();

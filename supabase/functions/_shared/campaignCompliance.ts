@@ -24,3 +24,11 @@ export async function appendComplianceFooter(client: SupabaseClient, userId: str
   const functionsUrl = `${(Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "")}/functions/v1`;
   return `${html}<div style="margin-top:32px;padding-top:16px;border-top:1px solid #d1d5db;color:#6b7280;font-size:12px;line-height:1.5"><div>${escapeHtml(mailingAddress)}</div><div><a href="${functionsUrl}/email-unsubscribe?token=${encodeURIComponent(token)}">Unsubscribe</a> from future marketing emails.</div></div>`;
 }
+
+export async function assertEmailNotSuppressed(client: SupabaseClient, userId: string, recipientEmail: string) {
+  const normalizedEmail = recipientEmail.trim().toLowerCase();
+  const { data: membership } = await client.from("workspace_memberships").select("workspace_id").eq("user_id", userId).limit(1).maybeSingle();
+  if (!membership?.workspace_id) return;
+  const { data: blocked } = await client.from("contact_suppression").select("id").eq("workspace_id", membership.workspace_id).eq("value_type", "email").eq("value_normalized", normalizedEmail).maybeSingle();
+  if (blocked) throw new Error("This email address has unsubscribed or is on your workspace do-not-contact list.");
+}
