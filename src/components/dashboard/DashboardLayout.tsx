@@ -41,6 +41,7 @@ import {
   Building2,
   Handshake,
   Megaphone,
+  House,
 } from "lucide-react";
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
@@ -68,6 +69,7 @@ const navSections: NavSection[] = [
     label: "Core",
     items: [
       { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Find Owners", href: "/dashboard/scraper?tab=real-estate", icon: House },
       { name: "Leads", href: "/dashboard/leads", icon: Users },
       { name: "Accounts", href: "/dashboard/accounts", icon: Building2 },
       { name: "Deals", href: "/dashboard/deals", icon: Handshake },
@@ -135,6 +137,10 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   });
 
   // Auto-expand the group that contains the active route
+  useEffect(() => {
+    document.title = "Brivano Dashboard";
+  }, []);
+
   useEffect(() => {
     setOpenGroups((prev) => {
       const next = { ...prev };
@@ -266,10 +272,12 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
               const filteredItems = section.items.filter(
                 (item: any) =>
                   (!item.adminOnly || isAdmin) &&
+                  (item.name !== "Find Owners" || isRealtor || isAdmin) &&
+                  !(isRealtor && item.name === "Brivano Scout") &&
                   // Realtors use Deals instead of Accounts
                   !(isRealtor && item.href === "/dashboard/accounts") &&
                   !(!isRealtor && !isAdmin && item.href === "/dashboard/deals") &&
-                  (isAdmin || !allowedNav || allowedNav.has(item.href))
+                  (isAdmin || !allowedNav || allowedNav.has(item.href.split("?")[0]))
               );
               if (filteredItems.length === 0) return null;
 
@@ -310,7 +318,8 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
                   {(!isCollapsibleGroup || effectiveOpen) && (
                     <div className={`space-y-0.5 ${isCollapsibleGroup ? "pl-2" : ""}`}>
                       {filteredItems.map((item) => {
-                        const isActive = location.pathname === item.href;
+                        const itemPath = item.href.split("?")[0];
+                        const isActive = location.pathname === itemPath;
                         return (
                           <Link
                             key={item.name}

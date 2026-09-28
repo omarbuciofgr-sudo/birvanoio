@@ -2,19 +2,18 @@ import * as React from "react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
 
   const navLinks = [
-    { name: "Services", href: "#services" },
+    { name: "AI Features", href: "#services" },
     { name: "How It Works", href: "#how-it-works" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "About", href: "#about" },
   ];
 
   const scrollToSection = (href: string) => {
@@ -32,6 +31,18 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1 px-0 text-sm font-normal text-muted-foreground hover:bg-transparent hover:text-foreground">
+                  Who we help <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem asChild><Link to="/who-we-help/agents">Real Estate Agents</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link to="/who-we-help/property-managers">Property Managers</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link to="/who-we-help/investors">Investors</Link></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {navLinks.map((link) => (
               <button
                 key={link.name}
@@ -86,6 +97,12 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
                 {link.name}
               </button>
             ))}
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs font-medium text-foreground">Who we help</p>
+              <Link className="block text-sm text-muted-foreground" to="/who-we-help/agents" onClick={() => setIsOpen(false)}>Real Estate Agents</Link>
+              <Link className="block text-sm text-muted-foreground" to="/who-we-help/property-managers" onClick={() => setIsOpen(false)}>Property Managers</Link>
+              <Link className="block text-sm text-muted-foreground" to="/who-we-help/investors" onClick={() => setIsOpen(false)}>Investors</Link>
+            </div>
             <div className="pt-3 space-y-2 border-t border-border">
               <Button
                 variant="ghost"

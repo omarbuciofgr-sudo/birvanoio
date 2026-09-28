@@ -15,20 +15,16 @@ const Footer = React.forwardRef<HTMLElement>(function Footer(_props, ref) {
               <BrivanoLogo className="h-28" />
             </Link>
             <p className="text-sm text-muted-foreground max-w-lg">
-              AI-powered lead generation. Fresh, verified data for any niche, any market.
+              Find owner-listed properties, get available contact information, and manage your outreach in one place.
             </p>
           </div>
 
           <div className="flex flex-col">
             <h4 className="font-display text-sm font-semibold text-foreground mb-3">Links</h4>
             <ul className="space-y-2">
-              {["Services", "Pricing", "About"].map((name) => (
-                <li key={name}>
-                  <a href={`#${name.toLowerCase()}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    {name}
-                  </a>
-                </li>
-              ))}
+              <li><a href="#services" className="text-sm text-muted-foreground hover:text-foreground transition-colors">AI features</a></li>
+              <li><a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</a></li>
+              <li><Link to="/who-we-help/agents" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Real Estate Agents</Link></li>
             </ul>
           </div>
 

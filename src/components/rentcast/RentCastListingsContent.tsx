@@ -26,6 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Download,
   ExternalLink,
@@ -34,6 +35,7 @@ import {
   Search,
   Sparkles,
   UserPlus,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -56,12 +58,33 @@ import {
   CALIBRATION_LABELS,
   downloadCalibrationCsv,
 } from "@/lib/rentcast/downloadCalibrationCsv";
+import { CREDIT_COSTS, useCredits } from "@/hooks/useCredits";
 
-type FilterTab = "all" | "rental" | "sale";
+type FilterTab = "sale-strong" | "sale-possible" | "rental-strong" | "rental-possible";
 type SourceMode = "zillow" | "rentcast";
 type ListingType = "both" | "sale" | "rental";
 type ConfidenceFilter = "qualified" | "likely" | "high" | "all";
 type MarketStatusFilter = "active" | "inactive" | "all";
+type ResultView = "best" | "all";
+
+const SAFE_RESULTS_ERROR = "We couldn't load your results. Please try again in a minute.";
+
+function reportAdminError(context: string, error: unknown) {
+  console.error(`[Find Owners] ${context}`, error);
+}
+
+function resultCategory(row: RentCastListing): FilterTab {
+  const sale = row.listing_kind === "sale";
+  const text = `${row.classification || ""} ${row.qualification || ""}`.toLowerCase();
+  const strong = text.includes("likely") || text.includes("strong") || rowScore(row) >= 70;
+  return `${sale ? "sale" : "rental"}-${strong ? "strong" : "possible"}` as FilterTab;
+}
+
+function formatListedDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+}
 
 type RentCastListingsContentProps = {
   /** When true, omit standalone page title (used inside Brivano Scout shell). */
@@ -116,7 +139,7 @@ function FreshnessBadge({ freshness }: { freshness?: string | null }) {
 const LEGACY_PM = new Set(["Institutional/PM", "Professionally Listed"]);
 function customerLabel(row: RentCastListing): string {
   if (row.source === "zillow_serpapi") {
-    return row.classification || (row.listing_kind === "sale" ? "Zillow Owner Posted / FSBO" : "Zillow FRBO");
+    return row.classification || (row.listing_kind === "sale" ? "Selling – strong match" : "Renting – strong match");
   }
   if (row.classification && LEGACY_PM.has(row.classification)) return "Professionally Managed";
   if (row.qualification === "agent_listed") return "Agent listed";
@@ -134,7 +157,7 @@ function LabelBadge({ row }: { row: RentCastListing }) {
           ? "bg-amber-600 hover:bg-amber-600"
           : "bg-sky-600 hover:bg-sky-600";
   return (
-    <Badge className={cls} title={label === "Zillow FRBO" ? "Zillow: For Rent By Owner" : undefined}>
+    <Badge className={cls}>
       {label}
     </Badge>
   );
@@ -276,8 +299,8 @@ export default function RentCastListingsContent({
   embedded = false,
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("Naperville, IL");
-  const [source, setSource] = useState<SourceMode>("zillow");
-  const [listingType, setListingType] = useState<ListingType>("rental");
+  const [source] = useState<SourceMode>("zillow");
+  const [listingType, setListingType] = useState<ListingType>("both");
   const [zillowStats, setZillowStats] = useState<ZillowSearchStats | null>(null);
   /** Rows stored in the DB for the current location/type, from the last Load saved */
   const [storedTotal, setStoredTotal] = useState<number | null>(null);
@@ -296,7 +319,8 @@ export default function RentCastListingsContent({
   const [pagesFetched, setPagesFetched] = useState<number | null>(null);
   const [queryType, setQueryType] = useState<string | null>(null);
   const [endpointsCalled, setEndpointsCalled] = useState<string[]>([]);
-  const [filter, setFilter] = useState<FilterTab>("all");
+  const [filter, setFilter] = useState<FilterTab>("sale-strong");
+  const [resultView, setResultView] = useState<ResultView>("best");
   const [listings, setListings] = useState<RentCastListing[]>([]);
   const [stats, setStats] = useState<RentCastStats | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -304,6 +328,7 @@ export default function RentCastListingsContent({
   const [busy, setBusy] = useState<
     "search" | "load" | "enrich" | "verify" | "import" | null
   >(null);
+  const { canAfford, spendCredits } = useCredits();
 
   useEffect(() => {
     let cancelled = false;
@@ -323,9 +348,11 @@ export default function RentCastListingsContent({
   }, []);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return listings;
-    return listings.filter((r) => r.listing_kind === filter);
-  }, [listings, filter]);
+    return listings.filter((row) => {
+      if (resultView === "best" && rowScore(row) < 60) return false;
+      return resultCategory(row) === filter;
+    });
+  }, [listings, filter, resultView]);
 
   const likelyInView = useMemo(
     () => filtered.filter((r) => rowScore(r) >= 60),
@@ -340,6 +367,26 @@ export default function RentCastListingsContent({
     setListings(Array.isArray(rows) ? rows : []);
     if (s) setStats(s);
     setSelectedIds(new Set());
+  };
+
+  const saveSearchResults = async (rows: RentCastListing[], searchLocation: string) => {
+    if (!rows.length) return;
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    const payload = rows
+      .filter((row) => row.rentcast_id || row.address)
+      .map((row) => ({
+        user_id: auth.user!.id,
+        external_id: row.rentcast_id || normalizeAddressKey(row.address),
+        search_location: searchLocation,
+        listing_kind: row.listing_kind || null,
+        listing_data: row,
+      }));
+    if (!payload.length) return;
+    const { error } = await (supabase as any)
+      .from("owner_search_results")
+      .upsert(payload, { onConflict: "user_id,external_id" });
+    if (error) reportAdminError("Unable to save search history", error);
   };
 
   const patchListings = (updates: RentCastListing[]) => {
@@ -391,42 +438,38 @@ export default function RentCastListingsContent({
       toast.error("Enter a city and state (e.g. Naperville, IL)");
       return;
     }
+    if (!canAfford("scrape")) {
+      toast.error(`You need ${CREDIT_COSTS.scrape} credit to run this search.`);
+      return;
+    }
     setBusy("search");
     try {
       const ok = await scraperBackendApi.isScraperBackendReachable();
       if (!ok) {
-        toast.error("Scraper backend not reachable. Start it on port 8080 (or set backend URL).");
+        reportAdminError("Search service unreachable", new Error("Health check failed"));
+        toast.error(SAFE_RESULTS_ERROR);
         return;
       }
       if (source === "zillow") {
-        const zType = listingType === "sale" ? "sale" : "rental";
-        const res = await rentcastApi.zillowSearch({ location: loc, type: zType, save: true });
-        setZillowStats(res.stats || null);
-        // Always reload from the DB: merged rows show once with their label, and a blocked
-        // search (daily limit) still shows what was saved earlier for this market.
-        const saved = await rentcastApi.leads({ location: loc, type: zType, limit: 500 });
-        applyResult(saved.success ? saved.listings : res.listings || [], saved.stats || null);
-        setStoredTotal(saved.success ? saved.stored_total ?? saved.listings?.length ?? null : null);
-        setQueryType(zType);
-        if (!res.success && !res.listings?.length) {
-          toast.error(
-            (res.error || "Zillow search failed") +
-              (saved.listings?.length ? ` · showing ${saved.listings.length} saved rows` : ""),
-          );
+        const types = listingType === "both" ? (["sale", "rental"] as const) : [listingType];
+        const responses = await Promise.all(
+          types.map((type) => rentcastApi.zillowSearch({ location: loc, type, save: true })),
+        );
+        const rows = responses.flatMap((res) => res.listings || []).slice(0, Math.max(1, Number(limit) || 50));
+        const failed = responses.filter((res) => !res.success && !res.listings?.length);
+        if (failed.length === responses.length) {
+          failed.forEach((res) => reportAdminError("Owner search failed", res.error));
+          toast.error(SAFE_RESULTS_ERROR);
+          applyResult([]);
           return;
         }
-        const s = res.stats;
-        toast.success(
-          `Zillow: ${s?.kept ?? res.listings?.length ?? 0} owner-posted listings` +
-            (res.saved != null ? ` · saved ${res.saved}` : "") +
-            (res.merged_into_existing ? ` · merged ${res.merged_into_existing}` : "") +
-            (s
-              ? ` · pages ${s.pages_fetched ?? 0}/${s.total_pages ?? "?"}` +
-                (s.cached_pages ? ` (${s.cached_pages} from cache)` : "") +
-                ` · credits today ${s.requests_today ?? "?"}/${s.daily_limit ?? "?"}`
-              : ""),
-        );
-        if (res.error) toast.message(String(res.error));
+        setZillowStats(responses[0]?.stats || null);
+        applyResult(rows);
+        setStoredTotal(rows.length);
+        setQueryType(listingType);
+        await saveSearchResults(rows, loc);
+        await spendCredits("scrape", 1, "find-owners");
+        toast.success(`Found ${rows.length} owner listings`);
         return;
       }
       setStoredTotal(null); // RentCast search results come from the API, not the DB
@@ -452,7 +495,8 @@ export default function RentCastListingsContent({
       });
       applyQueryMeta(res);
       if (!res.success && !res.listings?.length) {
-        toast.error(res.error || "RentCast search failed");
+        reportAdminError("Owner search failed", res.error);
+        toast.error(SAFE_RESULTS_ERROR);
         applyResult([], res.stats || null);
         setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
         setPoolStats(res.pool_stats || null);
@@ -462,6 +506,8 @@ export default function RentCastListingsContent({
         return;
       }
       applyResult(res.listings, res.stats || null);
+      await saveSearchResults(res.listings || [], loc);
+      await spendCredits("scrape", 1, "find-owners");
       setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
       setPoolStats(res.pool_stats || null);
       setMaxFetch(res.max_fetch ?? null);
@@ -495,9 +541,10 @@ export default function RentCastListingsContent({
             : "") +
           src,
       );
-      if (res.error) toast.message(String(res.error));
+      if (res.error) reportAdminError("Owner search warning", res.error);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Search failed");
+      reportAdminError("Owner search exception", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
@@ -506,30 +553,34 @@ export default function RentCastListingsContent({
   const onLoadSaved = async () => {
     setBusy("load");
     try {
-      const res = await rentcastApi.leads({
-        location: location.trim() || undefined,
-        type: filter === "all" ? listingType : filter,
-        limit: 500,
-      });
-      applyQueryMeta(res);
-      if (!res.success && !res.listings?.length) {
-        toast.error(res.error || "Failed to load saved leads");
-        return;
-      }
-      applyResult(res.listings, res.stats || null);
-      setStoredTotal(res.stored_total ?? res.listings?.length ?? null);
-      toast.success(
-        `Loaded ${res.listings?.length ?? 0} of ${res.stored_total ?? res.listings?.length ?? 0} stored rows` +
-          (res.query_type ? ` · ${res.query_type}` : ""),
-      );
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Not authenticated");
+      let query = (supabase as any)
+        .from("owner_search_results")
+        .select("listing_data")
+        .eq("user_id", auth.user.id)
+        .order("updated_at", { ascending: false })
+        .limit(500);
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = (data || []).map((record: { listing_data: RentCastListing }) => record.listing_data);
+      applyResult(rows);
+      setStoredTotal(rows.length);
+      toast.success(`Loaded ${rows.length} saved results`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Load failed");
+      reportAdminError("Saved searches failed", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
   };
 
   const runEnrich = async (ids?: string[]) => {
+    const count = ids?.length || Math.max(likelyInView.length, 10);
+    if (!canAfford("enrich", count)) {
+      toast.error(`You need ${count * CREDIT_COSTS.enrich} credits to get this contact info.`);
+      return;
+    }
     setBusy("enrich");
     try {
       const res = await rentcastApi.enrich({
@@ -539,7 +590,8 @@ export default function RentCastListingsContent({
         likely_only: !ids?.length,
       });
       if (!res.success) {
-        toast.error(res.error || "Enrich failed");
+        reportAdminError("Contact enrichment failed", res.error);
+        toast.error(SAFE_RESULTS_ERROR);
         return;
       }
       const summary = res.summary;
@@ -559,7 +611,8 @@ export default function RentCastListingsContent({
         await onLoadSaved();
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Enrich failed");
+      reportAdminError("Contact enrichment exception", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
@@ -610,7 +663,8 @@ export default function RentCastListingsContent({
         patchListings(res.listings);
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Verification failed");
+      reportAdminError("Listing verification failed", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
@@ -714,7 +768,8 @@ export default function RentCastListingsContent({
 
       toast.success(`CRM: ${created} created · ${updated} updated · ${skipped} skipped`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "CRM import failed");
+      reportAdminError("Lead save failed", e);
+      toast.error("We couldn't save these leads. Please try again in a minute.");
     } finally {
       setBusy(null);
     }
@@ -763,21 +818,12 @@ export default function RentCastListingsContent({
   return (
     <>
       <div className="space-y-5">
-        {!embedded ? (
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Owner-posted listings (FRBO / FSBO)</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Zillow finds listings posted by owners (For Rent By Owner, Owner Posted). RentCast and
-              BatchData enrich property and owner data. Import into CRM.
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Zillow&apos;s own owner-posted filters find FRBO / FSBO listings; RentCast + BatchData
-            enrich property and owner data. Labels reflect the source, not a score. RentCast search is
-            kept as a legacy option.
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Find Owners</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Search any US city to find homeowners selling or renting their property without an agent.
           </p>
-        )}
+        </div>
 
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border/40 bg-muted/20 p-3">
           <div className="w-full space-y-1 sm:w-52">
@@ -789,60 +835,42 @@ export default function RentCastListingsContent({
               onKeyDown={(e) => e.key === "Enter" && onSearch()}
             />
           </div>
-          <div className="w-full space-y-1 sm:w-44">
-            <label className="text-[11px] text-muted-foreground">Source</label>
-            <Select
-              value={source}
-              onValueChange={(v) => {
-                setSource(v as SourceMode);
-                if (v === "zillow" && listingType === "both") setListingType("rental");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zillow">Zillow (owner-posted)</SelectItem>
-                <SelectItem value="rentcast">RentCast (legacy)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="w-full space-y-1 sm:w-36">
-            <label className="text-[11px] text-muted-foreground">Type</label>
+            <label className="text-[11px] text-muted-foreground">Looking for</label>
             <Select value={listingType} onValueChange={(v) => setListingType(v as ListingType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {source === "rentcast" && <SelectItem value="both">Sale + Rental</SelectItem>}
-                <SelectItem value="rental">Rental (FRBO)</SelectItem>
-                <SelectItem value="sale">Sale (FSBO)</SelectItem>
+                <SelectItem value="sale">Selling</SelectItem>
+                <SelectItem value="rental">Renting</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {source === "rentcast" && (
-          <>
           <div className="w-full space-y-1 sm:w-24">
-            <label className="text-[11px] text-muted-foreground">Limit</label>
+            <label className="text-[11px] text-muted-foreground">Number of results</label>
             <Input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="numeric" />
           </div>
           <div className="w-full space-y-1 sm:w-40">
-            <label className="text-[11px] text-muted-foreground">Confidence</label>
-            <Select
-              value={confidenceFilter}
-              onValueChange={(v) => setConfidenceFilter(v as ConfidenceFilter)}
-            >
+            <label className="text-[11px] text-muted-foreground">Show</label>
+            <Select value={resultView} onValueChange={(v) => setResultView(v as ResultView)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="qualified">Qualified (60%+)</SelectItem>
-                <SelectItem value="likely">Likely (70%+)</SelectItem>
-                <SelectItem value="high">High (90%+)</SelectItem>
-                <SelectItem value="all">All scored</SelectItem>
+                <SelectItem value="best">Best matches (today&apos;s 60%+)</SelectItem>
+                <SelectItem value="all">All results</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          <Collapsible className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="gap-1.5 px-0 text-muted-foreground">
+                Advanced options <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="flex flex-wrap gap-2 pt-2">
           <div className="w-full space-y-1 sm:w-36">
             <label className="text-[11px] text-muted-foreground">Market</label>
             <Select
@@ -873,8 +901,8 @@ export default function RentCastListingsContent({
               </SelectContent>
             </Select>
           </div>
-          </>
-          )}
+            </CollapsibleContent>
+          </Collapsible>
           {showOpsUi && (
             <label className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">
               <Checkbox
@@ -890,7 +918,7 @@ export default function RentCastListingsContent({
             ) : (
               <Search className="h-4 w-4" />
             )}
-            {source === "zillow" ? "Search Zillow" : "Search RentCast"}
+            Find Owners ({CREDIT_COSTS.scrape} credit)
           </Button>
           <Button variant="outline" onClick={onLoadSaved} disabled={!!busy} className="gap-1.5">
             {busy === "load" ? (
@@ -898,7 +926,7 @@ export default function RentCastListingsContent({
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            Load saved
+            My past searches
           </Button>
           <Button
             variant="secondary"
@@ -911,15 +939,7 @@ export default function RentCastListingsContent({
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Enrich selected ({selectedCount})
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={onEnrichAllLikely}
-            disabled={!!busy || likelyCount === 0}
-            className="gap-1.5"
-          >
-            Enrich all likely ({likelyCount})
+            Get contact info ({selectedCount} selected · {selectedCount * CREDIT_COSTS.enrich} credits)
           </Button>
           {verifyEnabled && (
             <>
@@ -957,7 +977,7 @@ export default function RentCastListingsContent({
             ) : (
               <UserPlus className="h-4 w-4" />
             )}
-            Add to CRM ({selectedCount})
+            Save to My Leads ({selectedCount})
           </Button>
           {showOpsUi && (
             <Button
@@ -982,16 +1002,10 @@ export default function RentCastListingsContent({
 
         {zillowStats && source === "zillow" && (
           <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary">Zillow owner-posted</Badge>
             <Badge variant="outline">Found {zillowStats.kept ?? 0}</Badge>
             <Badge variant="outline">
               Pages {zillowStats.pages_fetched ?? 0}/{zillowStats.total_pages ?? "?"}
               {zillowStats.cached_pages ? ` (${zillowStats.cached_pages} cached, free)` : ""}
-            </Badge>
-            <Badge variant="outline">Zillow total {zillowStats.total_results ?? "?"}</Badge>
-            <Badge variant="outline">
-              Buildings dropped{" "}
-              {(zillowStats.buildings_dropped ?? 0) + (zillowStats.community_units_dropped ?? 0)}
             </Badge>
             <Badge variant="outline">Out of market {zillowStats.out_of_market ?? 0}</Badge>
             <Badge variant="outline">
@@ -1108,15 +1122,6 @@ export default function RentCastListingsContent({
                 {diagnostic.verification.not_checked ?? 0}
               </div>
             )}
-            {diagnostic.building_concentration_buckets && (
-              <div className="text-muted-foreground">
-                Building concentration — 1: {diagnostic.building_concentration_buckets["1"] ?? 0}, 2–3:{" "}
-                {diagnostic.building_concentration_buckets["2_3"] ?? 0}, 4–5:{" "}
-                {diagnostic.building_concentration_buckets["4_5"] ?? 0}, 6–9:{" "}
-                {diagnostic.building_concentration_buckets["6_9"] ?? 0}, 10+:{" "}
-                {diagnostic.building_concentration_buckets["10_plus"] ?? 0}
-              </div>
-            )}
             {diagnostic.property_types && (
               <div className="text-muted-foreground">
                 Types — SF {diagnostic.property_types.single_family ?? 0}, Condo{" "}
@@ -1171,9 +1176,10 @@ export default function RentCastListingsContent({
         <div className="flex flex-wrap gap-2">
             {(
               [
-                ["all", "All"],
-                ["rental", "Rentals (FRBO)"],
-                ["sale", "Sales (FSBO)"],
+                ["sale-strong", "Selling – strong match"],
+                ["sale-possible", "Selling – possible"],
+                ["rental-strong", "Renting – strong match"],
+                ["rental-possible", "Renting – possible"],
               ] as const
             ).map(([key, label]) => (
             <Button
@@ -1199,26 +1205,24 @@ export default function RentCastListingsContent({
                   />
                 </TableHead>
                 <TableHead>Address</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Market</TableHead>
-                <TableHead>Classification</TableHead>
+                <TableHead>Selling or Renting</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Listing</TableHead>
-                <TableHead>Owner / Contact</TableHead>
-                <TableHead>CRM</TableHead>
+                <TableHead>Date listed</TableHead>
+                <TableHead>Match</TableHead>
+                <TableHead>Owner &amp; contact</TableHead>
+                <TableHead>Saved</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-10">
-                    No rows yet. Search or Load saved.
+                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-10">
+                    Enter a city and click Find Owners. Most searches return results in under a minute.
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((row) => {
                   const id = row.rentcast_id || row.address || "";
-                  const links = listingExternalLinks(row);
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -1242,33 +1246,10 @@ export default function RentCastListingsContent({
                             .join(" · ")}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs capitalize">{row.listing_kind || "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <MarketStatusBadge status={row.market_status} />
-                          <FreshnessBadge freshness={row.freshness} />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <LabelBadge row={row} />
-                      </TableCell>
+                      <TableCell className="text-xs">{row.listing_kind === "sale" ? "Selling" : "Renting"}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">{money(row.price)}</TableCell>
-                      <TableCell className="text-xs">
-                        <div className="flex flex-wrap gap-1">
-                          {links.slice(0, 2).map((link) => (
-                            <a
-                              key={link.label}
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-0.5 text-primary hover:underline"
-                            >
-                              {link.label}
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ))}
-                        </div>
-                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{formatListedDate(row.listed_date)}</TableCell>
+                      <TableCell><Badge variant={rowScore(row) >= 70 ? "default" : "secondary"}>{rowScore(row) >= 70 ? "High" : "Medium"}</Badge></TableCell>
                       <TableCell className="text-xs max-w-[200px]">
                         <div className="truncate">{row.owner_name || "Not yet identified"}</div>
                         <div className="text-muted-foreground truncate">
@@ -1282,7 +1263,7 @@ export default function RentCastListingsContent({
                             to="/dashboard/leads"
                             className="text-primary hover:underline"
                           >
-                            In CRM
+                            Saved
                           </Link>
                         ) : (
                           <Button
@@ -1292,7 +1273,7 @@ export default function RentCastListingsContent({
                             disabled={!!busy}
                             onClick={() => onImportOne(row)}
                           >
-                            Add
+                            Save
                           </Button>
                         )}
                       </TableCell>
@@ -1319,10 +1300,6 @@ export default function RentCastListingsContent({
                   <MarketStatusBadge status={detailRow.market_status} />
                   <FreshnessBadge freshness={detailRow.freshness} />
                   <LabelBadge row={detailRow} />
-                  <Badge variant="outline">
-                    Source: {detailRow.source === "zillow_serpapi" ? "Zillow" : "RentCast"}
-                    {(detailRow.sources?.length ?? 0) > 1 ? " + merged" : ""}
-                  </Badge>
                   {detailRow.listing_kind && (
                     <Badge variant="outline" className="capitalize">
                       {detailRow.listing_kind}
@@ -1466,7 +1443,7 @@ export default function RentCastListingsContent({
                     className="gap-1.5"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Enrich
+                    Get contact info ({CREDIT_COSTS.enrich} credits)
                   </Button>
                   <Button
                     size="sm"
@@ -1475,11 +1452,11 @@ export default function RentCastListingsContent({
                     className="gap-1.5"
                   >
                     <UserPlus className="h-3.5 w-3.5" />
-                    Add to CRM
+                    Save to My Leads
                   </Button>
                   {detailRow.imported_lead_id && (
                     <Button size="sm" variant="outline" asChild>
-                      <Link to="/dashboard/leads">View in CRM</Link>
+                      <Link to="/dashboard/leads">View in My Leads</Link>
                     </Button>
                   )}
                 </div>

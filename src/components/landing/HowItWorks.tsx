@@ -1,31 +1,25 @@
 import * as React from "react";
-import { Search, Sparkles, Mail, TrendingUp } from "lucide-react";
+import { Search, Contact, Mail } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const steps = [
   {
     icon: Search,
     step: "01",
-    title: "Search & Scrape",
-    description: "Enter your target industry and location. Our AI finds fresh leads from verified sources in real-time.",
+    title: "Search a city",
+    description: "Choose selling, renting, or both to find owner-listed properties in any US city.",
   },
   {
-    icon: Sparkles,
+    icon: Contact,
     step: "02",
-    title: "AI Enrichment",
-    description: "Automatically enrich with verified emails, phones, company data, and intent signals from 100+ providers.",
+    title: "Get owner contact info",
+    description: "Select the best matches and find the owner name, phone number, and email when available.",
   },
   {
     icon: Mail,
     step: "03",
-    title: "AI Outreach",
-    description: "Launch personalized email sequences, SMS, or let your AI voice agent handle calls — all automated.",
-  },
-  {
-    icon: TrendingUp,
-    step: "04",
-    title: "Close & Scale",
-    description: "AI scores leads, analyzes sentiment, and surfaces your hottest opportunities in a unified CRM.",
+    title: "Reach out and track it",
+    description: "Save owners to My Leads, send messages, schedule follow-ups, and track every conversation.",
   },
 ];
 
@@ -43,7 +37,7 @@ const HowItWorks = React.forwardRef<HTMLDivElement>(function HowItWorks(_props, 
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {steps.map((step, index) => (
             <div
               key={step.title}

@@ -31,7 +31,7 @@ export function buildLeadNotes(row: RentCastListing): string {
     row.qualification_reason ? `Reason: ${row.qualification_reason}` : null,
     row.listing_kind ? `Listing type: ${row.listing_kind}` : null,
     row.price != null ? `Price: $${Number(row.price).toLocaleString()}` : null,
-    row.rentcast_id ? `RentCast ID: ${row.rentcast_id}` : null,
+    row.rentcast_id ? `Listing ID: ${row.rentcast_id}` : null,
   ].filter(Boolean);
   return lines.join("\n");
 }
@@ -63,20 +63,17 @@ export function listingExternalLinks(row: RentCastListing): { label: string; url
   const fromZillow = row.source === "zillow_serpapi";
   if (fromZillow && row.listing_url) {
     // The exact Zillow property the row came from, so the user can verify it directly
-    links.push({ label: "View on Zillow", url: row.listing_url });
+    links.push({ label: "View original listing", url: row.listing_url });
   } else if (row.listing_url) {
     links.push({ label: "Live listing", url: row.listing_url });
   }
   const q = encodeURIComponent((row.address || "").trim());
   if (q) {
     if (!fromZillow) {
-      links.push({
-        label: "Zillow",
-        url: `https://www.zillow.com/homes/${q}_rb/`,
-      });
+      links.push({ label: "Search this address", url: `https://www.zillow.com/homes/${q}_rb/` });
     }
     links.push({
-      label: "Realtor.com",
+      label: "Compare listing",
       url: `https://www.realtor.com/realestateandhomes-search/${q}`,
     });
   }

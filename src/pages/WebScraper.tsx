@@ -1477,7 +1477,7 @@ export default function WebScraper() {
     if (allowed.includes(tab)) setActiveTab(tab);
   }, [searchParams]);
 
-  // Realtors only get the Real Estate (RentCast) tab.
+  // Real Estate workspaces open directly to Find Owners.
   useEffect(() => {
     if (isRealtor && activeTab !== 'real-estate') setActiveTab('real-estate');
   }, [isRealtor, activeTab]);
@@ -4249,8 +4249,8 @@ export default function WebScraper() {
         {showPageChrome && !(lensSearchTypeActive && activeTab === 'prospect-search') && (
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Brivano Scout</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">{isRealtor ? 'Search FSBO / FRBO listings and turn owners into leads' : 'Find prospects, scrape listings, and enrich your pipeline'}</p>
+            {!isRealtor && <h1 className="text-xl font-semibold tracking-tight">Brivano Scout</h1>}
+            {!isRealtor && <p className="text-xs text-muted-foreground mt-0.5">Find prospects, scrape listings, and enrich your pipeline</p>}
           </div>
         </div>
         )}
