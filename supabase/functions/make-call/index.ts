@@ -94,6 +94,12 @@ serve(async (req) => {
     const clientId = user.id;
     const { data: compliance } = await supabase.from("profiles").select("communication_compliance_accepted_at").eq("user_id", user.id).maybeSingle();
     if (!compliance?.communication_compliance_accepted_at) return new Response(JSON.stringify({ error: "Accept the outreach compliance notice before calling." }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    const normalizedPhone = to.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    const { data: membership } = await supabase.from("workspace_memberships").select("workspace_id").eq("user_id", user.id).limit(1).maybeSingle();
+    if (membership?.workspace_id) {
+      const { data: blocked } = await supabase.from("contact_suppression").select("id").eq("workspace_id", membership.workspace_id).eq("value_type", "phone").eq("value_normalized", normalizedPhone).maybeSingle();
+      if (blocked) return new Response(JSON.stringify({ error: "This number is on your workspace do-not-contact list." }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
     let twilioPhone = defaultTwilioPhone;
     
     // Fetch client's custom Twilio phone number if configured

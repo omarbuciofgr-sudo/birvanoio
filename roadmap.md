@@ -62,4 +62,5 @@
 - [x] Add sender address and unsubscribe link to campaign email footers
 - [x] Require recorded lead consent for AI Voice Agent calls and retain Beta labeling
 - [x] Publish substantive Privacy and Terms pages from the landing footer
-- [ ] Verify database rules, functions, types, and browser-visible states
+- [x] Verify database rules, functions, and types
+- [ ] Verify signed-in browser-visible compliance states (blocked: no preview account access)

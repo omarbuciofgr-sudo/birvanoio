@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Clock, Mail, MessageSquare, Trash2, XCircle, CheckCircle, AlertCircle } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
 
 interface ScheduledMessage {
   id: string;
@@ -68,6 +69,7 @@ const statusConfig = {
 };
 
 export function ScheduledMessages({ userId }: ScheduledMessagesProps) {
+  const { requireAcceptance, complianceDialog } = useCommunicationCompliance();
   const [messages, setMessages] = useState<ScheduledMessage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,7 +115,7 @@ export function ScheduledMessages({ userId }: ScheduledMessagesProps) {
     }
   };
 
-  const handleCreate = async () => {
+  const createMessage = async () => {
     if (!formData.lead_id || !formData.body || !formData.scheduled_for || !formData.scheduled_time) {
       toast.error("Please fill in all required fields");
       return;
@@ -145,6 +147,11 @@ export function ScheduledMessages({ userId }: ScheduledMessagesProps) {
     setIsDialogOpen(false);
     resetForm();
     fetchMessages();
+  };
+
+  const handleCreate = () => {
+    if (formData.type === "sms") requireAcceptance(() => { void createMessage(); });
+    else void createMessage();
   };
 
   const handleCancel = async (id: string) => {
@@ -192,6 +199,8 @@ export function ScheduledMessages({ userId }: ScheduledMessagesProps) {
   const pastMessages = messages.filter(m => m.status !== "pending");
 
   return (
+    <>
+    {complianceDialog}
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -444,5 +453,6 @@ export function ScheduledMessages({ userId }: ScheduledMessagesProps) {
         </DialogContent>
       </Dialog>
     </Card>
+    </>
   );
 }

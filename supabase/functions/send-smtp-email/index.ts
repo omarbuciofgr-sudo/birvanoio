@@ -54,10 +54,6 @@ serve(async (req) => {
 
     const { to, subject, body, leadId, emailAccountId, isCampaign } = validation.data;
     if (isCampaign && !leadId) return new Response(JSON.stringify({ error: "Campaign emails require a lead" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
-    const emailHtml = isCampaign && leadId
-      ? await appendComplianceFooter(supabase, user.id, leadId, to, body.replace(/\n/g, "<br>"))
-      : body.replace(/\n/g, "<br>");
-
     // Verify lead ownership
     if (leadId) {
       const { data: lead } = await supabase.from("leads").select("client_id").eq("id", leadId).single();
@@ -67,6 +63,9 @@ serve(async (req) => {
         });
       }
     }
+    const emailHtml = isCampaign && leadId
+      ? await appendComplianceFooter(supabase, user.id, leadId, to, body.replace(/\n/g, "<br>"))
+      : body.replace(/\n/g, "<br>");
 
     // Get user's SMTP email account
     let query = supabase.from("user_email_accounts").select("*").eq("user_id", user.id);
