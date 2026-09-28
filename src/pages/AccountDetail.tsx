@@ -30,6 +30,7 @@ import {
   Save,
 } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"];
 
@@ -68,6 +69,7 @@ export default function AccountDetail() {
   const [emails, setEmails] = useState<Array<{ id: string; lead_id: string; subject: string | null; content: string | null; direction: string | null; created_at: string }>>([]);
   const [calls, setCalls] = useState<Array<{ id: string; lead_id: string; status: string; call_outcome: string | null; duration_seconds: number | null; created_at: string; started_at: string | null }>>([]);
   const [deals, setDeals] = useState<Array<{ id: string; lead_id: string; deal_value: number | null; close_date: string | null; notes: string | null }>>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
@@ -82,6 +84,7 @@ export default function AccountDetail() {
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         if (data) setLeads(data);
+        setDataLoading(false);
       });
   }, [user, decodedName]);
 
@@ -179,13 +182,7 @@ export default function AccountDetail() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading || dataLoading) return <DataPageSkeleton />;
   if (!user) return null;
 
   return (
