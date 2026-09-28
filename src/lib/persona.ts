@@ -31,8 +31,8 @@ export const ALWAYS_VISIBLE_NAV = [
 export const PERSONA_ROLES: PersonaRole[] = [
   {
     id: "realtor",
-    label: "Realtor / Real estate agent",
-    description: "FSBO & FRBO owners, skip tracing, listing outreach.",
+    label: "Real Estate",
+    description: "Agents, property managers and investors finding homeowners who are selling or renting on their own.",
   },
   {
     id: "sales_rep",
