@@ -10,6 +10,7 @@ import { toast } from "sonner";
 interface ElevenLabsVoiceAgentProps {
   agentId: string;
   leadName?: string;
+  leadId: string;
   onTranscriptUpdate?: (transcript: string) => void;
   onCallEnd?: (summary: string) => void;
 }
@@ -17,6 +18,7 @@ interface ElevenLabsVoiceAgentProps {
 export function ElevenLabsVoiceAgent({
   agentId,
   leadName,
+  leadId,
   onTranscriptUpdate,
   onCallEnd,
 }: ElevenLabsVoiceAgentProps) {
@@ -86,7 +88,7 @@ export function ElevenLabsVoiceAgent({
       // Get token from edge function
       const { data, error: fnError } = await supabase.functions.invoke(
         "elevenlabs-conversation-token",
-        { body: { agentId } }
+        { body: { leadId } }
       );
 
       if (fnError || !data?.token) {
@@ -105,7 +107,7 @@ export function ElevenLabsVoiceAgent({
     } finally {
       setIsConnecting(false);
     }
-  }, [agentId, conversation]);
+  }, [conversation, leadId]);
 
   const stopConversation = useCallback(async () => {
     await conversation.endSession();

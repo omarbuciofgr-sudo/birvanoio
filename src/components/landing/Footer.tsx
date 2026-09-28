@@ -59,8 +59,8 @@ const Footer = React.forwardRef<HTMLElement>(function Footer(_props, ref) {
         <div className="mt-10 pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-3">
           <p className="text-xs text-muted-foreground">© {currentYear} Brivano. All rights reserved.</p>
           <div className="flex gap-4">
-            <a href="#" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Privacy</a>
-            <a href="#" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Terms</a>
+            <Link to="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Privacy</Link>
+            <Link to="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character] ?? character);
 
-export async function appendComplianceFooter(client: SupabaseClient, userId: string, leadId: string, html: string) {
+export async function appendComplianceFooter(client: SupabaseClient, userId: string, leadId: string, recipientEmail: string, html: string) {
   const [{ data: profile }, { data: membership }] = await Promise.all([
     client.from("profiles").select("mailing_address").eq("user_id", userId).maybeSingle(),
     client.from("workspace_memberships").select("workspace_id").eq("user_id", userId).limit(1).maybeSingle(),
@@ -17,7 +17,7 @@ export async function appendComplianceFooter(client: SupabaseClient, userId: str
   const { data: existing } = await client.from("email_unsubscribe_tokens").select("token").eq("user_id", userId).eq("lead_id", leadId).maybeSingle();
   let token = existing?.token;
   if (!token) {
-    const { data: created, error } = await client.from("email_unsubscribe_tokens").insert({ user_id: userId, lead_id: leadId, email_normalized: "pending" }).select("token").single();
+    const { data: created, error } = await client.from("email_unsubscribe_tokens").insert({ user_id: userId, lead_id: leadId, email_normalized: recipientEmail.trim().toLowerCase() }).select("token").single();
     if (error || !created?.token) throw new Error("Could not create unsubscribe link");
     token = created.token;
   }

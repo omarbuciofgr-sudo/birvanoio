@@ -67,6 +67,7 @@ interface Lead {
   phone: string | null;
   email: string | null;
   status: string;
+  voice_consent_at: string | null;
 }
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
@@ -149,7 +150,7 @@ const VoiceAgent = () => {
   const fetchLeads = async () => {
     const { data, error } = await supabase
       .from("leads")
-      .select("id, business_name, contact_name, phone, email, status")
+      .select("id, business_name, contact_name, phone, email, status, voice_consent_at")
       .not("phone", "is", null)
       .order("created_at", { ascending: false });
 
@@ -247,6 +248,7 @@ const VoiceAgent = () => {
   if (!user) return null;
 
   const selectedLead = leads.find(l => l.id === selectedLeadId);
+  const consentedLeads = leads.filter((lead) => Boolean(lead.voice_consent_at));
 
   return (
     <DashboardLayout>
@@ -255,7 +257,7 @@ const VoiceAgent = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Voice AI Agent</h1>
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">AI Voice Agent <Badge variant="secondary">Beta</Badge></h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Automated AI-powered outbound calls for lead qualification
             </p>
@@ -420,7 +422,7 @@ const VoiceAgent = () => {
                   <SelectValue placeholder="Choose a lead to call" />
                 </SelectTrigger>
                 <SelectContent>
-                  {leads.map((lead) => (
+                  {consentedLeads.map((lead) => (
                     <SelectItem key={lead.id} value={lead.id}>
                       <div className="flex items-center gap-2">
                         <span>{lead.business_name}</span>
@@ -437,6 +439,7 @@ const VoiceAgent = () => {
                   Phone: {selectedLead.phone}
                 </p>
               )}
+              {consentedLeads.length === 0 && <p className="text-xs text-muted-foreground mt-2">Mark a lead as having given voice-call consent on its lead page before using AI Voice Agent.</p>}
             </div>
 
             {elevenLabsAgentId && selectedLeadId && (
@@ -444,6 +447,7 @@ const VoiceAgent = () => {
                 <label className="text-sm font-medium mb-2 block">Live AI Call</label>
                 <ElevenLabsVoiceAgent
                   agentId={elevenLabsAgentId}
+                  leadId={selectedLeadId}
                   leadName={selectedLead?.contact_name || selectedLead?.business_name}
                   onTranscriptUpdate={(transcript) => setLiveTranscript(transcript)}
                   onCallEnd={async (summary) => {

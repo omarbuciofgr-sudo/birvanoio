@@ -92,6 +92,8 @@ serve(async (req) => {
     }
 
     const clientId = user.id;
+    const { data: compliance } = await supabase.from("profiles").select("communication_compliance_accepted_at").eq("user_id", user.id).maybeSingle();
+    if (!compliance?.communication_compliance_accepted_at) return new Response(JSON.stringify({ error: "Accept the outreach compliance notice before calling." }), { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } });
     let twilioPhone = defaultTwilioPhone;
     
     // Fetch client's custom Twilio phone number if configured
@@ -118,7 +120,7 @@ serve(async (req) => {
     if (leadId) {
       const { data: lead, error: leadError } = await supabase
         .from("leads")
-        .select("client_id")
+        .select("client_id, do_not_contact")
         .eq("id", leadId)
         .single();
 
@@ -135,6 +137,7 @@ serve(async (req) => {
           { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
+      if (lead.do_not_contact) return new Response(JSON.stringify({ error: "This lead is marked Do not contact." }), { status: 409, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     console.log(`Initiating call to ${to} from ${twilioPhone}`);

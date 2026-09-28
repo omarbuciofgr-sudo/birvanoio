@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.22.4";
 import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { appendComplianceFooter } from "../_shared/campaignCompliance.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,7 @@ const emailSchema = z.object({
   body: z.string().min(1).max(50000),
   leadId: z.string().uuid().optional(),
   emailAccountId: z.string().uuid().optional(),
+  isCampaign: z.boolean().optional().default(false),
 });
 
 serve(async (req) => {
@@ -50,7 +52,11 @@ serve(async (req) => {
       });
     }
 
-    const { to, subject, body, leadId, emailAccountId } = validation.data;
+    const { to, subject, body, leadId, emailAccountId, isCampaign } = validation.data;
+    if (isCampaign && !leadId) return new Response(JSON.stringify({ error: "Campaign emails require a lead" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    const emailHtml = isCampaign && leadId
+      ? await appendComplianceFooter(supabase, user.id, leadId, to, body.replace(/\n/g, "<br>"))
+      : body.replace(/\n/g, "<br>");
 
     // Verify lead ownership
     if (leadId) {
@@ -91,7 +97,7 @@ serve(async (req) => {
       const emailResponse = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Authorization": `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `${senderName} <${senderEmail}>`, to: [to], subject, html: body.replace(/\n/g, "<br>") }),
+        body: JSON.stringify({ from: `${senderName} <${senderEmail}>`, to: [to], subject, html: emailHtml }),
       });
 
       const emailData = await emailResponse.json();
@@ -155,7 +161,7 @@ serve(async (req) => {
       to: to,
       subject: subject,
       content: "text/html",
-      html: body.replace(/\n/g, "<br>"),
+      html: emailHtml,
     });
 
     await client.close();
