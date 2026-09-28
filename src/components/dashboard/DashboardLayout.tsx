@@ -113,6 +113,14 @@ const navSections: NavSection[] = [
   },
 ];
 
+const realEstateNavItems: NavItem[] = [
+  { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Find Owners", href: "/dashboard/scraper?tab=real-estate", icon: House },
+  { name: "My Leads", href: "/dashboard/leads", icon: Users },
+  { name: "Outreach", href: "/dashboard/outreach", icon: Send },
+  { name: "Settings & Billing", href: "/dashboard/settings", icon: Settings },
+];
+
 const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -268,7 +276,39 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
 
           {/* Navigation - min-h-0 lets flex child shrink so overflow-y-auto works */}
           <nav className="flex-1 min-h-0 px-3 py-4 space-y-4 overflow-y-auto overflow-x-hidden">
-            {navSections.map((section) => {
+            {isRealtor && !isAdmin ? (
+              <div>
+                {!sidebarCollapsed && (
+                  <p className="px-3 mb-2 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-[0.12em]">
+                    Real Estate
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {realEstateNavItems.map((item) => {
+                    const itemPath = item.href.split("?")[0];
+                    const outreachPaths = ["/dashboard/outreach", "/dashboard/campaigns", "/dashboard/sequences", "/dashboard/templates"];
+                    const isActive = item.name === "Outreach"
+                      ? outreachPaths.includes(location.pathname)
+                      : location.pathname === itemPath;
+                    return (
+                      <Link
+                        key={item.name}
+                        to={item.href}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group relative ${
+                          isActive ? "bg-primary/[0.08] text-primary font-medium" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        } ${sidebarCollapsed ? "justify-center px-0" : ""}`}
+                        onClick={() => setSidebarOpen(false)}
+                        title={sidebarCollapsed ? item.name : undefined}
+                      >
+                        {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-primary" />}
+                        <item.icon className="w-[18px] h-[18px] shrink-0" />
+                        {!sidebarCollapsed && <span className="text-[13px]">{item.name}</span>}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : navSections.map((section) => {
               const filteredItems = section.items.filter(
                 (item: any) =>
                   (!item.adminOnly || isAdmin) &&
@@ -388,7 +428,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
             )}
 
             {/* Client items */}
-            {isClient && !isAdmin && (
+            {isClient && !isAdmin && !isRealtor && (
               <div>
                 {!sidebarCollapsed && (
                   <p className="px-3 mb-2 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-[0.12em]">
@@ -478,7 +518,12 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
                 <span className="text-muted-foreground">Brivano</span>
                 <span className="text-muted-foreground/40">/</span>
                 <span className="font-medium text-foreground">
-                  {navSections.flatMap(s => s.items).find(i => location.pathname === i.href)?.name || 
+                   {(isRealtor && !isAdmin
+                     ? realEstateNavItems.find((i) => {
+                         if (i.name === "Outreach") return ["/dashboard/outreach", "/dashboard/campaigns", "/dashboard/sequences", "/dashboard/templates"].includes(location.pathname);
+                         return location.pathname === i.href.split("?")[0];
+                       })?.name
+                     : navSections.flatMap(s => s.items).find(i => location.pathname === i.href)?.name) ||
                    (location.pathname.includes('admin') ? 'Admin' : 'Dashboard')}
                 </span>
               </div>

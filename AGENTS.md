@@ -1,1 +1,2 @@
 - Persist Find Owners search history in the user-scoped `owner_search_results` table so past searches do not depend on the external scraper service.
+- Gate every `/admin/*` route through the server-validated `check-admin` function; sidebar visibility alone is never authorization.

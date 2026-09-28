@@ -360,7 +360,7 @@ const Leads = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {activeTab === "companies" ? "Companies" : "Leads"}
+              {activeTab === "companies" ? "Companies" : "My Leads"}
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               {activeTab === "companies"
@@ -376,11 +376,13 @@ const Leads = () => {
                 value={peopleLayout}
                 onValueChange={(v) => v && setPeopleLayout(v as "table" | "kanban")}
               >
-                <ToggleGroupItem value="table" aria-label="Table view" className="gap-1 h-8 text-xs px-2.5">
+                <ToggleGroupItem value="table" aria-label="List view" className="gap-1 h-8 text-xs px-2.5">
                   <List className="w-3.5 h-3.5" />
+                  <span>List</span>
                 </ToggleGroupItem>
-                <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1 h-8 text-xs px-2.5">
+                <ToggleGroupItem value="kanban" aria-label="Pipeline view" className="gap-1 h-8 text-xs px-2.5">
                   <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Pipeline</span>
                 </ToggleGroupItem>
               </ToggleGroup>
             )}

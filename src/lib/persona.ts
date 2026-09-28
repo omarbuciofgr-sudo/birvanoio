@@ -23,7 +23,7 @@ export type PersonaGoal = {
 export const ALWAYS_VISIBLE_NAV = [
   "/dashboard",
   "/dashboard/leads",
-  "/dashboard/marketing",
+  "/dashboard/outreach",
   "/dashboard/billing",
   "/dashboard/settings",
 ];
@@ -202,8 +202,19 @@ export function allowedNavHrefs(
   const selected = goals.filter((g) => (goalIds ?? []).includes(g.id));
   const active = selected.length > 0 ? selected : goals;
   const allowed = new Set(ALWAYS_VISIBLE_NAV);
-  // Realtors get the Deals workspace in place of Accounts.
-  if (roleId === "realtor") allowed.add("/dashboard/deals");
+  if (roleId === "realtor") {
+    return new Set([
+      "/dashboard",
+      "/dashboard/scraper",
+      "/dashboard/leads",
+      "/dashboard/outreach",
+      "/dashboard/campaigns",
+      "/dashboard/sequences",
+      "/dashboard/templates",
+      "/dashboard/settings",
+      "/dashboard/billing",
+    ]);
+  }
   for (const goal of active) goal.tools.forEach((t) => allowed.add(t));
   return allowed;
 }

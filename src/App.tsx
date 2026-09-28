@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AdminRoute from "@/components/AdminRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -80,20 +81,21 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/accounts/:name" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/dashboard/outreach" element={<Navigate to="/dashboard/campaigns" replace />} />
               <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
               <Route path="/dashboard/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
               <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
-              <Route path="/admin/import" element={<ProtectedRoute><AdminImport /></ProtectedRoute>} />
+              <Route path="/admin/import" element={<AdminRoute><AdminImport /></AdminRoute>} />
               <Route path="/dashboard/contacts" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
               <Route path="/dashboard/scraper" element={<ProtectedRoute><WebScraper /></ProtectedRoute>} />
               <Route path="/dashboard/rentcast" element={<Navigate to="/dashboard/scraper?tab=real-estate" replace />} />
-              <Route path="/admin/schema-templates" element={<ProtectedRoute><SchemaTemplates /></ProtectedRoute>} />
-              <Route path="/admin/clients" element={<ProtectedRoute><ClientOrganizations /></ProtectedRoute>} />
-              <Route path="/admin/scrape-jobs" element={<ProtectedRoute><ScrapeJobs /></ProtectedRoute>} />
-              <Route path="/admin/scraped-leads" element={<ProtectedRoute><ScrapedLeads /></ProtectedRoute>} />
-              <Route path="/admin/api-settings" element={<ProtectedRoute><APISettings /></ProtectedRoute>} />
-               <Route path="/admin/scraper-settings" element={<ProtectedRoute><ScraperSettings /></ProtectedRoute>} />
-               <Route path="/admin/cost-calculator" element={<ProtectedRoute><CostCalculator /></ProtectedRoute>} />
+              <Route path="/admin/schema-templates" element={<AdminRoute><SchemaTemplates /></AdminRoute>} />
+              <Route path="/admin/clients" element={<AdminRoute><ClientOrganizations /></AdminRoute>} />
+              <Route path="/admin/scrape-jobs" element={<AdminRoute><ScrapeJobs /></AdminRoute>} />
+              <Route path="/admin/scraped-leads" element={<AdminRoute><ScrapedLeads /></AdminRoute>} />
+              <Route path="/admin/api-settings" element={<AdminRoute><APISettings /></AdminRoute>} />
+               <Route path="/admin/scraper-settings" element={<AdminRoute><ScraperSettings /></AdminRoute>} />
+               <Route path="/admin/cost-calculator" element={<AdminRoute><CostCalculator /></AdminRoute>} />
                <Route path="/client/leads" element={<ProtectedRoute><ClientLeads /></ProtectedRoute>} />
               <Route path="/dashboard/csv-enrichment" element={<ProtectedRoute><CSVEnrichment /></ProtectedRoute>} />
               <Route path="/dashboard/prospect-search" element={<ProtectedRoute><ProspectSearch /></ProtectedRoute>} />
