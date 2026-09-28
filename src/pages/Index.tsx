@@ -5,15 +5,7 @@ import Hero from "@/components/landing/Hero";
 
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
-import CRMShowcase from "@/components/landing/CRMShowcase";
 import ProductDemo from "@/components/landing/ProductDemo";
-import UseCases from "@/components/landing/UseCases";
-
-import ComparisonTable from "@/components/landing/ComparisonTable";
-import Pricing from "@/components/landing/Pricing";
-import FAQ from "@/components/landing/FAQ";
-import ROICalculator from "@/components/landing/ROICalculator";
-import About from "@/components/landing/About";
 import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
 import ChatWidget from "@/components/landing/ChatWidget";
@@ -23,11 +15,11 @@ const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
   return (
     <div ref={ref} className="min-h-screen bg-background">
       <Helmet>
-        <title>Brivano | AI-Powered B2B Lead Generation Platform</title>
-        <meta name="description" content="Fresh, verified B2B leads delivered weekly. All-in-one CRM with calling, texting, email, and AI agents — built for modern sales teams." />
+        <title>Brivano | Find FSBO &amp; FRBO Owners</title>
+        <meta name="description" content="Search US cities for FSBO and FRBO listings, find owner contact information, and manage real estate outreach from one place." />
         <link rel="canonical" href="https://www.brivano.io/" />
-        <meta property="og:title" content="Brivano | AI-Powered B2B Lead Generation Platform" />
-        <meta property="og:description" content="Fresh, verified B2B leads delivered weekly. All-in-one CRM with built-in calling, texting, email, and AI." />
+        <meta property="og:title" content="Brivano | Find FSBO &amp; FRBO Owners" />
+        <meta property="og:description" content="Find homeowners selling or renting on their own, get contact information, and manage outreach." />
         <meta property="og:url" content="https://www.brivano.io/" />
       </Helmet>
       <Navbar />
@@ -36,18 +28,7 @@ const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
       {/* Core value prop: what you get & how it works */}
       <HowItWorks />
       <Services />
-      <CRMShowcase />
       <ProductDemo />
-      <UseCases />
-      
-      {/* Decision-making: compare, price, FAQ */}
-      <ComparisonTable />
-      <Pricing />
-      <FAQ />
-      
-      {/* Supporting: ROI, about, final CTA */}
-      <ROICalculator />
-      <About />
       <CTASection />
       <Footer />
       <ChatWidget />

@@ -138,6 +138,10 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
 
   // Auto-expand the group that contains the active route
   useEffect(() => {
+    document.title = "Brivano Dashboard";
+  }, []);
+
+  useEffect(() => {
     setOpenGroups((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -273,7 +277,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
                   // Realtors use Deals instead of Accounts
                   !(isRealtor && item.href === "/dashboard/accounts") &&
                   !(!isRealtor && !isAdmin && item.href === "/dashboard/deals") &&
-                  (isAdmin || !allowedNav || allowedNav.has(item.href))
+                  (isAdmin || !allowedNav || allowedNav.has(item.href.split("?")[0]))
               );
               if (filteredItems.length === 0) return null;
 

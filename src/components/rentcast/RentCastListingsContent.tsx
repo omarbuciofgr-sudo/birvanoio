@@ -139,7 +139,7 @@ function FreshnessBadge({ freshness }: { freshness?: string | null }) {
 const LEGACY_PM = new Set(["Institutional/PM", "Professionally Listed"]);
 function customerLabel(row: RentCastListing): string {
   if (row.source === "zillow_serpapi") {
-    return row.classification || (row.listing_kind === "sale" ? "Zillow Owner Posted / FSBO" : "Zillow FRBO");
+    return row.classification || (row.listing_kind === "sale" ? "Selling – strong match" : "Renting – strong match");
   }
   if (row.classification && LEGACY_PM.has(row.classification)) return "Professionally Managed";
   if (row.qualification === "agent_listed") return "Agent listed";
@@ -157,7 +157,7 @@ function LabelBadge({ row }: { row: RentCastListing }) {
           ? "bg-amber-600 hover:bg-amber-600"
           : "bg-sky-600 hover:bg-sky-600";
   return (
-    <Badge className={cls} title={label === "Zillow FRBO" ? "Zillow: For Rent By Owner" : undefined}>
+    <Badge className={cls}>
       {label}
     </Badge>
   );
@@ -299,7 +299,7 @@ export default function RentCastListingsContent({
   embedded = false,
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("Naperville, IL");
-  const [source, setSource] = useState<SourceMode>("zillow");
+  const [source] = useState<SourceMode>("zillow");
   const [listingType, setListingType] = useState<ListingType>("both");
   const [zillowStats, setZillowStats] = useState<ZillowSearchStats | null>(null);
   /** Rows stored in the DB for the current location/type, from the last Load saved */

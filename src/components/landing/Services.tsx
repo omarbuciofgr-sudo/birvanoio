@@ -1,37 +1,27 @@
 import * as React from "react";
-import { Database, Sparkles, Bot, Search, BarChart3, Workflow } from "lucide-react";
+import { Sparkles, Bot, Gauge, MessageSquareText } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const services = [
   {
-    icon: Search,
-    title: "Web Scraper",
-    description: "Scrape leads from any industry, any city. Google Places, real estate, FSBO — all self-service.",
-  },
-  {
-    icon: Database,
-    title: "Data Enrichment",
-    description: "Waterfall enrichment across 100+ providers. Verified emails, phones, LinkedIn, and company data.",
-  },
-  {
     icon: Bot,
-    title: "AI Voice Agent",
-    description: "Automated outreach calls with natural conversation, smart qualification, and meeting booking.",
+    title: "AI Voice Agent · Beta",
+    description: "Use the beta voice agent for automated outreach calls and lead qualification.",
+  },
+  {
+    icon: Gauge,
+    title: "Smart match scoring",
+    description: "Ranks which listings are most likely to be real owner listings.",
+  },
+  {
+    icon: MessageSquareText,
+    title: "AI-written first messages",
+    description: "Creates a personalized first message for each owner.",
   },
   {
     icon: Sparkles,
-    title: "AI Automation",
-    description: "AI writes outreach, scores leads, analyzes sentiment, and generates pipeline digests hands-free.",
-  },
-  {
-    icon: Workflow,
-    title: "Workflow Engine",
-    description: "Chain actions: scrape → enrich → score → route → outreach. Let AI handle repetitive work.",
-  },
-  {
-    icon: BarChart3,
-    title: "Analytics",
-    description: "Track conversion rates, enrichment ROI, campaign performance, and pipeline health with AI insights.",
+    title: "AI follow-up suggestions",
+    description: "Suggests the next message and follow-up timing based on each lead.",
   },
 ];
 
@@ -45,14 +35,14 @@ const Services = React.forwardRef<HTMLDivElement>(function Services(_props, ref)
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <p className="text-xs font-medium text-primary uppercase tracking-widest mb-3">Platform</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Everything you need to grow
+            AI that does the busy work
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Find, enrich, and close leads — powered by AI, built for self-service.
+            Practical assistance for prioritizing listings and keeping owner conversations moving.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1">
           {services.map((service, index) => (
             <div
               key={service.title}
