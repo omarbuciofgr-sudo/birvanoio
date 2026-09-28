@@ -27,8 +27,8 @@ serve(async (req) => {
       );
     }
 
-    const { priceId, seats = 1 } = await req.json();
-    if (!priceId) throw new Error("Price ID is required");
+    const { priceId, seats = 1, checkoutType = "subscription", addonKey } = await req.json();
+    if (checkoutType === "subscription" && !priceId) throw new Error("Price ID is required");
 
     const token = authHeader.replace("Bearer ", "");
     const { data, error: authError } = await supabaseClient.auth.getUser(token);
@@ -56,7 +56,7 @@ serve(async (req) => {
         status: "active",
         limit: 1,
       });
-      if (subs.data.length > 0) {
+      if (checkoutType === "subscription" && subs.data.length > 0) {
         return new Response(
           JSON.stringify({
             error: "You already have an active subscription. Manage it from your dashboard.",
@@ -64,6 +64,27 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+    }
+
+    if (checkoutType === "credit_addon") {
+      if (addonKey !== "addon_500") throw new Error("Invalid credit add-on");
+      const { data: addon } = await supabaseClient.from("pricing_settings")
+        .select("label, credits, price_cents").eq("setting_key", addonKey).eq("is_active", true).single();
+      if (!addon?.credits || !addon.price_cents) throw new Error("Credit add-on is unavailable");
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        customer_email: customerId ? undefined : user.email,
+        line_items: [{ price_data: { currency: "usd", unit_amount: addon.price_cents, product_data: { name: addon.label } }, quantity: 1 }],
+        mode: "payment",
+        success_url: `${req.headers.get("origin")}/checkout/success`,
+        cancel_url: `${req.headers.get("origin")}/checkout/cancel`,
+        metadata: { supabase_user_id: user.id, checkout_type: "credit_addon", addon_key: addonKey, credits: String(addon.credits) },
+      });
+      await supabaseClient.from("credit_purchases").insert({
+        user_id: user.id, stripe_session_id: session.id, credits_purchased: addon.credits,
+        amount_paid_cents: addon.price_cents, status: "pending",
+      });
+      return new Response(JSON.stringify({ url: session.url }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
     }
 
     const session = await stripe.checkout.sessions.create({

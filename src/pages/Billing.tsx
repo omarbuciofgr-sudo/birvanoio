@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useAuth } from "@/hooks/useAuth";
+import { usePricingSettings } from "@/hooks/usePricingSettings";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,9 +42,9 @@ const PLAN_PRICES: Record<string, number> = {
 
 const CREDITS_PER_SEAT: Record<string, number> = {
   free: 50,
-  starter: 500,
-  growth: 2000,
-  scale: 10000,
+  starter: 1000,
+  growth: 2500,
+  scale: 7500,
   enterprise: 999999,
 };
 
@@ -81,6 +82,9 @@ const Billing = () => {
   const [seatInput, setSeatInput] = useState(seatsPurchased);
   const [updatingSeats, setUpdatingSeats] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [buyingCredits, setBuyingCredits] = useState(false);
+  const [aiMessagesUsed, setAiMessagesUsed] = useState(0);
+  const { actionCosts, plans, addon } = usePricingSettings();
 
   // Redirect non-owner/admin
   useEffect(() => {
@@ -160,6 +164,15 @@ const Billing = () => {
     fetchMembers();
   }, [fetchMembers]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    const periodStart = new Date();
+    periodStart.setDate(1);
+    supabase.from("ai_message_usage").select("messages_used").eq("user_id", user.id)
+      .eq("period_start", periodStart.toISOString().slice(0, 10)).maybeSingle()
+      .then(({ data }) => setAiMessagesUsed(data?.messages_used ?? 0));
+  }, [user?.id]);
+
   const handleUpdateSeats = async () => {
     if (seatInput === seatsPurchased || seatInput < 1) return;
     setUpdatingSeats(true);
@@ -198,9 +211,26 @@ const Billing = () => {
     }
   };
 
+  const handleBuyCredits = async () => {
+    setBuyingCredits(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { checkoutType: "credit_addon", addonKey: "addon_500" },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.url) window.open(data.url, "_blank");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to start checkout");
+    } finally {
+      setBuyingCredits(false);
+    }
+  };
+
   const effectiveTier = tier || "free";
   const pricePerSeat = PLAN_PRICES[effectiveTier] || 0;
-  const creditsPerSeat = CREDITS_PER_SEAT[effectiveTier] || 0;
+  const creditsPerSeat = plans[effectiveTier as keyof typeof plans]?.credits ?? CREDITS_PER_SEAT[effectiveTier] ?? 0;
+  const aiMessageLimit = (plans[effectiveTier as keyof typeof plans]?.aiMessages ?? 20) * Math.max(seatsPurchased, 1);
   const totalMonthly = pricePerSeat * seatsPurchased;
   const planInfo = PLAN_LABELS[effectiveTier] || PLAN_LABELS.free;
 
@@ -288,6 +318,10 @@ const Billing = () => {
                 <span className="font-medium text-foreground">
                   {pricePerSeat > 0 ? `$${pricePerSeat}/mo` : "Free"}
                 </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">AI messages</span>
+                <span className="text-foreground">{aiMessagesUsed.toLocaleString()} of {aiMessageLimit.toLocaleString()} used this month</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Monthly total</span>
@@ -406,10 +440,9 @@ const Billing = () => {
                 </CardTitle>
                 <CardDescription>Credit allocation and usage for each workspace member.</CardDescription>
               </div>
-              {/* Add-on credits placeholder */}
-              <Button variant="outline" size="sm" disabled>
+              <Button variant="outline" size="sm" onClick={handleBuyCredits} disabled={buyingCredits}>
                 <Coins className="h-4 w-4 mr-1" />
-                Buy Add-on Credits
+                {buyingCredits ? "Opening…" : `Buy ${addon.credits} credits · $${addon.priceCents / 100}`}
               </Button>
             </div>
           </CardHeader>
@@ -481,6 +514,28 @@ const Billing = () => {
                 </TableBody>
               </Table>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">What does a credit get me?</CardTitle>
+            <CardDescription>Credits are deducted only when the listed action succeeds.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader><TableRow><TableHead>Action</TableHead><TableHead className="text-right">Cost</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {[
+                  ["Search a city", `${actionCosts.city_search} credit`],
+                  ["Owner contact lookup", `${actionCosts.owner_contact} credits on a match`],
+                  ["AI-written message", "Free · monthly limit applies"],
+                  ["Send an SMS", `${actionCosts.sms} credit`],
+                  ["Voice call", `${actionCosts.voice_minute} credits per started minute`],
+                  ["Send an email", "Free"],
+                ].map(([action, cost]) => <TableRow key={action}><TableCell>{action}</TableCell><TableCell className="text-right font-medium">{cost}</TableCell></TableRow>)}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>
