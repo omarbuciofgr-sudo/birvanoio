@@ -62,7 +62,7 @@ function extractDomain(value: string | null | undefined): string | null {
 export default function Accounts() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(user?.id);
   const [search, setSearch] = useState("");
   const [industryFilter, setIndustryFilter] = useState("all");
   const [stateFilter, setStateFilter] = useState("all");

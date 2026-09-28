@@ -26,7 +26,7 @@ type Lead = Database["public"]["Tables"]["leads"]["Row"];
 const Analytics = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(user?.id);
 
   useEffect(() => {
     if (!loading && !user) {

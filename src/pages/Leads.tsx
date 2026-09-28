@@ -90,7 +90,7 @@ type SortDir = "asc" | "desc";
 const Leads = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { data: sharedLeads = [], isLoading: leadsLoading, refetch: refetchLeads } = useLeadsData(Boolean(user));
+  const { data: sharedLeads = [], isLoading: leadsLoading, refetch: refetchLeads } = useLeadsData(user?.id);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");

@@ -4,12 +4,12 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type AppLead = Database["public"]["Tables"]["leads"]["Row"];
 
-export const leadsQueryKey = ["app-leads"] as const;
+export const leadsQueryKey = (userId?: string) => ["app-leads", userId] as const;
 
-export function useLeadsData(enabled = true) {
+export function useLeadsData(userId?: string) {
   return useQuery({
-    queryKey: leadsQueryKey,
-    enabled,
+    queryKey: leadsQueryKey(userId),
+    enabled: Boolean(userId),
     queryFn: async (): Promise<AppLead[]> => {
       const { data, error } = await supabase
         .from("leads")

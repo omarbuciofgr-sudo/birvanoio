@@ -374,7 +374,7 @@ const Campaigns = () => {
     }
   };
 
-  if (loading || campaignsLoading) return <DataPageSkeleton />;
+  if (loading || (user && campaignsLoading)) return <DataPageSkeleton />;
 
   if (!user) return null;
 

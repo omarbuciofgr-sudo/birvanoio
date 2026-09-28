@@ -116,7 +116,7 @@ const Settings = () => {
     setIsSaving(false);
   };
 
-  if (loading || profileLoading) return <DataPageSkeleton />;
+  if (loading || (user && profileLoading)) return <DataPageSkeleton />;
 
   if (!user) return null;
 

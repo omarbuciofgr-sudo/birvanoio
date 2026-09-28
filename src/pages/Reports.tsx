@@ -121,7 +121,7 @@ export default function Reports() {
   const [saving, setSaving] = useState(false);
   const [loadingReports, setLoadingReports] = useState(true);
 
-  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(user?.id);
 
   const performanceData = buildPerformanceDataFromLeads(leads);
 

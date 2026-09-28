@@ -182,7 +182,7 @@ export default function AccountDetail() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading || dataLoading) return <DataPageSkeleton />;
+  if (loading || (user && dataLoading)) return <DataPageSkeleton />;
   if (!user) return null;
 
   return (

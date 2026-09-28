@@ -126,7 +126,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const layout = useOverviewLayout(user?.id);
   const credits = useCredits();
-  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(Boolean(user));
+  const { data: leads = [], isLoading: leadsLoading } = useLeadsData(user?.id);
   const [recentLeads, setRecentLeads] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
