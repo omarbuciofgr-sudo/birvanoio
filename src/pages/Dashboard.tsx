@@ -31,6 +31,7 @@ import CustomizeOverviewSheet from "@/components/dashboard/CustomizeOverviewShee
 import CallHourWidget from "@/components/dashboard/widgets/CallHourWidget";
 import EmailHourWidget from "@/components/dashboard/widgets/EmailHourWidget";
 import { useOverviewLayout, type WidgetId } from "@/hooks/useOverviewLayout";
+import { useCredits } from "@/hooks/useCredits";
 
 /** 7-day pipeline chart from CRM or Scout-normalized rows. */
 function computeWeeklyActivityData(data: { created_at: string; status: string }[]) {
@@ -85,6 +86,13 @@ interface LeadStats {
   qualified: number;
 }
 
+interface GettingStartedState {
+  searchedCity: boolean;
+  foundContact: boolean;
+  savedLead: boolean;
+  sentMessage: boolean;
+}
+
 interface Notification {
   id: string;
   title: string;
@@ -115,6 +123,7 @@ const Dashboard = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const layout = useOverviewLayout(user?.id);
+  const credits = useCredits();
   const [stats, setStats] = useState<LeadStats>({ total: 0, new: 0, contacted: 0, converted: 0, qualified: 0 });
   const [recentLeads, setRecentLeads] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -124,6 +133,14 @@ const Dashboard = () => {
   const [scrapedLeadsCount, setScrapedLeadsCount] = useState<number | null>(null);
   /** True when pipeline stats/chart use `scraped_leads` because CRM `leads` is empty. */
   const [pipelineFromScout, setPipelineFromScout] = useState(false);
+  const [savedLeadCount, setSavedLeadCount] = useState(0);
+  const [hasTwoWeeksActivity, setHasTwoWeeksActivity] = useState(false);
+  const [gettingStarted, setGettingStarted] = useState<GettingStartedState>({
+    searchedCity: false,
+    foundContact: false,
+    savedLead: false,
+    sentMessage: false,
+  });
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
@@ -137,6 +154,7 @@ const Dashboard = () => {
       fetchActivities();
       fetchScrapedLeadsCount();
       fetchLeadActivity();
+      fetchHomeEligibility();
     }
   }, [user]);
 
@@ -269,6 +287,71 @@ const Dashboard = () => {
     setWeeklyData(computeWeeklyActivityData(rows ?? []));
   };
 
+  const fetchHomeEligibility = async () => {
+    if (!user) return;
+
+    const [leadResult, ownerResult, messageResult, firstLeadResult, firstMessageResult, firstCallResult] = await Promise.all([
+      supabase.from("leads").select("id", { count: "exact", head: true }),
+      supabase
+        .from("owner_search_results")
+        .select("created_at, listing_data")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1000),
+      supabase
+        .from("conversation_logs")
+        .select("created_at")
+        .eq("client_id", user.id)
+        .eq("direction", "outbound")
+        .order("created_at", { ascending: true })
+        .limit(1),
+      supabase.from("leads").select("created_at").order("created_at", { ascending: true }).limit(1),
+      supabase
+        .from("conversation_logs")
+        .select("created_at")
+        .eq("client_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1),
+      supabase
+        .from("voice_agent_calls")
+        .select("created_at")
+        .eq("client_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1),
+    ]);
+
+    const leadCount = leadResult.count ?? 0;
+    const ownerRows = ownerResult.data ?? [];
+    const hasOwnerContact = ownerRows.some((row) => {
+      const listing = row.listing_data;
+      if (!listing || typeof listing !== "object" || Array.isArray(listing)) return false;
+      const ownerPhone = "owner_phone" in listing ? listing.owner_phone : null;
+      const ownerEmail = "owner_email" in listing ? listing.owner_email : null;
+      return Boolean(ownerPhone || ownerEmail);
+    });
+    const firstActivityDates = [
+      firstLeadResult.data?.[0]?.created_at,
+      ownerRows[0]?.created_at,
+      firstMessageResult.data?.[0]?.created_at,
+      firstCallResult.data?.[0]?.created_at,
+    ].filter((date): date is string => Boolean(date));
+    const oldestActivity = firstActivityDates.reduce<number | null>((oldest, date) => {
+      const timestamp = new Date(date).getTime();
+      if (!Number.isFinite(timestamp)) return oldest;
+      return oldest === null || timestamp < oldest ? timestamp : oldest;
+    }, null);
+    const fourteenDays = 14 * 24 * 60 * 60 * 1000;
+
+    setSavedLeadCount(leadCount);
+    setGettingStarted({
+      searchedCity: ownerRows.length > 0,
+      foundContact: hasOwnerContact,
+      savedLead: leadCount > 0,
+      sentMessage: Boolean(messageResult.data?.length),
+    });
+    setHasTwoWeeksActivity(oldestActivity !== null && Date.now() - oldestActivity >= fourteenDays);
+  };
+
   const markNotificationRead = async (id: string) => {
     if (isOptionalTableMissing("notifications")) {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
@@ -376,15 +459,54 @@ const Dashboard = () => {
       </div>
     ),
     kpis: (
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        {[
-          { title: "Total Leads", value: stats.total, icon: Users, change: "+12%", up: true, desc: "All time" },
-          { title: "New This Week", value: stats.new, icon: TrendingUp, change: "+8%", up: true, desc: "vs last week" },
-          { title: "Contact Rate", value: `${contactRate}%`, icon: Phone, change: "+3%", up: true, desc: `${stats.contacted} contacted` },
-          { title: "In Pipeline", value: stats.qualified, icon: Target, change: "+5%", up: true, desc: "Qualified" },
-          { title: "Win Rate", value: `${conversionRate}%`, icon: CheckCircle, change: "+1.2%", up: true, desc: `${stats.converted} won` },
-          { title: "Scraped Leads", value: scrapedLeadsCount !== null ? scrapedLeadsCount.toLocaleString() : "—", icon: Search, change: null, up: true, desc: "From Scout & jobs", href: "/admin/scraped-leads" },
-        ].map((stat) => {
+      savedLeadCount < 5 ? (
+        <Card className="border-border/40">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">Get started</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">Complete your first owner outreach workflow.</p>
+              </div>
+              <Badge variant="secondary" className="font-normal">
+                {Object.values(gettingStarted).filter(Boolean).length} of 4 complete
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-2 pb-5 md:grid-cols-2">
+            {[
+              { label: "Search your city", done: gettingStarted.searchedCity, href: "/dashboard/scraper?tab=real-estate" },
+              { label: "Get contact info for an owner", done: gettingStarted.foundContact, href: "/dashboard/scraper?tab=real-estate" },
+              { label: "Save an owner to My Leads", done: gettingStarted.savedLead, href: "/dashboard/leads" },
+              { label: "Send your first message", done: gettingStarted.sentMessage, href: "/dashboard/outreach" },
+            ].map((step, index) => (
+              <Link
+                key={step.label}
+                to={step.href}
+                className="flex min-h-12 items-center gap-3 rounded-md border border-border/60 px-3 py-2.5 transition-colors hover:bg-muted/40"
+              >
+                {step.done ? (
+                  <CheckCircle className="h-5 w-5 shrink-0 text-primary" />
+                ) : (
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-[10px] font-semibold text-muted-foreground">
+                    {index + 1}
+                  </span>
+                )}
+                <span className={`text-sm ${step.done ? "text-muted-foreground line-through" : "font-medium"}`}>{step.label}</span>
+                <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {[
+            { title: "Total Leads", value: stats.total, icon: Users, desc: "All time" },
+            { title: "New", value: stats.new, icon: TrendingUp, desc: "Current pipeline" },
+            { title: "Contact Rate", value: `${contactRate}%`, icon: Phone, desc: `${stats.contacted} contacted` },
+            { title: "In Pipeline", value: stats.qualified, icon: Target, desc: "Qualified" },
+            { title: "Win Rate", value: `${conversionRate}%`, icon: CheckCircle, desc: `${stats.converted} won` },
+            { title: "Scraped Leads", value: scrapedLeadsCount !== null ? scrapedLeadsCount.toLocaleString() : "—", icon: Search, desc: "From Scout & jobs", href: "/admin/scraped-leads" },
+          ].map((stat) => {
           const href = 'href' in stat ? (stat as { href?: string }).href : undefined;
           return (
             <Card
@@ -399,22 +521,16 @@ const Dashboard = () => {
                   </div>
                   {href ? (
                     <span className="text-[10px] font-medium text-muted-foreground">View</span>
-                  ) : (
-                    <span className={`text-[10px] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
-                      stat.up ? 'text-green-600 dark:text-green-400 bg-green-500/10' : 'text-destructive bg-destructive/10'
-                    }`}>
-                      {stat.up ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
-                      {stat.change}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
                 <span className="text-2xl font-bold tracking-tight">{stat.value}</span>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{stat.title} · {stat.desc}</p>
               </CardContent>
             </Card>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )
     ),
     pipelineActivity: (
       <Card className="border-border/40">
@@ -504,8 +620,8 @@ const Dashboard = () => {
         </CardContent>
       </Card>
     ),
-    callHour: <CallHourWidget />,
-    emailHour: <EmailHourWidget />,
+    callHour: hasTwoWeeksActivity ? <CallHourWidget /> : <></>,
+    emailHour: hasTwoWeeksActivity ? <EmailHourWidget /> : <></>,
     activity: (
       <Card className="border-border/40">
         <CardHeader className="pb-2 px-5 pt-4">
@@ -659,9 +775,13 @@ const Dashboard = () => {
         </div>
         <div className="grid lg:grid-cols-2 gap-4">
           <GatedAIWeeklyDigest />
-          <AIDealForecast />
-          <AISmartPriority />
-          <AIChurnDetection />
+          {hasTwoWeeksActivity ? (
+            <>
+              <AIDealForecast />
+              <AISmartPriority />
+              <AIChurnDetection />
+            </>
+          ) : null}
         </div>
       </div>
     ),
@@ -687,6 +807,12 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" asChild>
+              <Link to="/dashboard/billing">
+                <DollarSign className="h-3.5 w-3.5" />
+                {credits.isLoading ? "Credits" : `${credits.remaining === Infinity ? "Unlimited" : credits.remaining.toLocaleString()} credits`}
+              </Link>
+            </Button>
             <CustomizeOverviewSheet
               order={layout.order}
               hidden={layout.hidden}
