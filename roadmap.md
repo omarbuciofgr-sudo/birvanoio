@@ -24,3 +24,11 @@
 - [x] Add server-validated admin route protection
 - [x] Verify database policies, signed-out route denial, and build health
 - [ ] Verify signed-in Real Estate navigation and non-admin route denial (blocked: no matching preview account)
+
+## New-user Home dashboard
+- [x] Replace KPI cards with an automatic Get started checklist below five saved leads
+- [x] Remove fabricated trend badges
+- [x] Gate advanced AI and hourly performance widgets until 14 days of activity
+- [x] Show remaining credits with a Billing link
+- [x] Verify type safety and build health
+- [ ] Verify signed-in new-user and established-user states (blocked: no matching preview account)
