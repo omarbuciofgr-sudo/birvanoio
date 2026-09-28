@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.22.4";
+import { appendComplianceFooter, assertEmailNotSuppressed } from "../_shared/campaignCompliance.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,7 @@ const emailSchema = z.object({
     .min(1, "Body is required")
     .max(10000, "Body too long"),
   leadId: z.string().uuid("Invalid lead ID").optional(),
+  isCampaign: z.boolean().optional().default(false),
 });
 
 // Sanitize error messages to avoid leaking internal details
@@ -65,7 +67,7 @@ serve(async (req) => {
       );
     }
 
-    const { to, subject, body, leadId } = validation.data;
+    const { to, subject, body, leadId, isCampaign } = validation.data;
 
     // Require authentication - no anonymous email sending allowed
     const authHeader = req.headers.get("authorization");
@@ -139,6 +141,12 @@ serve(async (req) => {
 
     console.log(`Sending email to ${to} from ${senderName} <${senderEmail}> with subject: ${subject}`);
 
+    if (isCampaign && !leadId) return new Response(JSON.stringify({ error: "Campaign emails require a lead" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    if (isCampaign) await assertEmailNotSuppressed(supabase, user.id, to);
+    const emailHtml = isCampaign && leadId
+      ? await appendComplianceFooter(supabase, user.id, leadId, to, body.replace(/\n/g, "<br>"))
+      : body.replace(/\n/g, "<br>");
+
     // Send email via Resend API
     const emailResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -150,7 +158,7 @@ serve(async (req) => {
         from: `${senderName} <${senderEmail}>`,
         to: [to],
         subject: subject,
-        html: body.replace(/\n/g, "<br>"),
+        html: emailHtml,
       }),
     });
 

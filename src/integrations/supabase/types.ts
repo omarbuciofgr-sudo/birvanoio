@@ -1320,6 +1320,44 @@ export type Database = {
         }
         Relationships: []
       }
+      email_unsubscribe_tokens: {
+        Row: {
+          created_at: string
+          email_normalized: string
+          id: string
+          lead_id: string
+          token: string
+          unsubscribed_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_normalized: string
+          id?: string
+          lead_id: string
+          token?: string
+          unsubscribed_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_normalized?: string
+          id?: string
+          lead_id?: string
+          token?: string
+          unsubscribed_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_unsubscribe_tokens_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrichment_cache: {
         Row: {
           cache_key: string
@@ -1979,6 +2017,9 @@ export type Database = {
           contacted_at: string | null
           converted_at: string | null
           created_at: string
+          do_not_contact: boolean
+          do_not_contact_at: string | null
+          do_not_contact_reason: string | null
           email: string | null
           estimated_revenue: string | null
           id: string
@@ -1992,6 +2033,7 @@ export type Database = {
           state: string | null
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
+          voice_consent_at: string | null
           website: string | null
           zip_code: string | null
         }
@@ -2004,6 +2046,9 @@ export type Database = {
           contacted_at?: string | null
           converted_at?: string | null
           created_at?: string
+          do_not_contact?: boolean
+          do_not_contact_at?: string | null
+          do_not_contact_reason?: string | null
           email?: string | null
           estimated_revenue?: string | null
           id?: string
@@ -2017,6 +2062,7 @@ export type Database = {
           state?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
+          voice_consent_at?: string | null
           website?: string | null
           zip_code?: string | null
         }
@@ -2029,6 +2075,9 @@ export type Database = {
           contacted_at?: string | null
           converted_at?: string | null
           created_at?: string
+          do_not_contact?: boolean
+          do_not_contact_at?: string | null
+          do_not_contact_reason?: string | null
           email?: string | null
           estimated_revenue?: string | null
           id?: string
@@ -2042,6 +2091,7 @@ export type Database = {
           state?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
+          voice_consent_at?: string | null
           website?: string | null
           zip_code?: string | null
         }
@@ -2404,6 +2454,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          communication_compliance_accepted_at: string | null
           company_name: string | null
           created_at: string
           elevenlabs_agent_id: string | null
@@ -2412,6 +2463,7 @@ export type Database = {
           id: string
           industry: string | null
           last_name: string | null
+          mailing_address: string | null
           persona_completed_at: string | null
           persona_goals: string[]
           persona_role: string | null
@@ -2424,6 +2476,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          communication_compliance_accepted_at?: string | null
           company_name?: string | null
           created_at?: string
           elevenlabs_agent_id?: string | null
@@ -2432,6 +2485,7 @@ export type Database = {
           id?: string
           industry?: string | null
           last_name?: string | null
+          mailing_address?: string | null
           persona_completed_at?: string | null
           persona_goals?: string[]
           persona_role?: string | null
@@ -2444,6 +2498,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          communication_compliance_accepted_at?: string | null
           company_name?: string | null
           created_at?: string
           elevenlabs_agent_id?: string | null
@@ -2452,6 +2507,7 @@ export type Database = {
           id?: string
           industry?: string | null
           last_name?: string | null
+          mailing_address?: string | null
           persona_completed_at?: string | null
           persona_goals?: string[]
           persona_role?: string | null
@@ -4424,6 +4480,7 @@ export type Database = {
           daily_credit_cap_per_user: number | null
           enable_team_credit_pool: boolean
           id: string
+          mailing_address: string | null
           max_pages_per_domain: number | null
           max_provider_calls_per_lead: number | null
           max_targets_per_job: number | null
@@ -4437,6 +4494,7 @@ export type Database = {
           daily_credit_cap_per_user?: number | null
           enable_team_credit_pool?: boolean
           id?: string
+          mailing_address?: string | null
           max_pages_per_domain?: number | null
           max_provider_calls_per_lead?: number | null
           max_targets_per_job?: number | null
@@ -4450,6 +4508,7 @@ export type Database = {
           daily_credit_cap_per_user?: number | null
           enable_team_credit_pool?: boolean
           id?: string
+          mailing_address?: string | null
           max_pages_per_domain?: number | null
           max_provider_calls_per_lead?: number | null
           max_targets_per_job?: number | null

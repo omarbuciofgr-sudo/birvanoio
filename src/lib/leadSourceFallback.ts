@@ -40,6 +40,9 @@ export function scrapedRowsToSyntheticLeads(rows: ScrapedRow[], clientId: string
     contacted_at: null,
     converted_at: null,
     created_at: r.created_at,
+    do_not_contact: false,
+    do_not_contact_at: null,
+    do_not_contact_reason: null,
     email: r.best_email,
     estimated_revenue: null,
     industry: null,
@@ -52,6 +55,7 @@ export function scrapedRowsToSyntheticLeads(rows: ScrapedRow[], clientId: string
     state: null,
     status: scrapedStatusToLeadStatus(r.status),
     updated_at: r.created_at,
+    voice_consent_at: null,
     website: r.domain,
     zip_code: null,
   }));

@@ -52,6 +52,8 @@ import AccountDetail from "./pages/AccountDetail";
 import LeadDetail from "./pages/LeadDetail";
 import OAuthConsent from "./pages/OAuthConsent";
 import RealEstateAudience from "./pages/RealEstateAudience";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 
 
 const queryClient = new QueryClient();
@@ -111,6 +113,8 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
               <Route path="/dashboard/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />
               <Route path="/trust" element={<Trust />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="/who-we-help/:audience" element={<RealEstateAudience />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>

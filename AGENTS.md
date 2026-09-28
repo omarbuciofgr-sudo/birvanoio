@@ -3,3 +3,4 @@
 - Derive Home onboarding and two-week widget eligibility from user-scoped activity records; never persist client-controlled completion flags.
 - Source Home, My Leads, and Reports lead totals from the shared `useLeadsData` query so they cannot diverge.
 - Source plan allowances, action costs, add-ons, and AI limits from `pricing_settings`; charge paid actions in authenticated server functions after success.
+- Enforce communication compliance server-side: persist one-time user acceptance, honor workspace suppression, require lead voice consent for AI calls, and append campaign email opt-out footers.

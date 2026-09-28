@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,10 +43,12 @@ const profileSchema = z.object({
     })
     .optional()
     .or(z.literal("")),
+  mailing_address: z.string().trim().max(500, "Mailing address must be less than 500 characters").optional().or(z.literal("")),
 });
 
 const Settings = () => {
   const { user, loading } = useAuth();
+  const { workspaceId, workspaceRole } = useSubscription();
   const navigate = useNavigate();
   const [profile, setProfile] = useState({
     first_name: "",
@@ -52,7 +56,9 @@ const Settings = () => {
     company_name: "",
     twilio_phone_number: "",
     sender_email: "",
+    mailing_address: "",
   });
+  const [workspaceMailingAddress, setWorkspaceMailingAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
 
@@ -66,12 +72,12 @@ const Settings = () => {
     if (user) {
       fetchProfile();
     }
-  }, [user]);
+  }, [user, workspaceId]);
 
   const fetchProfile = async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("first_name, last_name, company_name, twilio_phone_number, sender_email")
+      .select("first_name, last_name, company_name, twilio_phone_number, sender_email, mailing_address")
       .eq("user_id", user?.id)
       .maybeSingle();
 
@@ -82,7 +88,12 @@ const Settings = () => {
         company_name: data.company_name || "",
         twilio_phone_number: data.twilio_phone_number || "",
         sender_email: data.sender_email || "",
+        mailing_address: data.mailing_address || "",
       });
+    }
+    if (workspaceId) {
+      const { data: settings } = await supabase.from("workspace_settings").select("mailing_address").eq("workspace_id", workspaceId).maybeSingle();
+      setWorkspaceMailingAddress(settings?.mailing_address || "");
     }
     setProfileLoading(false);
   };
@@ -105,6 +116,7 @@ const Settings = () => {
         company_name: profile.company_name.trim() || null,
         twilio_phone_number: profile.twilio_phone_number.trim() || null,
         sender_email: profile.sender_email.trim() || null,
+      mailing_address: profile.mailing_address.trim() || null,
       })
       .eq("user_id", user?.id);
 
@@ -114,6 +126,15 @@ const Settings = () => {
       toast.success("Profile updated!");
     }
     setIsSaving(false);
+  };
+
+  const saveWorkspaceAddress = async () => {
+    if (!workspaceId) return;
+    setIsSaving(true);
+    const { error } = await supabase.from("workspace_settings").update({ mailing_address: workspaceMailingAddress.trim() || null }).eq("workspace_id", workspaceId);
+    setIsSaving(false);
+    if (error) toast.error("Failed to save workspace mailing address");
+    else toast.success("Workspace mailing address saved");
   };
 
   if (loading || (user && profileLoading)) return <DataPageSkeleton />;
@@ -301,6 +322,20 @@ const Settings = () => {
                 </div>
 
                 <Separator />
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">Your mailing address (optional override)</label>
+                  <Textarea value={profile.mailing_address} onChange={(e) => setProfile({ ...profile, mailing_address: e.target.value })} placeholder="Street address, PO box, or registered private mailbox" rows={3} />
+                  <p className="text-xs text-muted-foreground">Used in your campaign email footer instead of the workspace address.</p>
+                </div>
+
+                {workspaceRole === "owner" && (
+                  <div className="space-y-2 border-t border-border pt-4">
+                    <label className="block text-sm font-medium text-foreground">Workspace mailing address</label>
+                    <Textarea value={workspaceMailingAddress} onChange={(e) => setWorkspaceMailingAddress(e.target.value)} placeholder="Street address, PO box, or registered private mailbox" rows={3} />
+                    <Button type="button" variant="outline" onClick={saveWorkspaceAddress} disabled={isSaving}>Save workspace address</Button>
+                  </div>
+                )}
 
                 {/* Sender Email */}
                 <div className="space-y-2">

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.22.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,6 +58,20 @@ serve(async (req) => {
       SUPABASE_URL,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? SUPABASE_ANON_KEY,
     );
+    const input = z.object({ leadId: z.string().uuid() }).safeParse(await req.json().catch(() => ({})));
+    if (!input.success) return new Response(JSON.stringify({ error: "A lead is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const [{ data: compliance }, { data: lead }] = await Promise.all([
+      serviceClient.from("profiles").select("communication_compliance_accepted_at").eq("user_id", userId).maybeSingle(),
+      serviceClient.from("leads").select("client_id,voice_consent_at,do_not_contact,phone").eq("id", input.data.leadId).maybeSingle(),
+    ]);
+    if (!compliance?.communication_compliance_accepted_at) return new Response(JSON.stringify({ error: "Accept the outreach compliance notice before calling." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!lead || lead.client_id !== userId || !lead.voice_consent_at || lead.do_not_contact) return new Response(JSON.stringify({ error: "AI Voice Agent calls require recorded consent from this lead." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { data: membership } = await serviceClient.from("workspace_memberships").select("workspace_id").eq("user_id", userId).limit(1).maybeSingle();
+    const normalizedPhone = (lead.phone || "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    if (membership?.workspace_id && normalizedPhone) {
+      const { data: blocked } = await serviceClient.from("contact_suppression").select("id").eq("workspace_id", membership.workspace_id).eq("value_type", "phone").eq("value_normalized", normalizedPhone).maybeSingle();
+      if (blocked) return new Response(JSON.stringify({ error: "This number is on your workspace do-not-contact list." }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const { data: profile, error: profileError } = await serviceClient
       .from("profiles")
       .select("elevenlabs_agent_id")

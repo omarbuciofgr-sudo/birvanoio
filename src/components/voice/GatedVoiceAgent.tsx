@@ -38,7 +38,7 @@ export function GatedVoiceAgentPage({ children }: GatedVoiceAgentProps) {
                   <div className="flex items-center gap-2 text-sm">
                     <Bot className="w-4 h-4 text-primary" />
                     <span className="text-muted-foreground">
-                      AI Voice Agent • Limited minutes on Growth plan
+                       AI Voice Agent Beta • Limited minutes on Growth plan
                     </span>
                   </div>
                   <Button
@@ -72,7 +72,7 @@ export function GatedVoiceAgentPage({ children }: GatedVoiceAgentProps) {
         <div>
           <h1 className="font-display text-3xl font-bold text-foreground flex items-center gap-3">
             <Bot className="w-8 h-8 text-primary" />
-            Voice AI Agent
+             AI Voice Agent <Badge variant="secondary">Beta</Badge>
           </h1>
           <p className="text-muted-foreground">
             Automated AI-powered outbound calls for lead qualification

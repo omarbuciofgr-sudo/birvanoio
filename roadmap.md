@@ -55,3 +55,12 @@
 - [x] Cache city owner searches for 24 hours without repeat provider calls
 - [x] Show credit costs on every credit-consuming action
 - [ ] Verify build and key pricing flows
+
+## Communication compliance
+- [x] Require one-time TCPA and Do Not Call acknowledgment before first app SMS or call
+- [x] Process STOP, UNSUBSCRIBE, and CANCEL replies and block future texts
+- [x] Add sender address and unsubscribe link to campaign email footers
+- [x] Require recorded lead consent for AI Voice Agent calls and retain Beta labeling
+- [x] Publish substantive Privacy and Terms pages from the landing footer
+- [x] Verify database rules, functions, and types
+- [ ] Verify signed-in browser-visible compliance states (blocked: no preview account access)
