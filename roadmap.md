@@ -40,6 +40,12 @@
 - [ ] Verify affected signed-in pages in the browser (blocked: preview account access required)
 
 ## Credit pricing and fair use
+- [x] Centralize plan allowances, action costs, fair-use limits, cache TTL, and add-on pricing
+- [ ] Align landing Pricing and Billing with the centralized rules
+- [ ] Enforce successful-action charging and AI fair-use limits server-side
+- [ ] Reuse matching city searches for 24 hours
+- [ ] Show credit costs on every credit-spending action
+- [ ] Verify types, build, and key pricing flows
 - [ ] Centralize plan allowances, action costs, AI message limits, and add-on pricing in database settings
 - [ ] Update landing pricing and Billing plan displays with real-estate descriptions and credit explanations
 - [ ] Charge city searches, successful owner contact lookups, SMS, and voice minutes from centralized costs
