@@ -12,10 +12,8 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
   const navigate = useNavigate();
 
   const navLinks = [
-    { name: "Services", href: "#services" },
+    { name: "AI Features", href: "#services" },
     { name: "How It Works", href: "#how-it-works" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "About", href: "#about" },
   ];
 
   const scrollToSection = (href: string) => {

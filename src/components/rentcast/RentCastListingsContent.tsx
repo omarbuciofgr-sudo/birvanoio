@@ -438,11 +438,16 @@ export default function RentCastListingsContent({
       toast.error("Enter a city and state (e.g. Naperville, IL)");
       return;
     }
+    if (!canAfford("scrape")) {
+      toast.error(`You need ${CREDIT_COSTS.scrape} credit to run this search.`);
+      return;
+    }
     setBusy("search");
     try {
       const ok = await scraperBackendApi.isScraperBackendReachable();
       if (!ok) {
-        toast.error("Scraper backend not reachable. Start it on port 8080 (or set backend URL).");
+        reportAdminError("Search service unreachable", new Error("Health check failed"));
+        toast.error(SAFE_RESULTS_ERROR);
         return;
       }
       if (source === "zillow") {
@@ -463,6 +468,7 @@ export default function RentCastListingsContent({
         setStoredTotal(rows.length);
         setQueryType(listingType);
         await saveSearchResults(rows, loc);
+        await spendCredits("scrape", 1, "find-owners");
         toast.success(`Found ${rows.length} owner listings`);
         return;
       }
@@ -501,6 +507,7 @@ export default function RentCastListingsContent({
       }
       applyResult(res.listings, res.stats || null);
       await saveSearchResults(res.listings || [], loc);
+      await spendCredits("scrape", 1, "find-owners");
       setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
       setPoolStats(res.pool_stats || null);
       setMaxFetch(res.max_fetch ?? null);
@@ -554,7 +561,6 @@ export default function RentCastListingsContent({
         .eq("user_id", auth.user.id)
         .order("updated_at", { ascending: false })
         .limit(500);
-      if (location.trim()) query = query.ilike("search_location", location.trim());
       const { data, error } = await query;
       if (error) throw error;
       const rows = (data || []).map((record: { listing_data: RentCastListing }) => record.listing_data);
@@ -657,7 +663,8 @@ export default function RentCastListingsContent({
         patchListings(res.listings);
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Verification failed");
+      reportAdminError("Listing verification failed", e);
+      toast.error(SAFE_RESULTS_ERROR);
     } finally {
       setBusy(null);
     }
@@ -761,7 +768,8 @@ export default function RentCastListingsContent({
 
       toast.success(`CRM: ${created} created · ${updated} updated · ${skipped} skipped`);
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "CRM import failed");
+      reportAdminError("Lead save failed", e);
+      toast.error("We couldn't save these leads. Please try again in a minute.");
     } finally {
       setBusy(null);
     }
@@ -910,7 +918,7 @@ export default function RentCastListingsContent({
             ) : (
               <Search className="h-4 w-4" />
             )}
-            Find Owners
+            Find Owners ({CREDIT_COSTS.scrape} credit)
           </Button>
           <Button variant="outline" onClick={onLoadSaved} disabled={!!busy} className="gap-1.5">
             {busy === "load" ? (

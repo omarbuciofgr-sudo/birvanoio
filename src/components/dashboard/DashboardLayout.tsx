@@ -272,7 +272,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
               const filteredItems = section.items.filter(
                 (item: any) =>
                   (!item.adminOnly || isAdmin) &&
-                  (item.name !== "Find Owners" || isRealtor) &&
+                  (item.name !== "Find Owners" || isRealtor || isAdmin) &&
                   !(isRealtor && item.name === "Brivano Scout") &&
                   // Realtors use Deals instead of Accounts
                   !(isRealtor && item.href === "/dashboard/accounts") &&
