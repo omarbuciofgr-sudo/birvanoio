@@ -59,8 +59,6 @@ export function DraftCard({ card }: { card: Extract<AssistantCard, { type: "draf
   const [body, setBody] = useState(initial.body);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const { data: lead } = { data: null as null };
-  void lead;
 
   const send = async () => {
     setSending(true);
