@@ -82,3 +82,9 @@
 - [ ] Auto-stop on reply / Appointment set / Listing signed / Lost / Do not contact
 - [ ] Progress on lead ("Step 3 of 7, next: call on Oct 12")
 - [ ] Idempotent scheduled job that catches up missed days
+
+## Find Owners listing link
+- [ ] Show a link to the actual listing on every Find Owners result (list, phone cards, map card, owner page)
+
+## Claude chat
+- [ ] Confirm whether users have a Claude chat (answer the user)
