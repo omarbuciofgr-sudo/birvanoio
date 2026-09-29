@@ -72,3 +72,13 @@
 - [x] Add manifest-only home-screen install support, app icons, splash color, and one-time install tip
 - [x] Audit every Real Estate page at 375px for overflow and 44px tap targets
 - [x] Verify build health and phone interactions
+
+## Appointment booking
+- [x] Booking link + Cal.com connect in Settings, Insert booking link buttons, Cal.com webhook
+
+## Follow-up plans (sequences)
+- [ ] FSBO 45-day and FRBO 30-day editable plans
+- [ ] "Start plan" on owner page; steps become follow-ups with AI drafts (claude-ai), never auto-send
+- [ ] Auto-stop on reply / Appointment set / Listing signed / Lost / Do not contact
+- [ ] Progress on lead ("Step 3 of 7, next: call on Oct 12")
+- [ ] Idempotent scheduled job that catches up missed days
