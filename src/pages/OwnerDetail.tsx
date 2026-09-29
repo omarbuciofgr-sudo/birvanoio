@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Loader2, Phone, Mail, Sparkles, ImageOff } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Phone, Mail, Send, Sparkles, ImageOff } from "lucide-react";
 import { rentcastApi, type RentCastListing } from "@/lib/api/rentcastApi";
 import { CREDIT_COSTS, useCredits } from "@/hooks/useCredits";
 import { OwnerFlagBadges } from "@/components/rentcast/OwnerFlagBadges";
@@ -195,8 +195,8 @@ export default function OwnerDetail() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto space-y-5">
-        <Button variant="ghost" size="sm" className="h-8 -ml-2" onClick={() => navigate(-1)}>
+      <div className="max-w-5xl mx-auto space-y-5 pb-20 md:pb-0">
+        <Button variant="ghost" size="sm" className="min-h-11 -ml-2 md:h-8 md:min-h-0" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
 
@@ -208,7 +208,7 @@ export default function OwnerDetail() {
           <h1 className="font-display text-2xl font-semibold leading-tight">{row.address || "Unknown address"}</h1>
           <p className="text-sm text-muted-foreground">{[row.city, row.state, row.zip_code].filter(Boolean).join(", ")}</p>
           <OwnerFlagBadges flags={flags} />
-          <Button size="sm" className="h-8" onClick={() => setReportOpen(true)}>
+          <Button size="sm" className="min-h-11 md:h-8 md:min-h-0" onClick={() => setReportOpen(true)}>
             <FileText className="h-4 w-4 mr-1" /> Create market report
           </Button>
         </div>
@@ -390,6 +390,23 @@ export default function OwnerDetail() {
         </div>
           </TabsContent>
         </Tabs>
+      </div>
+      <div className="fixed inset-x-0 z-40 grid grid-cols-3 gap-2 border-t border-border bg-background/95 px-3 py-2 backdrop-blur-xl md:hidden bottom-[calc(60px+env(safe-area-inset-bottom))]">
+        {row.owner_phone ? (
+          <Button asChild size="lg" className="h-12"><a href={`tel:${row.owner_phone}`}><Phone className="h-5 w-5" />Call</a></Button>
+        ) : (
+          <Button size="lg" className="h-12" disabled><Phone className="h-5 w-5" />Call</Button>
+        )}
+        {row.owner_phone ? (
+          <Button asChild size="lg" variant="outline" className="h-12"><a href={`sms:${row.owner_phone}`}><Send className="h-5 w-5" />Text</a></Button>
+        ) : (
+          <Button size="lg" variant="outline" className="h-12" disabled><Send className="h-5 w-5" />Text</Button>
+        )}
+        {row.owner_email ? (
+          <Button asChild size="lg" variant="outline" className="h-12"><a href={`mailto:${row.owner_email}`}><Mail className="h-5 w-5" />Email</a></Button>
+        ) : (
+          <Button size="lg" variant="outline" className="h-12" disabled><Mail className="h-5 w-5" />Email</Button>
+        )}
       </div>
     </DashboardLayout>
   );
