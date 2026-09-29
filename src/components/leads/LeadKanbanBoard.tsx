@@ -166,7 +166,7 @@ function KanbanColumn({ status, leads, onLeadClick }: KanbanColumnProps) {
   );
 }
 
-export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate }: LeadKanbanBoardProps) {
+export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate, realEstate = false }: LeadKanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   
   const sensors = useSensors(

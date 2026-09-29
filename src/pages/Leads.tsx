@@ -81,6 +81,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   contacted: { label: "Contacted", color: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400", icon: Phone },
   qualified: { label: "Qualified", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400", icon: UserCheck },
   converted: { label: "Converted", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: CheckCircle },
+  appointment_set: { label: "Appointment set", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400", icon: UserCheck },
+  listing_signed: { label: "Listing signed", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: CheckCircle },
   lost: { label: "Lost", color: "bg-destructive/10 text-destructive", icon: AlertTriangle },
 };
 
@@ -572,8 +574,9 @@ const Leads = () => {
         {viewMode === "kanban" ? (
           <LeadKanbanBoard
             leads={filteredLeads}
-            onLeadClick={(lead) => navigate(`/dashboard/leads/${lead.id}`)}
+            onLeadClick={(lead) => navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`)}
             onLeadsUpdate={fetchLeads}
+            realEstate={isRealtor}
           />
         ) : viewMode === "companies" ? (
           <div className="space-y-3">
