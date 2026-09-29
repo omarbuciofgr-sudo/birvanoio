@@ -19,7 +19,16 @@ const FALLBACK = "Something went wrong writing that. Please try again.";
 
 /** Calls the server-side Claude writer. Never sends anything; returns draft text only. */
 export async function writeWithAI(task: AIWritingTask, leadId: string, ownerMessage?: string): Promise<string> {
-  const { data, error } = await supabase.functions.invoke("claude-ai", { body: { task, leadId, ownerMessage } });
+  return invokeWriter({ task, leadId, ownerMessage });
+}
+
+/** Talking points for an owner from Find Owners that hasn't been saved as a lead yet. */
+export function writeTalkingPointsForListing(listingId: string): Promise<string> {
+  return invokeWriter({ task: "talking_points", listingId });
+}
+
+async function invokeWriter(body: Record<string, unknown>): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("claude-ai", { body });
   if (error) {
     let message = FALLBACK;
     let code: string | undefined;

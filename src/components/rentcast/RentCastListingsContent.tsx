@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { OwnerFlagBadges } from "@/components/rentcast/OwnerFlagBadges";
+import { computeFlags, estimateFor, loadCachedEstimates, ownerRef, type PropertyEstimate } from "@/lib/ownerFlags";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CityAutocomplete } from "@/components/onboarding/CityAutocomplete";
 import { SavedSearchAlerts, createAlert, useSavedAlerts } from "@/components/rentcast/SavedSearchAlerts";
@@ -334,6 +336,9 @@ export default function RentCastListingsContent({
   const [stats, setStats] = useState<RentCastStats | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailRow, setDetailRow] = useState<RentCastListing | null>(null);
+  const navigate = useNavigate();
+  const [estimates, setEstimates] = useState<Map<string, PropertyEstimate>>(new Map());
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [busy, setBusy] = useState<
     "search" | "load" | "enrich" | "verify" | "import" | null
   >(null);
@@ -388,6 +393,8 @@ export default function RentCastListingsContent({
   useEffect(() => {
     const listingId = searchParams.get("listing");
     if (!listingId) return;
+    navigate(`/dashboard/owners/${encodeURIComponent(listingId)}`);
+    return;
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return;
@@ -420,12 +427,28 @@ export default function RentCastListingsContent({
     savedAlerts.refresh();
   };
 
+  // Flags use estimates already cached on the server; no provider calls from the table.
+  useEffect(() => {
+    if (!listings.length) return;
+    let cancelled = false;
+    loadCachedEstimates(listings).then((m) => !cancelled && setEstimates(m)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [listings]);
+
+  const flagsFor = (row: RentCastListing) => computeFlags(row, estimateFor(estimates, row));
+
   const filtered = useMemo(() => {
     return listings.filter((row) => {
       if (resultView === "best" && rowScore(row) < 60) return false;
+      if (flaggedOnly && computeFlags(row, estimateFor(estimates, row)).length === 0) return false;
       return resultCategory(row) === filter;
     });
-  }, [listings, filter, resultView]);
+  }, [listings, filter, resultView, flaggedOnly, estimates]);
+
+  const openOwner = async (row: RentCastListing) => {
+    await saveSearchResults([row], row.search_location || location.trim() || "");
+    navigate(`/dashboard/owners/${encodeURIComponent(ownerRef(row))}`);
+  };
 
   const likelyInView = useMemo(
     () => filtered.filter((r) => rowScore(r) >= 60),
@@ -1317,6 +1340,10 @@ export default function RentCastListingsContent({
               {label}
             </Button>
           ))}
+          <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <Checkbox checked={flaggedOnly} onCheckedChange={(v) => setFlaggedOnly(v === true)} aria-label="Show only flagged owners" />
+            Flagged only (price dropped, 30+ days, above market)
+          </label>
         </div>
 
         <div className="rounded-lg border border-border/40 overflow-hidden">
@@ -1350,8 +1377,8 @@ export default function RentCastListingsContent({
                 filtered.map((row) => {
                   const id = row.rentcast_id || row.address || "";
                   return (
-                    <TableRow key={id}>
-                      <TableCell>
+                    <TableRow key={id} className="cursor-pointer" onClick={() => openOwner(row)}>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={!!row.rentcast_id && selectedIds.has(row.rentcast_id)}
                           onCheckedChange={() => toggleSelect(row.rentcast_id)}
@@ -1362,10 +1389,11 @@ export default function RentCastListingsContent({
                         <button
                           type="button"
                           className="text-left font-medium leading-snug hover:underline"
-                          onClick={() => setDetailRow(row)}
+                          onClick={(e) => { e.stopPropagation(); openOwner(row); }}
                         >
                           {row.address || "—"}
                         </button>
+                        <OwnerFlagBadges flags={flagsFor(row)} className="mt-1" />
                         <div className="text-[11px] text-muted-foreground">
                           {[row.bedrooms != null ? `${row.bedrooms} bd` : null, row.bathrooms != null ? `${row.bathrooms} ba` : null, row.property_type]
                             .filter(Boolean)
@@ -1383,7 +1411,7 @@ export default function RentCastListingsContent({
                         </div>
                         <OwnerStatusBadges row={row} />
                       </TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
                         {row.imported_lead_id ? (
                           <Link
                             to="/dashboard/leads"
