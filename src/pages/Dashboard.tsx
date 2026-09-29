@@ -35,6 +35,7 @@ import CallHourWidget from "@/components/dashboard/widgets/CallHourWidget";
 import EmailHourWidget from "@/components/dashboard/widgets/EmailHourWidget";
 import { useOverviewLayout, type WidgetId } from "@/hooks/useOverviewLayout";
 import { useCredits } from "@/hooks/useCredits";
+import { AskAssistantButton } from "@/components/assistant/AssistantPanel";
 import { useLeadsData } from "@/hooks/useLeadsData";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
@@ -787,6 +788,7 @@ const Dashboard = () => {
               onMove={layout.move}
               onReset={layout.reset}
             />
+            <AskAssistantButton className="h-8" />
             {isRealtor ? (
               <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={() => navigate("/dashboard/results")}>
                 <BarChart3 className="h-3.5 w-3.5" /> My Results

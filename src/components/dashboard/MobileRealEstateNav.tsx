@@ -1,3 +1,4 @@
+import { Workflow } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, CreditCard, Download, Home, House, MoreHorizontal, Send, Settings, Share, Users } from "lucide-react";
@@ -100,6 +101,7 @@ export function MobileRealEstateNav({ onSignOut }: { onSignOut: () => void }) {
           <div className="mt-4 grid gap-2">
             {[
               { label: "My Results", href: "/dashboard/results", icon: BarChart3 },
+              { label: "Automations", href: "/dashboard/automations", icon: Workflow },
               { label: "Settings", href: "/dashboard/settings", icon: Settings },
               { label: "Billing", href: "/dashboard/billing", icon: CreditCard },
             ].map(({ label, href, icon: Icon }) => (

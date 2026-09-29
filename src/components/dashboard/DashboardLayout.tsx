@@ -46,7 +46,9 @@ import {
 import brivanoLogo from "@/assets/logo-min-4.png";
 import brivanoIcon from "@/assets/brivano-b-icon.png";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
-import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
+import { AssistantProvider, useAssistant } from "@/components/assistant/AssistantContext";
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
+import { MessageSquarePlus } from "lucide-react";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { usePersona } from "@/hooks/usePersona";
 import PersonaSetupDialog from "@/components/onboarding/PersonaSetupDialog";
@@ -122,7 +124,20 @@ const realEstateNavItems: NavItem[] = [
   { name: "Settings & Billing", href: "/dashboard/settings", icon: Settings },
 ];
 
-const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) => {
+function AssistantTopButton() {
+  const { openAssistant } = useAssistant();
+  return (
+    <Button variant="outline" size="sm" className="h-11 gap-1.5 px-3 text-xs md:h-8" onClick={() => openAssistant()} aria-label="Ask Brivano Assistant">
+      <MessageSquarePlus className="h-4 w-4" /><span className="hidden sm:inline">Assistant</span>
+    </Button>
+  );
+}
+
+const DashboardLayout = (props: DashboardLayoutProps) => (
+  <AssistantProvider><DashboardLayoutInner {...props} /></AssistantProvider>
+);
+
+const DashboardLayoutInner = ({ children, fullWidth = false }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -536,6 +551,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <AssistantTopButton />
               <NotificationBell />
               <ThemeToggle />
             </div>
@@ -548,10 +564,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
 
       {isRealtor && !isAdmin && <MobileRealEstateNav onSignOut={handleSignOut} />}
 
-      {/* AI Chat Assistant - hide on client portal pages */}
-      {!location.pathname.startsWith('/client') && (
-        <div className={isRealtor && !isAdmin ? "hidden md:block" : ""}><AIDashboardChat /></div>
-      )}
+      {!location.pathname.startsWith('/client') && <AssistantPanel />}
     </div>
   );
 };
