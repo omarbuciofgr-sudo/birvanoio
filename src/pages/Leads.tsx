@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, lazy, Suspense } from "react";
+import { ListMapToggle, useListMapLayout } from "@/components/maps/ListMapToggle";
+const OwnerMap = lazy(() => import("@/components/maps/OwnerMap"));
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -121,6 +123,7 @@ const Leads = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"people" | "companies">("people");
   const [peopleLayout, setPeopleLayout] = useState<"table" | "kanban">("table");
+  const [mapLayout, setMapLayout] = useListMapLayout("my-leads");
   const viewMode: "table" | "kanban" | "companies" =
     activeTab === "companies" ? "companies" : peopleLayout;
   const [campaignDialogLeadIds, setCampaignDialogLeadIds] = useState<string[] | null>(null);
@@ -582,7 +585,30 @@ const Leads = () => {
 
         <ListingSignedDialog leadId={signedLeadId} onClose={(saved) => { setSignedLeadId(null); if (saved) fetchLeads(); }} />
         {/* View Content */}
-        {viewMode === "kanban" ? (
+        {isRealtor && viewMode === "table" && <ListMapToggle value={mapLayout} onChange={setMapLayout} />}
+        {isRealtor && viewMode === "table" && mapLayout === "map" ? (
+          <Suspense fallback={<div className="h-[60vh] animate-pulse rounded-lg bg-muted" />}>
+            <OwnerMap
+              items={filteredLeads.filter((l) => l.business_name).map((lead) => {
+                const details = leadListingDetails(lead.notes);
+                const priceNum = details.price ? Number(details.price.replace(/[^0-9.]/g, "")) : NaN;
+                const address = [lead.business_name, lead.city, lead.state].filter(Boolean).join(", ");
+                return {
+                  id: lead.id,
+                  address: lead.business_name.includes(",") ? lead.business_name : address,
+                  kind: details.kind === "sale" ? "sale" as const : "rental" as const,
+                  price: Number.isFinite(priceNum) && priceNum > 0 ? priceNum : null,
+                  flags: [],
+                  lat: lead.latitude ?? null,
+                  lng: lead.longitude ?? null,
+                  leadId: lead.id,
+                  extra: statusConfig[lead.status]?.label,
+                  onOpen: () => navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`),
+                };
+              })}
+            />
+          </Suspense>
+        ) : viewMode === "kanban" ? (
           <LeadKanbanBoard
             leads={filteredLeads}
             onLeadClick={(lead) => navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`)}
