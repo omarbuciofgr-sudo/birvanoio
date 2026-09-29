@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
         } finally {
           await admin.from("ai_usage_logs").insert({
             user_id: user.id, task: "assistant", model, input_tokens: tokens.tokensIn, output_tokens: tokens.tokensOut, success: true,
-            error_code: ctx.toolsUsed.length ? `tools:${ctx.toolsUsed.join(",")}`.slice(0, 200) : null,
+            tools: ctx.toolsUsed,
           }).then(() => {}, () => {});
           send({ type: "done" });
           controller.close();
