@@ -787,9 +787,15 @@ const Dashboard = () => {
               onMove={layout.move}
               onReset={layout.reset}
             />
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={() => navigate("/dashboard/reports")}>
-              <BarChart3 className="h-3.5 w-3.5" /> Reports
-            </Button>
+            {isRealtor ? (
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={() => navigate("/dashboard/results")}>
+                <BarChart3 className="h-3.5 w-3.5" /> My Results
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={() => navigate("/dashboard/reports")}>
+                <BarChart3 className="h-3.5 w-3.5" /> Reports
+              </Button>
+            )}
             <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => navigate("/dashboard/leads")}>
               <Plus className="h-3.5 w-3.5" /> Add Lead
             </Button>
