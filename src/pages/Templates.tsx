@@ -1,3 +1,4 @@
+import { FollowUpPlansEditor } from "@/components/plans/FollowUpPlansEditor";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,7 +8,7 @@ import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplates
 import { ScriptsLibrary } from "@/components/templates/ScriptsLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Clock, ScrollText } from "lucide-react";
+import { FileText, Clock, ScrollText, ListChecks } from "lucide-react";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const Templates = () => {
@@ -45,6 +46,10 @@ const Templates = () => {
               <ScrollText className="w-3.5 h-3.5" />
               Scripts
             </TabsTrigger>
+            <TabsTrigger value="plans" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <ListChecks className="w-3.5 h-3.5" />
+              Follow-up plans
+            </TabsTrigger>
             <TabsTrigger value="scheduled" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Clock className="w-3.5 h-3.5" />
               Scheduled Messages
@@ -57,6 +62,10 @@ const Templates = () => {
 
           <TabsContent value="scripts">
             <ScriptsLibrary userId={user.id} />
+          </TabsContent>
+
+          <TabsContent value="plans">
+            <FollowUpPlansEditor />
           </TabsContent>
 
           <TabsContent value="scheduled">

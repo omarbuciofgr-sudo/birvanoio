@@ -1,3 +1,5 @@
+import { LeadPlanCard } from "@/components/plans/LeadPlanCard";
+import { listingLink } from "@/lib/listingLink";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -22,7 +24,7 @@ import { SetFollowUp } from "@/components/leads/SetFollowUp";
 import { LogContactButton } from "@/components/leads/LogContactButton";
 import { OwnerScripts } from "@/components/rentcast/OwnerScripts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarClock, FileText } from "lucide-react";
+import { CalendarClock, FileText, ExternalLink } from "lucide-react";
 import { MarketReportDialog } from "@/components/rentcast/MarketReportDialog";
 
 const money = (n?: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString("en-US")}`);
@@ -209,9 +211,21 @@ export default function OwnerDetail() {
           <h1 className="font-display text-2xl font-semibold leading-tight">{row.address || "Unknown address"}</h1>
           <p className="text-sm text-muted-foreground">{[row.city, row.state, row.zip_code].filter(Boolean).join(", ")}</p>
           <OwnerFlagBadges flags={flags} />
-          <Button size="sm" className="min-h-11 md:h-8 md:min-h-0" onClick={() => setReportOpen(true)}>
-            <FileText className="h-4 w-4 mr-1" /> Create market report
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" className="min-h-11 md:h-8 md:min-h-0" onClick={() => setReportOpen(true)}>
+              <FileText className="h-4 w-4 mr-1" /> Create market report
+            </Button>
+            {(() => {
+              const link = listingLink(row);
+              return link ? (
+                <Button asChild size="sm" variant="outline" className="min-h-11 md:h-8 md:min-h-0">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.exact ? "Open the original listing" : "No direct listing link from the data source; searches Zillow for this address"}>
+                    <ExternalLink className="h-4 w-4 mr-1" /> {link.label}
+                  </a>
+                </Button>
+              ) : null;
+            })()}
+          </div>
         </div>
         {reportOpen && (
           <MarketReportDialog
@@ -360,6 +374,9 @@ export default function OwnerDetail() {
                 )}
               </CardContent>
             </Card>
+
+            <LeadPlanCard leadId={leadId} selling={!rental} />
+
 
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" />Talking points</CardTitle></CardHeader>

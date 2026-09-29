@@ -25,6 +25,7 @@ import { PhoneNumbersManager } from "@/components/settings/PhoneNumbersManager";
 import { WorkspaceFocusCard } from "@/components/settings/WorkspaceFocusCard";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 import { DailyGoalsSettingsCard } from "@/components/settings/DailyGoalsSettingsCard";
+import { BookingLinkCard } from "@/components/settings/BookingLinkCard";
 import { usePersona } from "@/hooks/usePersona";
 
 // E.164 phone number validation (optional field)
@@ -270,6 +271,7 @@ const Settings = () => {
 
             <WorkspaceFocusCard />
 
+            {isRealtor && <BookingLinkCard userId={user.id} />}
             {isRealtor && <DailyGoalsSettingsCard userId={user.id} />}
 
             {/* Restart / Resume Onboarding Tour */}

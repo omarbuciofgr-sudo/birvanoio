@@ -21,6 +21,8 @@ export type OwnerMapItem = {
   lng?: number | null;
   leadId?: string;
   extra?: string;
+  listingUrl?: string;
+  listingLabel?: string;
   onOpen: () => void;
 };
 
@@ -226,7 +228,14 @@ export function OwnerMap({ items, className = "" }: { items: OwnerMapItem[]; cla
           </div>
           <p className="mt-2 text-lg font-semibold">{money(sel.price)}{sel.kind === "rental" && sel.price != null ? "/mo" : ""}</p>
           <OwnerFlagBadges flags={sel.flags} className="mt-2" />
-          <Button className="mt-3 w-full min-h-11 sm:min-h-9" size="sm" onClick={sel.onOpen}>Open</Button>
+          <div className="mt-3 flex gap-2">
+            <Button className="flex-1 min-h-11 sm:min-h-9" size="sm" onClick={sel.onOpen}>Open</Button>
+            {sel.listingUrl && (
+              <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
+                <a href={sel.listingUrl} target="_blank" rel="noopener noreferrer">{sel.listingLabel ?? "View listing"}</a>
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { InsertBookingLink } from "@/components/booking/InsertBookingLink";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,7 @@ export const AIWriter = ({ leadId, title = "AI writing", tasks, defaultTask }: A
           <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-[160px] text-xs" />
           <div className="flex items-center justify-between">
             <p className="text-[10px] text-muted-foreground">Draft only. Review and edit before you send.</p>
+            {task !== "call_script" && task !== "talking_points" && task !== "lead_summary" && <InsertBookingLink value={draft} onChange={setDraft} className="ml-auto mr-1" />}
             <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={copy}>
               {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} Copy
             </Button>

@@ -1,0 +1,1 @@
+ALTER FUNCTION public.ensure_default_follow_up_plans() SECURITY INVOKER;

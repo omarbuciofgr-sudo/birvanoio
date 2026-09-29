@@ -1,3 +1,4 @@
+import { InsertBookingLink } from "@/components/booking/InsertBookingLink";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,7 @@ export function OwnerScripts({ selling, leadId, listingId, phone, email }: Props
             {kind === "email" && <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" maxLength={200} />}
             <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={kind === "text" ? 5 : 12} className="text-sm" />
             <div className="flex flex-wrap items-center gap-2">
+              {kind !== "call" && <InsertBookingLink value={text} onChange={setText} />}
               <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(kind === "email" && subject ? `Subject: ${subject}\n\n${text}` : text); toast.success("Copied"); }}>
                 <Copy className="h-3.5 w-3.5 mr-1" /> Copy
               </Button>
