@@ -39,6 +39,7 @@ import {
   Sparkles,
   UserPlus,
   ChevronDown,
+  Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -921,6 +922,8 @@ export default function RentCastListingsContent({
             Search any US city to find homeowners selling or renting their property without an agent.
           </p>
         </div>
+
+        <SavedSearchAlerts alerts={savedAlerts.alerts} loading={savedAlerts.loading} refresh={savedAlerts.refresh} />
 
         {welcomeCity && (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
