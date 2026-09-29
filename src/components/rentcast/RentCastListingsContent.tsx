@@ -1407,6 +1407,7 @@ export default function RentCastListingsContent({
                           {row.address || "—"}
                         </button>
                         <OwnerFlagBadges flags={flagsFor(row)} className="mt-1" />
+                        <ListingLinkButton row={row} />
                         <div className="text-[11px] text-muted-foreground">
                           {[row.bedrooms != null ? `${row.bedrooms} bd` : null, row.bathrooms != null ? `${row.bathrooms} ba` : null, row.property_type]
                             .filter(Boolean)
@@ -1478,6 +1479,7 @@ export default function RentCastListingsContent({
                     </div>
                     <p className="mt-3 text-lg font-semibold">{money(row.price)}</p>
                     <OwnerFlagBadges flags={flagsFor(row)} className="mt-2" />
+                    <ListingLinkButton row={row} className="mt-2 min-h-11" />
                   </div>
                 </div>
               </div>
