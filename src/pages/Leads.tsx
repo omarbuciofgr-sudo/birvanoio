@@ -65,6 +65,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { useLeadsData } from "@/hooks/useLeadsData";
+import { usePersona } from "@/hooks/usePersona";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
@@ -92,6 +93,7 @@ type SortDir = "asc" | "desc";
 const Leads = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { isRealtor } = usePersona();
   const { data: sharedLeads = [], isLoading: leadsLoading, refetch: refetchLeads } = useLeadsData(user?.id);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
