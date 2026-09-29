@@ -111,6 +111,7 @@ export function MessageTemplatesLibrary({
     const { data, error } = await supabase
       .from("message_templates")
       .select("*")
+      .in("type", ["email", "sms"])
       .order("usage_count", { ascending: false });
 
     if (!error && data) {

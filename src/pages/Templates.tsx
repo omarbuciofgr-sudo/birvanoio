@@ -4,9 +4,10 @@ import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { OutreachTabs } from "@/components/outreach/OutreachTabs";
 import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplatesLibrary";
+import { ScriptsLibrary } from "@/components/templates/ScriptsLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Clock } from "lucide-react";
+import { FileText, Clock, ScrollText } from "lucide-react";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const Templates = () => {
@@ -40,6 +41,10 @@ const Templates = () => {
               <FileText className="w-3.5 h-3.5" />
               Templates Library
             </TabsTrigger>
+            <TabsTrigger value="scripts" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <ScrollText className="w-3.5 h-3.5" />
+              Scripts
+            </TabsTrigger>
             <TabsTrigger value="scheduled" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Clock className="w-3.5 h-3.5" />
               Scheduled Messages
@@ -48,6 +53,10 @@ const Templates = () => {
 
           <TabsContent value="templates">
             <MessageTemplatesLibrary userId={user.id} />
+          </TabsContent>
+
+          <TabsContent value="scripts">
+            <ScriptsLibrary userId={user.id} />
           </TabsContent>
 
           <TabsContent value="scheduled">

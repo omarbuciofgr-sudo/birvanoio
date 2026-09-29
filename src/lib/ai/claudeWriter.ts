@@ -27,6 +27,21 @@ export function writeTalkingPointsForListing(listingId: string): Promise<string>
   return invokeWriter({ task: "talking_points", listingId });
 }
 
+export type AITone = "friendly" | "direct" | "brief";
+
+/** Writes for an owner by saved lead or by Find Owners listing, with an optional tone. */
+export function writeForOwner(
+  task: AIWritingTask,
+  target: { leadId?: string | null; listingId?: string | null },
+  tone?: AITone,
+): Promise<string> {
+  return invokeWriter({
+    task,
+    ...(target.listingId ? { listingId: target.listingId } : { leadId: target.leadId }),
+    tone,
+  });
+}
+
 async function invokeWriter(body: Record<string, unknown>): Promise<string> {
   const { data, error } = await supabase.functions.invoke("claude-ai", { body });
   if (error) {

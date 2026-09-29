@@ -1,0 +1,2 @@
+ALTER TABLE public.message_templates DROP CONSTRAINT message_templates_type_check;
+ALTER TABLE public.message_templates ADD CONSTRAINT message_templates_type_check CHECK (type = ANY (ARRAY['email'::text, 'sms'::text, 'call'::text]));
