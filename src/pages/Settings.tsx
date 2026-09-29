@@ -24,6 +24,8 @@ import { EmailAccountsManager } from "@/components/settings/EmailAccountsManager
 import { PhoneNumbersManager } from "@/components/settings/PhoneNumbersManager";
 import { WorkspaceFocusCard } from "@/components/settings/WorkspaceFocusCard";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
+import { DailyGoalsSettingsCard } from "@/components/settings/DailyGoalsSettingsCard";
+import { usePersona } from "@/hooks/usePersona";
 
 // E.164 phone number validation (optional field)
 const e164Regex = /^\+[1-9]\d{1,14}$/;
@@ -50,6 +52,7 @@ const profileSchema = z.object({
 const Settings = () => {
   const { user, loading } = useAuth();
   const { workspaceId, workspaceRole } = useSubscription();
+  const { isRealtor } = usePersona();
   const navigate = useNavigate();
   const [profile, setProfile] = useState({
     first_name: "",
@@ -266,6 +269,8 @@ const Settings = () => {
             </Card>
 
             <WorkspaceFocusCard />
+
+            {isRealtor && <DailyGoalsSettingsCard userId={user.id} />}
 
             {/* Restart / Resume Onboarding Tour */}
             <Card className="border-border/60">

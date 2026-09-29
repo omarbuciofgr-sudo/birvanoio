@@ -10,3 +10,5 @@
 - Fetch RentCast property estimates and price history only through the `property-estimate` function, cached 7 days in server-only `property_estimates`; table flags read cache only. Why: limits data provider calls and cost.
 - Store follow-ups in user-scoped `lead_follow_ups`; the `conversation_logs` insert trigger moves leads New→Contacted. Why: status change happens server-side for every in-app send path.
 - Charge owner market reports (3 credits, `action_market_report`) only in the `market-report` function, once per report ID recorded in server-only `market_reports`; PDFs are built in the browser. Why: download + email of one report never double-charges.
+
+- Count daily goals with `goal_day_counts` (distinct leads with outbound `conversation_logs` + completed `lead_follow_ups`) in the user's `profiles.timezone`. Why: Home and the morning email use one server-side definition of a day.

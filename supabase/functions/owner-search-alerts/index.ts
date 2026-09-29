@@ -118,6 +118,21 @@ Deno.serve(async (req) => {
       }
       if (!fresh.length && !followUps.length) continue;
 
+      // Gentle reminder if yesterday's daily goals were missed (user's time zone).
+      let goalHtml = "";
+      if (!followUpsSent.has(a.user_id)) {
+        const { data: gp } = await db.from("profiles")
+          .select("daily_contact_goal, daily_followup_goal, streak_counts_weekends, timezone").eq("user_id", a.user_id).maybeSingle();
+        const { data: gd } = await db.rpc("goal_day_counts", { p_user_id: a.user_id, p_tz: gp?.timezone || a.timezone, p_days: 2 });
+        const y = (gd ?? [])[0] as { day: string; contacted: number; followups: number } | undefined;
+        const wd = y ? new Date(`${y.day}T12:00:00Z`).getUTCDay() : 1;
+        const skipWeekend = !gp?.streak_counts_weekends && (wd === 0 || wd === 6);
+        const cg = gp?.daily_contact_goal ?? 10, fg = gp?.daily_followup_goal ?? 5;
+        if (y && !skipWeekend && (y.contacted < cg || y.followups < fg)) {
+          goalHtml = `<p style="background:#f1f5f9;border-radius:8px;padding:12px;color:#334155;font-size:14px;margin-top:20px">Yesterday you contacted ${y.contacted} of ${cg} owners and completed ${y.followups} of ${fg} follow-ups. Today's a fresh start. <a href="${APP_URL}/dashboard" style="color:#1d4ed8">See today's goals</a>.</p>`;
+        }
+      }
+
       if (fresh.length) await db.from("owner_alert_seen").upsert(fresh.map((r) => ({ alert_id: a.id, external_id: externalId(r) })), { ignoreDuplicates: true });
       // Make each listing openable from the email link.
       if (fresh.length) await db.from("owner_search_results").upsert(fresh.map((r) => ({
@@ -153,6 +168,7 @@ Deno.serve(async (req) => {
 ${fresh.length ? `<p style="color:#555">New owner listings for your saved search: ${esc(a.location)}.</p>
 <table style="width:100%;border-collapse:collapse">${items}</table>` : `<p style="color:#555">No new owners for ${esc(a.location)} today.</p>`}
 ${fuHtml}
+${goalHtml}
 ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Brivano.</p>` : ""}
 <p style="font-size:12px;color:#888;margin-top:24px">You get this because you saved this search in Brivano. <a href="${unsub}" style="color:#888">Unsubscribe from this alert</a>.</p></div>`;
 
@@ -163,7 +179,7 @@ ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Br
       });
       if (!send.ok) { console.error("alert email failed", send.status, (await send.text()).slice(0, 300)); summary.failed++; continue; }
       await db.from("owner_search_alerts").update({ last_sent_at: new Date().toISOString() }).eq("id", a.id);
-      if (followUps.length) followUpsSent.add(a.user_id);
+      followUpsSent.add(a.user_id);
       summary.emailed++;
     } catch (e) {
       console.error("alert run failed", a.id, e);

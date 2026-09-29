@@ -19,6 +19,7 @@ import {
 } from "@/lib/ownerFlags";
 import { normalizeAddressKey } from "@/lib/rentcast/mapRentCastToLead";
 import { SetFollowUp } from "@/components/leads/SetFollowUp";
+import { LogContactButton } from "@/components/leads/LogContactButton";
 import { OwnerScripts } from "@/components/rentcast/OwnerScripts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, FileText } from "lucide-react";
@@ -349,7 +350,10 @@ export default function OwnerDetail() {
               <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><CalendarClock className="h-4 w-4 text-primary" />Set follow-up</CardTitle></CardHeader>
               <CardContent>
                 {leadId ? (
-                  <SetFollowUp leadId={leadId} />
+                  <div className="space-y-3">
+                    <LogContactButton leadId={leadId} />
+                    <SetFollowUp leadId={leadId} />
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">Save this owner to My Leads from Find Owners to set follow-ups.</p>
                 )}

@@ -2697,6 +2697,8 @@ export type Database = {
           communication_compliance_accepted_at: string | null
           company_name: string | null
           created_at: string
+          daily_contact_goal: number
+          daily_followup_goal: number
           elevenlabs_agent_id: string | null
           email: string
           first_name: string | null
@@ -2711,6 +2713,8 @@ export type Database = {
           phone: string | null
           role_title: string | null
           sender_email: string | null
+          streak_counts_weekends: boolean
+          timezone: string | null
           twilio_phone_number: string | null
           updated_at: string
           user_id: string
@@ -2722,6 +2726,8 @@ export type Database = {
           communication_compliance_accepted_at?: string | null
           company_name?: string | null
           created_at?: string
+          daily_contact_goal?: number
+          daily_followup_goal?: number
           elevenlabs_agent_id?: string | null
           email: string
           first_name?: string | null
@@ -2736,6 +2742,8 @@ export type Database = {
           phone?: string | null
           role_title?: string | null
           sender_email?: string | null
+          streak_counts_weekends?: boolean
+          timezone?: string | null
           twilio_phone_number?: string | null
           updated_at?: string
           user_id: string
@@ -2747,6 +2755,8 @@ export type Database = {
           communication_compliance_accepted_at?: string | null
           company_name?: string | null
           created_at?: string
+          daily_contact_goal?: number
+          daily_followup_goal?: number
           elevenlabs_agent_id?: string | null
           email?: string
           first_name?: string | null
@@ -2761,6 +2771,8 @@ export type Database = {
           phone?: string | null
           role_title?: string | null
           sender_email?: string | null
+          streak_counts_weekends?: boolean
+          timezone?: string | null
           twilio_phone_number?: string | null
           updated_at?: string
           user_id?: string
@@ -5039,12 +5051,28 @@ export type Database = {
         Args: { _workspace_id: string }
         Returns: number
       }
+      goal_day_counts: {
+        Args: { p_days: number; p_tz: string; p_user_id: string }
+        Returns: {
+          contacted: number
+          day: string
+          followups: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      my_goal_day_counts: {
+        Args: { p_days: number; p_tz: string }
+        Returns: {
+          contacted: number
+          day: string
+          followups: number
+        }[]
       }
       normalize_email: { Args: { p_email: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
