@@ -393,20 +393,7 @@ export default function RentCastListingsContent({
   useEffect(() => {
     const listingId = searchParams.get("listing");
     if (!listingId) return;
-    navigate(`/dashboard/owners/${encodeURIComponent(listingId)}`);
-    return;
-    (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return;
-      const { data } = await (supabase as any).from("owner_search_results")
-        .select("listing_data").eq("user_id", auth.user.id).eq("external_id", listingId).maybeSingle();
-      if (data?.listing_data) {
-        setListings((prev) => (prev.some((r) => r.rentcast_id === data.listing_data.rentcast_id) ? prev : [data.listing_data, ...prev]));
-        setDetailRow(data.listing_data);
-      } else {
-        toast.error("That owner is no longer in your saved results.");
-      }
-    })();
+    navigate(`/dashboard/owners/${encodeURIComponent(listingId)}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
