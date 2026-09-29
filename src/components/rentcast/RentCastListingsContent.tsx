@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { OwnerFlagBadges } from "@/components/rentcast/OwnerFlagBadges";
+import { ListMapToggle, useListMapLayout } from "@/components/maps/ListMapToggle";
+import { lazy, Suspense, type ComponentProps } from "react";
+const OwnerMapLazy = lazy(() => import("@/components/maps/OwnerMap"));
+const OwnerMap = (p: ComponentProps<typeof OwnerMapLazy>) => (
+  <Suspense fallback={<div className="h-[60vh] animate-pulse rounded-lg bg-muted" />}><OwnerMapLazy {...p} /></Suspense>
+);
 import { computeFlags, estimateFor, loadCachedEstimates, ownerRef, type PropertyEstimate } from "@/lib/ownerFlags";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CityAutocomplete } from "@/components/onboarding/CityAutocomplete";
@@ -336,6 +342,7 @@ export default function RentCastListingsContent({
   const [stats, setStats] = useState<RentCastStats | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailRow, setDetailRow] = useState<RentCastListing | null>(null);
+  const [layout, setLayout] = useListMapLayout("find-owners");
   const navigate = useNavigate();
   const [estimates, setEstimates] = useState<Map<string, PropertyEstimate>>(new Map());
   const [flaggedOnly, setFlaggedOnly] = useState(false);
@@ -1334,6 +1341,24 @@ export default function RentCastListingsContent({
           </label>
         </div>
 
+        <ListMapToggle value={layout} onChange={setLayout} />
+
+        {layout === "map" ? (
+          <OwnerMap
+            items={filtered.filter((r) => r.address).map((row) => ({
+              id: row.rentcast_id || row.address!,
+              address: row.address!,
+              kind: row.listing_kind === "sale" ? "sale" : "rental",
+              price: row.price ?? null,
+              flags: flagsFor(row),
+              lat: row.latitude ?? null,
+              lng: row.longitude ?? null,
+              extra: rowScore(row) >= 70 ? "High match" : "Medium match",
+              onOpen: () => openOwner(row),
+            }))}
+          />
+        ) : (
+        <>
         <div className="hidden rounded-lg border border-border/40 overflow-hidden md:block">
           <Table>
             <TableHeader>
@@ -1459,6 +1484,8 @@ export default function RentCastListingsContent({
             );
           })}
         </div>
+        </>
+        )}
       </div>
 
       <Sheet open={!!detailRow} onOpenChange={(open) => !open && setDetailRow(null)}>
