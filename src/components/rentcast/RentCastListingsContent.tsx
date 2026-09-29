@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { OwnerFlagBadges } from "@/components/rentcast/OwnerFlagBadges";
 import { ListMapToggle, useListMapLayout } from "@/components/maps/ListMapToggle";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ComponentProps } from "react";
 const OwnerMapLazy = lazy(() => import("@/components/maps/OwnerMap"));
-const OwnerMap = (p: React.ComponentProps<typeof OwnerMapLazy>) => (
+const OwnerMap = (p: ComponentProps<typeof OwnerMapLazy>) => (
   <Suspense fallback={<div className="h-[60vh] animate-pulse rounded-lg bg-muted" />}><OwnerMapLazy {...p} /></Suspense>
 );
 import { computeFlags, estimateFor, loadCachedEstimates, ownerRef, type PropertyEstimate } from "@/lib/ownerFlags";
