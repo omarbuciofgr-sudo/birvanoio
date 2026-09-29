@@ -250,6 +250,11 @@ const Billing = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {roi && (
+          <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
+            Brivano has cost you <span className="font-semibold">{roi.paid.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</span> and helped you sign listings worth an estimated <span className="font-semibold">{roi.commission.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</span> in commission.
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
