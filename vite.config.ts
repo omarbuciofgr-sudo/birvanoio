@@ -127,6 +127,8 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+      // One copy of React and its context-based libraries, so providers always match.
+      dedupe: ["react", "react-dom", "react-router-dom", "react-helmet-async"],
     },
     ...(Object.keys(define).length > 0 ? { define } : {}),
   };
