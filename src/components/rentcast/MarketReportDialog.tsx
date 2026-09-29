@@ -27,7 +27,7 @@ type Props = {
 };
 
 export function MarketReportDialog({ open, onOpenChange, row, photoUrl, leadId, listingId, ownerEmail }: Props) {
-  const { refetch } = useCredits() as ReturnType<typeof useCredits> & { refetch?: () => void };
+  const { refreshCredits: refetch } = useCredits();
   const reportId = useRef<string>(crypto.randomUUID());
   const [loading, setLoading] = useState(true);
   const [base, setBase] = useState<Omit<MarketReportData, "summary"> | null>(null);

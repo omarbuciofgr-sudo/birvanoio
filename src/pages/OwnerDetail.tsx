@@ -21,7 +21,8 @@ import { normalizeAddressKey } from "@/lib/rentcast/mapRentCastToLead";
 import { SetFollowUp } from "@/components/leads/SetFollowUp";
 import { OwnerScripts } from "@/components/rentcast/OwnerScripts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, FileText } from "lucide-react";
+import { MarketReportDialog } from "@/components/rentcast/MarketReportDialog";
 
 const money = (n?: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString("en-US")}`);
 const fmtDate = (d?: string | null) => {
@@ -56,6 +57,7 @@ export default function OwnerDetail() {
   const [points, setPoints] = useState("");
   const [writing, setWriting] = useState(false);
   const [aiError, setAiError] = useState<{ message: string; limit: boolean } | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Load the owner: from saved search results, or from a saved lead ("lead:<id>").
   useEffect(() => {
@@ -205,7 +207,21 @@ export default function OwnerDetail() {
           <h1 className="font-display text-2xl font-semibold leading-tight">{row.address || "Unknown address"}</h1>
           <p className="text-sm text-muted-foreground">{[row.city, row.state, row.zip_code].filter(Boolean).join(", ")}</p>
           <OwnerFlagBadges flags={flags} />
+          <Button size="sm" className="h-8" onClick={() => setReportOpen(true)}>
+            <FileText className="h-4 w-4 mr-1" /> Create market report
+          </Button>
         </div>
+        {reportOpen && (
+          <MarketReportDialog
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            row={row}
+            photoUrl={photos[0] ?? null}
+            leadId={leadId}
+            listingId={externalId}
+            ownerEmail={row.owner_email ?? null}
+          />
+        )}
 
         <Tabs defaultValue="overview" className="space-y-4">
           <TabsList className="h-9">
