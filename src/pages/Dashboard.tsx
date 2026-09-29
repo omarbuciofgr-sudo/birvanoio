@@ -1,3 +1,4 @@
+import { TodaysFollowUps } from "@/components/dashboard/TodaysFollowUps";
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -791,6 +792,8 @@ const Dashboard = () => {
             </Button>
           </div>
         </div>
+
+        <TodaysFollowUps userId={user.id} />
 
         {savedLeadCount < 5 ? sections.kpis : null}
 
