@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarCheck, Copy, Unplug } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_SUPABASE_URL } from "@/integrations/supabase/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { isValidBookingUrl, setBookingLinkCache } from "@/hooks/useBookingLink";
 
 const webhookUrl = (token: string) =>
-  `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/calcom-webhook?t=${token}`;
+  `${DEFAULT_SUPABASE_URL}/functions/v1/calcom-webhook?t=${token}`;
 
 export function BookingLinkCard({ userId }: { userId: string }) {
   const [link, setLink] = useState("");
