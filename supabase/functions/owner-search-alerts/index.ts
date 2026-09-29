@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  const followUpsSent = new Set<string>();
   const summary = { due: due.length, emailed: 0, baselined: 0, skipped_credits: 0, failed: 0 };
 
   for (const a of due) {
