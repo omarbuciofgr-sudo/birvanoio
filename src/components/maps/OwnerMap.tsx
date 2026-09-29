@@ -53,7 +53,7 @@ function usePositions(items: OwnerMapItem[]) {
       return !!i.address;
     });
     setPositions(new Map(known));
-    const needsServer = ask.filter((i) => i.lat == null || i.leadId == null || true);
+    const needsServer = ask;
     if (!needsServer.length) return;
     setLoading(true);
     (async () => {
