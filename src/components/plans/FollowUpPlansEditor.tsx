@@ -60,7 +60,7 @@ export function FollowUpPlansEditor() {
               </div>
             ))}
             <div className="flex flex-wrap justify-between gap-2 pt-2">
-              <Button size="sm" variant="outline" className="gap-1" onClick={() => update(plan.id, (p) => ({ ...p, steps: [...p.steps, { day: (p.steps.at(-1)?.day ?? 0) + 7, channel: "text", instruction: "", market_report: false }] }))}>
+              <Button size="sm" variant="outline" className="gap-1" onClick={() => update(plan.id, (p) => ({ ...p, steps: [...p.steps, { day: (p.steps[p.steps.length - 1]?.day ?? 0) + 7, channel: "text", instruction: "", market_report: false }] }))}>
                 <Plus className="h-4 w-4" /> Add step
               </Button>
               <Button size="sm" disabled={saving === plan.id} onClick={async () => {
