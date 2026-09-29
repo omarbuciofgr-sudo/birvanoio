@@ -21,6 +21,7 @@ import { CallDialog } from "./CallDialog";
 import { AudioRecordingPlayer } from "./AudioRecordingPlayer";
 import { SentimentBadge } from "./SentimentBadge";
 import { supabase } from "@/integrations/supabase/client";
+import { writeWithAI, splitEmailDraft } from "@/lib/ai/claudeWriter";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
@@ -171,23 +172,12 @@ export function CommunicationPanel({
   const generateEmailWithAI = async () => {
     setIsGeneratingMessage(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-message", {
-        body: {
-          messageType: "email",
-          leadName: leadName || "Contact",
-          businessName: businessName || "the company",
-          notes: logs.length > 0 ? logs.slice(0, 3).map(l => l.content || l.subject).filter(Boolean).join(". ") : undefined,
-          context: "Follow-up after initial contact"
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.subject) setEmailSubject(data.subject);
-      if (data?.body) setEmailBody(data.body);
-      toast.success("AI generated email draft!");
+      const { subject, body } = splitEmailDraft(await writeWithAI("email", leadId));
+      if (subject) setEmailSubject(subject);
+      setEmailBody(body);
+      toast.success("Draft ready. Review it before sending.");
     } catch (err: any) {
-      toast.error(err.message || "Failed to generate email");
+      toast.error(err.message);
     } finally {
       setIsGeneratingMessage(false);
     }
@@ -196,22 +186,10 @@ export function CommunicationPanel({
   const generateSmsWithAI = async () => {
     setIsGeneratingMessage(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-message", {
-        body: {
-          messageType: "sms",
-          leadName: leadName || "Contact",
-          businessName: businessName || "the company",
-          notes: logs.length > 0 ? logs.slice(0, 2).map(l => l.content || l.subject).filter(Boolean).join(". ") : undefined,
-          context: "Brief follow-up"
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.message) setSmsMessage(data.message);
-      toast.success("AI generated SMS draft!");
+      setSmsMessage(await writeWithAI("text_message", leadId));
+      toast.success("Draft ready. Review it before sending.");
     } catch (err: any) {
-      toast.error(err.message || "Failed to generate SMS");
+      toast.error(err.message);
     } finally {
       setIsGeneratingMessage(false);
     }
