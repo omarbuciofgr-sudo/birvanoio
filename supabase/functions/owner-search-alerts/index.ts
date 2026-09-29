@@ -118,6 +118,21 @@ Deno.serve(async (req) => {
       }
       if (!fresh.length && !followUps.length) continue;
 
+      // Gentle reminder if yesterday's daily goals were missed (user's time zone).
+      let goalHtml = "";
+      if (!followUpsSent.has(a.user_id)) {
+        const { data: gp } = await db.from("profiles")
+          .select("daily_contact_goal, daily_followup_goal, streak_counts_weekends, timezone").eq("user_id", a.user_id).maybeSingle();
+        const { data: gd } = await db.rpc("goal_day_counts", { p_user_id: a.user_id, p_tz: gp?.timezone || a.timezone, p_days: 2 });
+        const y = (gd ?? [])[0] as { day: string; contacted: number; followups: number } | undefined;
+        const wd = y ? new Date(`${y.day}T12:00:00Z`).getUTCDay() : 1;
+        const skipWeekend = !gp?.streak_counts_weekends && (wd === 0 || wd === 6);
+        const cg = gp?.daily_contact_goal ?? 10, fg = gp?.daily_followup_goal ?? 5;
+        if (y && !skipWeekend && (y.contacted < cg || y.followups < fg)) {
+          goalHtml = `<p style="background:#f1f5f9;border-radius:8px;padding:12px;color:#334155;font-size:14px;margin-top:20px">Yesterday you contacted ${y.contacted} of ${cg} owners and completed ${y.followups} of ${fg} follow-ups. Today's a fresh start. <a href="${APP_URL}/dashboard" style="color:#1d4ed8">See today's goals</a>.</p>`;
+        }
+      }
+
       if (fresh.length) await db.from("owner_alert_seen").upsert(fresh.map((r) => ({ alert_id: a.id, external_id: externalId(r) })), { ignoreDuplicates: true });
       // Make each listing openable from the email link.
       if (fresh.length) await db.from("owner_search_results").upsert(fresh.map((r) => ({
