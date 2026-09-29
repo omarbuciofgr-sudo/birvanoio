@@ -474,7 +474,7 @@ export function CommunicationPanel({
               onChange={(e) => setSmsMessage(e.target.value)}
               rows={4}
             />
-            <InsertBookingLink value={smsMessage} onChange=setSmsMessage />
+            <InsertBookingLink value={smsMessage} onChange={setSmsMessage} />
             <Button
               variant="outline"
               size="sm"
@@ -520,7 +520,7 @@ export function CommunicationPanel({
               onChange={(e) => setEmailBody(e.target.value)}
               rows={6}
             />
-            <InsertBookingLink value={emailBody} onChange=setEmailBody />
+            <InsertBookingLink value={emailBody} onChange={setEmailBody} />
             <Button
               variant="outline"
               size="sm"
@@ -588,7 +588,7 @@ export function CommunicationPanel({
                   placeholder="Email content will appear here..."
                   className="font-mono text-sm"
                 />
-                <InsertBookingLink value={recapEmail} onChange=setRecapEmail />
+                <InsertBookingLink value={recapEmail} onChange={setRecapEmail} />
               </div>
 
               {/* SMS Section */}
@@ -615,7 +615,7 @@ export function CommunicationPanel({
                   placeholder="SMS content will appear here..."
                   maxLength={160}
                 />
-                <InsertBookingLink value={recapSms} onChange=setRecapSms />
+                <InsertBookingLink value={recapSms} onChange={setRecapSms} />
               </div>
             </div>
           )}
