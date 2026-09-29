@@ -21,7 +21,14 @@ const BodySchema = z.object({
   leadId: z.string().uuid().optional(),
   listingId: z.string().min(1).max(300).optional(),
   ownerMessage: z.string().max(4000).optional(),
+  tone: z.enum(["friendly", "direct", "brief"]).optional(),
 });
+
+const TONES = {
+  friendly: "Tone: warm and friendly.",
+  direct: "Tone: direct and to the point, still polite.",
+  brief: "Tone: as brief as possible. Keep it very short.",
+} as const;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -77,7 +84,7 @@ Deno.serve(async (req) => {
     return json({ error: "Something was wrong with that request. Please try again." }, 400);
   }
   if (!parsed.success) return json({ error: "Something was wrong with that request. Please try again." }, 400);
-  const { task, leadId, listingId, ownerMessage } = parsed.data;
+  const { task, leadId, listingId, ownerMessage, tone } = parsed.data;
   if (!leadId && !listingId) return json({ error: "Something was wrong with that request. Please try again." }, 400);
   if (task === "reply_suggestion" && !ownerMessage?.trim()) {
     return json({ error: "Paste the owner's message first." }, 400);
@@ -150,7 +157,7 @@ Deno.serve(async (req) => {
       agent_brokerage: profile?.company_name || null,
     };
 
-    let userContent = `${TASKS[task]}\n\nData (use only this):\n${JSON.stringify(context, null, 2)}`;
+    let userContent = `${TASKS[task]}${tone ? ` ${TONES[tone]}` : ""}\n\nData (use only this):\n${JSON.stringify(context, null, 2)}`;
     if (task === "reply_suggestion") userContent += `\n\nOwner's message:\n${stripContact(ownerMessage!)}`;
     userContent += "\n\nReturn only the finished text, no preamble.";
 
