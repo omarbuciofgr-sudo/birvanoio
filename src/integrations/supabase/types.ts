@@ -1752,6 +1752,71 @@ export type Database = {
           },
         ]
       }
+      follow_up_plan_steps: {
+        Row: {
+          channel: string
+          created_at: string
+          day: number
+          id: string
+          instruction: string | null
+          market_report: boolean
+          plan_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          day: number
+          id?: string
+          instruction?: string | null
+          market_report?: boolean
+          plan_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          day?: number
+          id?: string
+          instruction?: string | null
+          market_report?: boolean
+          plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_plan_steps_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_plans: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       free_search_grants: {
         Row: {
           search_location: string | null
@@ -2043,41 +2108,120 @@ export type Database = {
       }
       lead_follow_ups: {
         Row: {
+          channel: string | null
           created_at: string
           done_at: string | null
+          draft_body: string | null
+          draft_subject: string | null
           due_date: string
+          enrollment_id: string | null
           id: string
           lead_id: string
           note: string | null
+          step_index: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          channel?: string | null
           created_at?: string
           done_at?: string | null
+          draft_body?: string | null
+          draft_subject?: string | null
           due_date: string
+          enrollment_id?: string | null
           id?: string
           lead_id: string
           note?: string | null
+          step_index?: number | null
           updated_at?: string
           user_id?: string
         }
         Update: {
+          channel?: string | null
           created_at?: string
           done_at?: string | null
+          draft_body?: string | null
+          draft_subject?: string | null
           due_date?: string
+          enrollment_id?: string | null
           id?: string
           lead_id?: string
           note?: string | null
+          step_index?: number | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "lead_follow_ups_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "lead_plan_enrollments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "lead_follow_ups_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_plan_enrollments: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string
+          plan_id: string | null
+          plan_name: string
+          started_on: string
+          status: string
+          steps: Json
+          stopped_at: string | null
+          stopped_reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id: string
+          plan_id?: string | null
+          plan_name: string
+          started_on: string
+          status?: string
+          steps: Json
+          stopped_at?: string | null
+          stopped_reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string
+          plan_id?: string | null
+          plan_name?: string
+          started_on?: string
+          status?: string
+          steps?: Json
+          stopped_at?: string | null
+          stopped_reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_plan_enrollments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_plan_enrollments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "follow_up_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -5116,6 +5260,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: Json
       }
+      ensure_default_follow_up_plans: { Args: never; Returns: undefined }
       get_organization_api_keys: {
         Args: { p_organization_id: string }
         Returns: {
@@ -5174,6 +5319,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      materialize_plan_steps: {
+        Args: { p_enrollment?: string }
+        Returns: number
+      }
       my_goal_day_counts: {
         Args: { p_days: number; p_tz: string }
         Returns: {
@@ -5184,6 +5333,10 @@ export type Database = {
       }
       normalize_email: { Args: { p_email: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
+      stop_lead_plans: {
+        Args: { p_lead: string; p_reason: string }
+        Returns: undefined
+      }
       verify_job_token: {
         Args: { p_name: string; p_token: string }
         Returns: boolean
