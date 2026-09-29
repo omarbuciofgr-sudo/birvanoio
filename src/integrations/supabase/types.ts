@@ -1963,6 +1963,47 @@ export type Database = {
           },
         ]
       }
+      lead_follow_ups: {
+        Row: {
+          created_at: string
+          done_at: string | null
+          due_date: string
+          id: string
+          lead_id: string
+          note: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          done_at?: string | null
+          due_date: string
+          id?: string
+          lead_id: string
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          done_at?: string | null
+          due_date?: string
+          id?: string
+          lead_id?: string
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_follow_ups_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_routing_rules: {
         Row: {
           assign_to_org: string | null
@@ -5006,7 +5047,14 @@ export type Database = {
         | "structured_data"
         | "pdf"
         | "enrichment_provider"
-      lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
+      lead_status:
+        | "new"
+        | "contacted"
+        | "qualified"
+        | "converted"
+        | "lost"
+        | "appointment_set"
+        | "listing_signed"
       plan_tier: "free" | "starter" | "growth" | "scale" | "enterprise"
       scrape_job_status:
         | "draft"
@@ -5187,7 +5235,15 @@ export const Constants = {
         "pdf",
         "enrichment_provider",
       ],
-      lead_status: ["new", "contacted", "qualified", "converted", "lost"],
+      lead_status: [
+        "new",
+        "contacted",
+        "qualified",
+        "converted",
+        "lost",
+        "appointment_set",
+        "listing_signed",
+      ],
       plan_tier: ["free", "starter", "growth", "scale", "enterprise"],
       scrape_job_status: [
         "draft",
