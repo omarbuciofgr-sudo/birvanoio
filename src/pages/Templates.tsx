@@ -1,3 +1,4 @@
+import { FollowUpPlansEditor } from "@/components/plans/FollowUpPlansEditor";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
