@@ -34,15 +34,20 @@ const statusConfig: Record<LeadStatus, { label: string; color: string }> = {
   contacted: { label: "Contacted", color: "bg-status-contacted/20 text-status-contacted border-status-contacted/30" },
   qualified: { label: "Qualified", color: "bg-status-qualified/20 text-status-qualified border-status-qualified/30" },
   converted: { label: "Converted", color: "bg-status-converted/20 text-status-converted border-status-converted/30" },
+  appointment_set: { label: "Appointment set", color: "bg-status-qualified/20 text-status-qualified border-status-qualified/30" },
+  listing_signed: { label: "Listing signed", color: "bg-status-converted/20 text-status-converted border-status-converted/30" },
   lost: { label: "Lost", color: "bg-status-lost/20 text-status-lost border-status-lost/30" },
 };
 
-const statusOrder: LeadStatus[] = ["new", "contacted", "qualified", "converted", "lost"];
+const DEFAULT_ORDER: LeadStatus[] = ["new", "contacted", "qualified", "converted", "lost"];
+const REAL_ESTATE_ORDER: LeadStatus[] = ["new", "contacted", "appointment_set", "listing_signed", "lost"];
 
 interface LeadKanbanBoardProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   onLeadsUpdate: () => void;
+  /** Real Estate stages: New, Contacted, Appointment set, Listing signed, Lost. */
+  realEstate?: boolean;
 }
 
 interface KanbanCardProps {
@@ -161,7 +166,7 @@ function KanbanColumn({ status, leads, onLeadClick }: KanbanColumnProps) {
   );
 }
 
-export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate }: LeadKanbanBoardProps) {
+export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate, realEstate = false }: LeadKanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   
   const sensors = useSensors(
@@ -173,6 +178,10 @@ export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate }: LeadKanba
     useSensor(KeyboardSensor)
   );
 
+  const base = realEstate ? REAL_ESTATE_ORDER : DEFAULT_ORDER;
+  // Keep any leads in stages outside the chosen set visible.
+  const extra = Array.from(new Set(leads.map((l) => l.status))).filter((s) => !base.includes(s));
+  const statusOrder: LeadStatus[] = [...base.slice(0, -1), ...extra, base[base.length - 1]];
   const leadsByStatus = statusOrder.reduce((acc, status) => {
     acc[status] = leads.filter((lead) => lead.status === status);
     return acc;

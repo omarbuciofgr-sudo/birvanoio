@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  const followUpsSent = new Set<string>();
   const summary = { due: due.length, emailed: 0, baselined: 0, skipped_credits: 0, failed: 0 };
 
   for (const a of due) {
@@ -106,11 +107,20 @@ Deno.serve(async (req) => {
         continue;
       }
       await db.from("owner_search_alerts").update({ last_run_date: date }).eq("id", a.id);
-      if (!fresh.length) continue;
 
-      await db.from("owner_alert_seen").upsert(fresh.map((r) => ({ alert_id: a.id, external_id: externalId(r) })), { ignoreDuplicates: true });
+      // Today's follow-ups go in the user's first alert email of the morning.
+      let followUps: { due_date: string; note: string | null; lead_id: string; leads: { business_name: string; contact_name: string | null } | null }[] = [];
+      if (!followUpsSent.has(a.user_id)) {
+        const { data: fu } = await db.from("lead_follow_ups")
+          .select("due_date, note, lead_id, leads(business_name, contact_name)")
+          .eq("user_id", a.user_id).is("done_at", null).lte("due_date", date).order("due_date").limit(25);
+        followUps = (fu ?? []) as typeof followUps;
+      }
+      if (!fresh.length && !followUps.length) continue;
+
+      if (fresh.length) await db.from("owner_alert_seen").upsert(fresh.map((r) => ({ alert_id: a.id, external_id: externalId(r) })), { ignoreDuplicates: true });
       // Make each listing openable from the email link.
-      await db.from("owner_search_results").upsert(fresh.map((r) => ({
+      if (fresh.length) await db.from("owner_search_results").upsert(fresh.map((r) => ({
         user_id: a.user_id, external_id: externalId(r), search_location: a.location,
         listing_kind: r.listing_kind || null, listing_data: r,
       })), { onConflict: "user_id,external_id" });
@@ -119,7 +129,18 @@ Deno.serve(async (req) => {
       if (!profile?.email || !resendKey) { summary.failed++; continue; }
 
       const city = a.location.split(",")[0].trim();
-      const subject = `${fresh.length} new owner${fresh.length === 1 ? "" : "s"} in ${city} today`;
+      const subject = fresh.length
+        ? `${fresh.length} new owner${fresh.length === 1 ? "" : "s"} in ${city} today`
+        : `${followUps.length} follow-up${followUps.length === 1 ? "" : "s"} due today`;
+      const fuRows = followUps.map((f) => {
+        const overdue = f.due_date < date;
+        const link = `${APP_URL}/dashboard/owners/${encodeURIComponent(`lead:${f.lead_id}`)}`;
+        const who = [f.leads?.contact_name, f.leads?.business_name].filter(Boolean).join(" · ") || "Lead";
+        return `<tr><td style="padding:8px 0;border-bottom:1px solid #eee"><a href="${link}" style="color:#1d4ed8;font-weight:600;text-decoration:none">${esc(who)}</a>${overdue ? ` <span style="color:#b91c1c;font-size:12px">Overdue since ${esc(f.due_date)}</span>` : ""}${f.note ? `<br><span style="color:#555;font-size:13px">${esc(f.note)}</span>` : ""}</td></tr>`;
+      }).join("");
+      const fuHtml = followUps.length
+        ? `<h3 style="font-size:16px;margin-top:24px">Today's follow-ups (${followUps.length})</h3><table style="width:100%;border-collapse:collapse">${fuRows}</table>`
+        : "";
       const items = fresh.slice(0, 50).map((r) => {
         const kind = /rent/i.test(String(r.listing_kind)) ? "Renting" : "Selling";
         const price = r.price != null ? `$${Number(r.price).toLocaleString("en-US")}${kind === "Renting" ? "/mo" : ""}` : "Price not listed";
@@ -129,8 +150,9 @@ Deno.serve(async (req) => {
       const unsub = `${Deno.env.get("SUPABASE_URL")}/functions/v1/owner-alert-unsubscribe?token=${a.unsubscribe_token}`;
       const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111">
 <h2 style="font-size:20px">${esc(subject)}</h2>
-<p style="color:#555">New owner listings for your saved search: ${esc(a.location)}.</p>
-<table style="width:100%;border-collapse:collapse">${items}</table>
+${fresh.length ? `<p style="color:#555">New owner listings for your saved search: ${esc(a.location)}.</p>
+<table style="width:100%;border-collapse:collapse">${items}</table>` : `<p style="color:#555">No new owners for ${esc(a.location)} today.</p>`}
+${fuHtml}
 ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Brivano.</p>` : ""}
 <p style="font-size:12px;color:#888;margin-top:24px">You get this because you saved this search in Brivano. <a href="${unsub}" style="color:#888">Unsubscribe from this alert</a>.</p></div>`;
 
@@ -141,6 +163,7 @@ ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Br
       });
       if (!send.ok) { console.error("alert email failed", send.status, (await send.text()).slice(0, 300)); summary.failed++; continue; }
       await db.from("owner_search_alerts").update({ last_sent_at: new Date().toISOString() }).eq("id", a.id);
+      if (followUps.length) followUpsSent.add(a.user_id);
       summary.emailed++;
     } catch (e) {
       console.error("alert run failed", a.id, e);

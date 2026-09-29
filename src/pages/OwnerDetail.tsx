@@ -18,6 +18,8 @@ import {
   computeFlags, daysListed, listingKind, marketComparison, type PropertyEstimate,
 } from "@/lib/ownerFlags";
 import { normalizeAddressKey } from "@/lib/rentcast/mapRentCastToLead";
+import { SetFollowUp } from "@/components/leads/SetFollowUp";
+import { CalendarClock } from "lucide-react";
 
 const money = (n?: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString("en-US")}`);
 const fmtDate = (d?: string | null) => {
@@ -306,6 +308,17 @@ export default function OwnerDetail() {
                   <Button asChild size="sm" variant="outline" className="w-full">
                     <Link to={`/dashboard/leads/${leadId}`}>Open full lead record</Link>
                   </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><CalendarClock className="h-4 w-4 text-primary" />Set follow-up</CardTitle></CardHeader>
+              <CardContent>
+                {leadId ? (
+                  <SetFollowUp leadId={leadId} />
+                ) : (
+                  <p className="text-xs text-muted-foreground">Save this owner to My Leads from Find Owners to set follow-ups.</p>
                 )}
               </CardContent>
             </Card>

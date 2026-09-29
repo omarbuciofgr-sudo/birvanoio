@@ -65,6 +65,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { useLeadsData } from "@/hooks/useLeadsData";
+import { usePersona } from "@/hooks/usePersona";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
@@ -81,6 +82,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   contacted: { label: "Contacted", color: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400", icon: Phone },
   qualified: { label: "Qualified", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400", icon: UserCheck },
   converted: { label: "Converted", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: CheckCircle },
+  appointment_set: { label: "Appointment set", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400", icon: UserCheck },
+  listing_signed: { label: "Listing signed", color: "bg-green-500/10 text-green-600 dark:text-green-400", icon: CheckCircle },
   lost: { label: "Lost", color: "bg-destructive/10 text-destructive", icon: AlertTriangle },
 };
 
@@ -90,6 +93,7 @@ type SortDir = "asc" | "desc";
 const Leads = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { isRealtor } = usePersona();
   const { data: sharedLeads = [], isLoading: leadsLoading, refetch: refetchLeads } = useLeadsData(user?.id);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -572,8 +576,9 @@ const Leads = () => {
         {viewMode === "kanban" ? (
           <LeadKanbanBoard
             leads={filteredLeads}
-            onLeadClick={(lead) => navigate(`/dashboard/leads/${lead.id}`)}
+            onLeadClick={(lead) => navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`)}
             onLeadsUpdate={fetchLeads}
+            realEstate={isRealtor}
           />
         ) : viewMode === "companies" ? (
           <div className="space-y-3">

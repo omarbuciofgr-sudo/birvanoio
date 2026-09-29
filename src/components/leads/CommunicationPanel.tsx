@@ -23,6 +23,7 @@ import { SentimentBadge } from "./SentimentBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { writeWithAI, splitEmailDraft } from "@/lib/ai/claudeWriter";
 import { toast } from "sonner";
+import { addFollowUp, daysFromNow, prettyDate } from "@/lib/followUps";
 import { z } from "zod";
 import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
 
@@ -40,6 +41,22 @@ interface ConversationLog {
   call_sid: string | null;
   sentiment: string | null;
 }
+
+/** After contacting a lead, offer a one-click follow-up in 3 days. */
+const suggestFollowUp = (leadId: string, what: string) => {
+  const due = daysFromNow(3);
+  toast.success(what, {
+    description: `Follow up on ${prettyDate(due)}?`,
+    duration: 10000,
+    action: {
+      label: "Set follow-up",
+      onClick: async () => {
+        const { error } = await addFollowUp(leadId, due);
+        if (error) toast.error(error); else toast.success(`Follow-up set for ${prettyDate(due)}`);
+      },
+    },
+  });
+};
 
 interface CommunicationPanelProps {
   leadId: string;
@@ -156,7 +173,7 @@ export function CommunicationPanel({
 
   const handleEndCall = () => {
     fetchLogs();
-    toast.success("Call ended");
+    suggestFollowUp(leadId, "Call ended");
   };
 
   const handleEmail = () => {
@@ -208,7 +225,7 @@ export function CommunicationPanel({
       });
       
       if (error) throw error;
-      toast.success("Email sent successfully");
+      suggestFollowUp(leadId, "Email sent");
       setEmailDialogOpen(false);
       setEmailSubject("");
       setEmailBody("");
@@ -261,7 +278,7 @@ export function CommunicationPanel({
       });
       
       if (error) throw error;
-      toast.success("SMS sent successfully · 1 credit used");
+      suggestFollowUp(leadId, "Text sent · 1 credit used");
       setSmsDialogOpen(false);
       setSmsMessage("");
       fetchLogs();
