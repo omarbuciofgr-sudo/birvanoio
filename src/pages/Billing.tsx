@@ -256,14 +256,14 @@ const Billing = () => {
           </div>
         )}
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Billing & Seats</h1>
             <p className="text-muted-foreground text-sm mt-1">
               Manage your subscription, seats, and credit allocations.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -470,7 +470,7 @@ const Billing = () => {
             ) : members.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No members found.</p>
             ) : (
-              <Table>
+              <div className="overflow-x-auto"><Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Member</TableHead>
@@ -530,7 +530,7 @@ const Billing = () => {
                     );
                   })}
                 </TableBody>
-              </Table>
+              </Table></div>
             )}
           </CardContent>
         </Card>
@@ -541,7 +541,7 @@ const Billing = () => {
             <CardDescription>Credits are deducted only when the listed action succeeds.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto"><Table>
               <TableHeader><TableRow><TableHead>Action</TableHead><TableHead className="text-right">Cost</TableHead></TableRow></TableHeader>
               <TableBody>
                 {[
@@ -553,7 +553,7 @@ const Billing = () => {
                   ["Send an email", "Free"],
                 ].map(([action, cost]) => <TableRow key={action}><TableCell>{action}</TableCell><TableCell className="text-right font-medium">{cost}</TableCell></TableRow>)}
               </TableBody>
-            </Table>
+            </Table></div>
           </CardContent>
         </Card>
       </div>

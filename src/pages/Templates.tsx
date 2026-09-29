@@ -36,7 +36,7 @@ const Templates = () => {
         </div>
 
         <Tabs defaultValue="templates" className="space-y-4">
-          <TabsList className="h-9 p-0.5 bg-muted/60">
+          <TabsList className="flex h-11 w-full justify-start overflow-x-auto p-0.5 bg-muted/60 sm:h-9 sm:w-auto">
             <TabsTrigger value="templates" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <FileText className="w-3.5 h-3.5" />
               Templates Library

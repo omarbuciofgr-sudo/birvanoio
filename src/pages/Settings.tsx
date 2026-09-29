@@ -163,7 +163,7 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList className="h-9 p-0.5 bg-muted/60">
+          <TabsList className="flex h-11 w-full justify-start overflow-x-auto p-0.5 bg-muted/60 sm:h-9 sm:w-auto">
             <TabsTrigger value="profile" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <User className="w-3.5 h-3.5" />
               Profile
@@ -195,7 +195,7 @@ const Settings = () => {
                 <CardDescription>Update your personal information.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       First Name

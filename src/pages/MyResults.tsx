@@ -88,7 +88,7 @@ export default function MyResults() {
         <Card>
           <CardContent className="p-6">
             <p className="text-sm text-muted-foreground">Estimated commission from Brivano leads</p>
-            <p className="text-4xl font-bold tracking-tight mt-1">{money(stats.commission)}</p>
+            <p className="mt-1 text-3xl font-bold sm:text-4xl">{money(stats.commission)}</p>
             {stats.missingPrice > 0 && (
               <p className="text-xs text-muted-foreground mt-2">{stats.missingPrice} signed listing{stats.missingPrice > 1 ? "s have" : " has"} no list price yet, so {stats.missingPrice > 1 ? "they aren't" : "it isn't"} counted.</p>
             )}
@@ -110,7 +110,7 @@ export default function MyResults() {
         <div className="grid lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader><CardTitle className="text-base">Listings signed by month</CardTitle></CardHeader>
-            <CardContent className="h-64">
+            <CardContent className="h-64 min-w-0 px-2 sm:px-6">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stats.months}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
