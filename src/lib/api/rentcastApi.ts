@@ -13,6 +13,8 @@ export type RentCastListing = {
   address?: string | null;
   address_line1?: string | null;
   city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   state?: string | null;
   zip_code?: string | null;
   price?: number | null;
