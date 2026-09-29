@@ -2149,9 +2149,11 @@ export type Database = {
       }
       leads: {
         Row: {
+          appointment_set_at: string | null
           business_name: string
           city: string | null
           client_id: string
+          commission_rate: number | null
           company_size: string | null
           contact_name: string | null
           contacted_at: string | null
@@ -2161,11 +2163,14 @@ export type Database = {
           do_not_contact_at: string | null
           do_not_contact_reason: string | null
           email: string | null
+          estimated_commission: number | null
           estimated_revenue: string | null
           id: string
           industry: string | null
           lead_score: number | null
           linkedin_url: string | null
+          list_price: number | null
+          listing_signed_at: string | null
           notes: string | null
           phone: string | null
           social_profiles: Json | null
@@ -2178,9 +2183,11 @@ export type Database = {
           zip_code: string | null
         }
         Insert: {
+          appointment_set_at?: string | null
           business_name: string
           city?: string | null
           client_id: string
+          commission_rate?: number | null
           company_size?: string | null
           contact_name?: string | null
           contacted_at?: string | null
@@ -2190,11 +2197,14 @@ export type Database = {
           do_not_contact_at?: string | null
           do_not_contact_reason?: string | null
           email?: string | null
+          estimated_commission?: number | null
           estimated_revenue?: string | null
           id?: string
           industry?: string | null
           lead_score?: number | null
           linkedin_url?: string | null
+          list_price?: number | null
+          listing_signed_at?: string | null
           notes?: string | null
           phone?: string | null
           social_profiles?: Json | null
@@ -2207,9 +2217,11 @@ export type Database = {
           zip_code?: string | null
         }
         Update: {
+          appointment_set_at?: string | null
           business_name?: string
           city?: string | null
           client_id?: string
+          commission_rate?: number | null
           company_size?: string | null
           contact_name?: string | null
           contacted_at?: string | null
@@ -2219,11 +2231,14 @@ export type Database = {
           do_not_contact_at?: string | null
           do_not_contact_reason?: string | null
           email?: string | null
+          estimated_commission?: number | null
           estimated_revenue?: string | null
           id?: string
           industry?: string | null
           lead_score?: number | null
           linkedin_url?: string | null
+          list_price?: number | null
+          listing_signed_at?: string | null
           notes?: string | null
           phone?: string | null
           social_profiles?: Json | null
@@ -2699,6 +2714,7 @@ export type Database = {
           created_at: string
           daily_contact_goal: number
           daily_followup_goal: number
+          default_commission_rate: number
           elevenlabs_agent_id: string | null
           email: string
           first_name: string | null
@@ -2728,6 +2744,7 @@ export type Database = {
           created_at?: string
           daily_contact_goal?: number
           daily_followup_goal?: number
+          default_commission_rate?: number
           elevenlabs_agent_id?: string | null
           email: string
           first_name?: string | null
@@ -2757,6 +2774,7 @@ export type Database = {
           created_at?: string
           daily_contact_goal?: number
           daily_followup_goal?: number
+          default_commission_rate?: number
           elevenlabs_agent_id?: string | null
           email?: string
           first_name?: string | null
