@@ -59,12 +59,6 @@ Deno.serve(async (req) => {
     if (lead.do_not_contact) return json({ error: "This owner asked not to be contacted." }, 400);
     try { await assertEmailNotSuppressed(db, userId, lead.email); } catch { return json({ error: "This owner has unsubscribed from your emails." }, 400); }
 
-    // Make sure credits are available before sending.
-    if (!alreadyCharged) {
-      const { data: bal } = await db.rpc("consume_action_credits_for_user", { p_user_id: userId, p_action_key: "action_market_report", p_units: 0, p_reference_id: null }).then((r) => r, () => ({ data: null }));
-      void bal;
-    }
-
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) return json({ error: "Email isn't available right now." }, 503);
     const { data: profile } = await db.from("profiles").select("first_name, last_name, brokerage, company_name, sender_email").eq("user_id", userId).maybeSingle();
