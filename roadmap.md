@@ -91,3 +91,6 @@
 
 ## Claude chat
 - [x] Switch in-app chat assistant to Claude
+
+## Brivano Assistant (uploaded brief)
+- [ ] Plan and build Claude assistant with tools, confirmations, automations
