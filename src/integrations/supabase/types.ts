@@ -83,6 +83,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_settings: {
+        Row: {
+          setting_key: string
+          setting_value: string
+          updated_at: string
+        }
+        Insert: {
+          setting_key: string
+          setting_value: string
+          updated_at?: string
+        }
+        Update: {
+          setting_key?: string
+          setting_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_usage_logs: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          id: string
+          input_tokens: number
+          lead_id: string | null
+          model: string | null
+          output_tokens: number
+          success: boolean
+          task: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input_tokens?: number
+          lead_id?: string | null
+          model?: string | null
+          output_tokens?: number
+          success?: boolean
+          task: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input_tokens?: number
+          lead_id?: string | null
+          model?: string | null
+          output_tokens?: number
+          success?: boolean
+          task?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_user_connections: {
         Row: {
           account_email: string | null
