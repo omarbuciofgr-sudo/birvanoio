@@ -350,6 +350,30 @@ export type Database = {
         }
         Relationships: []
       }
+      city_search_cache: {
+        Row: {
+          created_at: string
+          fetched_on: string
+          listing_type: string
+          listings: Json
+          location_key: string
+        }
+        Insert: {
+          created_at?: string
+          fetched_on: string
+          listing_type: string
+          listings?: Json
+          location_key: string
+        }
+        Update: {
+          created_at?: string
+          fetched_on?: string
+          listing_type?: string
+          listings?: Json
+          location_key?: string
+        }
+        Relationships: []
+      }
       client_api_keys: {
         Row: {
           api_key_hash: string
@@ -2310,6 +2334,80 @@ export type Database = {
         }
         Relationships: []
       }
+      owner_alert_seen: {
+        Row: {
+          alert_id: string
+          external_id: string
+          seen_at: string
+        }
+        Insert: {
+          alert_id: string
+          external_id: string
+          seen_at?: string
+        }
+        Update: {
+          alert_id?: string
+          external_id?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_alert_seen_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "owner_search_alerts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      owner_search_alerts: {
+        Row: {
+          baseline_done: boolean
+          created_at: string
+          id: string
+          is_active: boolean
+          last_run_date: string | null
+          last_sent_at: string | null
+          listing_type: string
+          location: string
+          match_level: string
+          timezone: string
+          unsubscribe_token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          baseline_done?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_run_date?: string | null
+          last_sent_at?: string | null
+          listing_type?: string
+          location: string
+          match_level?: string
+          timezone?: string
+          unsubscribe_token?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          baseline_done?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_run_date?: string | null
+          last_sent_at?: string | null
+          listing_type?: string
+          location?: string
+          match_level?: string
+          timezone?: string
+          unsubscribe_token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       owner_search_results: {
         Row: {
           created_at: string
@@ -2494,6 +2592,7 @@ export type Database = {
           metadata: Json
           monthly_credits_per_seat: number | null
           price_cents: number | null
+          saved_search_limit: number | null
           setting_key: string
           setting_type: string
           updated_at: string
@@ -2507,6 +2606,7 @@ export type Database = {
           metadata?: Json
           monthly_credits_per_seat?: number | null
           price_cents?: number | null
+          saved_search_limit?: number | null
           setting_key: string
           setting_type: string
           updated_at?: string
@@ -2520,6 +2620,7 @@ export type Database = {
           metadata?: Json
           monthly_credits_per_seat?: number | null
           price_cents?: number | null
+          saved_search_limit?: number | null
           setting_key?: string
           setting_type?: string
           updated_at?: string
@@ -4837,6 +4938,10 @@ export type Database = {
       }
       normalize_email: { Args: { p_email: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
+      verify_job_token: {
+        Args: { p_name: string; p_token: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "client"

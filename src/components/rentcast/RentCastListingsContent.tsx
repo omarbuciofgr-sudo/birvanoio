@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CityAutocomplete } from "@/components/onboarding/CityAutocomplete";
+import { SavedSearchAlerts, createAlert, useSavedAlerts } from "@/components/rentcast/SavedSearchAlerts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ import {
   Sparkles,
   UserPlus,
   ChevronDown,
+  Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -304,6 +306,8 @@ export default function RentCastListingsContent({
   const [searchParams, setSearchParams] = useSearchParams();
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null);
   const welcomeStarted = useRef(false);
+  const savedAlerts = useSavedAlerts();
+  const [savingAlert, setSavingAlert] = useState(false);
   const [source] = useState<SourceMode>("zillow");
   const [listingType, setListingType] = useState<ListingType>("both");
   const [zillowStats, setZillowStats] = useState<ZillowSearchStats | null>(null);
@@ -379,6 +383,42 @@ export default function RentCastListingsContent({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Open an owner straight from an alert email link.
+  useEffect(() => {
+    const listingId = searchParams.get("listing");
+    if (!listingId) return;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+      const { data } = await (supabase as any).from("owner_search_results")
+        .select("listing_data").eq("user_id", auth.user.id).eq("external_id", listingId).maybeSingle();
+      if (data?.listing_data) {
+        setListings((prev) => (prev.some((r) => r.rentcast_id === data.listing_data.rentcast_id) ? prev : [data.listing_data, ...prev]));
+        setDetailRow(data.listing_data);
+      } else {
+        toast.error("That owner is no longer in your saved results.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onSaveAlert = async () => {
+    const loc = location.trim();
+    if (!loc) {
+      toast.error("Enter a city and state first.");
+      return;
+    }
+    setSavingAlert(true);
+    const { error } = await createAlert(loc, listingType, resultView === "best" ? "best" : "all");
+    setSavingAlert(false);
+    if (error) {
+      toast.error(error, error.includes("Upgrade") ? { action: { label: "Upgrade", onClick: () => (window.location.href = "/dashboard/billing") } } : undefined);
+      return;
+    }
+    toast.success(`Daily alerts on for ${loc}. We'll email you at 7am when new owners appear.`);
+    savedAlerts.refresh();
+  };
 
   const filtered = useMemo(() => {
     return listings.filter((row) => {
@@ -883,6 +923,8 @@ export default function RentCastListingsContent({
           </p>
         </div>
 
+        <SavedSearchAlerts alerts={savedAlerts.alerts} loading={savedAlerts.loading} refresh={savedAlerts.refresh} />
+
         {welcomeCity && (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
             <p>Here are owners in {welcomeCity} selling or renting on their own. Click any owner to see details.</p>
@@ -989,6 +1031,10 @@ export default function RentCastListingsContent({
               <RefreshCw className="h-4 w-4" />
             )}
             My past searches
+          </Button>
+          <Button variant="outline" onClick={onSaveAlert} disabled={!!busy || savingAlert || !location.trim()} className="gap-1.5">
+            {savingAlert ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+            Get daily alerts for this search
           </Button>
           <Button
             variant="secondary"
