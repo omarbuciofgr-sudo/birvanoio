@@ -56,6 +56,7 @@ import RealEstateAudience from "./pages/RealEstateAudience";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import MyResults from "./pages/MyResults";
+import Automations from "./pages/Automations";
 
 
 const queryClient = new QueryClient();
