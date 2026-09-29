@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LeadScoreBadge } from "./LeadScoreBadge";
+import { ListingSignedDialog } from "./ListingSignedDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Phone, Mail, Building2, MapPin } from "lucide-react";
@@ -281,5 +282,6 @@ export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate, realEstate 
         )}
       </DragOverlay>
     </DndContext>
+    </>
   );
 }

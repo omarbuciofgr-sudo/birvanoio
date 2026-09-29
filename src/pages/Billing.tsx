@@ -173,6 +173,19 @@ const Billing = () => {
       .then(({ data }) => setAiMessagesUsed(data?.messages_used ?? 0));
   }, [user?.id]);
 
+  const [roi, setRoi] = useState<{ paid: number; commission: number } | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    Promise.all([
+      supabase.functions.invoke("billing-spend"),
+      supabase.from("leads").select("estimated_commission").eq("status", "listing_signed"),
+    ]).then(([spend, signed]) => {
+      if (spend.error || spend.data?.error) return;
+      const commission = (signed.data ?? []).reduce((s: number, l: any) => s + Number(l.estimated_commission ?? 0), 0);
+      setRoi({ paid: Number(spend.data?.totalPaid ?? 0), commission });
+    });
+  }, [user?.id]);
+
   const handleUpdateSeats = async () => {
     if (seatInput === seatsPurchased || seatInput < 1) return;
     setUpdatingSeats(true);
