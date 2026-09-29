@@ -178,7 +178,7 @@ ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Br
       });
       if (!send.ok) { console.error("alert email failed", send.status, (await send.text()).slice(0, 300)); summary.failed++; continue; }
       await db.from("owner_search_alerts").update({ last_sent_at: new Date().toISOString() }).eq("id", a.id);
-      if (followUps.length) followUpsSent.add(a.user_id);
+      followUpsSent.add(a.user_id);
       summary.emailed++;
     } catch (e) {
       console.error("alert run failed", a.id, e);
