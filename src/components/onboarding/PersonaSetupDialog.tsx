@@ -5,12 +5,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Check, ChevronLeft, Loader2 } from "lucide-react";
 import { PERSONA_ROLES, getGoalsForRole, type PersonaRoleId } from "@/lib/persona";
 import { toast } from "sonner";
+import { CityAutocomplete } from "./CityAutocomplete";
 
 interface PersonaSetupDialogProps {
   open: boolean;
   initialRole?: string | null;
   initialGoals?: string[];
-  onSave: (role: string, goals: string[]) => Promise<{ error: unknown }>;
+  onSave: (role: string, goals: string[], homeMarket?: string) => Promise<{ error: unknown }>;
+  initialHomeMarket?: string | null;
   onClose?: () => void;
   dismissible?: boolean;
 }
@@ -22,10 +24,14 @@ export const PersonaSetupDialog = ({
   onSave,
   onClose,
   dismissible = false,
+  initialHomeMarket,
 }: PersonaSetupDialogProps) => {
   const [role, setRole] = useState<PersonaRoleId | null>((initialRole as PersonaRoleId) ?? null);
   const [goals, setGoals] = useState<string[]>(initialGoals ?? []);
-  const [step, setStep] = useState<1 | 2>(initialRole ? 2 : 1);
+  const [step, setStep] = useState<1 | 2 | 3>(initialRole ? 2 : 1);
+  const [homeMarket, setHomeMarket] = useState(initialHomeMarket ?? "");
+  const needsMarket = role === "realtor";
+  const marketValid = /^[^,]{2,},\s*[A-Za-z]{2}$/.test(homeMarket.trim());
   const [saving, setSaving] = useState(false);
 
   const goalOptions = useMemo(() => getGoalsForRole(role), [role]);
@@ -36,7 +42,8 @@ export const PersonaSetupDialog = ({
   const handleSave = async () => {
     if (!role || goals.length === 0) return;
     setSaving(true);
-    const { error } = await onSave(role, goals);
+    if (needsMarket && !marketValid) return;
+    const { error } = await onSave(role, goals, needsMarket ? homeMarket.trim() : undefined);
     setSaving(false);
     if (error) {
       toast.error("Couldn't save your setup. Please try again.");
@@ -55,12 +62,14 @@ export const PersonaSetupDialog = ({
       >
         <DialogHeader>
           <DialogTitle className="text-xl">
-            {step === 1 ? "What best describes your role?" : "What will you use Brivano for?"}
+            {step === 1 ? "What best describes your role?" : step === 2 ? "What will you use Brivano for?" : "Where do you work?"}
           </DialogTitle>
           <DialogDescription>
             {step === 1
               ? "We'll only show the tools that fit how you work."
-              : "Pick everything that applies — your sidebar adapts to your answers."}
+              : step === 2
+                ? "Pick everything that applies. Your sidebar adapts to your answers."
+                : "Enter the city you work in. We'll use it as your home market for owner searches."}
           </DialogDescription>
         </DialogHeader>
 
@@ -89,6 +98,14 @@ export const PersonaSetupDialog = ({
               );
             })}
           </div>
+        ) : step === 3 ? (
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">City, State</label>
+            <CityAutocomplete value={homeMarket} onChange={setHomeMarket} autoFocus />
+            {homeMarket.trim() && !marketValid && (
+              <p className="text-xs text-muted-foreground">Use the format City, ST (for example Austin, TX).</p>
+            )}
+          </div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 max-h-[45vh] overflow-y-auto pr-1">
             {goalOptions.map((g) => {
@@ -116,16 +133,21 @@ export const PersonaSetupDialog = ({
         )}
 
         <div className="flex items-center justify-between pt-2">
-          {step === 2 ? (
-            <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="gap-1.5">
+          {step > 1 ? (
+            <Button variant="ghost" size="sm" onClick={() => setStep(step === 3 ? 2 : 1)} className="gap-1.5">
               <ChevronLeft className="w-3.5 h-3.5" />
               Back
             </Button>
           ) : (
             <span />
           )}
-          {step === 2 && (
-            <Button size="sm" onClick={handleSave} disabled={goals.length === 0 || saving} className="gap-1.5">
+          {step === 2 && needsMarket && (
+            <Button size="sm" onClick={() => setStep(3)} disabled={goals.length === 0}>
+              Next
+            </Button>
+          )}
+          {((step === 2 && !needsMarket) || step === 3) && (
+            <Button size="sm" onClick={handleSave} disabled={goals.length === 0 || saving || (step === 3 && !marketValid)} className="gap-1.5">
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               Save & continue
             </Button>

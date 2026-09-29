@@ -1674,6 +1674,24 @@ export type Database = {
           },
         ]
       }
+      free_search_grants: {
+        Row: {
+          search_location: string | null
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          search_location?: string | null
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          search_location?: string | null
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gmail_followups: {
         Row: {
           calendar_event_id: string | null
@@ -2517,6 +2535,7 @@ export type Database = {
           elevenlabs_agent_id: string | null
           email: string
           first_name: string | null
+          home_market: string | null
           id: string
           industry: string | null
           last_name: string | null
@@ -2539,6 +2558,7 @@ export type Database = {
           elevenlabs_agent_id?: string | null
           email: string
           first_name?: string | null
+          home_market?: string | null
           id?: string
           industry?: string | null
           last_name?: string | null
@@ -2561,6 +2581,7 @@ export type Database = {
           elevenlabs_agent_id?: string | null
           email?: string
           first_name?: string | null
+          home_market?: string | null
           id?: string
           industry?: string | null
           last_name?: string | null

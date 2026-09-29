@@ -95,7 +95,7 @@ export const usePersona = () => {
   }, [authLoading, refresh, user?.id]);
 
   const savePersona = useCallback(
-    async (role: string, goals: string[]) => {
+    async (role: string, goals: string[], homeMarket?: string) => {
       if (!user?.id) return { error: new Error("Not signed in") };
       const { error } = await supabase
         .from("profiles")
@@ -103,6 +103,7 @@ export const usePersona = () => {
           persona_role: role,
           persona_goals: goals,
           persona_completed_at: new Date().toISOString(),
+          ...(homeMarket ? { home_market: homeMarket } : {}),
         } as any)
         .eq("user_id", user.id);
       if (!error) {
