@@ -138,7 +138,7 @@ function KanbanColumn({ status, leads, onLeadClick }: KanbanColumnProps) {
   const config = statusConfig[status];
   
   return (
-    <div className="flex flex-col w-72 shrink-0">
+    <div className="flex w-[calc(100vw-2rem)] max-w-72 shrink-0 flex-col sm:w-72">
       <div className={`flex items-center gap-2 px-3 py-2 rounded-t-lg border ${config.color}`}>
         <span className="font-medium text-sm">{config.label}</span>
         <Badge variant="secondary" className="text-xs">

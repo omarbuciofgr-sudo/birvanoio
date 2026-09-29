@@ -9,14 +9,14 @@ const tabs = [
 
 export function OutreachTabs() {
   return (
-    <div className="mb-5 border-b border-border">
-      <div className="flex items-center gap-1" aria-label="Outreach sections">
+    <div className="mb-5 overflow-x-auto border-b border-border">
+      <div className="flex min-w-max items-center gap-1" aria-label="Outreach sections">
         {tabs.map(({ label, href, icon: Icon }) => (
           <NavLink
             key={href}
             to={href}
             className={({ isActive }) =>
-              `inline-flex h-9 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors ${
+              `inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors md:min-h-9 ${
                 isActive
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"

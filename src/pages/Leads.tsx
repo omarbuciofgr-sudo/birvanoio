@@ -71,6 +71,12 @@ import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
 
+function leadListingDetails(notes?: string | null) {
+  const kind = notes?.match(/^Listing type:\s*(sale|rental)/im)?.[1];
+  const price = notes?.match(/^Price:\s*([^\n]+)/im)?.[1];
+  return { kind, price };
+}
+
 type Lead = Database["public"]["Tables"]["leads"]["Row"] & {
   lead_score?: number | null;
 };
@@ -359,7 +365,7 @@ const Leads = () => {
     <DashboardLayout>
       <div className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
               {activeTab === "companies" ? "Companies" : "My Leads"}
@@ -371,30 +377,30 @@ const Leads = () => {
               {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active`}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             {activeTab === "people" && (
               <ToggleGroup
                 type="single"
                 value={peopleLayout}
                 onValueChange={(v) => v && setPeopleLayout(v as "table" | "kanban")}
               >
-                <ToggleGroupItem value="table" aria-label="List view" className="gap-1 h-8 text-xs px-2.5">
+                <ToggleGroupItem value="table" aria-label="List view" className="min-h-11 gap-1 px-2.5 text-xs sm:h-8 sm:min-h-0">
                   <List className="w-3.5 h-3.5" />
                   <span>List</span>
                 </ToggleGroupItem>
-                <ToggleGroupItem value="kanban" aria-label="Pipeline view" className="gap-1 h-8 text-xs px-2.5">
+                <ToggleGroupItem value="kanban" aria-label="Pipeline view" className="min-h-11 gap-1 px-2.5 text-xs sm:h-8 sm:min-h-0">
                   <LayoutGrid className="w-3.5 h-3.5" />
                   <span>Pipeline</span>
                 </ToggleGroupItem>
               </ToggleGroup>
             )}
-            <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 text-xs h-8">
+            <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0">
               <Plus className="w-3.5 h-3.5" /> {activeTab === "companies" ? "Add Company" : "Add Lead"}
             </Button>
-            <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+            <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0">
               <Upload className="w-3.5 h-3.5" /> Import
             </Button>
-            <Button onClick={exportLeads} variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+            <Button onClick={exportLeads} variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0">
               <Download className="w-3.5 h-3.5" /> Export
             </Button>
           </div>
@@ -402,7 +408,7 @@ const Leads = () => {
 
         {/* People / Companies tabs */}
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as "people" | "companies"); setCompanyFilter(null); }}>
-          <TabsList className="h-9">
+          <TabsList className="h-11 sm:h-9">
             <TabsTrigger value="people" className="gap-1.5 text-xs">
               <Users className="w-3.5 h-3.5" /> Leads
               <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[9px]">
@@ -419,19 +425,19 @@ const Leads = () => {
         </Tabs>
 
         {/* Search + Filter Bar */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               placeholder="Search by name, email, phone, city..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 text-xs"
+              className="h-11 pl-8 text-xs sm:h-8"
             />
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32 h-8 text-xs">
+            <SelectTrigger className="h-11 w-full text-xs sm:h-8 sm:w-32">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -445,7 +451,7 @@ const Leads = () => {
           <Button
             variant={showFilters ? "secondary" : "outline"}
             size="sm"
-            className="gap-1.5 text-xs h-8"
+            className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0"
             onClick={() => setShowFilters(!showFilters)}
           >
             <Filter className="w-3 h-3" />
@@ -458,7 +464,7 @@ const Leads = () => {
           {/* Column Visibility */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+              <Button variant="outline" size="sm" className="hidden gap-1.5 text-xs sm:flex sm:h-8">
                 <Eye className="w-3 h-3" /> Columns
               </Button>
             </PopoverTrigger>
@@ -530,11 +536,11 @@ const Leads = () => {
 
         {/* Bulk Actions Bar */}
         {selectedLeads.size > 0 && (
-          <div className="flex items-center gap-3 p-2.5 rounded-lg border border-primary/20 bg-primary/[0.03]">
+          <div className="flex flex-wrap items-center gap-3 p-2.5 rounded-lg border border-primary/20 bg-primary/[0.03]">
             <span className="text-xs font-medium">{selectedLeads.size} selected</span>
             <Separator orientation="vertical" className="h-4" />
             <Select onValueChange={(v) => bulkUpdateStatus(v as LeadStatus)}>
-              <SelectTrigger className="w-36 h-7 text-xs">
+              <SelectTrigger className="h-11 w-36 text-xs sm:h-7">
                 <SelectValue placeholder="Change status" />
               </SelectTrigger>
               <SelectContent>
@@ -546,15 +552,15 @@ const Leads = () => {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs gap-1"
+              className="min-h-11 text-xs gap-1 sm:h-7 sm:min-h-0"
               onClick={() => setCampaignDialogLeadIds(Array.from(selectedLeads))}
             >
               <Send className="w-3 h-3" /> Add to Campaign
             </Button>
-            <Button variant="destructive" size="sm" className="h-7 text-xs gap-1" onClick={bulkDelete}>
+            <Button variant="destructive" size="sm" className="min-h-11 text-xs gap-1 sm:h-7 sm:min-h-0" onClick={bulkDelete}>
               <Trash2 className="w-3 h-3" /> Delete
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs ml-auto" onClick={() => setSelectedLeads(new Set())}>
+            <Button variant="ghost" size="sm" className="min-h-11 text-xs sm:ml-auto sm:h-7 sm:min-h-0" onClick={() => setSelectedLeads(new Set())}>
               Cancel
             </Button>
           </div>
@@ -641,7 +647,7 @@ const Leads = () => {
           </div>
         ) : (
           <>
-          <div className="rounded-lg border border-border/60 overflow-hidden">
+          <div className="hidden rounded-lg border border-border/60 overflow-hidden md:block">
             <div className="overflow-auto max-h-[calc(100vh-320px)]">
               <Table>
                 <TableHeader>
@@ -795,20 +801,48 @@ const Leads = () => {
               </Table>
             </div>
           </div>
+          <div className="grid gap-3 md:hidden">
+            {pagedLeads.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No leads found</div>
+            ) : pagedLeads.map((lead) => {
+              const details = leadListingDetails(lead.notes);
+              const status = statusConfig[lead.status] || statusConfig.new;
+              return (
+                <div key={lead.id} role="button" tabIndex={0} onClick={() => navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`)} onKeyDown={(event) => { if (event.key === "Enter") navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`); }} className="rounded-md border border-border bg-card p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                      <Checkbox className="h-6 w-6" checked={selectedLeads.has(lead.id)} onCheckedChange={() => toggleSelectLead(lead.id)} aria-label={`Select ${lead.business_name}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug">{lead.business_name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{[lead.city, lead.state].filter(Boolean).join(", ")}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {details.kind && <Badge variant="secondary">{details.kind === "sale" ? "Selling" : "Renting"}</Badge>}
+                        <Badge variant="outline" className={status.color}>{status.label}</Badge>
+                        {lead.phone && <Badge variant="outline">Phone</Badge>}
+                        {lead.email && <Badge variant="outline">Email</Badge>}
+                      </div>
+                      {details.price && <p className="mt-3 text-lg font-semibold">{details.price}</p>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           {/* Pagination */}
           {filteredLeads.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-1">
+            <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
                 Showing <span className="font-medium text-foreground">{(page - 1) * PAGE_SIZE + 1}</span>–
                 <span className="font-medium text-foreground">{Math.min(page * PAGE_SIZE, filteredLeads.length)}</span> of
                 <span className="font-medium text-foreground"> {filteredLeads.length}</span>
               </p>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(1)}>First</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
+              <div className="grid grid-cols-4 items-center gap-1 sm:flex">
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page === 1} onClick={() => setPage(1)}>First</Button>
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
                 <span className="text-xs px-2">Page {page} / {totalPages}</span>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</Button>
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</Button>
               </div>
             </div>
           )}

@@ -368,7 +368,7 @@ export default function Sequences() {
               Build multi-channel outreach with AI assistance
             </p>
           </div>
-          <Button onClick={() => setShowCreate(true)} className="gap-2 h-9">
+          <Button onClick={() => setShowCreate(true)} className="min-h-11 gap-2 sm:h-9 sm:min-h-0">
             <Plus className="h-4 w-4" /> New sequence
           </Button>
         </div>
@@ -387,17 +387,17 @@ export default function Sequences() {
 
         {/* Filters */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[240px] max-w-md">
+          <div className="relative w-full min-w-0 flex-1 sm:min-w-[240px] sm:max-w-md">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search sequences…"
-              className="pl-9 h-9"
+              className="h-11 pl-9 sm:h-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-            <SelectTrigger className="w-[140px] h-9">
+            <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

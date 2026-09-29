@@ -66,9 +66,9 @@
 - [ ] Verify signed-in browser-visible compliance states (blocked: no preview account access)
 
 ## Real Estate mobile experience
-- [ ] Replace the phone sidebar with Home, Find Owners, My Leads, Outreach, and More tabs
-- [ ] Render Find Owners and My Leads as stacked phone cards while preserving desktop tables
-- [ ] Add pinned Call, Text, and Email actions to owner details on phones
-- [ ] Add manifest-only home-screen install support, app icons, splash color, and one-time install tip
-- [ ] Audit every Real Estate page at 375px for overflow and 44px tap targets
-- [ ] Verify build health and phone interactions
+- [x] Replace the phone sidebar with Home, Find Owners, My Leads, Outreach, and More tabs
+- [x] Render Find Owners and My Leads as stacked phone cards while preserving desktop tables
+- [x] Add pinned Call, Text, and Email actions to owner details on phones
+- [x] Add manifest-only home-screen install support, app icons, splash color, and one-time install tip
+- [x] Audit every Real Estate page at 375px for overflow and 44px tap targets
+- [x] Verify build health and phone interactions

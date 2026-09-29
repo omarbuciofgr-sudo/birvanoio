@@ -50,6 +50,7 @@ import AIDashboardChat from "@/components/dashboard/AIDashboardChat";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { usePersona } from "@/hooks/usePersona";
 import PersonaSetupDialog from "@/components/onboarding/PersonaSetupDialog";
+import { MobileRealEstateNav } from "@/components/dashboard/MobileRealEstateNav";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -227,7 +228,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   const sidebarWidth = sidebarCollapsed ? "w-[68px]" : "w-64";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${isRealtor && !isAdmin ? "real-estate-mobile-shell" : ""}`}>
       <PersonaSetupDialog
         open={needsSetup}
         initialRole={persona.role}
@@ -241,7 +242,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
         }}
       />
       {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
+      {sidebarOpen && !(isRealtor && !isAdmin) && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -250,7 +251,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
 
       {/* Sidebar - h-screen so height is viewport-bound and nav scroll works */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen ${sidebarWidth} bg-card border-r border-border/60 transform transition-all duration-200 ease-out lg:translate-x-0 ${
+        className={`fixed top-0 left-0 z-50 h-screen ${sidebarWidth} bg-card border-r border-border/60 transform transition-all duration-200 ease-out lg:translate-x-0 ${isRealtor && !isAdmin ? "hidden md:block" : ""} ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -514,7 +515,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
           <div className="flex items-center justify-between h-full px-4 lg:px-6">
             <div className="flex items-center gap-3">
               <button
-                className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"
+                className={`${isRealtor && !isAdmin ? "hidden md:flex lg:hidden" : "lg:hidden"} min-h-11 min-w-11 items-center justify-center -ml-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors`}
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="w-5 h-5" />
@@ -542,11 +543,15 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
         </header>
 
         {/* Page content */}
-        <main className={`p-4 lg:p-6 ${fullWidth ? '' : 'max-w-[1600px]'} mx-auto`}>{children}</main>
+        <main className={`min-w-0 overflow-x-hidden p-4 ${isRealtor && !isAdmin ? "pb-24" : "pb-4"} md:pb-4 lg:p-6 ${fullWidth ? '' : 'max-w-[1600px]'} mx-auto`}>{children}</main>
       </div>
 
+      {isRealtor && !isAdmin && <MobileRealEstateNav onSignOut={handleSignOut} />}
+
       {/* AI Chat Assistant - hide on client portal pages */}
-      {!location.pathname.startsWith('/client') && <AIDashboardChat />}
+      {!location.pathname.startsWith('/client') && (
+        <div className={isRealtor && !isAdmin ? "hidden md:block" : ""}><AIDashboardChat /></div>
+      )}
     </div>
   );
 };

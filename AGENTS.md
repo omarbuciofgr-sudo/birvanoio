@@ -1,14 +1,15 @@
-- Persist Find Owners search history in the user-scoped `owner_search_results` table so past searches do not depend on the external scraper service.
-- Gate every `/admin/*` route through the server-validated `check-admin` function; sidebar visibility alone is never authorization.
-- Derive Home onboarding and two-week widget eligibility from user-scoped activity records; never persist client-controlled completion flags.
-- Source Home, My Leads, and Reports lead totals from the shared `useLeadsData` query so they cannot diverge.
-- Source plan allowances, action costs, add-ons, and AI limits from `pricing_settings`; charge paid actions in authenticated server functions after success.
-- Enforce communication compliance server-side: persist one-time user acceptance, honor workspace suppression, require lead voice consent for AI calls, and append campaign email opt-out footers.
-- Route all lead-based AI writing through the `claude-ai` function (Anthropic, model in `ai_settings.claude_model`, calls logged in `ai_usage_logs`); drafts only fill editable boxes. Why: one server-side place for prompts, privacy filtering (no owner phone/email), limits and cost tracking.
-- Grant the free first Find Owners search server-side in `consume-credits` via the server-only `free_search_grants` row. Why: a client-writable flag could be reset for unlimited free searches.
-- Run saved-search email alerts from the hourly `owner-search-alerts` job (7am per alert time zone), sharing one provider fetch per city/type/day via `city_search_cache`; the job authenticates with a token in `private.job_tokens`. Why: one fetch per city each morning and no client-callable trigger.
-- Fetch RentCast property estimates and price history only through the `property-estimate` function, cached 7 days in server-only `property_estimates`; table flags read cache only. Why: limits data provider calls and cost.
-- Store follow-ups in user-scoped `lead_follow_ups`; the `conversation_logs` insert trigger moves leads New→Contacted. Why: status change happens server-side for every in-app send path.
-- Charge owner market reports (3 credits, `action_market_report`) only in the `market-report` function, once per report ID recorded in server-only `market_reports`; PDFs are built in the browser. Why: download + email of one report never double-charges.
-
-- Count daily goals with `goal_day_counts` (distinct leads with outbound `conversation_logs` + completed `lead_follow_ups`) in the user's `profiles.timezone`. Why: Home and the morning email use one server-side definition of a day.
+- Persist Find Owners history in user-scoped `owner_search_results`; never depend on the scraper for past results.
+- Gate `/admin/*` with server-validated `check-admin`; link visibility is not authorization.
+- Derive onboarding and two-week widgets from user activity, never client flags.
+- Use shared `useLeadsData` totals on Home, My Leads, and Reports.
+- Read allowances, costs, add-ons, and AI limits from `pricing_settings`; charge successful paid actions server-side.
+- Enforce acceptance, suppression, voice consent, and campaign opt-out footers server-side.
+- Route lead writing through `claude-ai`; log usage, never send owner phone/email, and return editable drafts only.
+- Grant the first Find Owners search server-side through `consume-credits` and `free_search_grants`.
+- Run 7am saved-search mail via hourly `owner-search-alerts`; share `city_search_cache` fetches and authenticate with `private.job_tokens`.
+- Fetch estimates/history through `property-estimate`; cache server-only for seven days and let tables read cache only.
+- Store follow-ups in user-scoped `lead_follow_ups`; let the `conversation_logs` trigger move New→Contacted.
+- Charge market reports in `market-report` once per report ID; PDFs remain browser-built.
+- Count daily goals through `goal_day_counts` in `profiles.timezone`.
+- Below 768px, Real Estate uses a safe-area-aware five-tab bottom nav; shared layout reserves its space.
+- Home-screen installation stays manifest-only unless offline behavior is explicitly requested.

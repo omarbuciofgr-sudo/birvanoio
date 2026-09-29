@@ -1309,7 +1309,7 @@ export default function RentCastListingsContent({
           </p>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             {(
               [
                 ["sale-strong", "Selling – strong match"],
@@ -1321,19 +1321,20 @@ export default function RentCastListingsContent({
             <Button
               key={key}
               size="sm"
+              className="min-h-11 whitespace-normal text-xs sm:min-h-9"
               variant={filter === key ? "default" : "outline"}
               onClick={() => setFilter(key)}
             >
               {label}
             </Button>
           ))}
-          <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-            <Checkbox checked={flaggedOnly} onCheckedChange={(v) => setFlaggedOnly(v === true)} aria-label="Show only flagged owners" />
+          <label className="col-span-2 flex min-h-11 items-center gap-2 text-xs text-muted-foreground cursor-pointer sm:ml-auto">
+            <Checkbox className="h-6 w-6 sm:h-4 sm:w-4" checked={flaggedOnly} onCheckedChange={(v) => setFlaggedOnly(v === true)} aria-label="Show only flagged owners" />
             Flagged only (price dropped, 30+ days, above market)
           </label>
         </div>
 
-        <div className="rounded-lg border border-border/40 overflow-hidden">
+        <div className="hidden rounded-lg border border-border/40 overflow-hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -1424,6 +1425,39 @@ export default function RentCastListingsContent({
               )}
             </TableBody>
           </Table>
+        </div>
+        <div className="grid gap-3 md:hidden">
+          <label className="flex min-h-11 items-center gap-3 rounded-md border border-border bg-muted/20 px-3 text-sm">
+            <Checkbox className="h-6 w-6" checked={allVisibleSelected} onCheckedChange={toggleSelectAll} aria-label="Select all owners" />
+            Select all results
+          </label>
+          {filtered.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              Enter a city and tap Find Owners. Most searches return results in under a minute.
+            </div>
+          ) : filtered.map((row) => {
+            const id = row.rentcast_id || row.address || "";
+            const selected = !!row.rentcast_id && selectedIds.has(row.rentcast_id);
+            return (
+              <div key={id} role="button" tabIndex={0} onClick={() => openOwner(row)} onKeyDown={(event) => { if (event.key === "Enter") openOwner(row); }} className="rounded-md border border-border bg-card p-4 text-left shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                    <Checkbox className="h-6 w-6" checked={selected} onCheckedChange={() => toggleSelect(row.rentcast_id)} aria-label={`Select ${row.address || "owner"}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-snug">{row.address || "Unknown address"}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="secondary">{row.listing_kind === "sale" ? "Selling" : "Renting"}</Badge>
+                      <Badge variant={rowScore(row) >= 70 ? "default" : "outline"}>{rowScore(row) >= 70 ? "High match" : "Medium match"}</Badge>
+                      {row.imported_lead_id && <Badge variant="outline">Saved</Badge>}
+                    </div>
+                    <p className="mt-3 text-lg font-semibold">{money(row.price)}</p>
+                    <OwnerFlagBadges flags={flagsFor(row)} className="mt-2" />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

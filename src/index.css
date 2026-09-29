@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nunito:wght@600;700;800&family=Quicksand:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -131,10 +129,23 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+    overflow-wrap: anywhere;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', sans-serif;
+  }
+
+  @media (max-width: 767px) {
+    .real-estate-mobile-shell button,
+    .real-estate-mobile-shell input,
+    .real-estate-mobile-shell select,
+    .real-estate-mobile-shell [role="button"],
+    .real-estate-mobile-shell [role="tab"],
+    .real-estate-mobile-shell [role="menuitem"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
   }
 }
 
