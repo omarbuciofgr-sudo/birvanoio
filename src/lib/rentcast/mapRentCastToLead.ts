@@ -46,6 +46,8 @@ export function buildLeadFromRentCast(row: RentCastListing, clientId: string) {
     city: row.city?.trim() || null,
     state: row.state?.trim() || null,
     zip_code: row.zip_code?.trim() || null,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
     source_url: row.listing_url?.trim() || null,
     lead_score: row.confidence_score ?? row.fsbo_confidence ?? null,
     industry: "Real Estate",
