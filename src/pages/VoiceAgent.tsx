@@ -167,25 +167,10 @@ const VoiceAgent = () => {
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-message", {
-        body: {
-          messageType: "call_script",
-          leadName: selectedLead.contact_name || "Contact",
-          businessName: selectedLead.business_name,
-          context: "Initial outreach call to introduce our services and qualify the lead",
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.script) {
-        setScriptTemplate(data.script);
-      } else if (data?.body) {
-        setScriptTemplate(data.body);
-      }
-      toast.success("AI generated call script!");
+      setScriptTemplate(await writeWithAI("call_script", selectedLead.id));
+      toast.success("Draft ready. Review and edit before calling.");
     } catch (err: any) {
-      toast.error(err.message || "Failed to generate script");
+      toast.error(err.message);
     } finally {
       setIsGenerating(false);
     }
