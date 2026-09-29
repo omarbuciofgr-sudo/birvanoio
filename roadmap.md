@@ -88,3 +88,6 @@
 
 ## Claude chat
 - [x] Confirm whether users have a Claude chat (answer the user)
+
+## Claude chat
+- [x] Switch in-app chat assistant to Claude

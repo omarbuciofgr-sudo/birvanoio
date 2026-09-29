@@ -1,118 +1,96 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { z } from "npm:zod@3";
+import { AI_LIMIT_MESSAGE, getAiAllowance, recordAiMessage, serviceClient } from "../_shared/billing.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-// Models routed to OpenAI directly
-const OPENAI_MODELS = new Set(["chatgpt-4o-latest", "gpt-4o", "gpt-4o-mini"]);
+const Body = z.object({
+  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(8000) })).min(1).max(40),
+});
+
+const SYSTEM_PROMPT = `You are Brivano AI, an assistant inside Brivano, an app that helps real estate agents and property managers find homeowners selling or renting on their own (FSBO and FRBO), get their contact info, and follow up.
+
+You help with: prospecting strategy, what to say to owners, handling objections, follow-up timing, using the app (Find Owners, My Leads, Outreach, follow-up plans, market reports), and general real estate sales advice.
+
+Be friendly, short and practical. Plain language, no em dashes. Use short bullet points when listing things. Don't make up market numbers or facts about the user's data; if you don't know, say where in the app they can find it.`;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "Please sign in." }, 401);
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const parsed = Body.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) return json({ error: "Something was wrong with that message." }, 400);
+    // Claude requires the conversation to start with the user.
+    const messages = parsed.data.messages.slice(parsed.data.messages.findIndex((m) => m.role === "user"));
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!apiKey) return json({ error: "The assistant is temporarily unavailable." }, 503);
 
-    const { messages, model } = await req.json();
-    const selectedModel = model || "google/gemini-3-flash-preview";
-    const useOpenAI = OPENAI_MODELS.has(selectedModel);
+    const allowance = await getAiAllowance(user.id);
+    if (allowance.used >= allowance.limit) return json({ error: AI_LIMIT_MESSAGE, code: "ai_limit" }, 429);
 
-    const systemPrompt = `You are Brivano AI, a smart assistant embedded in a lead generation and CRM dashboard. You help users understand their leads, pipeline, analytics, and suggest actions.
+    const admin = serviceClient();
+    const { data: modelRow } = await admin.from("ai_settings").select("setting_value").eq("setting_key", "claude_model").maybeSingle();
+    const model = modelRow?.setting_value || "claude-sonnet-4-5";
 
-You can help with:
-- Explaining lead statuses, scores, and pipeline stages
-- Suggesting outreach strategies based on lead data
-- Answering questions about enrichment, scraping, and campaigns
-- Providing tips on improving conversion rates
-- General CRM and sales advice
-
-Be concise, actionable, and friendly. Use bullet points when listing items. If you don't know something specific about their data, suggest where they can find it in the dashboard.`;
-
-    let apiUrl: string;
-    let apiKey: string;
-    let requestBody: any;
-
-    if (useOpenAI) {
-      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-      if (!OPENAI_API_KEY) {
-        return new Response(JSON.stringify({ error: "OpenAI API key not configured" }), {
-          status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      apiUrl = "https://api.openai.com/v1/chat/completions";
-      apiKey = OPENAI_API_KEY;
-      requestBody = {
-        model: selectedModel,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
-        stream: true,
-      };
-    } else {
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-      apiUrl = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      apiKey = LOVABLE_API_KEY;
-      requestBody = {
-        model: selectedModel,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
-        stream: true,
-      };
-    }
-
-    const response = await fetch(apiUrl, {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: 1024, system: SYSTEM_PROMPT, messages, stream: true }),
     });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI error:", response.status, t);
-      return new Response(JSON.stringify({ error: "AI service temporarily unavailable." }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!res.ok || !res.body) {
+      const t = await res.text();
+      console.error(`Anthropic error [${res.status}]: ${t}`);
+      await admin.from("ai_usage_logs").insert({ user_id: user.id, task: "chat", model, success: false, error_code: `http_${res.status}` }).then(() => {}, () => {});
+      return json({ error: res.status === 429 || res.status === 529 ? "The assistant is busy right now. Please try again in a minute." : "The assistant is temporarily unavailable." }, 502);
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    // Re-emit Claude's stream in the simple format the chat window reads.
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    let inTok = 0, outTok = 0;
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = res.body!.getReader();
+        let buf = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            let i: number;
+            while ((i = buf.indexOf("\n")) !== -1) {
+              const line = buf.slice(0, i).trim();
+              buf = buf.slice(i + 1);
+              if (!line.startsWith("data:")) continue;
+              try {
+                const ev = JSON.parse(line.slice(5).trim());
+                if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
+                  const text = String(ev.delta.text).replace(/\u2014/g, ", ");
+                  controller.enqueue(enc.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`));
+                } else if (ev.type === "message_start") inTok = ev.message?.usage?.input_tokens ?? 0;
+                else if (ev.type === "message_delta") outTok = ev.usage?.output_tokens ?? outTok;
+              } catch { /* skip partial */ }
+            }
+          }
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+        } finally {
+          controller.close();
+          await admin.from("ai_usage_logs").insert({ user_id: user.id, task: "chat", model, input_tokens: inTok, output_tokens: outTok, success: true }).then(() => {}, () => {});
+          await recordAiMessage(user.id).catch(() => {});
+        }
+      },
     });
+    return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
   } catch (e) {
     console.error("ai-dashboard-chat error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "The assistant is temporarily unavailable." }, 500);
   }
 });

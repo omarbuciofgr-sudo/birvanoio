@@ -28,7 +28,6 @@ const AIDashboardChat = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [model, setModel] = useState("google/gemini-3-flash-preview");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -60,7 +59,7 @@ const AIDashboardChat = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ messages: allMessages, model }),
+        body: JSON.stringify({ messages: allMessages }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -150,16 +149,7 @@ const AIDashboardChat = () => {
           <CardTitle className="text-sm font-semibold">Brivano AI</CardTitle>
         </div>
         <div className="flex items-center gap-1">
-          <Select value={model} onValueChange={setModel}>
-            <SelectTrigger className="h-7 w-[130px] text-[10px] border-border/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODEL_OPTIONS.map(m => (
-                <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <span className="text-[10px] text-muted-foreground">Claude</span>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(false)}>
             <X className="w-4 h-4" />
           </Button>
