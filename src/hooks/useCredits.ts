@@ -128,7 +128,7 @@ export function useCredits() {
     });
     if (error || !data?.success) return false;
 
-    setCreditsUsed(prev => prev + totalCost);
+    setCreditsUsed(prev => prev + (typeof data.spent === "number" ? data.spent : totalCost));
     return true;
   }, [actionCosts]);
 
