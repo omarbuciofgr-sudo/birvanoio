@@ -173,6 +173,19 @@ const Billing = () => {
       .then(({ data }) => setAiMessagesUsed(data?.messages_used ?? 0));
   }, [user?.id]);
 
+  const [roi, setRoi] = useState<{ paid: number; commission: number } | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    Promise.all([
+      supabase.functions.invoke("billing-spend"),
+      supabase.from("leads").select("estimated_commission").eq("status", "listing_signed"),
+    ]).then(([spend, signed]) => {
+      if (spend.error || spend.data?.error) return;
+      const commission = (signed.data ?? []).reduce((s: number, l: any) => s + Number(l.estimated_commission ?? 0), 0);
+      setRoi({ paid: Number(spend.data?.totalPaid ?? 0), commission });
+    });
+  }, [user?.id]);
+
   const handleUpdateSeats = async () => {
     if (seatInput === seatsPurchased || seatInput < 1) return;
     setUpdatingSeats(true);
@@ -237,6 +250,11 @@ const Billing = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {roi && (
+          <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
+            Brivano has cost you <span className="font-semibold">{roi.paid.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</span> and helped you sign listings worth an estimated <span className="font-semibold">{roi.commission.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</span> in commission.
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

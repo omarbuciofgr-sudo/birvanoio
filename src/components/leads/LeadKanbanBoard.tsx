@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LeadScoreBadge } from "./LeadScoreBadge";
+import { ListingSignedDialog } from "./ListingSignedDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Phone, Mail, Building2, MapPin } from "lucide-react";
@@ -193,6 +194,7 @@ export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate, realEstate 
     setActiveId(event.active.id as string);
   };
 
+  const [signedLeadId, setSignedLeadId] = useState<string | null>(null);
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
@@ -241,10 +243,13 @@ export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate, realEstate 
     } else {
       toast.success(`Lead moved to ${statusConfig[targetStatus].label}`);
       onLeadsUpdate();
+      if (targetStatus === "listing_signed") setSignedLeadId(leadId);
     }
   };
 
   return (
+    <>
+    <ListingSignedDialog leadId={signedLeadId} onClose={(saved) => { setSignedLeadId(null); if (saved) onLeadsUpdate(); }} />
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
@@ -277,5 +282,6 @@ export function LeadKanbanBoard({ leads, onLeadClick, onLeadsUpdate, realEstate 
         )}
       </DragOverlay>
     </DndContext>
+    </>
   );
 }

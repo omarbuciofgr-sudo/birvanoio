@@ -7,6 +7,7 @@ import { CSVImportDialog } from "@/components/leads/CSVImportDialog";
 import { CreateLeadDialog } from "@/components/leads/CreateLeadDialog";
 import { LeadScoreBadge } from "@/components/leads/LeadScoreBadge";
 import { LeadKanbanBoard } from "@/components/leads/LeadKanbanBoard";
+import { ListingSignedDialog } from "@/components/leads/ListingSignedDialog";
 import { LeadActivityTimeline } from "@/components/leads/LeadActivityTimeline";
 import { TeamAssignment } from "@/components/leads/TeamAssignment";
 import { AIQualifyPanel } from "@/components/leads/AIQualifyPanel";
@@ -291,6 +292,7 @@ const Leads = () => {
     else { toast.success(`Deleted ${ids.length} leads`); fetchLeads(); setSelectedLeads(new Set()); }
   };
 
+  const [signedLeadId, setSignedLeadId] = useState<string | null>(null);
   const updateLeadStatus = async (leadId: string, status: LeadStatus) => {
     setIsUpdating(true);
     const updates: any = { status };
@@ -298,7 +300,7 @@ const Leads = () => {
     if (status === "converted" && !selectedLead?.converted_at) updates.converted_at = new Date().toISOString();
     const { error } = await supabase.from("leads").update(updates).eq("id", leadId);
     if (error) toast.error("Failed to update status");
-    else { toast.success("Status updated"); fetchLeads(); if (selectedLead) setSelectedLead({ ...selectedLead, status, ...updates }); }
+    else { toast.success("Status updated"); fetchLeads(); if (selectedLead) setSelectedLead({ ...selectedLead, status, ...updates }); if (status === "listing_signed") setSignedLeadId(leadId); }
     setIsUpdating(false);
   };
 
@@ -572,6 +574,7 @@ const Leads = () => {
           </div>
         )}
 
+        <ListingSignedDialog leadId={signedLeadId} onClose={(saved) => { setSignedLeadId(null); if (saved) fetchLeads(); }} />
         {/* View Content */}
         {viewMode === "kanban" ? (
           <LeadKanbanBoard

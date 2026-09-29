@@ -42,6 +42,7 @@ export function scrapedRowsToSyntheticLeads(rows: ScrapedRow[], clientId: string
     created_at: r.created_at,
     do_not_contact: false,
     do_not_contact_at: null,
+    appointment_set_at: null, listing_signed_at: null, list_price: null, commission_rate: null, estimated_commission: null,
     do_not_contact_reason: null,
     email: r.best_email,
     estimated_revenue: null,
