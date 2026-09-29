@@ -701,7 +701,7 @@ const Leads = () => {
                         <TableRow
                           key={lead.id}
                           className={`cursor-pointer transition-colors ${selectedLeads.has(lead.id) ? 'bg-primary/[0.04]' : ''}`}
-                          onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
+                          onClick={() => navigate(lead.industry === "Real Estate" ? `/dashboard/owners/${encodeURIComponent(`lead:${lead.id}`)}` : `/dashboard/leads/${lead.id}`)}
                         >
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Checkbox

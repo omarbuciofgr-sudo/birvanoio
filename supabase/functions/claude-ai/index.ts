@@ -10,7 +10,7 @@ const TASKS = {
   call_script: "Write a short phone call script the agent can read when calling this owner. Include an opener, 2 or 3 questions, and a polite close.",
   text_message: "Write one text message to this owner. Keep it under 300 characters. Do not include opt-out wording; it is added separately.",
   email: "Write a short email to this owner. First line must be 'Subject: ...', then a blank line, then the body. Under 150 words.",
-  talking_points: "Write 4 to 6 short bullet talking points for a conversation with this owner.",
+  talking_points: "Write exactly 3 short conversation openers the agent could use with this owner, as a numbered list. Base them on the property data (price, time on market, price changes, market estimate) when available.",
   reply_suggestion: "The owner sent the message below. Write one suggested reply the agent could send back. Keep it short and respectful. If the owner asks not to be contacted, write a brief polite acknowledgement only.",
   lead_summary: "Summarize this lead in 3 or 4 short sentences: the property, the situation, and a suggested next step.",
   market_report_summary: "Write a short plain-language summary of the property data provided, suitable to share with the owner. Only use the numbers given. If data is missing, say so briefly instead of guessing.",
@@ -18,7 +18,8 @@ const TASKS = {
 
 const BodySchema = z.object({
   task: z.enum(Object.keys(TASKS) as [keyof typeof TASKS, ...Array<keyof typeof TASKS>]),
-  leadId: z.string().uuid(),
+  leadId: z.string().uuid().optional(),
+  listingId: z.string().min(1).max(300).optional(),
   ownerMessage: z.string().max(4000).optional(),
 });
 
@@ -76,14 +77,15 @@ Deno.serve(async (req) => {
     return json({ error: "Something was wrong with that request. Please try again." }, 400);
   }
   if (!parsed.success) return json({ error: "Something was wrong with that request. Please try again." }, 400);
-  const { task, leadId, ownerMessage } = parsed.data;
+  const { task, leadId, listingId, ownerMessage } = parsed.data;
+  if (!leadId && !listingId) return json({ error: "Something was wrong with that request. Please try again." }, 400);
   if (task === "reply_suggestion" && !ownerMessage?.trim()) {
     return json({ error: "Paste the owner's message first." }, 400);
   }
 
   const admin = serviceClient();
   const log = (fields: Record<string, unknown>) =>
-    admin.from("ai_usage_logs").insert({ user_id: userId, task, lead_id: leadId, ...fields }).then(() => {}, () => {});
+    admin.from("ai_usage_logs").insert({ user_id: userId, task, lead_id: leadId ?? null, ...fields }).then(() => {}, () => {});
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {
@@ -97,19 +99,33 @@ Deno.serve(async (req) => {
       return json({ error: AI_LIMIT_MESSAGE, code: "ai_limit", used: allowance.used, limit: allowance.limit }, 429);
     }
 
-    // Lead access is checked with the user's own permissions.
-    const { data: lead } = await userClient
-      .from("leads")
-      .select("id, business_name, contact_name, city, state, zip_code, notes, status")
-      .eq("id", leadId)
-      .maybeSingle();
-    if (!lead) return json({ error: "We couldn't find that lead." }, 404);
+    // Access is checked with the user's own permissions.
+    let lead: { business_name: string; contact_name: string | null; city: string | null; state: string | null; zip_code: string | null; notes: string | null } | null = null;
+    let listingData: Record<string, unknown> | null = null;
+    let listingKind: string | null = null;
+    if (leadId) {
+      const { data } = await userClient.from("leads")
+        .select("business_name, contact_name, city, state, zip_code, notes").eq("id", leadId).maybeSingle();
+      lead = data;
+    } else {
+      const { data } = await userClient.from("owner_search_results")
+        .select("listing_data, listing_kind").eq("external_id", listingId!).maybeSingle();
+      if (data) {
+        const l = data.listing_data as Record<string, any>;
+        listingData = l; listingKind = data.listing_kind;
+        lead = { business_name: String(l.address ?? ""), contact_name: l.owner_name ?? null, city: l.city ?? null, state: l.state ?? null, zip_code: l.zip_code ?? null, notes: null };
+      }
+    }
+    if (!lead) return json({ error: "We couldn't find that owner." }, 404);
 
-    const [{ data: profile }, { data: listingRow }, { data: modelRow }] = await Promise.all([
+    const addrKey = lead.business_name.trim().toLowerCase().replace(/\s+/g, " ");
+    const [{ data: profile }, { data: listingRow }, { data: modelRow }, { data: estRows }] = await Promise.all([
       admin.from("profiles").select("first_name, last_name, company_name").eq("user_id", userId).maybeSingle(),
-      admin.from("owner_search_results").select("listing_data, listing_kind")
-        .eq("user_id", userId).ilike("listing_data->>address", lead.business_name).limit(1).maybeSingle(),
+      listingData ? Promise.resolve({ data: { listing_data: listingData, listing_kind: listingKind } }) :
+        admin.from("owner_search_results").select("listing_data, listing_kind")
+          .eq("user_id", userId).ilike("listing_data->>address", lead.business_name).limit(1).maybeSingle(),
       admin.from("ai_settings").select("setting_value").eq("setting_key", "claude_model").maybeSingle(),
+      admin.from("property_estimates").select("kind, estimate, range_low, range_high, days_on_market, price_history").eq("address_key", addrKey),
     ]);
     const model = modelRow?.setting_value || "claude-sonnet-4-5";
 
@@ -117,6 +133,12 @@ Deno.serve(async (req) => {
     if (!listing.listing_type && listingRow?.listing_kind) listing.listing_type = listingRow.listing_kind;
     const lt = String(listing.listing_type ?? lead.notes ?? "").toLowerCase();
     const situation = /frbo|rent/.test(lt) ? "renting without an agent" : /fsbo|sale|sell/.test(lt) ? "selling without an agent" : "unknown";
+    const est = (estRows ?? []).find((e: any) => e.kind === (situation.startsWith("renting") ? "rental" : "sale")) ?? (estRows ?? [])[0];
+    if (est) {
+      if (est.estimate != null) listing[situation.startsWith("renting") ? "estimated_rent" : "estimated_value"] = est.estimate;
+      if (Array.isArray(est.price_history) && est.price_history.length && !listing.price_history) listing.price_history = est.price_history;
+      if (est.days_on_market != null && listing.days_listed == null) listing.days_listed = est.days_on_market;
+    }
 
     const context = {
       property_address: [lead.business_name, lead.city, lead.state, lead.zip_code].filter(Boolean).join(", "),

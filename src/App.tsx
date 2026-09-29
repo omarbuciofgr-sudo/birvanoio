@@ -50,6 +50,7 @@ import GoogleCalendarReturn from "./pages/oauth/GoogleCalendarReturn";
 import GmailReturn from "./pages/oauth/GmailReturn";
 import AccountDetail from "./pages/AccountDetail";
 import LeadDetail from "./pages/LeadDetail";
+import OwnerDetail from "./pages/OwnerDetail";
 import OAuthConsent from "./pages/OAuthConsent";
 import RealEstateAudience from "./pages/RealEstateAudience";
 import Privacy from "./pages/Privacy";
@@ -75,6 +76,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
               <Route path="/dashboard/leads/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
+              <Route path="/dashboard/owners/:ref" element={<ProtectedRoute><OwnerDetail /></ProtectedRoute>} />
               <Route path="/oauth/google-calendar/return" element={<GoogleCalendarReturn />} />
               <Route path="/oauth/gmail/return" element={<GmailReturn />} />
               <Route path="/dashboard/deals" element={<ProtectedRoute><RealtorDeals /></ProtectedRoute>} />
