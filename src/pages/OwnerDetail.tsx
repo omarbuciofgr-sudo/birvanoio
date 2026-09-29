@@ -24,7 +24,7 @@ import { SetFollowUp } from "@/components/leads/SetFollowUp";
 import { LogContactButton } from "@/components/leads/LogContactButton";
 import { OwnerScripts } from "@/components/rentcast/OwnerScripts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarClock, FileText } from "lucide-react";
+import { CalendarClock, FileText, ExternalLink } from "lucide-react";
 import { MarketReportDialog } from "@/components/rentcast/MarketReportDialog";
 
 const money = (n?: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString("en-US")}`);

@@ -8,7 +8,7 @@ import { MessageTemplatesLibrary } from "@/components/templates/MessageTemplates
 import { ScriptsLibrary } from "@/components/templates/ScriptsLibrary";
 import { ScheduledMessages } from "@/components/scheduling/ScheduledMessages";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Clock, ScrollText } from "lucide-react";
+import { FileText, Clock, ScrollText, ListChecks } from "lucide-react";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
 
 const Templates = () => {
