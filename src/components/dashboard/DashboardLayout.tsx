@@ -232,7 +232,13 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
         open={needsSetup}
         initialRole={persona.role}
         initialGoals={persona.goals}
-        onSave={savePersona}
+        onSave={async (role, goals, homeMarket) => {
+          const res = await savePersona(role, goals, homeMarket);
+          if (!res.error && role === "realtor" && homeMarket) {
+            navigate("/dashboard/scraper?tab=real-estate&welcome=1");
+          }
+          return res;
+        }}
       />
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (

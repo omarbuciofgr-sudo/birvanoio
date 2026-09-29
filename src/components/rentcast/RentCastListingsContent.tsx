@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CityAutocomplete } from "@/components/onboarding/CityAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -298,7 +300,10 @@ function mergeListings(
 export default function RentCastListingsContent({
   embedded = false,
 }: RentCastListingsContentProps) {
-  const [location, setLocation] = useState("Naperville, IL");
+  const [location, setLocation] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [welcomeCity, setWelcomeCity] = useState<string | null>(null);
+  const welcomeStarted = useRef(false);
   const [source] = useState<SourceMode>("zillow");
   const [listingType, setListingType] = useState<ListingType>("both");
   const [zillowStats, setZillowStats] = useState<ZillowSearchStats | null>(null);
@@ -345,6 +350,34 @@ export default function RentCastListingsContent({
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Pre-fill the city with the user's home market; on the welcome visit, run the free first search.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user || cancelled) return;
+      const [{ data: profile }, { data: grant }] = await Promise.all([
+        supabase.from("profiles").select("home_market").eq("user_id", auth.user.id).maybeSingle(),
+        (supabase as any).from("free_search_grants").select("user_id").eq("user_id", auth.user.id).maybeSingle(),
+      ]);
+      const market = (profile as { home_market?: string | null } | null)?.home_market?.trim();
+      if (cancelled || !market) return;
+      setLocation((cur) => cur || market);
+      if (searchParams.get("welcome") === "1" && !grant && !welcomeStarted.current) {
+        welcomeStarted.current = true;
+        const next = new URLSearchParams(searchParams);
+        next.delete("welcome");
+        setSearchParams(next, { replace: true });
+        const found = await onSearch(market, { firstFree: true });
+        if (found && !cancelled) setWelcomeCity(market.split(",")[0].trim());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
@@ -432,15 +465,18 @@ export default function RentCastListingsContent({
     );
   };
 
-  const onSearch = async () => {
-    const loc = location.trim();
+  const onSearch = async (
+    locOverride?: string,
+    opts?: { firstFree?: boolean },
+  ): Promise<boolean> => {
+    const loc = (locOverride ?? location).trim();
     if (!loc) {
       toast.error("Enter a city and state (e.g. Naperville, IL)");
-      return;
+      return false;
     }
-    if (!canAfford("scrape")) {
+    if (!opts?.firstFree && !canAfford("scrape")) {
       toast.error(`You need ${CREDIT_COSTS.scrape} credit to run this search.`);
-      return;
+      return false;
     }
     setBusy("search");
     try {
@@ -461,14 +497,14 @@ export default function RentCastListingsContent({
           applyResult(cachedRows.slice(0, Math.max(1, Number(limit) || 50)));
           setStoredTotal(cachedRows.length);
           toast.success(`Loaded ${cachedRows.length} saved listings from the last 24 hours · no credit used`);
-          return;
+          return true;
         }
       }
       const ok = await scraperBackendApi.isScraperBackendReachable();
       if (!ok) {
         reportAdminError("Search service unreachable", new Error("Health check failed"));
         toast.error(SAFE_RESULTS_ERROR);
-        return;
+        return false;
       }
       if (source === "zillow") {
         const types = listingType === "both" ? (["sale", "rental"] as const) : [listingType];
@@ -481,7 +517,7 @@ export default function RentCastListingsContent({
           failed.forEach((res) => reportAdminError("Owner search failed", res.error));
           toast.error(SAFE_RESULTS_ERROR);
           applyResult([]);
-          return;
+          return false;
         }
         setZillowStats(responses[0]?.stats || null);
         applyResult(rows);
@@ -489,8 +525,8 @@ export default function RentCastListingsContent({
         setQueryType(listingType);
         await saveSearchResults(rows, loc);
         await spendCredits("scrape", 1, "find-owners");
-        toast.success(`Found ${rows.length} owner listings`);
-        return;
+        toast.success(`Found ${rows.length} owner listings${opts?.firstFree ? " · your first search is free" : ""}`);
+        return true;
       }
       setStoredTotal(null); // RentCast search results come from the API, not the DB
       const minConfidence =
@@ -523,7 +559,7 @@ export default function RentCastListingsContent({
         setMaxFetch(res.max_fetch ?? null);
         setMarketTotal(res.rentcast_total_count ?? res.diagnostic?.rentcast_total_count ?? null);
         setPagesFetched(res.pages_fetched ?? res.diagnostic?.pages_fetched ?? null);
-        return;
+        return false;
       }
       applyResult(res.listings, res.stats || null);
       await saveSearchResults(res.listings || [], loc);
@@ -562,9 +598,11 @@ export default function RentCastListingsContent({
           src,
       );
       if (res.error) reportAdminError("Owner search warning", res.error);
+      return true;
     } catch (e: unknown) {
       reportAdminError("Owner search exception", e);
       toast.error(SAFE_RESULTS_ERROR);
+      return false;
     } finally {
       setBusy(null);
     }
@@ -845,15 +883,19 @@ export default function RentCastListingsContent({
           </p>
         </div>
 
+        {welcomeCity && (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+            <p>Here are owners in {welcomeCity} selling or renting on their own. Click any owner to see details.</p>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setWelcomeCity(null)}>Dismiss</Button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border/40 bg-muted/20 p-3">
           <div className="w-full space-y-1 sm:w-52">
             <label className="text-[11px] text-muted-foreground">City, State</label>
-            <Input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Naperville, IL"
-              onKeyDown={(e) => e.key === "Enter" && onSearch()}
-            />
+            <div onKeyDown={(e) => e.key === "Enter" && onSearch()}>
+              <CityAutocomplete value={location} onChange={setLocation} />
+            </div>
           </div>
           <div className="w-full space-y-1 sm:w-36">
             <label className="text-[11px] text-muted-foreground">Looking for</label>
@@ -879,7 +921,7 @@ export default function RentCastListingsContent({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="best">Best matches (today&apos;s 60%+)</SelectItem>
+                <SelectItem value="best">Best matches</SelectItem>
                 <SelectItem value="all">All results</SelectItem>
               </SelectContent>
             </Select>
@@ -932,7 +974,7 @@ export default function RentCastListingsContent({
               Diagnostic
             </label>
           )}
-          <Button onClick={onSearch} disabled={!!busy} className="gap-1.5">
+          <Button onClick={() => onSearch()} disabled={!!busy} className="gap-1.5">
             {busy === "search" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -963,27 +1005,45 @@ export default function RentCastListingsContent({
           </Button>
           {verifyEnabled && (
             <>
-              <Button
-                variant="secondary"
-                onClick={onVerifySelected}
-                disabled={!!busy || selectedCount === 0}
-                className="gap-1.5"
-              >
-                {busy === "verify" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
-                )}
-                Verify selected ({selectedCount})
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={onVerifyTopLikely}
-                disabled={!!busy || likelyCount === 0}
-                className="gap-1.5"
-              >
-                Verify top likely ({Math.min(likelyCount, 20)})
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      variant="secondary"
+                      onClick={onVerifySelected}
+                      disabled={!!busy || selectedCount === 0}
+                      className="gap-1.5"
+                    >
+                      {busy === "verify" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                      Check still listed by owner ({selectedCount})
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Rechecks the selected listings to confirm they're still active and still listed by the owner, not an agent. This does not find phone numbers or emails.
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      variant="secondary"
+                      onClick={onVerifyTopLikely}
+                      disabled={!!busy || likelyCount === 0}
+                      className="gap-1.5"
+                    >
+                      Check top {Math.min(likelyCount, 20)} best matches
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Same check for your top best matches on screen, so you don't reach out about listings that sold, rented or moved to an agent.
+                </TooltipContent>
+              </Tooltip>
             </>
           )}
           <Button
