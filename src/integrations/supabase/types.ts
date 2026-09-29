@@ -112,6 +112,7 @@ export type Database = {
           output_tokens: number
           success: boolean
           task: string
+          tools: string[] | null
           user_id: string
         }
         Insert: {
@@ -124,6 +125,7 @@ export type Database = {
           output_tokens?: number
           success?: boolean
           task: string
+          tools?: string[] | null
           user_id: string
         }
         Update: {
@@ -136,6 +138,7 @@ export type Database = {
           output_tokens?: number
           success?: boolean
           task?: string
+          tools?: string[] | null
           user_id?: string
         }
         Relationships: []
