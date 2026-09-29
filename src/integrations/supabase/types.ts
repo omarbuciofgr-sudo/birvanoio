@@ -2237,6 +2237,27 @@ export type Database = {
         }
         Relationships: []
       }
+      market_reports: {
+        Row: {
+          address: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          id: string
+          user_id: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       message_templates: {
         Row: {
           body: string
@@ -2670,7 +2691,9 @@ export type Database = {
       }
       profiles: {
         Row: {
+          agent_photo_path: string | null
           avatar_url: string | null
+          brokerage: string | null
           communication_compliance_accepted_at: string | null
           company_name: string | null
           created_at: string
@@ -2693,7 +2716,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_photo_path?: string | null
           avatar_url?: string | null
+          brokerage?: string | null
           communication_compliance_accepted_at?: string | null
           company_name?: string | null
           created_at?: string
@@ -2716,7 +2741,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_photo_path?: string | null
           avatar_url?: string | null
+          brokerage?: string | null
           communication_compliance_accepted_at?: string | null
           company_name?: string | null
           created_at?: string
@@ -2743,6 +2770,7 @@ export type Database = {
       property_estimates: {
         Row: {
           address_key: string
+          comparables: Json | null
           days_on_market: number | null
           estimate: number | null
           fetched_at: string
@@ -2755,6 +2783,7 @@ export type Database = {
         }
         Insert: {
           address_key: string
+          comparables?: Json | null
           days_on_market?: number | null
           estimate?: number | null
           fetched_at?: string
@@ -2767,6 +2796,7 @@ export type Database = {
         }
         Update: {
           address_key?: string
+          comparables?: Json | null
           days_on_market?: number | null
           estimate?: number | null
           fetched_at?: string
