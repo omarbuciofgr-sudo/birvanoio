@@ -170,6 +170,124 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_messages: {
+        Row: {
+          content: Json
+          created_at: string
+          id: string
+          role: string
+          thread_id: string
+          ui: Json
+          user_id: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          id?: string
+          role: string
+          thread_id: string
+          ui?: Json
+          user_id: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          id?: string
+          role?: string
+          thread_id?: string
+          ui?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_pending_actions: {
+        Row: {
+          args: Json
+          created_at: string
+          credit_cost: number
+          expires_at: string
+          id: string
+          other_results: Json
+          status: string
+          summary: string
+          thread_id: string
+          tool: string
+          tool_use_id: string
+          user_id: string
+        }
+        Insert: {
+          args: Json
+          created_at?: string
+          credit_cost?: number
+          expires_at?: string
+          id?: string
+          other_results?: Json
+          status?: string
+          summary: string
+          thread_id: string
+          tool: string
+          tool_use_id: string
+          user_id: string
+        }
+        Update: {
+          args?: Json
+          created_at?: string
+          credit_cost?: number
+          expires_at?: string
+          id?: string
+          other_results?: Json
+          status?: string
+          summary?: string
+          thread_id?: string
+          tool?: string
+          tool_use_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_pending_actions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_threads: {
+        Row: {
+          automation_id: string | null
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          automation_id?: string | null
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          automation_id?: string | null
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -206,6 +324,102 @@ export type Database = {
           reason?: string | null
           record_id?: string
           table_name?: string
+        }
+        Relationships: []
+      }
+      automation_runs: {
+        Row: {
+          automation_id: string
+          created_at: string
+          credits_spent: number
+          id: string
+          run_date: string
+          status: string
+          summary: string | null
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          automation_id: string
+          created_at?: string
+          credits_spent?: number
+          id?: string
+          run_date: string
+          status?: string
+          summary?: string | null
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          automation_id?: string
+          created_at?: string
+          credits_spent?: number
+          id?: string
+          run_date?: string
+          status?: string
+          summary?: string | null
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automations: {
+        Row: {
+          created_at: string
+          credit_cap: number
+          days: number[]
+          enabled: boolean
+          id: string
+          instructions: string
+          last_run_at: string | null
+          name: string
+          run_time: string
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credit_cap?: number
+          days?: number[]
+          enabled?: boolean
+          id?: string
+          instructions: string
+          last_run_at?: string | null
+          name: string
+          run_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credit_cap?: number
+          days?: number[]
+          enabled?: boolean
+          id?: string
+          instructions?: string
+          last_run_at?: string | null
+          name?: string
+          run_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
