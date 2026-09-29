@@ -52,8 +52,9 @@ export function AssistantPanel() {
         if (e.type === "thread") setThreadId(e.thread_id);
         else if (e.type === "text") patch((m) => ({ ...m, text: m.text + e.text }));
         else if (e.type === "card") {
-          if (e.card.type === "action_result") setSettled((s) => new Set(s).add(e.card.action_id as string));
-          patch((m) => ({ ...m, cards: [...m.cards, e.card] }));
+          const card = e.card;
+          if (card.type === "action_result") setSettled((s) => new Set(s).add(card.action_id));
+          patch((m) => ({ ...m, cards: [...m.cards, card] }));
         } else if (e.type === "error") setError({ message: e.message });
       });
     } catch (e) {
