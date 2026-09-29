@@ -92,7 +92,16 @@ Deno.serve(async (req) => {
           .eq("user_id", a.user_id).is("done_at", null).lte("due_date", date).order("due_date").limit(25);
         followUps = (fu ?? []) as typeof followUps;
       }
-      if (!fresh.length && !followUps.length) continue;
+      // Assistant automation summaries from the last day.
+      let autoHtml = "";
+      if (!followUpsSent.has(a.user_id)) {
+        const { data: runs } = await db.from("automation_runs").select("summary, automations(name)")
+          .eq("user_id", a.user_id).eq("status", "done").not("summary", "is", null)
+          .gte("created_at", new Date(Date.now() - 864e5).toISOString()).limit(10);
+        if (runs?.length) autoHtml = `<h3 style="font-size:16px;margin-top:24px">Your automations</h3>` + runs.map((r: { summary: string; automations: { name: string } | null }) =>
+          `<p style="color:#334155;font-size:14px"><strong>${esc(r.automations?.name || "Automation")}:</strong> ${esc(r.summary)}</p>`).join("");
+      }
+      if (!fresh.length && !followUps.length && !autoHtml) continue;
 
       // Gentle reminder if yesterday's daily goals were missed (user's time zone).
       let goalHtml = "";
@@ -122,7 +131,7 @@ Deno.serve(async (req) => {
       const city = a.location.split(",")[0].trim();
       const subject = fresh.length
         ? `${fresh.length} new owner${fresh.length === 1 ? "" : "s"} in ${city} today`
-        : `${followUps.length} follow-up${followUps.length === 1 ? "" : "s"} due today`;
+        : followUps.length ? `${followUps.length} follow-up${followUps.length === 1 ? "" : "s"} due today` : "Your Brivano automations ran";
       const fuRows = followUps.map((f) => {
         const overdue = f.due_date < date;
         const link = `${APP_URL}/dashboard/owners/${encodeURIComponent(`lead:${f.lead_id}`)}`;
@@ -144,6 +153,7 @@ Deno.serve(async (req) => {
 ${fresh.length ? `<p style="color:#555">New owner listings for your saved search: ${esc(a.location)}.</p>
 <table style="width:100%;border-collapse:collapse">${items}</table>` : `<p style="color:#555">No new owners for ${esc(a.location)} today.</p>`}
 ${fuHtml}
+${autoHtml}
 ${goalHtml}
 ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Brivano.</p>` : ""}
 <p style="font-size:12px;color:#888;margin-top:24px">You get this because you saved this search in Brivano. <a href="${unsub}" style="color:#888">Unsubscribe from this alert</a>.</p></div>`;
