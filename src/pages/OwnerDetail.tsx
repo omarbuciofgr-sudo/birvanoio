@@ -209,9 +209,21 @@ export default function OwnerDetail() {
           <h1 className="font-display text-2xl font-semibold leading-tight">{row.address || "Unknown address"}</h1>
           <p className="text-sm text-muted-foreground">{[row.city, row.state, row.zip_code].filter(Boolean).join(", ")}</p>
           <OwnerFlagBadges flags={flags} />
-          <Button size="sm" className="min-h-11 md:h-8 md:min-h-0" onClick={() => setReportOpen(true)}>
-            <FileText className="h-4 w-4 mr-1" /> Create market report
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" className="min-h-11 md:h-8 md:min-h-0" onClick={() => setReportOpen(true)}>
+              <FileText className="h-4 w-4 mr-1" /> Create market report
+            </Button>
+            {(() => {
+              const link = listingLink(row);
+              return link ? (
+                <Button asChild size="sm" variant="outline" className="min-h-11 md:h-8 md:min-h-0">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.exact ? "Open the original listing" : "No direct listing link from the data source; searches Zillow for this address"}>
+                    <ExternalLink className="h-4 w-4 mr-1" /> {link.label}
+                  </a>
+                </Button>
+              ) : null;
+            })()}
+          </div>
         </div>
         {reportOpen && (
           <MarketReportDialog
@@ -360,6 +372,9 @@ export default function OwnerDetail() {
                 )}
               </CardContent>
             </Card>
+
+            <LeadPlanCard leadId={leadId} selling={!rental} />
+
 
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" />Talking points</CardTitle></CardHeader>

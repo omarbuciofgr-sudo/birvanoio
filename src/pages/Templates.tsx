@@ -45,6 +45,10 @@ const Templates = () => {
               <ScrollText className="w-3.5 h-3.5" />
               Scripts
             </TabsTrigger>
+            <TabsTrigger value="plans" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <ListChecks className="w-3.5 h-3.5" />
+              Follow-up plans
+            </TabsTrigger>
             <TabsTrigger value="scheduled" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Clock className="w-3.5 h-3.5" />
               Scheduled Messages
@@ -57,6 +61,10 @@ const Templates = () => {
 
           <TabsContent value="scripts">
             <ScriptsLibrary userId={user.id} />
+          </TabsContent>
+
+          <TabsContent value="plans">
+            <FollowUpPlansEditor />
           </TabsContent>
 
           <TabsContent value="scheduled">
