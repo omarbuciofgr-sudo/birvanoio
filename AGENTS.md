@@ -8,3 +8,4 @@
 - Grant the free first Find Owners search server-side in `consume-credits` via the server-only `free_search_grants` row. Why: a client-writable flag could be reset for unlimited free searches.
 - Run saved-search email alerts from the hourly `owner-search-alerts` job (7am per alert time zone), sharing one provider fetch per city/type/day via `city_search_cache`; the job authenticates with a token in `private.job_tokens`. Why: one fetch per city each morning and no client-callable trigger.
 - Fetch RentCast property estimates and price history only through the `property-estimate` function, cached 7 days in server-only `property_estimates`; table flags read cache only. Why: limits data provider calls and cost.
+- Store follow-ups in user-scoped `lead_follow_ups`; the `conversation_logs` insert trigger moves leads New→Contacted. Why: status change happens server-side for every in-app send path.
