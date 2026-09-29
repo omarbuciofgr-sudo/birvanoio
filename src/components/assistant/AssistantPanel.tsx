@@ -170,7 +170,6 @@ export function AskAssistantButton({ className = "", label = "Ask Brivano Assist
   const { openAssistant } = useAssistant();
   return (
     <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${className}`} onClick={() => openAssistant()}>
-      <img src="/favicon.png" alt="" className="hidden" />
       <MessageSquarePlus className="h-3.5 w-3.5" /> {label}
     </Button>
   );
