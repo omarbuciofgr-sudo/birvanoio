@@ -53,7 +53,7 @@ export const TOOLS = [
   { name: "update_lead_status", description: "Move a saved lead to a pipeline stage.", input_schema: obj({ lead_id: { type: "string" }, status: { type: "string", enum: [...STATUS] } }, ["lead_id", "status"]) },
   { name: "start_followup_plan", description: "Start the FSBO 45-day or FRBO 30-day follow-up plan for a saved lead.", input_schema: obj({ lead_id: { type: "string" }, plan: { type: "string", enum: ["fsbo", "frbo"] } }, ["lead_id", "plan"]) },
   { name: "create_saved_search_alert", description: "Save a search with a daily 7am email of new owners.", input_schema: obj({ city: { type: "string" }, selling_or_renting: kindProp }, ["city", "selling_or_renting"]) },
-  { name: "create_automation", description: "Create a scheduled automation that runs instructions on chosen weekdays at a time. It can search, save leads and set follow-ups, never send messages.", input_schema: obj({ name: { type: "string" }, instructions: { type: "string" }, days: { type: "array", items: { type: "integer", description: "0=Sun..6=Sat" } }, time: { type: "string", description: "HH:MM 24h" }, credit_cap: { type: "integer" } }, ["name", "instructions", "days", "time"]) },
+  { name: "create_automation", description: "Create a scheduled automation that runs instructions on chosen weekdays at a time. It can search, save leads and set follow-ups, never send messages.", input_schema: obj({ name: { type: "string" }, instructions: { type: "string" }, days: { type: "array", items: { type: "integer", description: "0=Sun..6=Sat" } }, time: { type: "string", description: "HH:00 24h, whole hours only" }, credit_cap: { type: "integer" } }, ["name", "instructions", "days", "time"]) },
   { name: "draft_message", description: "Write a draft text, email or call script for a saved lead. Shown to the user in an editable box; never sent automatically.", input_schema: obj({ lead_id: { type: "string" }, type: { type: "string", enum: ["text", "email", "call_script"] }, tone: { type: "string", enum: ["friendly", "direct", "brief"] } }, ["lead_id", "type"]) },
 ];
 
@@ -282,7 +282,7 @@ export async function runTool(tool: string, a: Block, ctx: Ctx): Promise<{ resul
     }
     case "create_automation": {
       const days = ids(a.days, 7).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
-      const time = /^\d{1,2}:\d{2}$/.test(String(a.time)) ? String(a.time) : "08:00";
+      const hr = Math.min(23, Math.max(0, parseInt(String(a.time), 10) || 8)); const time = `${String(hr).padStart(2, "0")}:00`;
       const { data, error } = await db.from("automations").insert({
         user_id: ctx.userId, name: String(a.name).slice(0, 80) || "Automation", instructions: String(a.instructions).slice(0, 2000),
         days: days.length ? days : [1, 2, 3, 4, 5], run_time: time, timezone: ctx.tz, credit_cap: Math.min(Math.max(Number(a.credit_cap) || 10, 0), 1000),
