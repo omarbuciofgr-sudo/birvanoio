@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { AgentPhotoField } from "@/components/settings/AgentPhotoField";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +61,9 @@ const Settings = () => {
   });
   const [workspaceMailingAddress, setWorkspaceMailingAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [brokerage, setBrokerage] = useState("");
+  const [agentPhone, setAgentPhone] = useState("");
+  const [agentPhotoPath, setAgentPhotoPath] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
@@ -77,7 +81,7 @@ const Settings = () => {
   const fetchProfile = async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("first_name, last_name, company_name, twilio_phone_number, sender_email, mailing_address")
+      .select("first_name, last_name, company_name, twilio_phone_number, sender_email, mailing_address, brokerage, phone, agent_photo_path")
       .eq("user_id", user?.id)
       .maybeSingle();
 
@@ -90,6 +94,9 @@ const Settings = () => {
         sender_email: data.sender_email || "",
         mailing_address: data.mailing_address || "",
       });
+      setBrokerage(data.brokerage || "");
+      setAgentPhone(data.phone || "");
+      setAgentPhotoPath(data.agent_photo_path || null);
     }
     if (workspaceId) {
       const { data: settings } = await supabase.from("workspace_settings").select("mailing_address").eq("workspace_id", workspaceId).maybeSingle();
@@ -117,6 +124,8 @@ const Settings = () => {
         twilio_phone_number: profile.twilio_phone_number.trim() || null,
         sender_email: profile.sender_email.trim() || null,
       mailing_address: profile.mailing_address.trim() || null,
+        brokerage: brokerage.trim().slice(0, 200) || null,
+        phone: agentPhone.trim().slice(0, 40) || null,
       })
       .eq("user_id", user?.id);
 
@@ -216,6 +225,24 @@ const Settings = () => {
                     placeholder="Your company name"
                     className="bg-secondary/50 border-border"
                   />
+                </div>
+
+                <div className="rounded-lg border border-border p-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Report branding</p>
+                    <p className="text-xs text-muted-foreground">Shown on the market reports you create for owners.</p>
+                  </div>
+                  <AgentPhotoField userId={user.id} path={agentPhotoPath} onChange={setAgentPhotoPath} />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Brokerage</label>
+                      <Input value={brokerage} onChange={(e) => setBrokerage(e.target.value)} placeholder="e.g. Keller Williams Naperville" maxLength={200} className="bg-secondary/50 border-border" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Phone</label>
+                      <Input value={agentPhone} onChange={(e) => setAgentPhone(e.target.value)} placeholder="(555) 123-4567" maxLength={40} className="bg-secondary/50 border-border" />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
