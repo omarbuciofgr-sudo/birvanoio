@@ -21,6 +21,7 @@ import { CallDialog } from "./CallDialog";
 import { AudioRecordingPlayer } from "./AudioRecordingPlayer";
 import { SentimentBadge } from "./SentimentBadge";
 import { supabase } from "@/integrations/supabase/client";
+import { writeWithAI, splitEmailDraft } from "@/lib/ai/claudeWriter";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
