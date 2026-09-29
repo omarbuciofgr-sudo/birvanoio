@@ -19,6 +19,8 @@ import {
 } from "@/lib/ownerFlags";
 import { normalizeAddressKey } from "@/lib/rentcast/mapRentCastToLead";
 import { SetFollowUp } from "@/components/leads/SetFollowUp";
+import { OwnerScripts } from "@/components/rentcast/OwnerScripts";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock } from "lucide-react";
 
 const money = (n?: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString("en-US")}`);
@@ -205,6 +207,21 @@ export default function OwnerDetail() {
           <OwnerFlagBadges flags={flags} />
         </div>
 
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="h-9">
+            <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+            <TabsTrigger value="scripts" className="text-xs">Scripts</TabsTrigger>
+          </TabsList>
+          <TabsContent value="scripts">
+            <OwnerScripts
+              selling={!rental}
+              leadId={leadId}
+              listingId={externalId}
+              phone={row.owner_phone ?? null}
+              email={row.owner_email ?? null}
+            />
+          </TabsContent>
+          <TabsContent value="overview" className="space-y-5">
         {photos.length > 0 ? (
           <div className="flex gap-2 overflow-x-auto pb-1">
             {photos.map((src) => (
@@ -351,6 +368,8 @@ export default function OwnerDetail() {
             </Card>
           </div>
         </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
