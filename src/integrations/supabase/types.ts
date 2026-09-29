@@ -1716,6 +1716,30 @@ export type Database = {
         }
         Relationships: []
       }
+      geocode_cache: {
+        Row: {
+          address_key: string
+          created_at: string
+          latitude: number | null
+          longitude: number | null
+          source: string
+        }
+        Insert: {
+          address_key: string
+          created_at?: string
+          latitude?: number | null
+          longitude?: number | null
+          source: string
+        }
+        Update: {
+          address_key?: string
+          created_at?: string
+          latitude?: number | null
+          longitude?: number | null
+          source?: string
+        }
+        Relationships: []
+      }
       gmail_followups: {
         Row: {
           calendar_event_id: string | null
@@ -2167,10 +2191,12 @@ export type Database = {
           estimated_revenue: string | null
           id: string
           industry: string | null
+          latitude: number | null
           lead_score: number | null
           linkedin_url: string | null
           list_price: number | null
           listing_signed_at: string | null
+          longitude: number | null
           notes: string | null
           phone: string | null
           social_profiles: Json | null
@@ -2201,10 +2227,12 @@ export type Database = {
           estimated_revenue?: string | null
           id?: string
           industry?: string | null
+          latitude?: number | null
           lead_score?: number | null
           linkedin_url?: string | null
           list_price?: number | null
           listing_signed_at?: string | null
+          longitude?: number | null
           notes?: string | null
           phone?: string | null
           social_profiles?: Json | null
@@ -2235,10 +2263,12 @@ export type Database = {
           estimated_revenue?: string | null
           id?: string
           industry?: string | null
+          latitude?: number | null
           lead_score?: number | null
           linkedin_url?: string | null
           list_price?: number | null
           listing_signed_at?: string | null
+          longitude?: number | null
           notes?: string | null
           phone?: string | null
           social_profiles?: Json | null
@@ -2723,6 +2753,7 @@ export type Database = {
           industry: string | null
           last_name: string | null
           mailing_address: string | null
+          map_view: Json | null
           persona_completed_at: string | null
           persona_goals: string[]
           persona_role: string | null
@@ -2753,6 +2784,7 @@ export type Database = {
           industry?: string | null
           last_name?: string | null
           mailing_address?: string | null
+          map_view?: Json | null
           persona_completed_at?: string | null
           persona_goals?: string[]
           persona_role?: string | null
@@ -2783,6 +2815,7 @@ export type Database = {
           industry?: string | null
           last_name?: string | null
           mailing_address?: string | null
+          map_view?: Json | null
           persona_completed_at?: string | null
           persona_goals?: string[]
           persona_role?: string | null
