@@ -10,6 +10,7 @@ const Item = z.object({ address: z.string().min(5).max(300), kind: z.enum(["sale
 const Body = z.object({
   mode: z.enum(["fetch", "cached"]).default("fetch"),
   items: z.array(Item).min(1).max(200),
+  withComps: z.boolean().optional(),
 });
 
 const json = (b: unknown, status = 200) =>
@@ -20,6 +21,7 @@ type Estimate = {
   address_key: string; kind: "sale" | "rental"; estimate: number | null; range_low: number | null; range_high: number | null;
   listed_date: string | null; days_on_market: number | null; price_history: { date: string; price: number | null; event: string }[];
   photos: string[]; fetched_at: string;
+  comparables: { address: string; price: number | null; bedrooms: number | null; bathrooms: number | null; square_footage: number | null; distance: number | null }[];
 };
 
 async function rc(path: string, key: string) {
@@ -50,6 +52,15 @@ async function fetchEstimate(address: string, kind: "sale" | "rental", key: stri
     days_on_market: listing?.daysOnMarket ?? null,
     price_history: history,
     photos: [],
+    comparables: (Array.isArray(avm?.comparables) ? avm.comparables : [])
+      .filter((c: any) => c?.formattedAddress && c?.price)
+      .sort((a: any, b: any) => (a.distance ?? 99) - (b.distance ?? 99))
+      .slice(0, 5)
+      .map((c: any) => ({
+        address: String(c.formattedAddress), price: c.price ?? null, bedrooms: c.bedrooms ?? null,
+        bathrooms: c.bathrooms ?? null, square_footage: c.squareFootage ?? null,
+        distance: typeof c.distance === "number" ? Math.round(c.distance * 100) / 100 : null,
+      })),
     fetched_at: new Date().toISOString(),
   };
 }
@@ -65,7 +76,7 @@ Deno.serve(async (req) => {
   let parsed;
   try { parsed = Body.safeParse(await req.json()); } catch { return json({ error: "Invalid request." }, 400); }
   if (!parsed.success) return json({ error: "Invalid request." }, 400);
-  const { mode, items } = parsed.data;
+  const { mode, items, withComps } = parsed.data;
   const db = serviceClient();
 
   const keys = [...new Set(items.map((i) => addressKey(i.address)))];
@@ -78,7 +89,8 @@ Deno.serve(async (req) => {
   // Fetch mode: one property at a time (the detail page).
   const item = items[0];
   const hit = byKey.get(`${addressKey(item.address)}|${item.kind}`);
-  if (hit) return json({ estimate: hit, cached: true });
+  // Older cached rows have no comparables; refresh them when a report needs comps.
+  if (hit && !(withComps && hit.comparables == null)) return json({ estimate: hit, cached: true });
 
   const key = Deno.env.get("RENTCAST_API_KEY");
   if (!key) return json({ estimate: null, unavailable: true });

@@ -13,7 +13,7 @@ const TASKS = {
   talking_points: "Write exactly 3 short conversation openers the agent could use with this owner, as a numbered list. Base them on the property data (price, time on market, price changes, market estimate) when available.",
   reply_suggestion: "The owner sent the message below. Write one suggested reply the agent could send back. Keep it short and respectful. If the owner asks not to be contacted, write a brief polite acknowledgement only.",
   lead_summary: "Summarize this lead in 3 or 4 short sentences: the property, the situation, and a suggested next step.",
-  market_report_summary: "Write a short plain-language summary of the property data provided, suitable to share with the owner. Only use the numbers given. If data is missing, say so briefly instead of guessing.",
+  market_report_summary: "Write a short plain-language summary (3 to 5 sentences, no headings or lists) of the property data provided, including how the asking price compares with the estimate and nearby comparables, suitable to share with the owner. Only use the numbers given. If data is missing, say so briefly instead of guessing.",
 } as const;
 
 const BodySchema = z.object({
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
         admin.from("owner_search_results").select("listing_data, listing_kind")
           .eq("user_id", userId).ilike("listing_data->>address", lead.business_name).limit(1).maybeSingle(),
       admin.from("ai_settings").select("setting_value").eq("setting_key", "claude_model").maybeSingle(),
-      admin.from("property_estimates").select("kind, estimate, range_low, range_high, days_on_market, price_history").eq("address_key", addrKey),
+      admin.from("property_estimates").select("kind, estimate, range_low, range_high, days_on_market, price_history, comparables").eq("address_key", addrKey),
     ]);
     const model = modelRow?.setting_value || "claude-sonnet-4-5";
 
@@ -145,6 +145,7 @@ Deno.serve(async (req) => {
       if (est.estimate != null) listing[situation.startsWith("renting") ? "estimated_rent" : "estimated_value"] = est.estimate;
       if (Array.isArray(est.price_history) && est.price_history.length && !listing.price_history) listing.price_history = est.price_history;
       if (est.days_on_market != null && listing.days_listed == null) listing.days_listed = est.days_on_market;
+      if (Array.isArray(est.comparables) && est.comparables.length) listing.nearby_comparables = est.comparables;
     }
 
     const context = {
