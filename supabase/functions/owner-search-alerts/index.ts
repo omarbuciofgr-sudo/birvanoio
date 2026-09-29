@@ -1,5 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { chargeCredits, serviceClient } from "../_shared/billing.ts";
+import { createCitySearch } from "../_shared/citySearch.ts";
 
 const APP_URL = "https://brivano.io";
 const ALERT_HOUR = 7;
@@ -36,7 +37,6 @@ Deno.serve(async (req) => {
   const { data: ok } = await db.rpc("verify_job_token", { p_name: "owner_alerts", p_token: token });
   if (!ok) return json({ error: "Unauthorized" }, 401);
 
-  const scraperBase = (Deno.env.get("SCRAPER_BACKEND_URL") ?? "").replace(/\/+$/, "");
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM_EMAIL") || "alerts@brivano.io";
 
@@ -46,32 +46,8 @@ Deno.serve(async (req) => {
     return hour >= ALERT_HOUR && a.last_run_date !== date;
   });
 
-  // One provider fetch per city + type per day, shared across users.
-  const cacheMem = new Map<string, Listing[]>();
-  const today = new Date().toISOString().slice(0, 10);
-  async function cityListings(location: string, type: "sale" | "rental"): Promise<Listing[] | null> {
-    const key = `${location.trim().toLowerCase()}|${type}`;
-    if (cacheMem.has(key)) return cacheMem.get(key)!;
-    const { data: cached } = await db.from("city_search_cache").select("listings")
-      .eq("location_key", location.trim().toLowerCase()).eq("listing_type", type).eq("fetched_on", today).maybeSingle();
-    if (cached) { cacheMem.set(key, cached.listings as Listing[]); return cached.listings as Listing[]; }
-    if (!scraperBase) return null;
-    try {
-      const res = await fetch(`${scraperBase}/api/zillow/search`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location, type, save: true }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !Array.isArray(body?.listings)) { console.error("provider fetch failed", location, type, res.status); return null; }
-      const rows = body.listings.map((r: Listing) => ({ ...r, listing_kind: r.listing_kind || type }));
-      await db.from("city_search_cache").upsert({ location_key: location.trim().toLowerCase(), listing_type: type, fetched_on: today, listings: rows });
-      cacheMem.set(key, rows);
-      return rows;
-    } catch (e) {
-      console.error("provider fetch error", location, type, e);
-      return null;
-    }
-  }
+  const cityListings = createCitySearch(db);
+
 
   const followUpsSent = new Set<string>();
   const summary = { due: due.length, emailed: 0, baselined: 0, skipped_credits: 0, failed: 0 };
@@ -116,7 +92,16 @@ Deno.serve(async (req) => {
           .eq("user_id", a.user_id).is("done_at", null).lte("due_date", date).order("due_date").limit(25);
         followUps = (fu ?? []) as typeof followUps;
       }
-      if (!fresh.length && !followUps.length) continue;
+      // Assistant automation summaries from the last day.
+      let autoHtml = "";
+      if (!followUpsSent.has(a.user_id)) {
+        const { data: runs } = await db.from("automation_runs").select("summary, automations(name)")
+          .eq("user_id", a.user_id).eq("status", "done").not("summary", "is", null)
+          .gte("created_at", new Date(Date.now() - 864e5).toISOString()).limit(10);
+        if (runs?.length) autoHtml = `<h3 style="font-size:16px;margin-top:24px">Your automations</h3>` + runs.map((r: { summary: string; automations: { name: string } | null }) =>
+          `<p style="color:#334155;font-size:14px"><strong>${esc(r.automations?.name || "Automation")}:</strong> ${esc(r.summary)}</p>`).join("");
+      }
+      if (!fresh.length && !followUps.length && !autoHtml) continue;
 
       // Gentle reminder if yesterday's daily goals were missed (user's time zone).
       let goalHtml = "";
@@ -146,7 +131,7 @@ Deno.serve(async (req) => {
       const city = a.location.split(",")[0].trim();
       const subject = fresh.length
         ? `${fresh.length} new owner${fresh.length === 1 ? "" : "s"} in ${city} today`
-        : `${followUps.length} follow-up${followUps.length === 1 ? "" : "s"} due today`;
+        : followUps.length ? `${followUps.length} follow-up${followUps.length === 1 ? "" : "s"} due today` : "Your Brivano automations ran";
       const fuRows = followUps.map((f) => {
         const overdue = f.due_date < date;
         const link = `${APP_URL}/dashboard/owners/${encodeURIComponent(`lead:${f.lead_id}`)}`;
@@ -168,6 +153,7 @@ Deno.serve(async (req) => {
 ${fresh.length ? `<p style="color:#555">New owner listings for your saved search: ${esc(a.location)}.</p>
 <table style="width:100%;border-collapse:collapse">${items}</table>` : `<p style="color:#555">No new owners for ${esc(a.location)} today.</p>`}
 ${fuHtml}
+${autoHtml}
 ${goalHtml}
 ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Brivano.</p>` : ""}
 <p style="font-size:12px;color:#888;margin-top:24px">You get this because you saved this search in Brivano. <a href="${unsub}" style="color:#888">Unsubscribe from this alert</a>.</p></div>`;

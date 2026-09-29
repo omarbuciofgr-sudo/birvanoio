@@ -56,6 +56,7 @@ import RealEstateAudience from "./pages/RealEstateAudience";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import MyResults from "./pages/MyResults";
+import Automations from "./pages/Automations";
 
 
 const queryClient = new QueryClient();
@@ -104,6 +105,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
                <Route path="/client/leads" element={<ProtectedRoute><ClientLeads /></ProtectedRoute>} />
               <Route path="/dashboard/csv-enrichment" element={<ProtectedRoute><CSVEnrichment /></ProtectedRoute>} />
               <Route path="/dashboard/prospect-search" element={<ProtectedRoute><ProspectSearch /></ProtectedRoute>} />
+              <Route path="/dashboard/automations" element={<ProtectedRoute><Automations /></ProtectedRoute>} />
               <Route path="/dashboard/results" element={<ProtectedRoute><MyResults /></ProtectedRoute>} />
               <Route path="/dashboard/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
