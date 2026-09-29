@@ -311,6 +311,60 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_events: {
+        Row: {
+          created_at: string
+          external_id: string
+          id: string
+          lead_id: string | null
+          starts_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_id: string
+          id?: string
+          lead_id?: string | null
+          starts_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string
+          id?: string
+          lead_id?: string | null
+          starts_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      booking_integrations: {
+        Row: {
+          created_at: string
+          last_event_at: string | null
+          provider: string
+          signing_secret: string
+          user_id: string
+          webhook_token: string
+        }
+        Insert: {
+          created_at?: string
+          last_event_at?: string | null
+          provider?: string
+          signing_secret: string
+          user_id: string
+          webhook_token: string
+        }
+        Update: {
+          created_at?: string
+          last_event_at?: string | null
+          provider?: string
+          signing_secret?: string
+          user_id?: string
+          webhook_token?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           ai_qualified: boolean | null
@@ -2738,6 +2792,7 @@ export type Database = {
         Row: {
           agent_photo_path: string | null
           avatar_url: string | null
+          booking_url: string | null
           brokerage: string | null
           communication_compliance_accepted_at: string | null
           company_name: string | null
@@ -2769,6 +2824,7 @@ export type Database = {
         Insert: {
           agent_photo_path?: string | null
           avatar_url?: string | null
+          booking_url?: string | null
           brokerage?: string | null
           communication_compliance_accepted_at?: string | null
           company_name?: string | null
@@ -2800,6 +2856,7 @@ export type Database = {
         Update: {
           agent_photo_path?: string | null
           avatar_url?: string | null
+          booking_url?: string | null
           brokerage?: string | null
           communication_compliance_accepted_at?: string | null
           company_name?: string | null
