@@ -1,22 +1,26 @@
 import { ExternalLink } from "lucide-react";
-import { listingLink } from "@/lib/listingLink";
+import { listingExternalLinks } from "@/lib/rentcast/mapRentCastToLead";
 import type { RentCastListing } from "@/lib/api/rentcastApi";
 
-/** Small "View listing" link that never triggers the row's own click. */
+/** The original always-visible listing links; clicks never open the owner page. */
 export function ListingLinkButton({ row, className = "" }: { row: RentCastListing; className?: string }) {
-  const link = listingLink(row);
-  if (!link) return null;
+  const links = listingExternalLinks(row);
+  if (!links.length) return null;
   return (
-    <a
-      href={link.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-      title={link.exact ? "Open the original listing" : "No direct listing link from the data source; searches Zillow for this address"}
-      className={`inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline ${className}`}
-    >
-      <ExternalLink className="h-3 w-3" /> {link.label}
-    </a>
+    <div className={`flex flex-wrap gap-x-3 gap-y-1 ${className}`}>
+      {links.map((link) => (
+        <a
+          key={link.label}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          {link.label} <ExternalLink className="h-3 w-3" />
+        </a>
+      ))}
+    </div>
   );
 }
