@@ -168,6 +168,7 @@ Deno.serve(async (req) => {
 ${fresh.length ? `<p style="color:#555">New owner listings for your saved search: ${esc(a.location)}.</p>
 <table style="width:100%;border-collapse:collapse">${items}</table>` : `<p style="color:#555">No new owners for ${esc(a.location)} today.</p>`}
 ${fuHtml}
+${goalHtml}
 ${fresh.length > 50 ? `<p style="color:#555">And ${fresh.length - 50} more in Brivano.</p>` : ""}
 <p style="font-size:12px;color:#888;margin-top:24px">You get this because you saved this search in Brivano. <a href="${unsub}" style="color:#888">Unsubscribe from this alert</a>.</p></div>`;
 
