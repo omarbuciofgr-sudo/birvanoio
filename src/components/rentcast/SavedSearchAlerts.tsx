@@ -90,7 +90,7 @@ export function SavedSearchAlerts({ alerts, loading, refresh }: Props) {
 
   return (
     <div className="rounded-lg border border-border/40 p-3 space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Bell className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold">Saved searches</h2>
         <span className="text-xs text-muted-foreground">Emailed at 7am your time when there are new owners · 1 credit per search each morning</span>
@@ -108,7 +108,7 @@ export function SavedSearchAlerts({ alerts, loading, refresh }: Props) {
                   {a.last_sent_at ? ` · last email ${new Date(a.last_sent_at).toLocaleDateString()}` : ""}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto">
                 <Badge variant={a.is_active ? "default" : "secondary"} className="text-[10px]">{a.is_active ? "Active" : "Paused"}</Badge>
                 <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" disabled={busyId === a.id}
                   onClick={() => update(a.id, { is_active: !a.is_active })}>

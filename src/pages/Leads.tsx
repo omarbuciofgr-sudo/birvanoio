@@ -536,11 +536,11 @@ const Leads = () => {
 
         {/* Bulk Actions Bar */}
         {selectedLeads.size > 0 && (
-          <div className="flex items-center gap-3 p-2.5 rounded-lg border border-primary/20 bg-primary/[0.03]">
+          <div className="flex flex-wrap items-center gap-3 p-2.5 rounded-lg border border-primary/20 bg-primary/[0.03]">
             <span className="text-xs font-medium">{selectedLeads.size} selected</span>
             <Separator orientation="vertical" className="h-4" />
             <Select onValueChange={(v) => bulkUpdateStatus(v as LeadStatus)}>
-              <SelectTrigger className="w-36 h-7 text-xs">
+              <SelectTrigger className="h-11 w-36 text-xs sm:h-7">
                 <SelectValue placeholder="Change status" />
               </SelectTrigger>
               <SelectContent>
@@ -552,15 +552,15 @@ const Leads = () => {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs gap-1"
+              className="min-h-11 text-xs gap-1 sm:h-7 sm:min-h-0"
               onClick={() => setCampaignDialogLeadIds(Array.from(selectedLeads))}
             >
               <Send className="w-3 h-3" /> Add to Campaign
             </Button>
-            <Button variant="destructive" size="sm" className="h-7 text-xs gap-1" onClick={bulkDelete}>
+            <Button variant="destructive" size="sm" className="min-h-11 text-xs gap-1 sm:h-7 sm:min-h-0" onClick={bulkDelete}>
               <Trash2 className="w-3 h-3" /> Delete
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs ml-auto" onClick={() => setSelectedLeads(new Set())}>
+            <Button variant="ghost" size="sm" className="min-h-11 text-xs sm:ml-auto sm:h-7 sm:min-h-0" onClick={() => setSelectedLeads(new Set())}>
               Cancel
             </Button>
           </div>
@@ -831,18 +831,18 @@ const Leads = () => {
           </div>
           {/* Pagination */}
           {filteredLeads.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-1">
+            <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
                 Showing <span className="font-medium text-foreground">{(page - 1) * PAGE_SIZE + 1}</span>–
                 <span className="font-medium text-foreground">{Math.min(page * PAGE_SIZE, filteredLeads.length)}</span> of
                 <span className="font-medium text-foreground"> {filteredLeads.length}</span>
               </p>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(1)}>First</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
+              <div className="grid grid-cols-4 items-center gap-1 sm:flex">
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page === 1} onClick={() => setPage(1)}>First</Button>
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
                 <span className="text-xs px-2">Page {page} / {totalPages}</span>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</Button>
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+                <Button variant="outline" size="sm" className="min-h-11 text-xs sm:h-7 sm:min-h-0" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last</Button>
               </div>
             </div>
           )}

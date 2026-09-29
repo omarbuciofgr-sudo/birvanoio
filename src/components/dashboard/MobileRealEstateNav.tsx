@@ -31,6 +31,7 @@ export function MobileRealEstateNav({ onSignOut }: { onSignOut: () => void }) {
     const standalone = window.matchMedia("(display-mode: standalone)").matches || navigatorWithStandalone.standalone;
     const dismissed = window.localStorage.getItem("brivano:install-tip-dismissed") === "1";
     setShowInstallTip(!standalone && !dismissed);
+    if (!standalone && !dismissed) window.localStorage.setItem("brivano:install-tip-dismissed", "1");
     const capture = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as InstallPromptEvent);

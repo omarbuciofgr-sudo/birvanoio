@@ -228,7 +228,7 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
   const sidebarWidth = sidebarCollapsed ? "w-[68px]" : "w-64";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${isRealtor && !isAdmin ? "real-estate-mobile-shell" : ""}`}>
       <PersonaSetupDialog
         open={needsSetup}
         initialRole={persona.role}

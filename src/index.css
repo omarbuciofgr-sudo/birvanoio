@@ -135,6 +135,18 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', sans-serif;
   }
+
+  @media (max-width: 767px) {
+    .real-estate-mobile-shell button,
+    .real-estate-mobile-shell input,
+    .real-estate-mobile-shell select,
+    .real-estate-mobile-shell [role="button"],
+    .real-estate-mobile-shell [role="tab"],
+    .real-estate-mobile-shell [role="menuitem"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
 }
 
 @layer utilities {

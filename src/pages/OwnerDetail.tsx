@@ -162,12 +162,13 @@ export default function OwnerDetail() {
   };
 
   const onTalkingPoints = async () => {
+    if (!externalId && !leadId) return;
     setWriting(true);
     setAiError(null);
     try {
       const text = externalId
         ? await writeTalkingPointsForListing(externalId)
-        : await writeWithAI("talking_points", leadId!);
+        : await writeWithAI("talking_points", leadId);
       setPoints(text);
     } catch (e) {
       const err = e instanceof AIWritingError ? e : new AIWritingError("Something went wrong writing that. Please try again.");
