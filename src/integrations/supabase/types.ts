@@ -2699,6 +2699,45 @@ export type Database = {
         }
         Relationships: []
       }
+      property_estimates: {
+        Row: {
+          address_key: string
+          days_on_market: number | null
+          estimate: number | null
+          fetched_at: string
+          kind: string
+          listed_date: string | null
+          photos: Json
+          price_history: Json
+          range_high: number | null
+          range_low: number | null
+        }
+        Insert: {
+          address_key: string
+          days_on_market?: number | null
+          estimate?: number | null
+          fetched_at?: string
+          kind: string
+          listed_date?: string | null
+          photos?: Json
+          price_history?: Json
+          range_high?: number | null
+          range_low?: number | null
+        }
+        Update: {
+          address_key?: string
+          days_on_market?: number | null
+          estimate?: number | null
+          fetched_at?: string
+          kind?: string
+          listed_date?: string | null
+          photos?: Json
+          price_history?: Json
+          range_high?: number | null
+          range_low?: number | null
+        }
+        Relationships: []
+      }
       provider_pricing_config: {
         Row: {
           api_name: string
