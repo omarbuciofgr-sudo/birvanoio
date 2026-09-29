@@ -1,5 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { chargeCredits, serviceClient } from "../_shared/billing.ts";
+import { createCitySearch } from "../_shared/citySearch.ts";
 
 const APP_URL = "https://brivano.io";
 const ALERT_HOUR = 7;
@@ -36,7 +37,6 @@ Deno.serve(async (req) => {
   const { data: ok } = await db.rpc("verify_job_token", { p_name: "owner_alerts", p_token: token });
   if (!ok) return json({ error: "Unauthorized" }, 401);
 
-  const scraperBase = (Deno.env.get("SCRAPER_BACKEND_URL") ?? "").replace(/\/+$/, "");
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM_EMAIL") || "alerts@brivano.io";
 
@@ -46,32 +46,8 @@ Deno.serve(async (req) => {
     return hour >= ALERT_HOUR && a.last_run_date !== date;
   });
 
-  // One provider fetch per city + type per day, shared across users.
-  const cacheMem = new Map<string, Listing[]>();
-  const today = new Date().toISOString().slice(0, 10);
-  async function cityListings(location: string, type: "sale" | "rental"): Promise<Listing[] | null> {
-    const key = `${location.trim().toLowerCase()}|${type}`;
-    if (cacheMem.has(key)) return cacheMem.get(key)!;
-    const { data: cached } = await db.from("city_search_cache").select("listings")
-      .eq("location_key", location.trim().toLowerCase()).eq("listing_type", type).eq("fetched_on", today).maybeSingle();
-    if (cached) { cacheMem.set(key, cached.listings as Listing[]); return cached.listings as Listing[]; }
-    if (!scraperBase) return null;
-    try {
-      const res = await fetch(`${scraperBase}/api/zillow/search`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location, type, save: true }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok || !Array.isArray(body?.listings)) { console.error("provider fetch failed", location, type, res.status); return null; }
-      const rows = body.listings.map((r: Listing) => ({ ...r, listing_kind: r.listing_kind || type }));
-      await db.from("city_search_cache").upsert({ location_key: location.trim().toLowerCase(), listing_type: type, fetched_on: today, listings: rows });
-      cacheMem.set(key, rows);
-      return rows;
-    } catch (e) {
-      console.error("provider fetch error", location, type, e);
-      return null;
-    }
-  }
+  const cityListings = createCitySearch(db);
+
 
   const followUpsSent = new Set<string>();
   const summary = { due: due.length, emailed: 0, baselined: 0, skipped_credits: 0, failed: 0 };
