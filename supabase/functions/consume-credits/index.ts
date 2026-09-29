@@ -22,6 +22,15 @@ Deno.serve(async (req) => {
     if (error || !data.user) return new Response(JSON.stringify({ error: "Invalid authentication" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.flatten().fieldErrors }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // A user's very first city search is free. The grant row is server-only, so it can't be reset.
+    if (parsed.data.actionKey === "action_city_search" && parsed.data.units === 1) {
+      const { error: grantError } = await serviceClient()
+        .from("free_search_grants")
+        .insert({ user_id: data.user.id, search_location: parsed.data.referenceId ?? null });
+      if (!grantError) {
+        return new Response(JSON.stringify({ success: true, spent: 0, free_first_search: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
     const result = await chargeCredits(data.user.id, parsed.data.actionKey, parsed.data.units, parsed.data.referenceId);
     return new Response(JSON.stringify(result), { status: result.success ? 200 : 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
