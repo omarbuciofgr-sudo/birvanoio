@@ -543,13 +543,15 @@ const DashboardLayout = ({ children, fullWidth = false }: DashboardLayoutProps) 
         </header>
 
         {/* Page content */}
-        <main className={`min-w-0 overflow-x-hidden p-4 pb-24 md:pb-4 lg:p-6 ${fullWidth ? '' : 'max-w-[1600px]'} mx-auto`}>{children}</main>
+        <main className={`min-w-0 overflow-x-hidden p-4 ${isRealtor && !isAdmin ? "pb-24" : "pb-4"} md:pb-4 lg:p-6 ${fullWidth ? '' : 'max-w-[1600px]'} mx-auto`}>{children}</main>
       </div>
 
       {isRealtor && !isAdmin && <MobileRealEstateNav onSignOut={handleSignOut} />}
 
       {/* AI Chat Assistant - hide on client portal pages */}
-      {!location.pathname.startsWith('/client') && !(isRealtor && !isAdmin) && <AIDashboardChat />}
+      {!location.pathname.startsWith('/client') && (
+        <div className={isRealtor && !isAdmin ? "hidden md:block" : ""}><AIDashboardChat /></div>
+      )}
     </div>
   );
 };
