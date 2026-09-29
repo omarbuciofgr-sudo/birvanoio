@@ -1,4 +1,6 @@
 import { TodaysFollowUps } from "@/components/dashboard/TodaysFollowUps";
+import { DailyGoalsCard } from "@/components/dashboard/DailyGoalsCard";
+import { usePersona } from "@/hooks/usePersona";
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -792,6 +794,8 @@ const Dashboard = () => {
             </Button>
           </div>
         </div>
+
+        {isRealtor && <DailyGoalsCard userId={user.id} />}
 
         <TodaysFollowUps userId={user.id} />
 

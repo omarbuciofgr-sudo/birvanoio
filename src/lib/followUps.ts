@@ -31,5 +31,6 @@ export async function addFollowUp(leadId: string, dueDate: string, note?: string
 
 export async function markFollowUpDone(id: string) {
   const { error } = await (supabase as any).from("lead_follow_ups").update({ done_at: new Date().toISOString() }).eq("id", id);
+  if (!error) window.dispatchEvent(new Event("brivano:goals-changed"));
   return { error: error ? "Couldn't update the follow-up." : null };
 }
