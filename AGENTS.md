@@ -5,3 +5,4 @@
 - Source plan allowances, action costs, add-ons, and AI limits from `pricing_settings`; charge paid actions in authenticated server functions after success.
 - Enforce communication compliance server-side: persist one-time user acceptance, honor workspace suppression, require lead voice consent for AI calls, and append campaign email opt-out footers.
 - Route all lead-based AI writing through the `claude-ai` function (Anthropic, model in `ai_settings.claude_model`, calls logged in `ai_usage_logs`); drafts only fill editable boxes. Why: one server-side place for prompts, privacy filtering (no owner phone/email), limits and cost tracking.
+- Grant the free first Find Owners search server-side in `consume-credits` via the server-only `free_search_grants` row. Why: a client-writable flag could be reset for unlimited free searches.
