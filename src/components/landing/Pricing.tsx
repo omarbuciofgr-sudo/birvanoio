@@ -98,6 +98,19 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
   const navigate = useNavigate();
   const { ref: scrollRef, isVisible } = useScrollAnimation();
 
+  const usageFor = (name: string) => {
+    const tier = name.toLowerCase() as "free" | "starter" | "growth" | "scale";
+    const credits = planRules[tier]?.credits ?? 0;
+    const aiMessages = planRules[tier]?.aiMessages ?? 0;
+    return {
+      credits,
+      aiMessages,
+      searches: Math.floor(credits / (actionCosts.city_search || 1)),
+      ownerLookups: Math.floor(credits / (actionCosts.owner_contact || 10)),
+    };
+  };
+
+
   const handleSubscribe = async (plan: typeof plans[0]) => {
     if (!plan.monthlyPriceId) {
       navigate("/auth");
