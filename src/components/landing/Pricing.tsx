@@ -19,7 +19,6 @@ const plans = [
     description: "Try with no commitment.",
     features: [
       "1 seat included",
-      "50 credits/seat/month",
       "Web scraper",
       "CSV enrichment",
       "AI lead scoring",
@@ -39,9 +38,6 @@ const plans = [
     description: "For solo agents",
     features: [
       "Per-seat pricing",
-      "1,000 credits/seat/month",
-      "About 100 owner contact lookups",
-      "300 AI-written messages/month",
       "Everything in Free",
       "CSV import & export",
       "Message templates",
