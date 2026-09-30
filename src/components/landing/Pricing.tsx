@@ -58,9 +58,6 @@ const plans = [
     description: "For busy agents and small teams",
     features: [
       "Per-seat pricing",
-      "2,500 credits/seat/month",
-      "About 250 owner contact lookups",
-      "1,000 AI-written messages/month",
       "Everything in Starter",
       "AI call recaps",
       "AI lead scoring & sentiment",
@@ -81,9 +78,6 @@ const plans = [
     description: "For brokerages and property management companies",
     features: [
       "Per-seat pricing",
-      "7,500 credits/seat/month",
-      "About 750 owner contact lookups",
-      "3,000 AI-written messages/month",
       "Everything in Growth",
       "Prospect & industry search",
       "Skip tracing",
