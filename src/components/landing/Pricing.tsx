@@ -201,6 +201,14 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
           {plans.map((plan, index) => {
             const unitPrice = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
             const totalPrice = unitPrice * seatCount;
+            const usage = usageFor(plan.name);
+            const allFeatures = [
+              `${usage.credits.toLocaleString()} credits/seat/month`,
+              `About ${usage.searches.toLocaleString()} city searches/mo`,
+              `About ${usage.ownerLookups.toLocaleString()} owner contact lookups`,
+              `${usage.aiMessages.toLocaleString()} AI-written messages/month`,
+              ...plan.features,
+            ];
             return (
               <div
                 key={plan.name}
@@ -241,7 +249,7 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
                 </div>
 
                 <ul className="space-y-2 mb-6">
-                  {plan.features.map((feature) => (
+                  {allFeatures.map((feature) => (
                     <li key={feature} className="flex items-start gap-2">
                       <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
                       <span className="text-xs text-muted-foreground">{feature}</span>
