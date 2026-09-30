@@ -6,6 +6,7 @@ import Hero from "@/components/landing/Hero";
 import HowItWorks from "@/components/landing/HowItWorks";
 import Services from "@/components/landing/Services";
 import ProductDemo from "@/components/landing/ProductDemo";
+import Pricing from "@/components/landing/Pricing";
 import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
 import ChatWidget from "@/components/landing/ChatWidget";
@@ -29,6 +30,7 @@ const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
       <HowItWorks />
       <Services />
       <ProductDemo />
+      <Pricing />
       <CTASection />
       <Footer />
       <ChatWidget />

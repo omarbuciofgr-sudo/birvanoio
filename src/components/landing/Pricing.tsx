@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
+import { usePricingSettings } from "@/hooks/usePricingSettings";
 
 const plans = [
   {
@@ -18,7 +19,6 @@ const plans = [
     description: "Try with no commitment.",
     features: [
       "1 seat included",
-      "50 credits/seat/month",
       "Web scraper",
       "CSV enrichment",
       "AI lead scoring",
@@ -38,9 +38,6 @@ const plans = [
     description: "For solo agents",
     features: [
       "Per-seat pricing",
-      "1,000 credits/seat/month",
-      "About 100 owner contact lookups",
-      "300 AI-written messages/month",
       "Everything in Free",
       "CSV import & export",
       "Message templates",
@@ -61,9 +58,6 @@ const plans = [
     description: "For busy agents and small teams",
     features: [
       "Per-seat pricing",
-      "2,500 credits/seat/month",
-      "About 250 owner contact lookups",
-      "1,000 AI-written messages/month",
       "Everything in Starter",
       "AI call recaps",
       "AI lead scoring & sentiment",
@@ -84,9 +78,6 @@ const plans = [
     description: "For brokerages and property management companies",
     features: [
       "Per-seat pricing",
-      "7,500 credits/seat/month",
-      "About 750 owner contact lookups",
-      "3,000 AI-written messages/month",
       "Everything in Growth",
       "Prospect & industry search",
       "Skip tracing",
@@ -100,11 +91,25 @@ const plans = [
 ];
 
 const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
+  const { actionCosts, plans: planRules, addon } = usePricingSettings();
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [seatCount, setSeatCount] = useState(1);
   const navigate = useNavigate();
   const { ref: scrollRef, isVisible } = useScrollAnimation();
+
+  const usageFor = (name: string) => {
+    const tier = name.toLowerCase() as "free" | "starter" | "growth" | "scale";
+    const credits = planRules[tier]?.credits ?? 0;
+    const aiMessages = planRules[tier]?.aiMessages ?? 0;
+    return {
+      credits,
+      aiMessages,
+      searches: Math.floor(credits / (actionCosts.city_search || 1)),
+      ownerLookups: Math.floor(credits / (actionCosts.owner_contact || 10)),
+    };
+  };
+
 
   const handleSubscribe = async (plan: typeof plans[0]) => {
     if (!plan.monthlyPriceId) {
@@ -196,6 +201,14 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
           {plans.map((plan, index) => {
             const unitPrice = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
             const totalPrice = unitPrice * seatCount;
+            const usage = usageFor(plan.name);
+            const allFeatures = [
+              `${usage.credits.toLocaleString()} credits/seat/month`,
+              `About ${usage.searches.toLocaleString()} city searches/mo`,
+              `About ${usage.ownerLookups.toLocaleString()} owner contact lookups`,
+              `${usage.aiMessages.toLocaleString()} AI-written messages/month`,
+              ...plan.features,
+            ];
             return (
               <div
                 key={plan.name}
@@ -231,12 +244,12 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
                 <div className="mb-5 flex items-center gap-1">
                   <Zap className="w-3 h-3 text-primary" />
                   <span className="text-xs font-medium text-primary">
-                    {(plan.creditsPerSeat * seatCount).toLocaleString()} credits/mo total
+                    {(usage.credits * seatCount).toLocaleString()} credits/mo total
                   </span>
                 </div>
 
                 <ul className="space-y-2 mb-6">
-                  {plan.features.map((feature) => (
+                  {allFeatures.map((feature) => (
                     <li key={feature} className="flex items-start gap-2">
                       <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
                       <span className="text-xs text-muted-foreground">{feature}</span>
@@ -268,12 +281,12 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
           </div>
           <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
             {[
-              ["Search a city", "1 credit"],
-              ["Owner contact lookup", "10 credits on a match"],
-              ["AI-written message", "0 credits · monthly limit applies"],
-              ["Send an SMS", "1 credit"],
-              ["Voice call", "10 credits per started minute"],
-              ["Send an email", "Free"],
+              ["Search a city", `${actionCosts.city_search} credit${actionCosts.city_search === 1 ? "" : "s"}`],
+              ["Owner contact lookup", `${actionCosts.owner_contact} credits on a match`],
+              ["AI-written message", actionCosts.ai_message === 0 ? "Free · monthly limit applies" : `${actionCosts.ai_message} credits`],
+              ["Send an SMS", `${actionCosts.sms} credit${actionCosts.sms === 1 ? "" : "s"}`],
+              ["Voice call", `${actionCosts.voice_minute} credits per started minute`],
+              ["Send an email", actionCosts.email === 0 ? "Free" : `${actionCosts.email} credits`],
             ].map(([action, cost], index) => (
               <div key={action} className={`flex items-center justify-between gap-4 px-4 py-3 text-sm ${index > 0 ? "border-t border-border" : ""}`}>
                 <span className="text-foreground">{action}</span>
@@ -281,7 +294,7 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
               </div>
             ))}
           </div>
-          <p className="mt-4 text-center text-sm text-muted-foreground">Need more? Add 500 credits for $25 from Billing.</p>
+          <p className="mt-4 text-center text-sm text-muted-foreground">Need more? Add {addon.credits.toLocaleString()} credits for ${(addon.priceCents / 100).toFixed(0)} from Billing.</p>
         </div>
 
         <div className="mt-10 text-center">
