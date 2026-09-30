@@ -244,7 +244,7 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
                 <div className="mb-5 flex items-center gap-1">
                   <Zap className="w-3 h-3 text-primary" />
                   <span className="text-xs font-medium text-primary">
-                    {(plan.creditsPerSeat * seatCount).toLocaleString()} credits/mo total
+                    {(usage.credits * seatCount).toLocaleString()} credits/mo total
                   </span>
                 </div>
 
@@ -281,12 +281,12 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
           </div>
           <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
             {[
-              ["Search a city", "1 credit"],
-              ["Owner contact lookup", "10 credits on a match"],
-              ["AI-written message", "0 credits · monthly limit applies"],
-              ["Send an SMS", "1 credit"],
-              ["Voice call", "10 credits per started minute"],
-              ["Send an email", "Free"],
+              ["Search a city", `${actionCosts.city_search} credit${actionCosts.city_search === 1 ? "" : "s"}`],
+              ["Owner contact lookup", `${actionCosts.owner_contact} credits on a match`],
+              ["AI-written message", actionCosts.ai_message === 0 ? "Free · monthly limit applies" : `${actionCosts.ai_message} credits`],
+              ["Send an SMS", `${actionCosts.sms} credit${actionCosts.sms === 1 ? "" : "s"}`],
+              ["Voice call", `${actionCosts.voice_minute} credits per started minute`],
+              ["Send an email", actionCosts.email === 0 ? "Free" : `${actionCosts.email} credits`],
             ].map(([action, cost], index) => (
               <div key={action} className={`flex items-center justify-between gap-4 px-4 py-3 text-sm ${index > 0 ? "border-t border-border" : ""}`}>
                 <span className="text-foreground">{action}</span>
