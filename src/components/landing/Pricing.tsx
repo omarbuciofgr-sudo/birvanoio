@@ -91,6 +91,7 @@ const plans = [
 ];
 
 const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
+  const { actionCosts, plans: planRules } = usePricingSettings();
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [seatCount, setSeatCount] = useState(1);
