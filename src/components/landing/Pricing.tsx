@@ -91,7 +91,7 @@ const plans = [
 ];
 
 const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
-  const { actionCosts, plans: planRules } = usePricingSettings();
+  const { actionCosts, plans: planRules, addon } = usePricingSettings();
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [seatCount, setSeatCount] = useState(1);
@@ -294,7 +294,7 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
               </div>
             ))}
           </div>
-          <p className="mt-4 text-center text-sm text-muted-foreground">Need more? Add 500 credits for $25 from Billing.</p>
+          <p className="mt-4 text-center text-sm text-muted-foreground">Need more? Add {addon.credits.toLocaleString()} credits for ${(addon.priceCents / 100).toFixed(0)} from Billing.</p>
         </div>
 
         <div className="mt-10 text-center">
