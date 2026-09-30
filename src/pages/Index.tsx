@@ -30,6 +30,7 @@ const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
       <HowItWorks />
       <Services />
       <ProductDemo />
+      <Pricing />
       <CTASection />
       <Footer />
       <ChatWidget />
