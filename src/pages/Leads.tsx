@@ -346,7 +346,7 @@ const Leads = () => {
       ? leads.filter(l => selectedLeads.has(l.id))
       : filteredLeads;
     const csv = [
-      ["Business Name", "Contact", "Email", "Phone", "City", "State", "Industry", "Status", "Score", "Source URL", "Created"],
+      [isRealtor ? "Address" : "Business Name", "Contact", "Email", "Phone", "City", "State", "Industry", "Status", "Score", "Source URL", "Created"],
       ...rows.map(l => [
         l.business_name, l.contact_name || "", l.email || "", l.phone || "",
         l.city || "", l.state || "", l.industry || "", l.status,
