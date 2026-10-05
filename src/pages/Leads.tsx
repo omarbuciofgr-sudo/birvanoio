@@ -342,22 +342,25 @@ const Leads = () => {
   };
 
   const exportLeads = () => {
+    const rows = selectedLeads.size > 0
+      ? leads.filter(l => selectedLeads.has(l.id))
+      : filteredLeads;
     const csv = [
       ["Business Name", "Contact", "Email", "Phone", "City", "State", "Industry", "Status", "Score", "Source URL", "Created"],
-      ...filteredLeads.map(l => [
+      ...rows.map(l => [
         l.business_name, l.contact_name || "", l.email || "", l.phone || "",
         l.city || "", l.state || "", l.industry || "", l.status,
         l.lead_score?.toString() || "", l.source_url || "",
         new Date(l.created_at).toLocaleDateString(),
       ]),
-    ].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    ].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = `leads-${new Date().toISOString().split("T")[0]}.csv`; a.click();
     URL.revokeObjectURL(url);
-    toast.success("Leads exported!");
+    toast.success(`Exported ${rows.length} lead${rows.length === 1 ? "" : "s"}`);
   };
 
   if (loading || leadsLoading) return <DataPageSkeleton />;
