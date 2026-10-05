@@ -1,5 +1,7 @@
 import * as React from "react";
-import productDemoVideo from "@/assets/product-demo.mp4";
+import productDemoAsset from "@/assets/brivano-demo.mp4.asset.json";
+
+const productDemoVideo = productDemoAsset.url;
 
 const ProductDemo = React.forwardRef<HTMLElement>(function ProductDemo(_props, ref) {
   return (
