@@ -94,3 +94,4 @@
 
 ## Brivano Assistant (uploaded brief)
 - [x] Plan and build Claude assistant with tools, confirmations, automations
+- [x] City exclusivity add-on ($149/mo per city, paid plans, blocks others)
