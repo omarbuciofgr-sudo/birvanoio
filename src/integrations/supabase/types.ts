@@ -5492,10 +5492,6 @@ export type Database = {
         Returns: boolean
       }
       check_city_access: { Args: { p_location: string }; Returns: Json }
-      city_is_blocked: {
-        Args: { p_location: string; p_user_id: string }
-        Returns: boolean
-      }
       consume_action_credits: {
         Args: {
           p_action_key: string
