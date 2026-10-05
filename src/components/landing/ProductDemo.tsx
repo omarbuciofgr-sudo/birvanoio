@@ -25,7 +25,7 @@ const ProductDemo = React.forwardRef<HTMLElement>(function ProductDemo(_props, r
               loop
               muted
               playsInline
-              className="w-full h-auto"
+              className="block w-full aspect-[2284/1080] object-cover"
             />
           </div>
         </div>
