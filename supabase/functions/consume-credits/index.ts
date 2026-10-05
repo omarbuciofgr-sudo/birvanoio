@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { z } from "https://esm.sh/zod@3.22.4";
-import { chargeCredits, isCityBlocked, CITY_LOCKED_MESSAGE } from "../_shared/billing.ts";
+import { chargeCredits, serviceClient, isCityBlocked, CITY_LOCKED_MESSAGE } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -1,6 +1,6 @@
 // Brivano Assistant: tool definitions, tool runners and the Claude tool loop.
 // Used by assistant-chat (interactive, user's own permissions) and assistant-automations (scheduled).
-import { chargeCredits, serviceClient } from "./billing.ts";
+import { chargeCredits, serviceClient, isCityBlocked } from "./billing.ts";
 import { createCitySearch, listingExternalId, listingScore, type Listing } from "./citySearch.ts";
 import { buildLeadFromRentCast } from "./leadMapping.ts";
 
