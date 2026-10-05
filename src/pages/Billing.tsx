@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CityExclusivityCard } from "@/components/billing/CityExclusivityCard";
 import {
   CreditCard,
   Users,
@@ -444,6 +445,8 @@ const Billing = () => {
             </CardContent>
           </Card>
         </div>
+
+        <CityExclusivityCard isPaid={effectiveTier !== "free"} />
 
         <Separator />
 

@@ -55,3 +55,13 @@ export async function getAiAllowance(userId: string) {
   const limit = (setting?.ai_messages_per_seat ?? 20) * seats;
   return { used: usage?.messages_used ?? 0, limit };
 }
+export const CITY_LOCKED_MESSAGE = "This city is reserved exclusively by another Brivano member.";
+
+/** True when another user holds an active exclusivity for this city. */
+export async function isCityBlocked(userId: string, location: string) {
+  const key = location.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!key) return false;
+  const { data } = await serviceClient().from("city_exclusivities").select("user_id")
+    .eq("city_key", key).in("status", ["active", "past_due"]).neq("user_id", userId).limit(1);
+  return (data?.length ?? 0) > 0;
+}

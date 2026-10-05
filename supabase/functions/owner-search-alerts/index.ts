@@ -1,5 +1,5 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { chargeCredits, serviceClient } from "../_shared/billing.ts";
+import { chargeCredits, serviceClient, isCityBlocked } from "../_shared/billing.ts";
 import { createCitySearch } from "../_shared/citySearch.ts";
 
 const APP_URL = "https://brivano.io";
@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
   for (const a of due) {
     const { date } = localParts(a.timezone);
     try {
+      if (await isCityBlocked(a.user_id, a.location)) { summary.failed++; continue; } // city reserved by another member
       const types = a.listing_type === "both" ? (["sale", "rental"] as const) : [a.listing_type];
       const lists = await Promise.all(types.map((t) => cityListings(a.location, t)));
       if (lists.some((l) => l === null)) { summary.failed++; continue; } // retry next hour

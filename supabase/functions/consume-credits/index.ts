@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { z } from "https://esm.sh/zod@3.22.4";
-import { chargeCredits } from "../_shared/billing.ts";
+import { chargeCredits, serviceClient, isCityBlocked, CITY_LOCKED_MESSAGE } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +22,9 @@ Deno.serve(async (req) => {
     if (error || !data.user) return new Response(JSON.stringify({ error: "Invalid authentication" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const parsed = schema.safeParse(await req.json());
     if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.flatten().fieldErrors }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (parsed.data.actionKey === "action_city_search" && parsed.data.referenceId && await isCityBlocked(data.user.id, parsed.data.referenceId)) {
+      return new Response(JSON.stringify({ success: false, error: CITY_LOCKED_MESSAGE, city_locked: true }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     // A user's very first city search is free. The grant row is server-only, so it can't be reset.
     if (parsed.data.actionKey === "action_city_search" && parsed.data.units === 1) {
       const { error: grantError } = await serviceClient()

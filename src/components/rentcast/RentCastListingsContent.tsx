@@ -539,6 +539,11 @@ export default function RentCastListingsContent({
     }
     setBusy("search");
     try {
+      const { data: access } = await (supabase as any).rpc("check_city_access", { p_location: loc });
+      if (access?.blocked) {
+        toast.error("This city is reserved exclusively by another Brivano member. Try a nearby city.");
+        return false;
+      }
       const { data: auth } = await supabase.auth.getUser();
       if (auth.user) {
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -583,7 +588,7 @@ export default function RentCastListingsContent({
         setStoredTotal(rows.length);
         setQueryType(listingType);
         await saveSearchResults(rows, loc);
-        await spendCredits("scrape", 1, "find-owners");
+        await spendCredits("scrape", 1, loc);
         toast.success(`Found ${rows.length} owner listings${opts?.firstFree ? " · your first search is free" : ""}`);
         return true;
       }
@@ -622,7 +627,7 @@ export default function RentCastListingsContent({
       }
       applyResult(res.listings, res.stats || null);
       await saveSearchResults(res.listings || [], loc);
-      await spendCredits("scrape", 1, "find-owners");
+      await spendCredits("scrape", 1, loc);
       setDiagnostic(diagnosticMode ? res.diagnostic || null : null);
       setPoolStats(res.pool_stats || null);
       setMaxFetch(res.max_fetch ?? null);

@@ -27,7 +27,7 @@ serve(async (req) => {
       );
     }
 
-    const { priceId, seats = 1, checkoutType = "subscription", addonKey } = await req.json();
+    const { priceId, seats = 1, checkoutType = "subscription", addonKey, city } = await req.json();
     if (checkoutType === "subscription" && !priceId) throw new Error("Price ID is required");
 
     const token = authHeader.replace("Bearer ", "");
@@ -54,9 +54,10 @@ serve(async (req) => {
       const subs = await stripe.subscriptions.list({
         customer: customerId,
         status: "active",
-        limit: 1,
+        limit: 20,
       });
-      if (checkoutType === "subscription" && subs.data.length > 0) {
+      const planSubs = subs.data.filter((s) => s.metadata?.checkout_type !== "city_exclusivity");
+      if (checkoutType === "subscription" && planSubs.length > 0) {
         return new Response(
           JSON.stringify({
             error: "You already have an active subscription. Manage it from your dashboard.",
@@ -64,6 +65,35 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+    }
+
+    if (checkoutType === "city_exclusivity") {
+      const label = String(city ?? "").trim().slice(0, 100);
+      const cityKey = label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!cityKey) throw new Error("Enter a city and state");
+      const { data: profile } = await supabaseClient.from("profiles").select("subscription_tier").eq("user_id", user.id).maybeSingle();
+      if (!profile?.subscription_tier || profile.subscription_tier === "free") {
+        return new Response(JSON.stringify({ error: "City exclusivity is available on paid plans. Upgrade first." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data: held } = await supabaseClient.from("city_exclusivities").select("user_id").eq("city_key", cityKey).in("status", ["active", "past_due"]).maybeSingle();
+      if (held) {
+        return new Response(JSON.stringify({ error: held.user_id === user.id ? "You already hold this city." : "This city is already reserved." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data: addon } = await supabaseClient.from("pricing_settings").select("label, price_cents").eq("setting_key", "addon_city_exclusivity").eq("is_active", true).single();
+      if (!addon?.price_cents) throw new Error("City exclusivity is unavailable");
+      const meta = { supabase_user_id: user.id, checkout_type: "city_exclusivity", city_key: cityKey, city_label: label };
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        customer_email: customerId ? undefined : user.email,
+        line_items: [{ price_data: { currency: "usd", unit_amount: addon.price_cents, recurring: { interval: "month" }, product_data: { name: `${addon.label}: ${label}` } }, quantity: 1 }],
+        mode: "subscription",
+        success_url: `${req.headers.get("origin")}/checkout/success`,
+        cancel_url: `${req.headers.get("origin")}/checkout/cancel`,
+        subscription_data: { metadata: meta },
+        metadata: meta,
+      });
+      await supabaseClient.from("city_exclusivities").insert({ user_id: user.id, city_key: cityKey, city_label: label, status: "pending", stripe_session_id: session.id });
+      return new Response(JSON.stringify({ url: session.url }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
     }
 
     if (checkoutType === "credit_addon") {

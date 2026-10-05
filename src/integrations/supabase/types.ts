@@ -621,6 +621,42 @@ export type Database = {
         }
         Relationships: []
       }
+      city_exclusivities: {
+        Row: {
+          city_key: string
+          city_label: string
+          created_at: string
+          id: string
+          status: string
+          stripe_session_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          city_key: string
+          city_label: string
+          created_at?: string
+          id?: string
+          status?: string
+          stripe_session_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          city_key?: string
+          city_label?: string
+          created_at?: string
+          id?: string
+          status?: string
+          stripe_session_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       city_search_cache: {
         Row: {
           created_at: string
@@ -5455,6 +5491,7 @@ export type Database = {
         Args: { session_uuid: string }
         Returns: boolean
       }
+      check_city_access: { Args: { p_location: string }; Returns: Json }
       consume_action_credits: {
         Args: {
           p_action_key: string
@@ -5548,6 +5585,7 @@ export type Database = {
           followups: number
         }[]
       }
+      normalize_city_key: { Args: { p_location: string }; Returns: string }
       normalize_email: { Args: { p_email: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
       stop_lead_plans: {

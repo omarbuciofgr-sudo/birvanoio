@@ -185,6 +185,14 @@ async function allocateMonthlyCredits(
   log("Credits allocated", { workspaceId, tier, members: members.length, creditsPerSeat });
 }
 
+// ─── City exclusivity add-on (separate subscription, never a plan) ──
+const isCityAddon = (sub: { metadata?: Record<string, string> | null }) => sub.metadata?.checkout_type === "city_exclusivity";
+
+async function setCityStatus(subscriptionId: string, status: string) {
+  const { error } = await supabase.from("city_exclusivities").update({ status }).eq("stripe_subscription_id", subscriptionId);
+  if (error) log("ERROR updating city exclusivity", { error, subscriptionId, status });
+}
+
 // ─── Event handlers ─────────────────────────────────────────────────
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
@@ -209,6 +217,24 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
+  if (session.mode === "subscription" && session.metadata?.checkout_type === "city_exclusivity") {
+    const { error } = await supabase.from("city_exclusivities")
+      .update({ status: "active", stripe_subscription_id: session.subscription as string })
+      .eq("stripe_session_id", session.id);
+    if (error) {
+      // Another member claimed the city first: cancel and refund this subscription.
+      log("City already held; canceling add-on", { error, sessionId: session.id });
+      await supabase.from("city_exclusivities").update({ status: "canceled" }).eq("stripe_session_id", session.id);
+      const sub = await stripe.subscriptions.cancel(session.subscription as string);
+      const invoiceId = sub.latest_invoice as string | null;
+      if (invoiceId) {
+        const inv = await stripe.invoices.retrieve(invoiceId);
+        if (inv.payment_intent) await stripe.refunds.create({ payment_intent: inv.payment_intent as string });
+      }
+    }
+    return;
+  }
+
   if (session.mode !== "subscription") {
     log("Skipping non-subscription checkout");
     return;
@@ -229,6 +255,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
 async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscription) {
   log("subscription.created/updated", { subId: subscription.id, status: subscription.status });
+  if (isCityAddon(subscription)) {
+    if (subscription.status === "active") await setCityStatus(subscription.id, "active");
+    else if (subscription.status === "past_due") await setCityStatus(subscription.id, "past_due");
+    else if (["canceled", "unpaid", "incomplete_expired"].includes(subscription.status)) await setCityStatus(subscription.id, "canceled");
+    return;
+  }
 
   const customerId = subscription.customer as string;
   const { item, tier, seats } = extractSubscriptionFields(subscription);
@@ -273,6 +305,7 @@ async function handleSubscriptionCreatedOrUpdated(subscription: Stripe.Subscript
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   log("customer.subscription.deleted", { subId: subscription.id });
+  if (isCityAddon(subscription)) { await setCityStatus(subscription.id, "canceled"); return; }
 
   const customerId = subscription.customer as string;
 
@@ -304,6 +337,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   }
 
   const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+  if (isCityAddon(subscription)) { await setCityStatus(subscription.id, "active"); return; }
   const customerId = subscription.customer as string;
   const { tier, seats } = extractSubscriptionFields(subscription);
 
@@ -340,6 +374,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   if (!invoice.subscription) return;
 
   const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+  if (isCityAddon(subscription)) { await setCityStatus(subscription.id, "past_due"); return; }
   const customerId = subscription.customer as string;
 
   const { error } = await supabase

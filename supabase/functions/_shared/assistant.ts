@@ -1,6 +1,6 @@
 // Brivano Assistant: tool definitions, tool runners and the Claude tool loop.
 // Used by assistant-chat (interactive, user's own permissions) and assistant-automations (scheduled).
-import { chargeCredits, serviceClient } from "./billing.ts";
+import { chargeCredits, serviceClient, isCityBlocked } from "./billing.ts";
 import { createCitySearch, listingExternalId, listingScore, type Listing } from "./citySearch.ts";
 import { buildLeadFromRentCast } from "./leadMapping.ts";
 
@@ -187,6 +187,7 @@ export async function runTool(tool: string, a: Block, ctx: Ctx): Promise<{ resul
     case "find_owners": {
       const city = String(a.city ?? "").trim().slice(0, 100);
       if (!city) return { result: { error: "City is required." } };
+      if (await isCityBlocked(ctx.userId, city)) return { result: { error: "That city is reserved exclusively by another Brivano member. No credits were used." } };
       const lists = await Promise.all(kindTypes(String(a.selling_or_renting)).map((t) => createCitySearch(serviceClient())(city, t)));
       if (lists.every((l) => l === null)) return { result: { error: "The owner search is unavailable right now. No credits were used." } };
       const seen = new Set<string>();
