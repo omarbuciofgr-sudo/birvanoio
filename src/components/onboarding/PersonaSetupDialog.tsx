@@ -6,6 +6,10 @@ import { Check, ChevronLeft, Loader2 } from "lucide-react";
 import { PERSONA_ROLES, getGoalsForRole, type PersonaRoleId } from "@/lib/persona";
 import { toast } from "sonner";
 import { CityAutocomplete } from "./CityAutocomplete";
+import { Input } from "@/components/ui/input";
+import { useProspectingProfile } from "@/hooks/useProspectingProfile";
+import { PLAYBOOK_ROLES } from "@/lib/playbook";
+import { roleLabels, type PlaybookRole } from "@/data/playbookContent";
 
 interface PersonaSetupDialogProps {
   open: boolean;
@@ -28,11 +32,17 @@ export const PersonaSetupDialog = ({
 }: PersonaSetupDialogProps) => {
   const [role, setRole] = useState<PersonaRoleId | null>((initialRole as PersonaRoleId) ?? null);
   const [goals, setGoals] = useState<string[]>(initialGoals ?? []);
-  const [step, setStep] = useState<1 | 2 | 3>(initialRole ? 2 : 1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(initialRole ? 2 : 1);
   const [homeMarket, setHomeMarket] = useState(initialHomeMarket ?? "");
   const needsMarket = role === "realtor";
   const marketValid = /^[^,]{2,},\s*[A-Za-z]{2}$/.test(homeMarket.trim());
   const [saving, setSaving] = useState(false);
+  const { profile, save: saveProspecting } = useProspectingProfile();
+  const [pRole, setPRole] = useState<PlaybookRole | null>(null);
+  const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
+  const needCompany = !profile?.brokerage?.trim() && !profile?.company_name?.trim();
+  const needPhone = !profile?.phone?.trim();
 
   const goalOptions = useMemo(() => getGoalsForRole(role), [role]);
 
@@ -42,7 +52,14 @@ export const PersonaSetupDialog = ({
   const handleSave = async () => {
     if (!role || goals.length === 0) return;
     setSaving(true);
-    if (needsMarket && !marketValid) return;
+    if (needsMarket && !marketValid) { setSaving(false); return; }
+    if (needsMarket && pRole) {
+      await saveProspecting({
+        prospecting_role: pRole,
+        ...(needCompany && company.trim() ? { company_name: company.trim().slice(0, 200) } : {}),
+        ...(needPhone && phone.trim() ? { phone: phone.trim().slice(0, 20) } : {}),
+      });
+    }
     const { error } = await onSave(role, goals, needsMarket ? homeMarket.trim() : undefined);
     setSaving(false);
     if (error) {
@@ -62,14 +79,16 @@ export const PersonaSetupDialog = ({
       >
         <DialogHeader>
           <DialogTitle className="text-xl">
-            {step === 1 ? "What best describes your role?" : step === 2 ? "What will you use Brivano for?" : "Where do you work?"}
+            {step === 1 ? "What best describes your role?" : step === 2 ? "What will you use Brivano for?" : step === 3 ? "Where do you work?" : "How do you prospect?"}
           </DialogTitle>
           <DialogDescription>
             {step === 1
               ? "We'll only show the tools that fit how you work."
               : step === 2
                 ? "Pick everything that applies. Your sidebar adapts to your answers."
-                : "Enter the city you work in. We'll use it as your home market for owner searches."}
+                : step === 3
+                  ? "Enter the city you work in. We'll use it as your home market for owner searches."
+                  : "We'll show the call scripts that fit how you work first."}
           </DialogDescription>
         </DialogHeader>
 
@@ -97,6 +116,19 @@ export const PersonaSetupDialog = ({
                 </button>
               );
             })}
+          </div>
+        ) : step === 4 ? (
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PLAYBOOK_ROLES.map((r) => (
+                <button key={r} type="button" onClick={() => setPRole(r)}
+                  className={`min-h-11 rounded-lg border p-3 text-left text-sm ${pRole === r ? "border-primary bg-primary/[0.06]" : "border-border hover:bg-muted/50"}`}>
+                  {roleLabels[r]}
+                </button>
+              ))}
+            </div>
+            {needCompany && <Input className="h-11" placeholder="Company or brokerage" value={company} onChange={(e) => setCompany(e.target.value)} maxLength={200} />}
+            {needPhone && <Input className="h-11" placeholder="Your phone number" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} />}
           </div>
         ) : step === 3 ? (
           <div className="space-y-1.5">
@@ -134,7 +166,7 @@ export const PersonaSetupDialog = ({
 
         <div className="flex items-center justify-between pt-2">
           {step > 1 ? (
-            <Button variant="ghost" size="sm" onClick={() => setStep(step === 3 ? 2 : 1)} className="gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => setStep(step === 4 ? 3 : step === 3 ? 2 : 1)} className="gap-1.5">
               <ChevronLeft className="w-3.5 h-3.5" />
               Back
             </Button>
@@ -146,8 +178,11 @@ export const PersonaSetupDialog = ({
               Next
             </Button>
           )}
-          {((step === 2 && !needsMarket) || step === 3) && (
-            <Button size="sm" onClick={handleSave} disabled={goals.length === 0 || saving || (step === 3 && !marketValid)} className="gap-1.5">
+          {step === 3 && (
+            <Button size="sm" onClick={() => setStep(4)} disabled={!marketValid}>Next</Button>
+          )}
+          {((step === 2 && !needsMarket) || step === 4) && (
+            <Button size="sm" onClick={handleSave} disabled={goals.length === 0 || saving || (step === 4 && (!marketValid || !pRole))} className="gap-1.5">
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               Save & continue
             </Button>
