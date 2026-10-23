@@ -24,6 +24,7 @@ export const ALWAYS_VISIBLE_NAV = [
   "/dashboard",
   "/dashboard/leads",
   "/dashboard/outreach",
+  "/dashboard/playbook",
   "/dashboard/billing",
   "/dashboard/settings",
 ];

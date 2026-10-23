@@ -57,6 +57,7 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import MyResults from "./pages/MyResults";
 import Automations from "./pages/Automations";
+import Playbook from "./pages/Playbook";
 
 
 const queryClient = new QueryClient();
@@ -89,6 +90,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/dashboard/outreach" element={<Navigate to="/dashboard/campaigns" replace />} />
               <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+              <Route path="/dashboard/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
               <Route path="/dashboard/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
               <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
               <Route path="/admin/import" element={<AdminRoute><AdminImport /></AdminRoute>} />

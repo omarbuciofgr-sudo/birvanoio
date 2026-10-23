@@ -22,6 +22,7 @@ import {
 import { normalizeAddressKey } from "@/lib/rentcast/mapRentCastToLead";
 import { SetFollowUp } from "@/components/leads/SetFollowUp";
 import { LogContactButton } from "@/components/leads/LogContactButton";
+import { CallScriptDialog } from "@/components/playbook/CallScriptDialog";
 import { OwnerScripts } from "@/components/rentcast/OwnerScripts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, FileText, ExternalLink } from "lucide-react";
@@ -61,6 +62,14 @@ export default function OwnerDetail() {
   const [writing, setWriting] = useState(false);
   const [aiError, setAiError] = useState<{ message: string; limit: boolean } | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [leadInfo, setLeadInfo] = useState<{ listing_type: string | null; do_not_contact: boolean } | null>(null);
+
+  const loadLeadInfo = async (id: string | null) => {
+    if (!id) { setLeadInfo(null); return; }
+    const { data } = await supabase.from("leads").select("listing_type, do_not_contact").eq("id", id).maybeSingle();
+    setLeadInfo(data ?? null);
+  };
+  useEffect(() => { loadLeadInfo(leadId); }, [leadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load the owner: from saved search results, or from a saved lead ("lead:<id>").
   useEffect(() => {
@@ -136,6 +145,7 @@ export default function OwnerDetail() {
   const suffix = rental ? "/mo" : "";
   const history = estimate?.price_history ?? [];
   const photos = row ? photosOf(row) : [];
+  const dnc = !!leadInfo?.do_not_contact;
 
   const onGetContact = async () => {
     if (!row?.rentcast_id) return;
@@ -338,7 +348,7 @@ export default function OwnerDetail() {
                 <p className="font-medium">{row.owner_name || "Not yet identified"}</p>
                 {hasContact ? (
                   <div className="space-y-1.5">
-                    {row.owner_phone && (
+                    {row.owner_phone && !dnc && (
                       <a href={`tel:${row.owner_phone}`} className="flex items-center gap-2 hover:underline"><Phone className="h-3.5 w-3.5" />{row.owner_phone}</a>
                     )}
                     {row.owner_email && (
@@ -353,6 +363,12 @@ export default function OwnerDetail() {
                 ) : (
                   <p className="text-xs text-muted-foreground">No contact info saved for this owner.</p>
                 )}
+                {dnc && <Badge variant="destructive">Do not contact</Badge>}
+                <CallScriptDialog
+                  className="min-h-11 w-full gap-1.5 text-xs md:min-h-9"
+                  lead={{ id: leadId, contact_name: row.owner_name, business_name: row.address, city: row.city, listing_type: leadInfo?.listing_type, do_not_contact: dnc }}
+                  fallbackType={rental ? "frbo" : "fsbo"}
+                />
                 {leadId && (
                   <Button asChild size="sm" variant="outline" className="w-full">
                     <Link to={`/dashboard/leads/${leadId}`}>Open full lead record</Link>
@@ -366,7 +382,7 @@ export default function OwnerDetail() {
               <CardContent>
                 {leadId ? (
                   <div className="space-y-3">
-                    <LogContactButton leadId={leadId} />
+                    <LogContactButton leadId={leadId} onLogged={() => loadLeadInfo(leadId)} />
                     <SetFollowUp leadId={leadId} />
                   </div>
                 ) : (
@@ -410,12 +426,14 @@ export default function OwnerDetail() {
         </Tabs>
       </div>
       <div className="fixed inset-x-0 z-40 grid grid-cols-3 gap-2 border-t border-border bg-background/95 px-3 py-2 backdrop-blur-xl md:hidden bottom-[calc(60px+env(safe-area-inset-bottom))]">
-        {row.owner_phone ? (
+        {dnc ? (
+          <Button size="lg" className="h-12 col-span-2" variant="outline" disabled>Do not contact</Button>
+        ) : row.owner_phone ? (
           <Button asChild size="lg" className="h-12"><a href={`tel:${row.owner_phone}`}><Phone className="h-5 w-5" />Call</a></Button>
         ) : (
           <Button size="lg" className="h-12" disabled><Phone className="h-5 w-5" />Call</Button>
         )}
-        {row.owner_phone ? (
+        {dnc ? null : row.owner_phone ? (
           <Button asChild size="lg" variant="outline" className="h-12"><a href={`sms:${row.owner_phone}`}><Send className="h-5 w-5" />Text</a></Button>
         ) : (
           <Button size="lg" variant="outline" className="h-12" disabled><Send className="h-5 w-5" />Text</Button>

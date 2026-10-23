@@ -25,6 +25,8 @@ import SequenceEnrollments from "@/components/leads/SequenceEnrollments";
 import { resolveLeadTimezone } from "@/lib/leadTimezone";
 import type { Database } from "@/integrations/supabase/types";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
+import { CallScriptDialog } from "@/components/playbook/CallScriptDialog";
+import { LogContactButton } from "@/components/leads/LogContactButton";
 
 type Lead = Database["public"]["Tables"]["leads"]["Row"] & { lead_score?: number | null };
 type LeadStatus = Database["public"]["Enums"]["lead_status"];
@@ -251,11 +253,14 @@ export default function LeadDetail() {
           <div className="flex items-center gap-2">
             <LocalTimeClock tz={tz.tz} source={tz.source} />
             <Separator orientation="vertical" className="h-6" />
-            {lead.phone && (
+            {lead.do_not_contact && <Badge variant="destructive">Do not contact</Badge>}
+            {lead.phone && !lead.do_not_contact && (
               <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" asChild>
                 <a href={`tel:${lead.phone}`}><Phone className="w-3.5 h-3.5" /> Call</a>
               </Button>
             )}
+            <CallScriptDialog lead={lead} className="h-8 gap-1 text-xs" />
+            {!lead.do_not_contact && <LogContactButton leadId={lead.id} />}
             {lead.email && (
               <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" asChild>
                 <a href={`mailto:${lead.email}`}><Mail className="w-3.5 h-3.5" /> Email</a>
@@ -276,7 +281,7 @@ export default function LeadDetail() {
                 <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contact</h3>
                 <div className="space-y-2">
                   <ContactRow icon={<Mail className="w-3.5 h-3.5" />} value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
-                  <ContactRow icon={<Phone className="w-3.5 h-3.5" />} value={lead.phone} href={lead.phone ? `tel:${lead.phone}` : undefined} />
+                  <ContactRow icon={<Phone className="w-3.5 h-3.5" />} value={lead.phone} href={lead.phone && !lead.do_not_contact ? `tel:${lead.phone}` : undefined} />
                   <ContactRow
                     icon={<Globe className="w-3.5 h-3.5" />}
                     value={lead.website}

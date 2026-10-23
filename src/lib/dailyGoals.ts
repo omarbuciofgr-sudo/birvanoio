@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { addFollowUp } from "@/lib/followUps";
+import { OUTCOMES, outcomeEffects, type CallOutcome } from "@/lib/playbook";
 
 export type GoalSettings = { contactGoal: number; followupGoal: number; weekendsCount: boolean };
 export type GoalDay = { day: string; contacted: number; followups: number };
@@ -46,6 +48,33 @@ export function computeStreak(days: GoalDay[], g: GoalSettings): number {
     break;
   }
   return streak;
+}
+
+/** Logs a call outcome. Every outcome (including No answer) counts toward the contacted goal. */
+export async function logCallOutcome(leadId: string, outcome: CallOutcome, opts: { note?: string; followUpDate?: string | null } = {}) {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { error: "Please sign in." };
+  const fx = outcomeEffects(outcome);
+  const label = OUTCOMES.find((o) => o.key === outcome)?.label ?? outcome;
+  const note = opts.note?.trim().slice(0, 500);
+  const { error } = await supabase.from("conversation_logs").insert({
+    client_id: auth.user.id, lead_id: leadId, type: "call", direction: "outbound", outcome,
+    content: note ? `Call outcome: ${label}. ${note}` : `Call outcome: ${label}`,
+  });
+  if (error) return { error: "Couldn't log the call. Please try again." };
+  if (fx.markDoNotContact) {
+    const { error: e } = await supabase.from("leads").update({
+      do_not_contact: true, do_not_contact_at: new Date().toISOString(), do_not_contact_reason: "Asked not to be called",
+    }).eq("id", leadId);
+    if (e) return { error: "Call logged, but couldn't mark do not contact. Please try again." };
+  }
+  if (fx.setStatus) await supabase.from("leads").update({ status: fx.setStatus }).eq("id", leadId);
+  if (fx.allowFollowUp && opts.followUpDate) {
+    const { error: e } = await addFollowUp(leadId, opts.followUpDate, note ? `${label}: ${note}` : label);
+    if (e) return { error: e };
+  }
+  notifyGoalsChanged();
+  return { error: null };
 }
 
 export async function logOutsideContact(leadId: string, note?: string) {

@@ -89,12 +89,14 @@ export function TodaysFollowUps({ userId }: { userId: string }) {
                         <Sparkles className="h-3.5 w-3.5" /> Review draft
                       </Button>
                     )}
+                    {!l?.do_not_contact && <>
                     <Button asChild={!!l?.phone} size="sm" variant="outline" className="h-8 px-2" disabled={!l?.phone} title={l?.phone ? "Call" : "No phone saved"}>
                       {l?.phone ? <a href={`tel:${l.phone}`} aria-label="Call"><Phone className="h-3.5 w-3.5" /></a> : <Phone className="h-3.5 w-3.5" />}
                     </Button>
                     <Button asChild={!!l?.phone} size="sm" variant="outline" className="h-8 px-2" disabled={!l?.phone} title={l?.phone ? "Text" : "No phone saved"}>
                       {l?.phone ? <a href={`sms:${l.phone}`} aria-label="Text"><MessageSquare className="h-3.5 w-3.5" /></a> : <MessageSquare className="h-3.5 w-3.5" />}
                     </Button>
+                    </>}
                     <Button asChild={!!l?.email} size="sm" variant="outline" className="h-8 px-2" disabled={!l?.email} title={l?.email ? "Email" : "No email saved"}>
                       {l?.email ? <a href={`mailto:${l.email}`} aria-label="Email"><Mail className="h-3.5 w-3.5" /></a> : <Mail className="h-3.5 w-3.5" />}
                     </Button>

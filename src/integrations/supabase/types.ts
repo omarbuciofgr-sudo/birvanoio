@@ -980,6 +980,7 @@ export type Database = {
           duration_seconds: number | null
           id: string
           lead_id: string
+          outcome: string | null
           recording_url: string | null
           sentiment: string | null
           subject: string | null
@@ -994,6 +995,7 @@ export type Database = {
           duration_seconds?: number | null
           id?: string
           lead_id: string
+          outcome?: string | null
           recording_url?: string | null
           sentiment?: string | null
           subject?: string | null
@@ -1008,6 +1010,7 @@ export type Database = {
           duration_seconds?: number | null
           id?: string
           lead_id?: string
+          outcome?: string | null
           recording_url?: string | null
           sentiment?: string | null
           subject?: string | null
@@ -2647,6 +2650,7 @@ export type Database = {
           linkedin_url: string | null
           list_price: number | null
           listing_signed_at: string | null
+          listing_type: string | null
           longitude: number | null
           notes: string | null
           phone: string | null
@@ -2683,6 +2687,7 @@ export type Database = {
           linkedin_url?: string | null
           list_price?: number | null
           listing_signed_at?: string | null
+          listing_type?: string | null
           longitude?: number | null
           notes?: string | null
           phone?: string | null
@@ -2719,6 +2724,7 @@ export type Database = {
           linkedin_url?: string | null
           list_price?: number | null
           listing_signed_at?: string | null
+          listing_type?: string | null
           longitude?: number | null
           notes?: string | null
           phone?: string | null
@@ -3210,6 +3216,7 @@ export type Database = {
           persona_goals: string[]
           persona_role: string | null
           phone: string | null
+          prospecting_role: string | null
           role_title: string | null
           sender_email: string | null
           streak_counts_weekends: boolean
@@ -3242,6 +3249,7 @@ export type Database = {
           persona_goals?: string[]
           persona_role?: string | null
           phone?: string | null
+          prospecting_role?: string | null
           role_title?: string | null
           sender_email?: string | null
           streak_counts_weekends?: boolean
@@ -3274,6 +3282,7 @@ export type Database = {
           persona_goals?: string[]
           persona_role?: string | null
           phone?: string | null
+          prospecting_role?: string | null
           role_title?: string | null
           sender_email?: string | null
           streak_counts_weekends?: boolean
