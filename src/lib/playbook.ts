@@ -2,6 +2,19 @@ import { callScripts, textTemplates, voicemails, type CallScript, type LeadType,
 
 export const PLAYBOOK_ROLES: PlaybookRole[] = ["agent", "investor", "leasing_agent", "property_manager"];
 
+/** Only stage directions are cues; bracketed fill-in values remain spoken/copyable. */
+export function scriptParts(text: string): { text: string; cue: boolean }[] {
+  return text.split(/(\[[^\]\n]+\])/g).filter(Boolean).map((part) => ({
+    text: part,
+    cue: /^\[(?:They\b|If\b|Repeat\b|Listen\b)/i.test(part),
+  }));
+}
+
+export function spokenScriptText(text: string): string {
+  return scriptParts(text).filter((part) => !part.cue).map((part) => part.text).join("")
+    .replace(/[^\S\n]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export const asPlaybookRole = (v?: string | null): PlaybookRole | null =>
   PLAYBOOK_ROLES.includes(v as PlaybookRole) ? (v as PlaybookRole) : null;
 

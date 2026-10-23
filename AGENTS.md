@@ -14,3 +14,4 @@
 - Below 768px, Real Estate uses a safe-area-aware five-tab bottom nav; shared layout reserves its space.
 - Home-screen installation stays manifest-only unless offline behavior is explicitly requested.
 - Playbook script text lives in `src/data/playbookContent.ts` (owner-supplied wording, don't rewrite); matching/token/outcome rules live in `src/lib/playbook.ts` with bun tests. Why: content edits stay separate from logic.
+- Playbook surfaces share ScriptText and CallFlow; cue parsing and copy sanitization live in the tested playbook helpers. Why: spoken text, placeholders, and stage directions stay consistent across the page and lead panel.

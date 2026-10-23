@@ -1,6 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { fillTokens } from "../data/playbookContent";
-import { canCallOrText, outcomeEffects, scriptsFor, toLeadType, tokenValues } from "./playbook";
+import { canCallOrText, outcomeEffects, scriptsFor, scriptParts, spokenScriptText, toLeadType, tokenValues } from "./playbook";
+
+describe("stage directions", () => {
+  test("excludes answer cues while preserving paragraph breaks in copied speech", () => {
+    expect(spokenScriptText("Is it still for sale?\n\n[They answer]\n\nGreat."))
+      .toBe("Is it still for sale?\n\nGreat.");
+  });
+  test("excludes inline coaching and conditional cues", () => {
+    expect(spokenScriptText("What went wrong? [Listen.] Tell me. [If no] Ask again. [Repeat their answer back before moving on.]"))
+      .toBe("What went wrong? Tell me. Ask again.");
+  });
+  test("keeps fill-in placeholders copyable", () => {
+    expect(spokenScriptText("[your fee] [your %] [their headache] [link]"))
+      .toBe("[your fee] [your %] [their headache] [link]");
+  });
+  test("classifies coaching separately from fill-in values", () => {
+    expect(scriptParts("[They answer] [your fee]").filter((part) => part.cue).map((part) => part.text))
+      .toEqual(["[They answer]"]);
+  });
+});
 
 describe("tokens", () => {
   test("fills tokens from lead and profile", () => {
