@@ -46,7 +46,7 @@ const Hero = React.forwardRef<HTMLElement>(function Hero(_props, ref) {
             <Button
               size="lg"
               className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-6 text-base group"
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate("/auth?mode=signup")}
             >
               Start Free
               <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />

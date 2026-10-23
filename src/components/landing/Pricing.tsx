@@ -113,7 +113,7 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
 
   const handleSubscribe = async (plan: typeof plans[0]) => {
     if (!plan.monthlyPriceId) {
-      navigate("/auth");
+      navigate("/auth?mode=signup");
       return;
     }
     setLoadingPlan(plan.name);
