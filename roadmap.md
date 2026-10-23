@@ -97,7 +97,7 @@
 - [x] City exclusivity add-on ($149/mo per city, paid plans, blocks others)
 
 ## Prospecting Playbook
-- [ ] Replace rewritten content exactly, format stage cues and copy text, add five-step reminders, verify display
+- [x] Replace rewritten content exactly, format stage cues and copy text, add five-step reminders; verify actual script display and copy at desktop/375px (signed-in page check blocked: no matching preview account)
 - [x] Playbook content file, page in nav (all users), copy buttons, mobile layout
 - [x] Prospecting role in onboarding (+ company/phone if missing), changeable on Playbook
 - [x] Call script button on owner and lead pages with filled tokens
