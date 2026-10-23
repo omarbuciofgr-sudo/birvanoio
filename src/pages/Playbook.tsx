@@ -12,6 +12,7 @@ import { ScriptCard, ObjectionList } from "@/components/playbook/ScriptCard";
 import { CopyText } from "@/components/playbook/CopyText";
 import { RoleSetupCard } from "@/components/playbook/RoleSetupCard";
 import { fillTokens } from "@/data/playbookContent";
+import { CallFlow } from "@/components/playbook/CallFlow";
 
 const SECTIONS = [
   { id: "start", label: "Getting started" },
@@ -79,6 +80,10 @@ export default function Playbook() {
           <AccordionItem value="scripts" id="pb-scripts" className="rounded-lg border px-4">
             <AccordionTrigger className="min-h-11">Call scripts</AccordionTrigger>
             <AccordionContent className="space-y-4">
+              <div className="rounded-md border border-border p-3">
+                <h2 className="mb-3 text-sm font-semibold">The 5-step call</h2>
+                <CallFlow />
+              </div>
               {role && (
                 <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
                   <span>Show all scripts</span>

@@ -11,6 +11,7 @@ import { isRoleMatch, scriptsFor, textsFor, toLeadType, tokenValues, voicemailsF
 import { ScriptCard } from "./ScriptCard";
 import { CopyText } from "./CopyText";
 import { LogContactButton } from "@/components/leads/LogContactButton";
+import { CallFlow } from "./CallFlow";
 
 type Props = {
   lead: TokenLead & { id?: string | null; listing_type?: string | null; do_not_contact?: boolean | null };
@@ -44,6 +45,12 @@ export function CallScriptDialog({ lead, fallbackType, className }: Props) {
             </DialogDescription>
           </DialogHeader>
           {lead.do_not_contact && <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">This owner asked not to be contacted. Don't call or text.</p>}
+          <Accordion type="single" collapsible>
+            <AccordionItem value="call-flow" className="rounded-md border px-3">
+              <AccordionTrigger className="min-h-11 text-sm">5-step call</AccordionTrigger>
+              <AccordionContent><CallFlow /></AccordionContent>
+            </AccordionItem>
+          </Accordion>
           {role && (
             <label className="flex min-h-11 items-center justify-between text-sm"><span>Show all scripts</span><Switch checked={showAll} onCheckedChange={setShowAll} /></label>
           )}
