@@ -771,7 +771,7 @@ const Leads = () => {
                           )}
                           {visibleColumns.phone && (
                             <TableCell className="hidden lg:table-cell">
-                              {lead.phone ? (
+                              {lead.phone && lead.do_not_contact ? <span className="text-xs text-muted-foreground">Do not contact</span> : lead.phone ? (
                                 <a href={`tel:${lead.phone}`} onClick={e => e.stopPropagation()} className="text-xs text-primary hover:underline">
                                   {lead.phone}
                                 </a>

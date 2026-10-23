@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   LayoutDashboard,
+  BookOpen,
   Users,
   Kanban,
   Settings,
@@ -77,6 +78,7 @@ const navSections: NavSection[] = [
       { name: "Accounts", href: "/dashboard/accounts", icon: Building2 },
       { name: "Deals", href: "/dashboard/deals", icon: Handshake },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
+      { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
     ],
   },
   {
@@ -121,6 +123,7 @@ const realEstateNavItems: NavItem[] = [
   { name: "Find Owners", href: "/dashboard/scraper?tab=real-estate", icon: House },
   { name: "My Leads", href: "/dashboard/leads", icon: Users },
   { name: "Outreach", href: "/dashboard/outreach", icon: Send },
+  { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
   { name: "Settings & Billing", href: "/dashboard/settings", icon: Settings },
 ];
 
