@@ -27,9 +27,9 @@ const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
       <Hero />
       
       {/* Core value prop: what you get & how it works */}
+      <ProductDemo />
       <HowItWorks />
       <Services />
-      <ProductDemo />
       <Pricing />
       <CTASection />
       <Footer />
