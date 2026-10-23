@@ -67,7 +67,7 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
             <Button
               size="sm"
               className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate("/auth?mode=signup")}
             >
               Start Free
             </Button>
@@ -115,7 +115,7 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
               <Button
                 size="sm"
                 className="w-full bg-primary text-primary-foreground"
-                onClick={() => navigate("/auth")}
+                onClick={() => navigate("/auth?mode=signup")}
               >
                 Start Free
               </Button>
