@@ -95,3 +95,9 @@
 ## Brivano Assistant (uploaded brief)
 - [x] Plan and build Claude assistant with tools, confirmations, automations
 - [x] City exclusivity add-on ($149/mo per city, paid plans, blocks others)
+
+## Prospecting Playbook
+- [x] Playbook content file, page in nav (all users), copy buttons, mobile layout
+- [x] Prospecting role in onboarding (+ company/phone if missing), changeable on Playbook
+- [x] Call script button on owner and lead pages with filled tokens
+- [x] Call outcome logging with follow-up date; Do not call hides call/text
