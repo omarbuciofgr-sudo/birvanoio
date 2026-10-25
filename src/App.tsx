@@ -59,6 +59,7 @@ import MyResults from "./pages/MyResults";
 import Automations from "./pages/Automations";
 import Playbook from "./pages/Playbook";
 import CallTracking from "./pages/CallTracking";
+import FollowUps from "./pages/FollowUps";
 
 
 const queryClient = new QueryClient();

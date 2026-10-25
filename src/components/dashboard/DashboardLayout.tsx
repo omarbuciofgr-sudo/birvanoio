@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   BookOpen,
   PhoneCall,
+  CalendarClock,
   Users,
   Kanban,
   Settings,
