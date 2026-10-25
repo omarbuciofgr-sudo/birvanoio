@@ -90,7 +90,7 @@ export default function FollowUps() {
   const defaultScript = () => {
     if (!selectedLead) return "";
     if (channel === "call") {
-      const s = callScript ? `${callScript.opener}${callScript.ask ? `\n\n${callScript.ask}` : ""}` : "";
+      const s = callScript ? [callScript.opener, ...callScript.asks.map((a) => a.text)].join("\n\n") : "";
       return fillTokens(s, tokens);
     }
     const t = templates.find((x) => x.id === templateId) ?? templates[0];
