@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   LayoutDashboard,
   BookOpen,
+  PhoneCall,
   Users,
   Kanban,
   Settings,
@@ -79,6 +80,7 @@ const navSections: NavSection[] = [
       { name: "Deals", href: "/dashboard/deals", icon: Handshake },
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
       { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
+      { name: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
     ],
   },
   {
@@ -124,6 +126,7 @@ const realEstateNavItems: NavItem[] = [
   { name: "My Leads", href: "/dashboard/leads", icon: Users },
   { name: "Outreach", href: "/dashboard/outreach", icon: Send },
   { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
+  { name: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
   { name: "Settings & Billing", href: "/dashboard/settings", icon: Settings },
 ];
 
