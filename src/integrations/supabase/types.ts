@@ -972,14 +972,17 @@ export type Database = {
       }
       conversation_logs: {
         Row: {
+          call_date: string | null
           call_sid: string | null
           client_id: string
           content: string | null
           created_at: string
           direction: string | null
           duration_seconds: number | null
+          follow_up_date: string | null
           id: string
           lead_id: string
+          next_step: string | null
           outcome: string | null
           recording_url: string | null
           sentiment: string | null
@@ -987,14 +990,17 @@ export type Database = {
           type: string
         }
         Insert: {
+          call_date?: string | null
           call_sid?: string | null
           client_id: string
           content?: string | null
           created_at?: string
           direction?: string | null
           duration_seconds?: number | null
+          follow_up_date?: string | null
           id?: string
           lead_id: string
+          next_step?: string | null
           outcome?: string | null
           recording_url?: string | null
           sentiment?: string | null
@@ -1002,14 +1008,17 @@ export type Database = {
           type: string
         }
         Update: {
+          call_date?: string | null
           call_sid?: string | null
           client_id?: string
           content?: string | null
           created_at?: string
           direction?: string | null
           duration_seconds?: number | null
+          follow_up_date?: string | null
           id?: string
           lead_id?: string
+          next_step?: string | null
           outcome?: string | null
           recording_url?: string | null
           sentiment?: string | null
@@ -5581,6 +5590,17 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_tracked_call: {
+        Args: {
+          p_call_date?: string
+          p_follow_up_date?: string
+          p_lead_id: string
+          p_next_step?: string
+          p_note?: string
+          p_outcome: string
+        }
+        Returns: string
       }
       materialize_plan_steps: {
         Args: { p_enrollment?: string }
