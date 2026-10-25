@@ -25,6 +25,7 @@ export const ALWAYS_VISIBLE_NAV = [
   "/dashboard/leads",
   "/dashboard/outreach",
   "/dashboard/playbook",
+  "/dashboard/call-tracking",
   "/dashboard/billing",
   "/dashboard/settings",
 ];
@@ -208,6 +209,7 @@ export function allowedNavHrefs(
       "/dashboard",
       "/dashboard/scraper",
       "/dashboard/leads",
+      "/dashboard/call-tracking",
       "/dashboard/outreach",
       "/dashboard/campaigns",
       "/dashboard/sequences",
