@@ -129,7 +129,10 @@ export default function CallTracking() {
       <div className="space-y-7">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-semibold"><PhoneCall className="h-6 w-6 text-primary" />Call Tracking</h1>
-          <Button asChild variant="outline" className="min-h-11"><Link to="/dashboard/leads">My Leads<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline" className="min-h-11"><Link to="/dashboard/follow-ups">Follow-Ups<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+            <Button asChild variant="outline" className="min-h-11"><Link to="/dashboard/leads">My Leads<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+          </div>
         </header>
 
         <section className="space-y-4 border-b border-border pb-6" aria-labelledby="daily-progress-title">

@@ -6,6 +6,12 @@
 - [x] Link desktop navigation and phone More menu; 20 tests pass, build OK, signed-out access redirects
 - [ ] Verify signed-in logging and daily progress (blocked: no account matches the requesting user; sign in in the preview)
 
+## Follow-Ups page
+- [x] Follow-Ups page: schedule call/text follow-ups with editable playbook script (tokens filled), next step, quick dates
+- [x] Log outcome from a follow-up writes to Call Tracking (log_tracked_call) and marks the follow-up done
+- [x] Route, Core + Real Estate sidebar links, phone More menu, Call Tracking cross-link
+- [ ] Verify signed-in scheduling and outcome logging (blocked: no matching preview account)
+
 - [x] Add Find Owners as the first Real Estate sidebar tool
 - [x] Rework the Scout Real Estate search controls and user-facing language
 - [x] Rename actions, filters, table columns, and empty state
