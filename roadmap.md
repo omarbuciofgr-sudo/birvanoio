@@ -1,5 +1,10 @@
 # Roadmap
 
+## Call Tracking
+- [ ] Add a Call Tracking page with saved-lead selection, outcome, call date, next step, and optional follow-up
+- [ ] Reuse call history and daily goals with secure saved records
+- [ ] Link desktop navigation and phone More menu; verify logging and daily progress
+
 - [x] Add Find Owners as the first Real Estate sidebar tool
 - [x] Rework the Scout Real Estate search controls and user-facing language
 - [x] Rename actions, filters, table columns, and empty state
