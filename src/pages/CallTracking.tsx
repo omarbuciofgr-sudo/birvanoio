@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { leadsQueryKey, useLeadsData } from "@/hooks/useLeadsData";
 import { supabase } from "@/integrations/supabase/client";
-import { browserTimeZone, loadGoalDays, loadGoalSettings, notifyGoalsChanged } from "@/lib/dailyGoals";
+import { browserTimeZone, DEFAULT_GOALS, notifyGoalsChanged } from "@/lib/dailyGoals";
 import { dailyCallSummary, dateInTimeZone, trackedCallDate, validateTrackedCall } from "@/lib/callTracking";
 import { OUTCOMES, type CallOutcome } from "@/lib/playbook";
 import { prettyDate } from "@/lib/followUps";
@@ -42,11 +42,14 @@ export default function CallTracking() {
     enabled: Boolean(user?.id),
     queryFn: async () => {
       if (!user) throw new Error("Please sign in.");
-      const [{ data: profile, error: profileError }, settings] = await Promise.all([
-        supabase.from("profiles").select("timezone").eq("user_id", user.id).maybeSingle(),
-        loadGoalSettings(user.id),
-      ]);
+      const { data: profile, error: profileError } = await supabase.from("profiles")
+        .select("timezone, daily_contact_goal, daily_followup_goal, streak_counts_weekends").eq("user_id", user.id).maybeSingle();
       if (profileError) throw profileError;
+      const settings = {
+        contactGoal: profile?.daily_contact_goal ?? DEFAULT_GOALS.contactGoal,
+        followupGoal: profile?.daily_followup_goal ?? DEFAULT_GOALS.followupGoal,
+        weekendsCount: profile?.streak_counts_weekends ?? DEFAULT_GOALS.weekendsCount,
+      };
       const timeZone = profile?.timezone || browserTimeZone();
       // Read all pages so long histories are not silently limited to 1,000 records.
       const calls: import("@/integrations/supabase/types").Database["public"]["Tables"]["conversation_logs"]["Row"][] = [];
@@ -96,8 +99,8 @@ export default function CallTracking() {
     try {
       const { error } = await supabase.rpc("log_tracked_call", {
         p_lead_id: leadId, p_outcome: outcome, p_call_date: selectedCallDate,
-        p_note: note.trim() || null, p_next_step: nextStep.trim() || null,
-        p_follow_up_date: blocked ? null : followUpDate || null,
+        p_note: note.trim() || undefined, p_next_step: nextStep.trim() || undefined,
+        p_follow_up_date: blocked ? undefined : followUpDate || undefined,
       });
       if (error) throw error;
       setDay(selectedCallDate);
