@@ -59,6 +59,7 @@ import MyResults from "./pages/MyResults";
 import Automations from "./pages/Automations";
 import Playbook from "./pages/Playbook";
 import CallTracking from "./pages/CallTracking";
+import FollowUps from "./pages/FollowUps";
 
 
 const queryClient = new QueryClient();
@@ -93,6 +94,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
               <Route path="/dashboard/playbook" element={<ProtectedRoute><Playbook /></ProtectedRoute>} />
                <Route path="/dashboard/call-tracking" element={<ProtectedRoute><CallTracking /></ProtectedRoute>} />
+               <Route path="/dashboard/follow-ups" element={<ProtectedRoute><FollowUps /></ProtectedRoute>} />
               <Route path="/dashboard/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
               <Route path="/dashboard/voice-agent" element={<ProtectedRoute><VoiceAgent /></ProtectedRoute>} />
               <Route path="/admin/import" element={<AdminRoute><AdminImport /></AdminRoute>} />

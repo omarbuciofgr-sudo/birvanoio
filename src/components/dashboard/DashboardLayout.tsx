@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   BookOpen,
   PhoneCall,
+  CalendarClock,
   Users,
   Kanban,
   Settings,
@@ -81,6 +82,7 @@ const navSections: NavSection[] = [
       { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
       { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
       { name: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
+      { name: "Follow-Ups", href: "/dashboard/follow-ups", icon: CalendarClock },
     ],
   },
   {
@@ -127,6 +129,7 @@ const realEstateNavItems: NavItem[] = [
   { name: "Outreach", href: "/dashboard/outreach", icon: Send },
   { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
   { name: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
+  { name: "Follow-Ups", href: "/dashboard/follow-ups", icon: CalendarClock },
   { name: "Settings & Billing", href: "/dashboard/settings", icon: Settings },
 ];
 

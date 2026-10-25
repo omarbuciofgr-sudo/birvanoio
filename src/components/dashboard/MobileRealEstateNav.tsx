@@ -1,4 +1,4 @@
-import { BookOpen, PhoneCall, Workflow } from "lucide-react";
+import { BookOpen, CalendarClock, PhoneCall, Workflow } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BarChart3, CreditCard, Download, Home, House, MoreHorizontal, Send, Settings, Share, Users } from "lucide-react";
@@ -88,7 +88,7 @@ export function MobileRealEstateNav({ onSignOut }: { onSignOut: () => void }) {
               </Link>
             );
           })}
-          <button type="button" onClick={() => setMoreOpen(true)} className={cn("flex min-h-[60px] min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium", moreOpen || ["/dashboard/call-tracking", "/dashboard/playbook", "/dashboard/results", "/dashboard/settings", "/dashboard/billing"].includes(location.pathname) ? "text-primary" : "text-muted-foreground")}>
+          <button type="button" onClick={() => setMoreOpen(true)} className={cn("flex min-h-[60px] min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium", moreOpen || ["/dashboard/call-tracking", "/dashboard/follow-ups", "/dashboard/playbook", "/dashboard/results", "/dashboard/settings", "/dashboard/billing"].includes(location.pathname) ? "text-primary" : "text-muted-foreground")}>
             <MoreHorizontal className="h-5 w-5" />
             <span>More</span>
           </button>
@@ -101,6 +101,7 @@ export function MobileRealEstateNav({ onSignOut }: { onSignOut: () => void }) {
           <div className="mt-4 grid gap-2">
             {[
               { label: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
+              { label: "Follow-Ups", href: "/dashboard/follow-ups", icon: CalendarClock },
               { label: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
               { label: "My Results", href: "/dashboard/results", icon: BarChart3 },
               { label: "Automations", href: "/dashboard/automations", icon: Workflow },
