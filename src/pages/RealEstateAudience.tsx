@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, Building2, Home, KeyRound } from "lucide-react";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
 import { Button } from "@/components/ui/button";
+import AgentsFsboPage from "@/pages/AgentsFsboPage";
 
 const audiences = {
   agents: {
@@ -27,6 +28,7 @@ const audiences = {
 
 export default function RealEstateAudience() {
   const { audience } = useParams();
+  if (audience === "agents") return <AgentsFsboPage />;
   const content = audience && audience in audiences ? audiences[audience as keyof typeof audiences] : null;
   if (!content) return <Navigate to="/" replace />;
   const Icon = content.icon;

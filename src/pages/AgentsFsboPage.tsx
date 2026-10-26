@@ -5,7 +5,7 @@ import { BrivanoLogo } from "@/components/BrivanoLogo";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { usePricingSettings } from "@/hooks/usePricingSettings";
-import { PLAYBOOK } from "@/data/playbookContent";
+import { callScripts, fillTokens } from "@/data/playbookContent";
 
 const steps = [
   { icon: Search, title: "Search your city", text: "Enter any US city and see homes listed for sale by owner, with price, days listed and a link to the original listing." },
@@ -29,7 +29,8 @@ function ScriptLines({ text }: { text: string }) {
 
 export default function AgentsFsboPage() {
   const { actionCosts } = usePricingSettings();
-  const script = (PLAYBOOK as any).scripts?.find((s: any) => s.id === "fsbo-agent");
+  const script = callScripts.find((s) => s.id === "fsbo-agent");
+  const sample = { ownerName: "Maria", street: "Oak Street", yourName: "Alex", area: "Naperville", company: "your brokerage", phone: "" };
   const title = "FSBO Leads & Scripts for Real Estate Agents | Brivano";
   const description = "Find FSBO leads in any US city, get owner contact info, and call with ready-made FSBO scripts. Start free with Brivano.";
 
@@ -106,12 +107,12 @@ export default function AgentsFsboPage() {
           <div className="space-y-6 rounded-xl border border-border bg-card p-6">
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-widest text-primary">Opener</p>
-              <ScriptLines text={script.opener} />
+              <ScriptLines text={fillTokens(script.opener, sample)} />
             </div>
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-widest text-primary">Questions to ask</p>
               <ul className="list-disc space-y-1 pl-5 text-foreground">
-                {script.discovery.slice(0, 3).map((q: string) => <li key={q}>{q}</li>)}
+                {script.discovery.slice(0, 3).map((q) => <li key={q}>{q}</li>)}
               </ul>
             </div>
             {script.objections?.[0] && (
