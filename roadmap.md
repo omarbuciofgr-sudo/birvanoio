@@ -120,3 +120,7 @@
 - [x] Prospecting role in onboarding (+ company/phone if missing), changeable on Playbook
 - [x] Call script button on owner and lead pages with filled tokens
 - [x] Call outcome logging with follow-up date; Do not call hides call/text
+
+## Marketing
+- [ ] Send 6 Houston invites (needs email connection + approval)
+- [ ] Real dashboard/lead-card screenshots for promo video v2
