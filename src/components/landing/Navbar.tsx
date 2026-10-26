@@ -6,6 +6,7 @@ import { ChevronDown, Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrivanoLogo } from "@/components/BrivanoLogo";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { RemainingCredits } from "@/components/dashboard/RemainingCredits";
 
 const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
   const [isOpen, setIsOpen] = useState(false);
@@ -71,9 +72,11 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
             >
               Start Free
             </Button>
+            <RemainingCredits />
           </div>
 
           <div className="md:hidden flex items-center gap-2">
+            <RemainingCredits />
             <ThemeToggle />
             <button
               className="p-2 text-muted-foreground"

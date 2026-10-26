@@ -37,7 +37,7 @@ import AIAgents from "./pages/AIAgents";
 import Signals from "./pages/Signals";
 import Billing from "./pages/Billing";
 import Tools from "./pages/Tools";
-import Pipeline from "./pages/Pipeline";
+import LeadPipeline from "./pages/LeadPipeline";
 import Sequences from "./pages/Sequences";
 import Team from "./pages/Team";
 import AdvancedAnalytics from "./pages/AdvancedAnalytics";
@@ -120,7 +120,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/dashboard/signals" element={<ProtectedRoute><Signals /></ProtectedRoute>} />
               <Route path="/dashboard/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
               <Route path="/dashboard/tools" element={<ProtectedRoute><Tools /></ProtectedRoute>} />
-              <Route path="/dashboard/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
+              <Route path="/dashboard/pipeline" element={<ProtectedRoute><LeadPipeline /></ProtectedRoute>} />
               <Route path="/dashboard/sequences" element={<ProtectedRoute><Sequences /></ProtectedRoute>} />
               <Route path="/dashboard/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
               <Route path="/dashboard/advanced-analytics" element={<ProtectedRoute><AdvancedAnalytics /></ProtectedRoute>} />

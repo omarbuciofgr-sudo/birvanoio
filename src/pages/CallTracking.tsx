@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, PhoneCall, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -23,9 +23,11 @@ import { prettyDate } from "@/lib/followUps";
 export default function CallTracking() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [params] = useSearchParams();
+  const linkedLeadId = params.get("lead") || "";
   const leadsQuery = useLeadsData(user?.id);
   const [day, setDay] = useState("");
-  const [leadId, setLeadId] = useState("");
+  const [leadId, setLeadId] = useState(linkedLeadId);
   const [leadSearch, setLeadSearch] = useState("");
   const [outcome, setOutcome] = useState<CallOutcome | null>(null);
   const [callDate, setCallDate] = useState("");
@@ -35,7 +37,8 @@ export default function CallTracking() {
   const [saving, setSaving] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
-  const [allDates, setAllDates] = useState(false);
+  const [allDates, setAllDates] = useState(Boolean(linkedLeadId));
+  const [leadHistoryFilter, setLeadHistoryFilter] = useState(linkedLeadId);
 
   const tracking = useQuery({
     queryKey: ["call-tracking", user?.id],
@@ -81,7 +84,7 @@ export default function CallTracking() {
   const visibleCalls = calls.filter((call) => {
     const lead = leadMap.get(call.lead_id);
     const text = `${lead?.business_name ?? ""} ${lead?.contact_name ?? ""} ${call.content ?? ""} ${call.next_step ?? ""}`.toLowerCase();
-    return (allDates || trackedCallDate(call, timeZone) === selectedDay) && (outcomeFilter === "all" || call.outcome === outcomeFilter) && text.includes(historySearch.toLowerCase());
+    return (!leadHistoryFilter || call.lead_id === leadHistoryFilter) && (allDates || trackedCallDate(call, timeZone) === selectedDay) && (outcomeFilter === "all" || call.outcome === outcomeFilter) && text.includes(historySearch.toLowerCase());
   }).sort((a, b) => trackedCallDate(b, timeZone).localeCompare(trackedCallDate(a, timeZone)) || b.created_at.localeCompare(a.created_at));
   const filteredLeads = leads.filter((lead) => `${lead.business_name} ${lead.contact_name ?? ""} ${lead.city ?? ""}`.toLowerCase().includes(leadSearch.toLowerCase()));
 
@@ -129,7 +132,8 @@ export default function CallTracking() {
       <div className="space-y-7">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-semibold"><PhoneCall className="h-6 w-6 text-primary" />Call Tracking</h1>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="min-h-11"><Link to="/dashboard/pipeline">Lead Pipeline<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
             <Button asChild variant="outline" className="min-h-11"><Link to="/dashboard/follow-ups">Follow-Ups<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
             <Button asChild variant="outline" className="min-h-11"><Link to="/dashboard/leads">My Leads<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
           </div>
@@ -181,6 +185,7 @@ export default function CallTracking() {
         </section>
 
         <section aria-labelledby="call-history-title" className="space-y-4 border-t border-border pt-6">
+          {leadHistoryFilter && <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{leadMap.get(leadHistoryFilter)?.business_name || "Selected lead"}</Badge><Button variant="ghost" className="min-h-11" onClick={() => setLeadHistoryFilter("")}>Show all leads</Button></div>}
           <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="call-history-title" className="text-lg font-semibold">Call history <span className="ml-1 text-sm font-normal text-muted-foreground">{visibleCalls.length}</span></h2><Button variant="outline" className="min-h-11" onClick={() => setAllDates(!allDates)}>{allDates ? "Selected day" : "All dates"}</Button></div>
           <div className="grid gap-2 sm:grid-cols-[1fr_200px]"><Input aria-label="Search call history" className="h-11" placeholder="Search calls" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} /><Select value={outcomeFilter} onValueChange={setOutcomeFilter}><SelectTrigger aria-label="Filter outcomes" className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All outcomes</SelectItem>{OUTCOMES.map((item) => <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>)}</SelectContent></Select></div>
           {visibleCalls.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{calls.length === 0 ? "No calls logged yet." : "No calls match these filters."}</p> : <div className="divide-y divide-border">{visibleCalls.map((call) => {
