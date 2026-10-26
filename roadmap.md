@@ -1,5 +1,10 @@
 # Roadmap
 
+## Lead Pipeline and credit visibility
+- [ ] Show each signed-in user's remaining credits in the top-right corner
+- [ ] Add Lead Pipeline with listing, contact, follow-up, and conversion visibility linked to Call Tracking
+- [ ] Verify tests, app health, and signed-in flow if account access is available
+
 ## Call Tracking
 - [x] Add a Call Tracking page with saved-lead selection, outcome, call date, next step, and optional follow-up
 - [x] Reuse call history and daily goals with secure saved records
