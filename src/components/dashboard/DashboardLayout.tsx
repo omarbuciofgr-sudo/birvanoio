@@ -56,6 +56,7 @@ import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { usePersona } from "@/hooks/usePersona";
 import PersonaSetupDialog from "@/components/onboarding/PersonaSetupDialog";
 import { MobileRealEstateNav } from "@/components/dashboard/MobileRealEstateNav";
+import { RemainingCredits } from "@/components/dashboard/RemainingCredits";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -79,7 +80,7 @@ const navSections: NavSection[] = [
       { name: "Leads", href: "/dashboard/leads", icon: Users },
       { name: "Accounts", href: "/dashboard/accounts", icon: Building2 },
       { name: "Deals", href: "/dashboard/deals", icon: Handshake },
-      { name: "Pipeline", href: "/dashboard/pipeline", icon: Kanban },
+      { name: "Lead Pipeline", href: "/dashboard/pipeline", icon: Kanban },
       { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
       { name: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
       { name: "Follow-Ups", href: "/dashboard/follow-ups", icon: CalendarClock },
@@ -126,6 +127,7 @@ const realEstateNavItems: NavItem[] = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
   { name: "Find Owners", href: "/dashboard/scraper?tab=real-estate", icon: House },
   { name: "My Leads", href: "/dashboard/leads", icon: Users },
+  { name: "Lead Pipeline", href: "/dashboard/pipeline", icon: Kanban },
   { name: "Outreach", href: "/dashboard/outreach", icon: Send },
   { name: "Playbook", href: "/dashboard/playbook", icon: BookOpen },
   { name: "Call Tracking", href: "/dashboard/call-tracking", icon: PhoneCall },
@@ -563,6 +565,7 @@ const DashboardLayoutInner = ({ children, fullWidth = false }: DashboardLayoutPr
               <AssistantTopButton />
               <NotificationBell />
               <ThemeToggle />
+              <RemainingCredits />
             </div>
           </div>
         </header>
