@@ -122,5 +122,5 @@
 - [x] Call outcome logging with follow-up date; Do not call hides call/text
 
 ## Marketing
-- [ ] Send 6 Houston invites (needs email connection + approval)
+- [x] Sent 4 Houston email invites (Kevan Pewitt, Al Bunch: form/phone only, manual)
 - [ ] Real dashboard/lead-card screenshots for promo video v2
