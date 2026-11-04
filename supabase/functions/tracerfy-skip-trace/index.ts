@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { chargeCredits } from '../_shared/billing.ts';
+import { contactFound } from '../_shared/ownerContact.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,7 +8,8 @@ const corsHeaders = {
 };
 
 interface SkipTraceRequest {
-  address: string;
+  address?: string;
+  listingId?: string;
   city?: string;
   state?: string;
   zip?: string;
@@ -147,7 +148,7 @@ function parseBatchDataResponse(data: any, addressData: Record<string, string>):
   console.log('[Skip Trace] Parsing BatchData response:', JSON.stringify(data).slice(0, 500));
   
   // BatchData returns results in various formats depending on endpoint
-  const results = data.results || data.data || data.records || [];
+  const results = data.results?.objects || data.results || data.data || data.records || [];
   const firstResult = Array.isArray(results) ? results[0] : results;
   
   if (!firstResult) {
@@ -160,7 +161,7 @@ function parseBatchDataResponse(data: any, addressData: Record<string, string>):
   }
 
   // Navigate to owner data - BatchData has nested structure
-  const owner = firstResult.owner || firstResult.owners?.[0] || firstResult.person || firstResult;
+  const owner = firstResult.persons?.[0] || firstResult.owner || firstResult.owners?.[0] || firstResult.person || firstResult;
   const phones: Array<{ number: string; type: string; lineType?: string }> = [];
   const emails: Array<{ address: string; type?: string }> = [];
 
@@ -281,6 +282,8 @@ Deno.serve(async (req) => {
     });
   }
 
+  let auditId: string | null = null;
+  let auditClient: ReturnType<typeof createClient> | null = null;
   try {
     // Authentication check
     const authHeader = req.headers.get('Authorization');
@@ -334,9 +337,27 @@ Deno.serve(async (req) => {
     // Skip trace is allowed for any authenticated user (scraper uses it internally)
 
     const body: SkipTraceRequest = await req.json();
+    auditClient = admin;
+    let listing: Record<string, any> | null = null;
+    if (body.listingId) {
+      const { data: saved, error: savedError } = await admin.from('owner_search_results')
+        .select('listing_data').eq('user_id', userId).eq('external_id', body.listingId).maybeSingle();
+      if (savedError || !saved) return new Response(JSON.stringify({ success: false, error: 'Listing not available. Run a search first.' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      listing = saved.listing_data;
+      body.address = listing?.address_line1 || listing?.address;
+      body.city = listing?.city || '';
+      body.state = listing?.state || '';
+      body.zip = listing?.zip_code || '';
+      if (!listing?.address_line1 && listing?.address?.includes(',')) body.fullAddress = listing.address;
+    }
+    const listingId = body.listingId || body.fullAddress || [body.address, body.city, body.state, body.zip].filter(Boolean).join(', ');
+    const { data: attempt, error: attemptError } = await admin.from('owner_contact_lookups').insert({ user_id: userId, listing_id: listingId || 'invalid' }).select('id').single();
+    if (attemptError || !attempt) return new Response(JSON.stringify({ success: false, error: 'A lookup is already running for this listing. Please wait and try again.' }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    auditId = attempt.id;
     
     // Validate input
     if (!body.fullAddress && !body.address) {
+      await admin.rpc('finish_owner_contact_lookup', { p_id: auditId, p_phone: false, p_email: false, p_error: 'invalid_address' });
       return new Response(
         JSON.stringify({ success: false, error: 'Address is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -371,7 +392,7 @@ Deno.serve(async (req) => {
       }
     } else {
       addressData = {
-        street: body.address,
+        street: body.address || '',
         city: body.city || '',
         state: body.state || '',
         zip: body.zip || '',
@@ -380,51 +401,32 @@ Deno.serve(async (req) => {
 
     console.log('[Skip Trace] Processing address:', addressData);
 
-    // BatchData only
-    let result: SkipTraceResult | null = null;
-
-    // 1. Try BatchData first
-    result = await tryBatchData(addressData);
-    if (result?.data?.fullName || (result?.data?.phones && result.data.phones.length > 0)) {
-      const charge = await chargeCredits(userId, 'action_owner_contact', 1, body.fullAddress || body.address);
-      if (!charge.success) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'You need 10 credits to reveal this owner contact.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      console.log('[Skip Trace] Success via BatchData');
-      return new Response(
-        JSON.stringify({ ...result, credits_spent: 10 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // No providers configured or BatchData failed
-    const hasAnyKey = Deno.env.get('BATCHDATA_API_KEY');
-    if (!hasAnyKey) {
-      // Use 200 so supabase-js invoke() returns JSON instead of FunctionsHttpError (non-2xx).
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error:
-            'Skip trace is not configured: add secret BATCHDATA_API_KEY on this function (Supabase Dashboard → Project Settings → Edge Functions → Secrets, or `supabase secrets set BATCHDATA_API_KEY=...`).',
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-        message: 'No owner information found from available providers',
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // Reuse a contact already revealed to this user, without another charge.
+    let result: SkipTraceResult | null = listing && (listing.owner_phone || listing.owner_email) ? {
+      success: true, data: { fullName: listing.owner_name || null, firstName: null, lastName: null,
+        phones: listing.owner_phone ? [{ number: listing.owner_phone, type: 'primary' }] : [],
+        emails: listing.owner_email ? [{ address: listing.owner_email }] : [] },
+    } : await tryBatchData(addressData);
+    const found = contactFound(result?.data);
+    const next = listing ? { ...listing, owner_name: result?.data?.fullName || listing.owner_name,
+      owner_phone: found.phone ? result?.data?.phones.find(p => p.number.replace(/\D/g, '').length >= 7)?.number : null,
+      owner_email: found.email ? result?.data?.emails.find(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.address))?.address : null,
+      contact_status: found.phone && found.email ? 'phone_email' : found.phone ? 'phone_only' : found.email ? 'email_only' : 'none',
+      enriched_at: new Date().toISOString() } : null;
+    const { data: charge, error: finishError } = await admin.rpc('finish_owner_contact_lookup', {
+      p_id: auditId, p_phone: found.phone, p_email: found.email, p_listing: next,
+      p_error: result ? null : 'provider_unavailable',
+    });
+    if (finishError) throw finishError;
+    if (!charge?.success) return new Response(JSON.stringify({ success: false, error: charge?.error === 'insufficient_credits' ? 'Not enough credits. Upgrade to get more contact lookups.' : 'Contact lookup is temporarily unavailable. No lookup or credits charged.', credits_spent: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ...result, success: true, matched: found.phone || found.email,
+      listing: next, credits_spent: charge.spent, free_lookup_used: charge.free_used,
+      message: found.phone || found.email ? 'Owner contact found.' : "We couldn't find contact info for this owner. No lookup or credits charged. Try another listing." }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error('Skip trace error:', error);
+    if (auditId && auditClient) await auditClient.rpc('finish_owner_contact_lookup', { p_id: auditId, p_phone: false, p_email: false, p_error: 'lookup_failed' });
     const errorMessage = error instanceof Error ? error.message : 'Skip trace failed';
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
