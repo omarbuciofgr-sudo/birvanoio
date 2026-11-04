@@ -29,6 +29,13 @@
       "when": 1793762161226,
       "tag": "0003_signup_contact_welcome",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793762402330,
+      "tag": "0004_owner_lookup_explicit_grants",
+      "breakpoints": true
     }
   ]
 }
