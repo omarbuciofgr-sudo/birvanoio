@@ -1,5 +1,11 @@
 # Roadmap
 
+## First owner contact experience
+- [ ] First-search guidance, primary listing lookup buttons, free allowance counters, contact success and miss states
+- [ ] Server-side successful-only allowance and credit charging, audit every attempt
+- [ ] Send the requested one-time signup welcome email if sending is configured
+- [ ] Test allowance and miss rules, verify lookup flow and list exact changed files
+
 ## Lead Pipeline and credit visibility
 - [x] Show each signed-in user's server-returned remaining credits in the top-right corner, linked to Billing
 - [x] Add Lead Pipeline with listing, status changes, latest call outcome, next follow-up, and lead-scoped Call Tracking links
