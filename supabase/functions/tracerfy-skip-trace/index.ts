@@ -231,7 +231,9 @@ function parseBatchDataResponse(data: any, addressData: Record<string, string>):
   }
 
   // Build full name from various possible fields
-  const fullName = owner.fullName || owner.name || owner.full_name ||
+  const name = owner.names?.[0];
+  const fullName = owner.fullName || owner.name || owner.full_name || name?.fullName ||
+    (name?.firstName && name?.lastName ? `${name.firstName} ${name.lastName}` : null) ||
     (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : null) ||
     (owner.first_name && owner.last_name ? `${owner.first_name} ${owner.last_name}` : null);
 
@@ -250,8 +252,8 @@ function parseBatchDataResponse(data: any, addressData: Record<string, string>):
     success: true,
     data: {
       fullName,
-      firstName: owner.firstName || owner.first_name || null,
-      lastName: owner.lastName || owner.last_name || null,
+      firstName: owner.firstName || owner.first_name || name?.firstName || null,
+      lastName: owner.lastName || owner.last_name || name?.lastName || null,
       phones,
       emails,
       propertyAddress: {

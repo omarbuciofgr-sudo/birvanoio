@@ -8,7 +8,10 @@ export function useOwnerLookups() {
   const { user } = useAuth();
   const [state, setState] = useState({ loading: true, isFree: false, total: 5, remaining: 0, attempted: false });
   const refresh = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setState({ loading: false, isFree: false, total: 5, remaining: 0, attempted: false });
+      return;
+    }
     const { data, error } = await supabase.rpc('my_owner_lookup_allowance');
     if (error || !data) return;
     const value = data as { is_free: boolean; total: number; used: number; attempted: boolean };

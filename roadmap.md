@@ -1,10 +1,11 @@
 # Roadmap
 
 ## First owner contact experience
-- [ ] First-search guidance, primary listing lookup buttons, free allowance counters, contact success and miss states
-- [ ] Server-side successful-only allowance and credit charging, audit every attempt
-- [ ] Send the requested one-time signup welcome email if sending is configured
-- [ ] Test allowance and miss rules, verify lookup flow and list exact changed files
+- [x] First-search guidance, primary listing lookup buttons, free allowance counters, contact success and miss states
+- [x] Server-side successful-only allowance and credit charging, audit every attempt
+- [x] Wire the requested one-time signup welcome email into the existing sender
+- [x] Verify 27 rule/regression tests, build health, signup form and upgrade destination; list changed files
+- [ ] Verify a real signed-in lookup and welcome delivery (blocked: requesting user has no matching app account; verified sender delivery unavailable)
 
 ## Lead Pipeline and credit visibility
 - [x] Show each signed-in user's server-returned remaining credits in the top-right corner, linked to Billing
