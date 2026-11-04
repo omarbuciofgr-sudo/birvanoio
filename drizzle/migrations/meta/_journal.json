@@ -15,6 +15,27 @@
       "when": 1792893766638,
       "tag": "0001_call_tracking_records",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793762022200,
+      "tag": "0002_owner_contact_lookup_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793762161226,
+      "tag": "0003_signup_contact_welcome",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793762402330,
+      "tag": "0004_owner_lookup_explicit_grants",
+      "breakpoints": true
     }
   ]
 }

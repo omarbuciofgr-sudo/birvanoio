@@ -2933,6 +2933,48 @@ export type Database = {
           },
         ]
       }
+      owner_contact_lookups: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          credits_charged: number
+          email_found: boolean
+          error_code: string | null
+          free_lookup_used: boolean
+          id: string
+          listing_id: string
+          phone_found: boolean
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          credits_charged?: number
+          email_found?: boolean
+          error_code?: string | null
+          free_lookup_used?: boolean
+          id?: string
+          listing_id: string
+          phone_found?: boolean
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          credits_charged?: number
+          email_found?: boolean
+          error_code?: string | null
+          free_lookup_used?: boolean
+          id?: string
+          listing_id?: string
+          phone_found?: boolean
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       owner_search_alerts: {
         Row: {
           baseline_done: boolean
@@ -4443,6 +4485,30 @@ export type Database = {
         }
         Relationships: []
       }
+      signup_welcome_emails: {
+        Row: {
+          created_at: string
+          provider_id: string | null
+          sent_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          provider_id?: string | null
+          sent_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          provider_id?: string | null
+          sent_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       source_analytics: {
         Row: {
           avg_confidence_score: number | null
@@ -5533,6 +5599,16 @@ export type Database = {
         Returns: Json
       }
       ensure_default_follow_up_plans: { Args: never; Returns: undefined }
+      finish_owner_contact_lookup: {
+        Args: {
+          p_email: boolean
+          p_error?: string
+          p_id: string
+          p_listing?: Json
+          p_phone: boolean
+        }
+        Returns: Json
+      }
       get_organization_api_keys: {
         Args: { p_organization_id: string }
         Returns: {
@@ -5614,6 +5690,7 @@ export type Database = {
           followups: number
         }[]
       }
+      my_owner_lookup_allowance: { Args: never; Returns: Json }
       normalize_city_key: { Args: { p_location: string }; Returns: string }
       normalize_email: { Args: { p_email: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }

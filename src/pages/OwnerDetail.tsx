@@ -1,3 +1,6 @@
+import { findOwnerContact } from '@/lib/api/ownerContactLookup';
+import { FreeLookupCounter } from '@/components/rentcast/FreeLookupCounter';
+import { OwnerContactSuccess } from '@/components/rentcast/OwnerContactSuccess';
 import { LeadPlanCard } from "@/components/plans/LeadPlanCard";
 import { listingLink } from "@/lib/listingLink";
 import { useEffect, useMemo, useState } from "react";
@@ -57,6 +60,7 @@ export default function OwnerDetail() {
   const [estimate, setEstimate] = useState<PropertyEstimate | null>(null);
   const [estLoading, setEstLoading] = useState(false);
   const [estNote, setEstNote] = useState<string | null>(null);
+  const [lookupMiss, setLookupMiss] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [points, setPoints] = useState("");
   const [writing, setWriting] = useState(false);
@@ -148,29 +152,18 @@ export default function OwnerDetail() {
   const dnc = !!leadInfo?.do_not_contact;
 
   const onGetContact = async () => {
-    if (!row?.rentcast_id) return;
-    if (!canAfford("enrich", 1)) {
-      toast.error(`You need ${CREDIT_COSTS.enrich} credits to get this contact info.`);
-      return;
-    }
+    const id = externalId || row?.rentcast_id;
+    if (!row || !id) return;
     setEnriching(true);
+    setLookupMiss(false);
     try {
-      const res = await rentcastApi.enrich({ rentcast_ids: [row.rentcast_id], limit: 1, likely_only: false });
-      const updated = res.listings?.find((l) => l.rentcast_id === row.rentcast_id);
-      if (!res.success || !updated) throw new Error("no result");
-      const next = { ...row, ...updated };
-      setRow(next);
-      const { data: auth } = await supabase.auth.getUser();
-      if (auth.user) {
-        await (supabase as any).from("owner_search_results").update({ listing_data: next })
-          .eq("user_id", auth.user.id).eq("external_id", externalId || row.rentcast_id || normalizeAddressKey(row.address));
-      }
-      toast.success(next.owner_phone || next.owner_email ? "Contact info found." : "No contact info found for this owner.");
-    } catch {
-      toast.error("We couldn't get contact info right now. Please try again.");
-    } finally {
-      setEnriching(false);
-    }
+      const res = await findOwnerContact(id);
+      setRow({ ...row, ...res.listing });
+      if (res.matched) toast.success('Owner contact found.');
+      else setLookupMiss(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Contact lookup is temporarily unavailable.');
+    } finally { setEnriching(false); }
   };
 
   const onTalkingPoints = async () => {
@@ -347,22 +340,17 @@ export default function OwnerDetail() {
               <CardContent className="space-y-3 text-sm">
                 <p className="font-medium">{row.owner_name || "Not yet identified"}</p>
                 {hasContact ? (
-                  <div className="space-y-1.5">
-                    {row.owner_phone && !dnc && (
-                      <a href={`tel:${row.owner_phone}`} className="flex items-center gap-2 hover:underline"><Phone className="h-3.5 w-3.5" />{row.owner_phone}</a>
-                    )}
-                    {row.owner_email && (
-                      <a href={`mailto:${row.owner_email}`} className="flex items-center gap-2 hover:underline break-all"><Mail className="h-3.5 w-3.5" />{row.owner_email}</a>
-                    )}
-                  </div>
-                ) : row.rentcast_id ? (
-                  <Button size="sm" className="w-full" onClick={onGetContact} disabled={enriching}>
+                  <OwnerContactSuccess row={row} dnc={dnc} />
+                ) : externalId || row.rentcast_id ? (
+                  <Button size="sm" className="min-h-11 w-full" onClick={onGetContact} disabled={enriching}>
                     {enriching && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                    Get contact info ({CREDIT_COSTS.enrich} credits)
+                    Find contact info
                   </Button>
                 ) : (
                   <p className="text-xs text-muted-foreground">No contact info saved for this owner.</p>
                 )}
+                <FreeLookupCounter />
+                {lookupMiss && <p role="status" className="text-sm">We couldn't find contact info for this owner. No lookup or credits charged. Try another listing.</p>}
                 {dnc && <Badge variant="destructive">Do not contact</Badge>}
                 <CallScriptDialog
                   className="min-h-11 w-full gap-1.5 text-xs md:min-h-9"

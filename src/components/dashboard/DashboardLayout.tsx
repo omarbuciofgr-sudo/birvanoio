@@ -537,8 +537,8 @@ const DashboardLayoutInner = ({ children, fullWidth = false }: DashboardLayoutPr
       {/* Main content */}
       <div className={`transition-all duration-200 ${sidebarCollapsed ? 'lg:pl-[68px]' : 'lg:pl-64'}`}>
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-14 bg-background/80 backdrop-blur-xl border-b border-border/60">
-          <div className="flex items-center justify-between h-full px-4 lg:px-6">
+        <header className="sticky top-0 z-30 min-h-14 bg-background/80 backdrop-blur-xl border-b border-border/60">
+          <div className="flex flex-wrap items-center justify-between min-h-14 gap-2 px-4 py-1 lg:px-6">
             <div className="flex items-center gap-3">
               <button
                 className={`${isRealtor && !isAdmin ? "hidden md:flex lg:hidden" : "lg:hidden"} min-h-11 min-w-11 items-center justify-center -ml-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors`}
@@ -561,7 +561,7 @@ const DashboardLayoutInner = ({ children, fullWidth = false }: DashboardLayoutPr
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
               <AssistantTopButton />
               <NotificationBell />
               <ThemeToggle />

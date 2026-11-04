@@ -1,3 +1,4 @@
+import { FreeLookupCounter } from "@/components/rentcast/FreeLookupCounter";
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Coins } from "lucide-react";
@@ -19,9 +20,9 @@ export function RemainingCredits() {
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, [user?.id, pathname, checkSubscription]);
   if (!user) return null;
-  return <Button asChild variant="outline" className="h-11 shrink-0 gap-1.5 px-2 text-xs sm:px-3" aria-label={error ? "Check credits in Billing" : `${creditsRemaining.toLocaleString()} credits left. Open Billing`}>
+  return <div className="flex flex-wrap items-center justify-end gap-2"><FreeLookupCounter compact /><Button asChild variant="outline" className="h-11 shrink-0 gap-1.5 px-2 text-xs sm:px-3" aria-label={error ? "Check credits in Billing" : `${creditsRemaining.toLocaleString()} credits left. Open Billing`}>
     <Link to="/dashboard/billing"><Coins className="h-4 w-4 text-primary" />
       {isLoading ? <Skeleton className="h-4 w-16" /> : error ? <span>Check credits</span> : <span><strong className="tabular-nums">{creditsRemaining.toLocaleString()}</strong> credits left</span>}
     </Link>
-  </Button>;
+  </Button></div>;
 }
