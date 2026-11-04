@@ -4485,6 +4485,30 @@ export type Database = {
         }
         Relationships: []
       }
+      signup_welcome_emails: {
+        Row: {
+          created_at: string
+          provider_id: string | null
+          sent_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          provider_id?: string | null
+          sent_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          provider_id?: string | null
+          sent_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       source_analytics: {
         Row: {
           avg_confidence_score: number | null
