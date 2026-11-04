@@ -50,6 +50,7 @@ import {
   UserPlus,
   ChevronDown,
   Bell,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -72,6 +73,12 @@ import {
   CALIBRATION_LABELS,
   downloadCalibrationCsv,
 } from "@/lib/rentcast/downloadCalibrationCsv";
+import { useOwnerLookups } from '@/hooks/useOwnerLookups';
+import { usePricingSettings } from '@/hooks/usePricingSettings';
+import { FreeLookupCounter } from './FreeLookupCounter';
+import { OwnerContactSuccess } from './OwnerContactSuccess';
+import { findOwnerContact } from '@/lib/api/ownerContactLookup';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CREDIT_COSTS, useCredits } from "@/hooks/useCredits";
 
 type FilterTab = "sale-strong" | "sale-possible" | "rental-strong" | "rental-possible";
@@ -314,6 +321,12 @@ export default function RentCastListingsContent({
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
+  const lookupAllowance = useOwnerLookups();
+  const { actionCosts } = usePricingSettings();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [resultCity, setResultCity] = useState('');
+  const [contactResult, setContactResult] = useState<RentCastListing | null>(null);
+  const [lookupMiss, setLookupMiss] = useState<string | null>(null);
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null);
   const welcomeStarted = useRef(false);
   const savedAlerts = useSavedAlerts();
@@ -537,6 +550,8 @@ export default function RentCastListingsContent({
       toast.error(`You need ${CREDIT_COSTS.scrape} credit to run this search.`);
       return false;
     }
+    setBannerDismissed(false);
+    setResultCity(loc.split(",")[0].trim());
     setBusy("search");
     try {
       const { data: access } = await (supabase as any).rpc("check_city_access", { p_location: loc });
@@ -698,47 +713,36 @@ export default function RentCastListingsContent({
   };
 
   const runEnrich = async (ids?: string[]) => {
-    const count = ids?.length || Math.max(likelyInView.length, 10);
-    if (!canAfford("enrich", count)) {
-      toast.error(`You need ${count * CREDIT_COSTS.enrich} credits to get this contact info.`);
-      return;
-    }
+    const rows = ids?.length ? listings.filter(r => ids.includes(r.rentcast_id || ownerRef(r))) : likelyInView;
+    if (!rows.length) return;
     setBusy("enrich");
+    setLookupMiss(null);
     try {
-      const res = await rentcastApi.enrich({
-        location: ids?.length ? undefined : location.trim() || undefined,
-        rentcast_ids: ids?.length ? ids : undefined,
-        limit: ids?.length ? ids.length : Math.max(likelyInView.length, 10),
-        likely_only: !ids?.length,
-      });
-      if (!res.success) {
-        reportAdminError("Contact enrichment failed", res.error);
-        toast.error(SAFE_RESULTS_ERROR);
-        return;
+      // Persist under this user before lookup; the server loads the address, never trusts a client result.
+      await saveSearchResults(rows, resultCity || location.trim());
+      let found = 0;
+      for (const row of rows) {
+        const id = row.rentcast_id || normalizeAddressKey(row.address);
+        const res = await findOwnerContact(id);
+        const next = { ...row, ...res.listing };
+        patchListings([next]);
+        if (res.matched) { found++; setContactResult(next); }
+        else setLookupMiss("We couldn't find contact info for this owner. No lookup or credits charged. Try another listing.");
       }
-      const summary = res.summary;
-      if (summary) {
-        const skipped = summary.skipped_below_60
-          ? ` · skipped <60: ${summary.skipped_below_60}`
-          : "";
-        toast.success(
-          `Enrich done: ${summary.enriched ?? 0} with contact · ${summary.partial ?? 0} partial · ${summary.no_contact ?? 0} no contact · ${summary.failed ?? 0} failed${skipped}`,
-        );
-      } else {
-        toast.success(`Processed ${res.total ?? res.results?.length ?? 0} rows`);
-      }
-      if (res.listings?.length) {
-        patchListings(res.listings);
-      } else {
-        await onLoadSaved();
-      }
-    } catch (e: unknown) {
-      reportAdminError("Contact enrichment exception", e);
-      toast.error(SAFE_RESULTS_ERROR);
-    } finally {
-      setBusy(null);
-    }
+      if (found) toast.success('Owner contact found.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Contact lookup is temporarily unavailable.');
+    } finally { setBusy(null); }
   };
+
+  const lookupButton = (row: RentCastListing, index: number) => <div className="mt-3 space-y-1" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+    {index < 3 && !lookupAllowance.attempted && <Badge variant="outline" className="border-primary text-primary">Start here</Badge>}
+    <Button className="min-h-11 w-full gap-2 whitespace-normal" disabled={!!busy}
+      onClick={() => row.owner_phone || row.owner_email ? setContactResult(row) : void runEnrich([row.rentcast_id || ownerRef(row)])}>
+      {busy === 'enrich' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+      {row.owner_phone || row.owner_email ? 'View contact info' : 'Find contact info'}
+    </Button>
+  </div>;
 
   const onEnrichSelected = () => {
     const ids = Array.from(selectedIds);
@@ -1071,7 +1075,7 @@ export default function RentCastListingsContent({
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Get contact info ({selectedCount} selected · {selectedCount * CREDIT_COSTS.enrich} credits)
+            Find contact info ({selectedCount} selected · {lookupAllowance.isFree && lookupAllowance.remaining > 0 ? 'free lookups available' : `${selectedCount * actionCosts.owner_contact} credits on matches`})
           </Button>
           {verifyEnabled && (
             <>
@@ -1348,6 +1352,14 @@ export default function RentCastListingsContent({
           </label>
         </div>
 
+        <FreeLookupCounter />
+        {listings.length > 0 && lookupAllowance.isFree && lookupAllowance.remaining > 0 && !lookupAllowance.attempted && !bannerDismissed && (
+          <div className="flex items-start gap-3 border-l-4 border-primary bg-primary/10 p-4" role="status">
+            <p className="flex-1 text-sm leading-relaxed">These are owners in {resultCity || listings[0]?.search_location?.split(',')[0] || location.split(',')[0] || 'your city'}. Pick a listing and press <strong>Find contact info</strong> to get the owner's phone number and email. You have <strong>{lookupAllowance.remaining} free lookups</strong>.</p>
+            <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Dismiss contact lookup guidance" onClick={() => setBannerDismissed(true)}><X className="h-4 w-4" /></Button>
+          </div>
+        )}
+        {lookupMiss && <p role="status" className="border border-border p-4 text-sm">{lookupMiss}</p>}
         <ListMapToggle value={layout} onChange={setLayout} />
 
         {layout === "map" ? (
@@ -1394,7 +1406,7 @@ export default function RentCastListingsContent({
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((row) => {
+                filtered.map((row, index) => {
                   const id = row.rentcast_id || row.address || "";
                   return (
                     <TableRow key={id} className="cursor-pointer" onClick={() => openOwner(row)}>
@@ -1431,6 +1443,7 @@ export default function RentCastListingsContent({
                           {row.owner_phone || row.owner_email || row.owner_mailing_address || ""}
                         </div>
                         <OwnerStatusBadges row={row} />
+                        {lookupButton(row, index)}
                       </TableCell>
                       <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
                         {row.imported_lead_id ? (
@@ -1468,7 +1481,7 @@ export default function RentCastListingsContent({
             <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               Enter a city and tap Find Owners. Most searches return results in under a minute.
             </div>
-          ) : filtered.map((row) => {
+          ) : filtered.map((row, index) => {
             const id = row.rentcast_id || row.address || "";
             const selected = !!row.rentcast_id && selectedIds.has(row.rentcast_id);
             return (
@@ -1487,6 +1500,7 @@ export default function RentCastListingsContent({
                     <p className="mt-3 text-lg font-semibold">{money(row.price)}</p>
                     <OwnerFlagBadges flags={flagsFor(row)} className="mt-2" />
                     <ListingLinkButton row={row} className="mt-2 min-h-11" />
+                    {lookupButton(row, index)}
                   </div>
                 </div>
               </div>
@@ -1497,6 +1511,9 @@ export default function RentCastListingsContent({
         )}
       </div>
 
+      <Dialog open={!!contactResult} onOpenChange={open => !open && setContactResult(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{contactResult?.address || 'Owner contact'}</DialogTitle></DialogHeader>{contactResult && <OwnerContactSuccess row={contactResult} dnc={Boolean((contactResult as RentCastListing & { do_not_contact?: boolean }).do_not_contact)} />}</DialogContent>
+      </Dialog>
       <Sheet open={!!detailRow} onOpenChange={(open) => !open && setDetailRow(null)}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           {detailRow && (
@@ -1654,7 +1671,7 @@ export default function RentCastListingsContent({
                     className="gap-1.5"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Get contact info ({CREDIT_COSTS.enrich} credits)
+                    Find contact info
                   </Button>
                   <Button
                     size="sm"
