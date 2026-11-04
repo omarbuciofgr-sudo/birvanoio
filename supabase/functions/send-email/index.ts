@@ -58,6 +58,35 @@ serve(async (req) => {
 
     // Parse and validate input
     const rawInput = await req.json();
+    // Signup-only event: fixed recipient and content, authenticated by the private job token.
+    if (rawInput.mode === 'signup_welcome') {
+      const db = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+      const { data: valid } = await db.rpc('verify_job_token', { p_name: 'owner_alerts', p_token: rawInput.job_token ?? '' });
+      if (!valid || typeof rawInput.user_id !== 'string') return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+      const { data: account, error: accountError } = await db.auth.admin.getUserById(rawInput.user_id);
+      const user = account?.user;
+      if (accountError || !user?.email || Date.now() - Date.parse(user.created_at) > 24 * 60 * 60 * 1000) return new Response(JSON.stringify({ error: 'Signup event unavailable' }), { status: 400, headers: corsHeaders });
+      const { data: prior } = await db.from('signup_welcome_emails').select('status').eq('user_id', user.id).maybeSingle();
+      if (prior?.status === 'sent') return new Response(JSON.stringify({ success: true, already_sent: true }), { headers: corsHeaders });
+      if (!prior) {
+        const { error: claimError } = await db.from('signup_welcome_emails').insert({ user_id: user.id });
+        if (claimError) return new Response(JSON.stringify({ success: true, already_queued: true }), { headers: corsHeaders });
+      }
+      if (defaultSenderEmail.endsWith('@resend.dev')) return new Response(JSON.stringify({ error: 'Verified sender required' }), { status: 503, headers: corsHeaders });
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `contact-welcome-${user.id}` },
+        body: JSON.stringify({ from: `Brivano <${defaultSenderEmail}>`, to: [user.email],
+          subject: 'How to get owner contact info in Brivano',
+          text: "Thanks for signing up! Search any city, pick a listing, and press Find contact info. That gives you the owner's phone number and email. You have 5 free lookups to start." }),
+      });
+      const sent = await response.json();
+      if (!response.ok) {
+        await db.from('signup_welcome_emails').update({ status: 'failed' }).eq('user_id', user.id);
+        return new Response(JSON.stringify({ error: 'Welcome email failed', status: response.status }), { status: 502, headers: corsHeaders });
+      }
+      await db.from('signup_welcome_emails').update({ status: 'sent', provider_id: sent.id, sent_at: new Date().toISOString() }).eq('user_id', user.id);
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
     const validation = emailSchema.safeParse(rawInput);
 
     if (!validation.success) {

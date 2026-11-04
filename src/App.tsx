@@ -76,6 +76,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/pricing" element={<Navigate to="/dashboard/billing" replace />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
