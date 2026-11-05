@@ -1,5 +1,10 @@
 # Roadmap
 
+## HeyCatch analytics
+- [x] Install the latest stable SDK and initialize once in the shared client entry point
+- [ ] Reconcile existing identity handling and verify initialization and short links
+- [ ] Confirm live ingestion (blocked: publish and real-browser activity required)
+
 ## Website audit improvements (November 5)
 - [x] Quick wins: pricing access/mobile menu, truthful FAQ, real-estate AI discovery/schema, value anchor and page metadata
 - [x] Public About/Features/Customers pages and sitemap; data-quality explanation (Customers remains noindex until real stories are provided)
