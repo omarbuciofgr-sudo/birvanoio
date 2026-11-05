@@ -60,6 +60,7 @@ import Automations from "./pages/Automations";
 import Playbook from "./pages/Playbook";
 import CallTracking from "./pages/CallTracking";
 import FollowUps from "./pages/FollowUps";
+import PublicInfo from "./pages/PublicInfo";
 
 
 const queryClient = new QueryClient();
@@ -76,7 +77,10 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/pricing" element={<Navigate to="/dashboard/billing" replace />} />
+              <Route path="/pricing" element={<PublicInfo kind="pricing" />} />
+              <Route path="/about" element={<PublicInfo kind="about" />} />
+              <Route path="/features" element={<PublicInfo kind="features" />} />
+              <Route path="/customers" element={<PublicInfo kind="customers" />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

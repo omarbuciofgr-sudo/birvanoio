@@ -22,8 +22,11 @@ const Footer = React.forwardRef<HTMLElement>(function Footer(_props, ref) {
           <div className="flex flex-col">
             <h4 className="font-display text-sm font-semibold text-foreground mb-3">Links</h4>
             <ul className="space-y-2">
-              <li><a href="#services" className="text-sm text-muted-foreground hover:text-foreground transition-colors">AI features</a></li>
-              <li><a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</a></li>
+              <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">AI features</Link></li>
+              <li><Link to="/#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</Link></li>
+              <li><Link to="/#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link></li>
+              <li><Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About Brivano</Link></li>
+              <li><Link to="/customers" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Who uses Brivano</Link></li>
               <li><Link to="/who-we-help/agents" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Real Estate Agents</Link></li>
             </ul>
           </div>
@@ -44,11 +47,11 @@ const Footer = React.forwardRef<HTMLElement>(function Footer(_props, ref) {
             </ul>
             <div className="flex gap-2">
               {[
-                { icon: Instagram, href: "https://www.instagram.com/brivano.io/" },
-                { icon: Linkedin, href: "https://www.linkedin.com/company/brivano-io/" },
-                { icon: Twitter, href: "https://x.com/brivanoio" },
-              ].map(({ icon: Icon, href }) => (
-                <a key={href} href={href} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors">
+                { icon: Instagram, href: "https://www.instagram.com/brivano.io/", label: "Brivano on Instagram" },
+                { icon: Linkedin, href: "https://www.linkedin.com/company/brivano-io/", label: "Brivano on LinkedIn" },
+                { icon: Twitter, href: "https://x.com/brivanoio", label: "Brivano on X" },
+              ].map(({ icon: Icon, href, label }) => (
+                <a key={href} href={href} aria-label={label} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors">
                   <Icon className="w-3.5 h-3.5" />
                 </a>
               ))}

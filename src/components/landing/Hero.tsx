@@ -2,6 +2,7 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Play, Search, Contact, Send } from "lucide-react";
+import { UsageProof } from "@/components/landing/CustomerProof";
 
 const Hero = React.forwardRef<HTMLElement>(function Hero(_props, ref) {
   const navigate = useNavigate();
@@ -62,9 +63,12 @@ const Hero = React.forwardRef<HTMLElement>(function Hero(_props, ref) {
             </Button>
           </div>
 
+          <p className="mt-4 text-sm text-muted-foreground">Start free, no credit card required.</p>
+          <UsageProof />
+
           {/* Three-step workflow */}
           <div 
-            className="flex items-center justify-center gap-8 sm:gap-12 mt-16 animate-fade-in"
+            className="flex flex-col sm:flex-row items-center justify-center gap-5 sm:gap-8 mt-16 animate-fade-in"
             style={{ animationDelay: "0.5s" }}
           >
             <div className="flex items-center gap-2 text-sm font-medium"><Search className="h-4 w-4 text-primary" />Search a city</div>

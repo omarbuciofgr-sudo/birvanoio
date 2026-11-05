@@ -1,5 +1,14 @@
 # Roadmap
 
+## Website audit improvements (November 5)
+- [x] Quick wins: pricing access/mobile menu, truthful FAQ, real-estate AI discovery/schema, value anchor and page metadata
+- [x] Public About/Features/Customers pages and sitemap; data-quality explanation (Customers remains noindex until real stories are provided)
+- [x] Verify public pages, signup navigation, FAQ, pricing schema, mobile overflow; 27 regression tests pass and build OK
+- [ ] Confirm production page-speed/transfer metrics (blocked: local preview serves development assets, not published output)
+- [ ] Customer quotes/photos, approved usage count, founder identity/story/photo/profile and third-party mentions (blocked: owner-supplied evidence required)
+- [ ] Real scoring screenshot and measured freshness/match quality (blocked: authenticated screenshot and measured evidence required)
+- [ ] Competitor comparison pages (blocked: existing project rule excludes direct competitor comparisons)
+
 ## First owner contact experience
 - [x] First-search guidance, primary listing lookup buttons, free allowance counters, contact success and miss states
 - [x] Server-side successful-only allowance and credit charging, audit every attempt

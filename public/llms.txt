@@ -1,15 +1,27 @@
 # Brivano
 
-> AI-powered B2B lead generation platform delivering fresh, verified leads weekly with a built-in CRM, calling, texting, email, and AI agents.
+> Find homeowners selling or renting on their own in US cities, request available owner contacts, and manage real estate outreach in one place.
 
-Brivano helps sales teams replace stitched-together tools (ZoomInfo + Apollo + Outreach + a CRM) with a single platform: scrape and enrich verified leads, organize them in a pipeline, and run multi-channel outreach (email, SMS, LinkedIn, voice) with AI assistance.
+Brivano serves real estate agents, investors, leasing agents and property managers prospecting for-sale-by-owner (FSBO) and for-rent-by-owner (FRBO) properties. Search by city, review listing links and match scores, use Find contact info for available phone numbers or emails, save owners to My Leads, and track call outcomes, appointments and follow-ups.
+
+The Playbook includes role-specific FSBO/FRBO scripts. AI-written first messages, talking points and follow-up suggestions are editable drafts, never automatically sent. AI Voice Agent is Beta and requires recorded lead consent. A match score does not verify ownership or contact accuracy. Listings and contacts may be incomplete, cached or outdated. Brivano does not provide automatic national Do Not Call registry scrubbing; users must check applicable calling, consent and opt-out rules.
+
+Plans, monthly credits and action costs are shown on the pricing page. Paid owner-contact lookups consume credits only when a phone number or email is found; misses consume neither credits nor free lookups. AI writing is credit-free with monthly per-seat limits. Contact availability and business outcomes are not guaranteed.
 
 ## Pages
 
 - [Home](/): Overview of Brivano, features, pricing, and how it works.
-- [Sign in / Start free](/auth): Create an account or sign in to the workspace.
+- [Pricing](/pricing): Free, Starter, Growth and Scale plans, monthly search allowances and action credit costs.
+- [FSBO leads and scripts for agents](/who-we-help/agents): City search, contact lookups, sample FSBO scripts and FAQs.
+- [Property managers](/who-we-help/property-managers): Prospecting independent rental owners.
+- [Investors](/who-we-help/investors): Owner-listed sale and rental opportunities.
+- [Features](/features): Search, skip tracing, scripts, call tracking, follow-ups and AI drafts.
+- [About](/about): Brivano's real estate prospecting focus and contact information.
+- [Who uses Brivano](/customers): Role-specific workflows; not a claim of customer outcomes.
+- [Start free](/auth?mode=signup): Create an account without a credit card.
+- [Sign in](/auth): Access an existing workspace.
 
 ## Optional
 
-- [Privacy](/#privacy): Privacy policy.
-- [Terms](/#terms): Terms of service.
+- [Privacy](/privacy): Personal information, service providers, retention and user choices.
+- [Terms](/terms): Billing, data limitations and outreach responsibilities.
