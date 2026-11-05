@@ -173,8 +173,11 @@ const Auth = () => {
   return (
     <div className="min-h-screen bg-background flex">
       <Helmet>
-        <title>Sign in or Start Free | Brivano</title>
-        <meta name="description" content="Sign in to your Brivano workspace or start free in seconds. Access verified B2B leads, CRM, and AI-powered outreach tools." />
+        <title>{isLogin ? "Sign In | Brivano" : "Start Free | Brivano FSBO & FRBO Leads"}</title>
+        <meta name="description" content="Sign in or start free with Brivano. Search US cities for FSBO and FRBO owners, request available contacts, and manage your real estate follow-ups." />
+        <meta property="og:title" content={isLogin ? "Sign In | Brivano" : "Start Free | Brivano FSBO & FRBO Leads"} />
+        <meta property="og:description" content="Find owner-listed properties, request available contacts, and track your real estate outreach with Brivano." />
+        <meta property="og:url" content="https://www.brivano.io/auth" />
         <link rel="canonical" href="https://www.brivano.io/auth" />
       </Helmet>
       {/* Left Panel - Branding */}

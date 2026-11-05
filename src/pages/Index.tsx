@@ -11,8 +11,18 @@ import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
 import ChatWidget from "@/components/landing/ChatWidget";
 import ExitIntentPopup from "@/components/landing/ExitIntentPopup";
+import FAQ from "@/components/landing/FAQ";
+import DataQuality from "@/components/landing/DataQuality";
+import CustomerProof from "@/components/landing/CustomerProof";
+import { useLocation } from "react-router-dom";
 
 const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
+  const { hash } = useLocation();
+  React.useEffect(() => {
+    if (!hash) return;
+    const id = decodeURIComponent(hash.slice(1));
+    document.getElementById(id)?.scrollIntoView();
+  }, [hash]);
   return (
     <div ref={ref} className="min-h-screen bg-background">
       <Helmet>
@@ -30,7 +40,10 @@ const Index = React.forwardRef<HTMLDivElement>(function Index(_props, ref) {
       <ProductDemo />
       <HowItWorks />
       <Services />
+      <DataQuality />
+      <CustomerProof />
       <Pricing />
+      <FAQ />
       <CTASection />
       <Footer />
       <ChatWidget />

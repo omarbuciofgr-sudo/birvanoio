@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { usePricingSettings } from "@/hooks/usePricingSettings";
+import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 
 const plans = [
   {
@@ -144,6 +146,27 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
 
   return (
     <div ref={ref} style={{ display: "contents" }}>
+    <Helmet>
+      <script type="application/ld+json">{JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "@id": "https://www.brivano.io/#software",
+        name: "Brivano",
+        url: "https://www.brivano.io/",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        description: "Find FSBO and FRBO listings, get available owner contact information, and manage real estate outreach.",
+        offers: plans.map(plan => ({
+          "@type": "Offer",
+          name: `${plan.name} monthly plan`,
+          price: plan.monthlyPrice,
+          priceCurrency: "USD",
+          url: "https://www.brivano.io/pricing",
+          description: `${plan.description}. Monthly price per seat.`,
+          priceSpecification: { "@type": "UnitPriceSpecification", price: plan.monthlyPrice, priceCurrency: "USD", unitText: "seat/month" },
+        })),
+      })}</script>
+    </Helmet>
     <section id="pricing" className="py-24">
       <div ref={scrollRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
@@ -273,6 +296,9 @@ const Pricing = React.forwardRef<HTMLDivElement>(function Pricing(_props, ref) {
             );
           })}
         </div>
+
+        <p className="mt-8 text-center text-sm leading-7 text-muted-foreground">One subscription brings your owner listing search, skip tracing, outreach and follow-up tracking together, instead of managing separate tools.</p>
+        <p className="mt-3 text-center text-sm leading-7 text-muted-foreground">Paid checkout is handled by Stripe. Manage your subscription in Billing. Charges are non-refundable except where required by law. <Link to="/terms" className="text-primary underline underline-offset-4">Terms</Link> · <Link to="/privacy" className="text-primary underline underline-offset-4">How we handle your data</Link>.</p>
 
         <div className="mt-12 border-t border-border pt-10">
           <div className="mb-5 text-center">
