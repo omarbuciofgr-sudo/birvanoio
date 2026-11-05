@@ -17,6 +17,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@elevenlabs/react": "^0.12.3",
+    "@heycatch/sdk": "^0.8.5",
     "@hookform/resolvers": "^3.10.0",
     "@lovable.dev/cloud-auth-js": "^1.0.0",
     "@lovable.dev/mcp-js": "^0.26.1",
