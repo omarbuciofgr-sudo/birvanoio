@@ -112,22 +112,22 @@ const Navbar = React.forwardRef<HTMLElement>(function Navbar(_props, ref) {
             ))}
             <div className="space-y-2 border-t border-border pt-3">
               <p className="text-xs font-medium text-foreground">Who we help</p>
-              <Link className="block text-sm text-muted-foreground" to="/who-we-help/agents" onClick={() => setIsOpen(false)}>Real Estate Agents</Link>
-              <Link className="block text-sm text-muted-foreground" to="/who-we-help/property-managers" onClick={() => setIsOpen(false)}>Property Managers</Link>
-              <Link className="block text-sm text-muted-foreground" to="/who-we-help/investors" onClick={() => setIsOpen(false)}>Investors</Link>
+              <Link className="flex min-h-11 items-center text-sm text-muted-foreground" to="/who-we-help/agents" onClick={() => setIsOpen(false)}>Real Estate Agents</Link>
+              <Link className="flex min-h-11 items-center text-sm text-muted-foreground" to="/who-we-help/property-managers" onClick={() => setIsOpen(false)}>Property Managers</Link>
+              <Link className="flex min-h-11 items-center text-sm text-muted-foreground" to="/who-we-help/investors" onClick={() => setIsOpen(false)}>Investors</Link>
             </div>
             <div className="pt-3 space-y-2 border-t border-border">
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start text-muted-foreground"
+                className="min-h-11 w-full justify-start text-muted-foreground"
                 onClick={() => navigate("/auth")}
               >
                 Sign In
               </Button>
               <Button
                 size="sm"
-                className="w-full bg-primary text-primary-foreground"
+                className="min-h-11 w-full bg-primary text-primary-foreground"
                 onClick={() => navigate("/auth?mode=signup")}
               >
                 Start Free

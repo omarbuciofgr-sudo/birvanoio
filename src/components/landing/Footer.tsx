@@ -24,7 +24,7 @@ const Footer = React.forwardRef<HTMLElement>(function Footer(_props, ref) {
             <ul className="space-y-2">
               <li><Link to="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">AI features</Link></li>
               <li><Link to="/#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</Link></li>
-              <li><Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link></li>
+              <li><Link to="/#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link></li>
               <li><Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About Brivano</Link></li>
               <li><Link to="/customers" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Who uses Brivano</Link></li>
               <li><Link to="/who-we-help/agents" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Real Estate Agents</Link></li>
