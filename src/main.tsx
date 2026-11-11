@@ -3,6 +3,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { analytics } from "@heycatch/sdk";
 import { supabase } from "@/integrations/supabase/client";
 import App from "./App.tsx";
+import { captureFirstTouch, readFirstTouch } from "@/lib/firstTouch";
 import "./index.css";
 
 analytics.init({
@@ -14,6 +15,19 @@ analytics.init({
   },
 });
 
+captureFirstTouch();
+
+// Saves first-touch source once per profile; a DB trigger blocks overwrites.
+const sourcedUsers = new Set<string>();
+async function saveSignupSource(userId: string) {
+  if (sourcedUsers.has(userId)) return;
+  sourcedUsers.add(userId);
+  const { data } = await supabase.from("profiles").select("signup_source").eq("user_id", userId).maybeSingle();
+  if (!data || data.signup_source) return;
+  const source = readFirstTouch() ?? { referrer: null, note: "no first-touch data" };
+  await supabase.from("profiles").update({ signup_source: source as never }).eq("user_id", userId).is("signup_source", null);
+}
+
 // One listener for the shared site/app, rather than one per useAuth consumer.
 let identifiedUserId: string | null = null;
 supabase.auth.onAuthStateChange((event, session) => {
@@ -23,6 +37,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     return;
   }
   const user = session?.user;
+  if (user) setTimeout(() => { void saveSignupSource(user.id); }, 0);
   if (!user || user.id === identifiedUserId) return;
   const metadata = user.user_metadata;
   const name = metadata.full_name ?? metadata.name ??
