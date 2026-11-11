@@ -19,8 +19,10 @@ captureFirstTouch();
 
 // Saves first-touch source once per profile; a DB trigger blocks overwrites.
 const sourcedUsers = new Set<string>();
-async function saveSignupSource(userId: string) {
+async function saveSignupSource(userId: string, createdAt?: string) {
   if (sourcedUsers.has(userId)) return;
+  const createdMs = createdAt ? Date.parse(createdAt) : NaN;
+  if (!Number.isFinite(createdMs) || Date.now() - createdMs > 24 * 60 * 60 * 1000) return;
   sourcedUsers.add(userId);
   const { data } = await supabase.from("profiles").select("signup_source").eq("user_id", userId).maybeSingle();
   if (!data || data.signup_source) return;
@@ -37,7 +39,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     return;
   }
   const user = session?.user;
-  if (user) setTimeout(() => { void saveSignupSource(user.id); }, 0);
+  if (user) setTimeout(() => { void saveSignupSource(user.id, user.created_at); }, 0);
   if (!user || user.id === identifiedUserId) return;
   const metadata = user.user_metadata;
   const name = metadata.full_name ?? metadata.name ??
