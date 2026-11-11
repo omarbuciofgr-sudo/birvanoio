@@ -3273,6 +3273,7 @@ export type Database = {
           prospecting_role: string | null
           role_title: string | null
           sender_email: string | null
+          signup_source: Json | null
           streak_counts_weekends: boolean
           timezone: string | null
           twilio_phone_number: string | null
@@ -3306,6 +3307,7 @@ export type Database = {
           prospecting_role?: string | null
           role_title?: string | null
           sender_email?: string | null
+          signup_source?: Json | null
           streak_counts_weekends?: boolean
           timezone?: string | null
           twilio_phone_number?: string | null
@@ -3339,6 +3341,7 @@ export type Database = {
           prospecting_role?: string | null
           role_title?: string | null
           sender_email?: string | null
+          signup_source?: Json | null
           streak_counts_weekends?: boolean
           timezone?: string | null
           twilio_phone_number?: string | null
@@ -4491,6 +4494,8 @@ export type Database = {
       signup_welcome_emails: {
         Row: {
           created_at: string
+          error_message: string | null
+          http_status: number | null
           provider_id: string | null
           sent_at: string | null
           status: string
@@ -4498,6 +4503,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          error_message?: string | null
+          http_status?: number | null
           provider_id?: string | null
           sent_at?: string | null
           status?: string
@@ -4505,6 +4512,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          error_message?: string | null
+          http_status?: number | null
           provider_id?: string | null
           sent_at?: string | null
           status?: string
