@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
   }
 
   let auditId: string | null = null;
-  let auditClient: ReturnType<typeof createClient> | null = null;
+  let auditClient: any = null;
   try {
     // Authentication check
     const authHeader = req.headers.get('Authorization');
