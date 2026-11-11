@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { batchDataSkipTrace } from '../_shared/batchData.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1491,71 +1492,13 @@ async function skipTraceAddress(address: string, _unused?: string): Promise<Skip
     addressData.street = address;
   }
 
-  // Use BatchData API only (removed Tracerfy)
-  const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
-  if (!batchDataKey) {
-    return { success: false, error: 'BATCHDATA_API_KEY not configured' };
+  // Shared BatchData client (propertyAddress request format).
+  const r = await batchDataSkipTrace({ street: addressData.street, city: addressData.city, state: addressData.state, zip: addressData.zip });
+  if (!r.ok) return { success: false, error: r.error || 'Skip trace failed' };
+  if (!r.matched) {
+    return { success: true, data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 }, message: 'No owner information found' };
   }
-
-  try {
-    console.log(`[BatchData] Skip tracing: ${addressData.street}, ${addressData.city}, ${addressData.state} ${addressData.zip}`);
-    
-    const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${batchDataKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        requests: [{
-          street: addressData.street,
-          city: addressData.city || '',
-          state: addressData.state || '',
-          zip: addressData.zip || '',
-        }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[BatchData] API error:', response.status, errorText);
-      return { success: false, error: `BatchData API error: ${response.status}` };
-    }
-
-    const data = await response.json();
-    const result = data.results?.[0];
-    
-    if (result?.persons?.[0]) {
-      const person = result.persons[0];
-      return {
-        success: true,
-        data: {
-          fullName: person.names?.[0]?.fullName || null,
-          firstName: person.names?.[0]?.firstName || null,
-          lastName: person.names?.[0]?.lastName || null,
-          phones: (person.phones || []).map((p: any) => ({
-            number: p.phoneNumber || p.number,
-            type: p.phoneType || 'unknown',
-            lineType: p.carrierType,
-          })),
-          emails: (person.emails || []).map((e: any) => ({
-            address: e.emailAddress || e.email,
-            type: e.emailType,
-          })),
-          confidence: result.confidenceScore || 0,
-        },
-      };
-    }
-    
-    return {
-      success: true,
-      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-      message: 'No owner information found',
-    };
-  } catch (error) {
-    console.error('[BatchData] Skip trace error:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Skip trace failed' };
-  }
+  return { success: true, data: { fullName: r.fullName, firstName: r.firstName, lastName: r.lastName, phones: r.phones, emails: r.emails, confidence: 0 } };
 }
 
 // Main handler
