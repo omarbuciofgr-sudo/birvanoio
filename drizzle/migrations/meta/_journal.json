@@ -43,6 +43,13 @@
       "when": 1794404825699,
       "tag": "0005_owner_lookup_provider_response",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794405057765,
+      "tag": "0006_welcome_errors_and_signup_source",
+      "breakpoints": true
     }
   ]
 }
