@@ -2944,6 +2944,7 @@ export type Database = {
           id: string
           listing_id: string
           phone_found: boolean
+          provider_response: Json | null
           status: string
           user_id: string
         }
@@ -2957,6 +2958,7 @@ export type Database = {
           id?: string
           listing_id: string
           phone_found?: boolean
+          provider_response?: Json | null
           status?: string
           user_id: string
         }
@@ -2970,6 +2972,7 @@ export type Database = {
           id?: string
           listing_id?: string
           phone_found?: boolean
+          provider_response?: Json | null
           status?: string
           user_id?: string
         }
@@ -5606,6 +5609,7 @@ export type Database = {
           p_id: string
           p_listing?: Json
           p_phone: boolean
+          p_provider_response?: Json
         }
         Returns: Json
       }
