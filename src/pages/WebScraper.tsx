@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { ownerNameText } from "@/lib/ownerName";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -559,7 +560,7 @@ function apartmentsComSkipDataFromListing(listing: {
 }): SkipTraceDataShape | undefined {
   const sp = (listing.source_platform || '').toLowerCase();
   if (sp !== 'apartments') return undefined;
-  const name = (listing.owner_name || '').trim();
+  const name = (ownerNameText(listing.owner_name) || '');
   const phoneRaw = (listing.owner_phone || '').trim();
   const email = (listing.owner_email || '').trim();
   const digits = phoneRaw.replace(/\D/g, '');
@@ -592,7 +593,7 @@ function mergeSkipTraceResultWithApartmentsFallback(
 
 /** First scraped Zillow/card contact — used when skip trace returns an assessor name that is not a private landlord. */
 function withScrapedListingContactSeed(listing: any): any {
-  const n = (listing.owner_name || '').trim();
+  const n = (ownerNameText(listing.owner_name) || '');
   if (!n || listing.scraped_listing_contact_name) return listing;
   return { ...listing, scraped_listing_contact_name: n };
 }
@@ -623,7 +624,7 @@ function ownerNameForByOwnerTableFilter(listing: {
     const kept = (listing.scraped_listing_contact_name || '').trim();
     if (kept) return kept;
   }
-  return (listing.owner_name || '').trim();
+  return (ownerNameText(listing.owner_name) || '');
 }
 
 function buildListingAfterSkipTrace(
@@ -634,7 +635,7 @@ function buildListingAfterSkipTrace(
 ): any {
   const traceName = (data.fullName && String(data.fullName).trim()) || '';
   const listContact =
-    (listing.scraped_listing_contact_name || listing.owner_name || '').trim();
+    (listing.scraped_listing_contact_name || ownerNameText(listing.owner_name) || '').trim();
   const strictFrbo = sourcePlatformLower === 'zillow_frbo';
   const badAssessor =
     !!traceName &&
@@ -3108,7 +3109,7 @@ export default function WebScraper() {
         const { data, fromApartmentsListing } = merged;
         const providers = fromApartmentsListing ? ['apartments_listing_contact'] : ['batchdata'];
         const traceName = (data.fullName && String(data.fullName).trim()) || '';
-        const listContact = (latest.scraped_listing_contact_name || latest.owner_name || '').trim();
+        const listContact = (latest.scraped_listing_contact_name || ownerNameText(latest.owner_name) || '').trim();
         const strictFrbo = sp === 'zillow_frbo';
         const badAssessor =
           !!traceName &&
