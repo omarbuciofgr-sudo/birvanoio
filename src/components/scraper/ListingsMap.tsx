@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ownerNameText } from "@/lib/ownerName";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -405,8 +406,8 @@ export default function ListingsMap({
                 <p className="text-muted-foreground">
                   {[listing.bedrooms && `${listing.bedrooms} bed`, listing.bathrooms && `${listing.bathrooms} bath`, listing.square_feet && `${listing.square_feet.toLocaleString()} sqft`].filter(Boolean).join(' · ')}
                 </p>
-                {listing.owner_name && (
-                  <p className="font-medium pt-1 border-t border-border/40">{listing.owner_name}</p>
+                {ownerNameText(listing.owner_name) && (
+                  <p className="font-medium pt-1 border-t border-border/40">{ownerNameText(listing.owner_name)}</p>
                 )}
                 <div className="flex items-center gap-3">
                   {listing.owner_phone && (

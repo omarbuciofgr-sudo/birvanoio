@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { contactFound } from '../_shared/ownerContact.ts';
+import { batchDataSkipTrace } from '../_shared/batchData.ts';
+import { ownerNameString } from '../_shared/ownerName.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,222 +52,13 @@ interface SkipTraceResult {
   provider?: string;
 }
 
-// Try BatchData API - Primary skip trace provider
+// BatchData via the shared client; keeps raw reply for no-match auditing.
+let lastProvider: { http_status: number; body: string } | null = null;
 async function tryBatchData(addressData: Record<string, string>): Promise<SkipTraceResult | null> {
-  const batchDataKey = Deno.env.get('BATCHDATA_API_KEY');
-  if (!batchDataKey) {
-    console.log('[Skip Trace] BatchData API key not configured, skipping');
-    return null;
-  }
-
-  try {
-    console.log('[Skip Trace] Trying BatchData API with address:', JSON.stringify(addressData));
-    
-    // BatchData Property Skip Trace API
-    // Endpoint: https://api.batchdata.com/api/v1/property/skip-trace
-    // Docs: https://developer.batchdata.com/docs/batchdata/batchdata-v1/operations/create-a-property-skip-trace
-    const requestBody = {
-      requests: [{
-        street: addressData.street,
-        city: addressData.city || '',
-        state: addressData.state || '',
-        zip: addressData.zip || '',
-      }],
-    };
-    
-    console.log('[Skip Trace] BatchData request body:', JSON.stringify(requestBody));
-    
-    const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${batchDataKey}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    console.log('[Skip Trace] BatchData response status:', response.status);
-    const responseText = await response.text();
-    console.log('[Skip Trace] BatchData raw response (first 2000 chars):', responseText.slice(0, 2000));
-
-    if (!response.ok) {
-      console.error('[Skip Trace] BatchData error status:', response.status, responseText.slice(0, 500));
-      
-      // Check if it's an auth error
-      if (response.status === 401 || response.status === 403) {
-        console.error('[Skip Trace] BatchData authentication failed - check API key');
-        return null;
-      }
-      
-      // Try the alternate batch endpoint format
-      console.log('[Skip Trace] Trying alternate BatchData batch endpoint...');
-      const altRequestBody = {
-        requests: [{
-          propertyAddress: {
-            street: addressData.street,
-            city: addressData.city || '',
-            state: addressData.state || '',
-            zip: addressData.zip || '',
-          },
-        }],
-      };
-      
-      const altResponse = await fetch('https://api.batchdata.com/api/v1/property/skip-trace/batch', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${batchDataKey}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(altRequestBody),
-      });
-      
-      console.log('[Skip Trace] Alternate BatchData response status:', altResponse.status);
-      
-      if (!altResponse.ok) {
-        const altText = await altResponse.text();
-        console.error('[Skip Trace] Alternate BatchData endpoint also failed:', altText.slice(0, 500));
-        return null;
-      }
-      
-      const altData = await altResponse.json();
-      console.log('[Skip Trace] Alternate BatchData parsed response:', JSON.stringify(altData).slice(0, 1000));
-      return parseBatchDataResponse(altData, addressData);
-    }
-
-    const data = JSON.parse(responseText);
-    console.log('[Skip Trace] BatchData parsed response:', JSON.stringify(data).slice(0, 1000));
-    return parseBatchDataResponse(data, addressData);
-  } catch (error) {
-    console.error('[Skip Trace] BatchData exception:', error);
-    return null;
-  }
-}
-
-// Parse BatchData response - handles multiple response formats
-function parseBatchDataResponse(data: any, addressData: Record<string, string>): SkipTraceResult {
-  console.log('[Skip Trace] Parsing BatchData response:', JSON.stringify(data).slice(0, 500));
-  
-  // BatchData returns results in various formats depending on endpoint
-  const results = data.results?.objects || data.results || data.data || data.records || [];
-  const firstResult = Array.isArray(results) ? results[0] : results;
-  
-  if (!firstResult) {
-    return {
-      success: true,
-      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-      message: 'No owner information found',
-      provider: 'batchdata',
-    };
-  }
-
-  // Navigate to owner data - BatchData has nested structure
-  const owner = firstResult.persons?.[0] || firstResult.owner || firstResult.owners?.[0] || firstResult.person || firstResult;
-  const phones: Array<{ number: string; type: string; lineType?: string }> = [];
-  const emails: Array<{ address: string; type?: string }> = [];
-
-  // Extract phones from various possible locations
-  const phoneSources = [
-    owner.phones,
-    owner.phoneNumbers, 
-    firstResult.phones,
-    firstResult.phoneNumbers,
-    owner.contacts?.phones,
-  ];
-  
-  for (const phoneList of phoneSources) {
-    if (Array.isArray(phoneList)) {
-      for (const p of phoneList) {
-        const number = typeof p === 'string' ? p : 
-          (p.phoneNumber || p.number || p.phone || p.value);
-        if (number && !phones.some(existing => existing.number === number)) {
-          phones.push({
-            number: number,
-            type: typeof p === 'string' ? 'unknown' : (p.phoneType || p.type || 'unknown'),
-            lineType: typeof p === 'string' ? undefined : (p.lineType || p.line_type),
-          });
-        }
-      }
-    }
-  }
-  
-  // Check for single phone fields
-  if (owner.phoneNumber && !phones.some(p => p.number === owner.phoneNumber)) {
-    phones.push({ number: owner.phoneNumber, type: 'primary' });
-  }
-  if (owner.phone && !phones.some(p => p.number === owner.phone)) {
-    phones.push({ number: owner.phone, type: 'primary' });
-  }
-
-  // Extract emails from various possible locations
-  const emailSources = [
-    owner.emails,
-    owner.emailAddresses,
-    firstResult.emails,
-    firstResult.emailAddresses,
-    owner.contacts?.emails,
-  ];
-  
-  for (const emailList of emailSources) {
-    if (Array.isArray(emailList)) {
-      for (const e of emailList) {
-        const address = typeof e === 'string' ? e : 
-          (e.emailAddress || e.email || e.address || e.value);
-        if (address && !emails.some(existing => existing.address === address)) {
-          emails.push({ 
-            address: address, 
-            type: typeof e === 'object' ? e.type : undefined 
-          });
-        }
-      }
-    }
-  }
-  
-  // Check for single email fields
-  if (owner.emailAddress && !emails.some(e => e.address === owner.emailAddress)) {
-    emails.push({ address: owner.emailAddress });
-  }
-  if (owner.email && !emails.some(e => e.address === owner.email)) {
-    emails.push({ address: owner.email });
-  }
-
-  // Build full name from various possible fields
-  const name = owner.names?.[0];
-  const fullName = owner.fullName || owner.name || owner.full_name || name?.fullName ||
-    (name?.firstName && name?.lastName ? `${name.firstName} ${name.lastName}` : null) ||
-    (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : null) ||
-    (owner.first_name && owner.last_name ? `${owner.first_name} ${owner.last_name}` : null);
-
-  if (!fullName && phones.length === 0 && emails.length === 0) {
-    return {
-      success: true,
-      data: { fullName: null, firstName: null, lastName: null, phones: [], emails: [], confidence: 0 },
-      message: 'No owner information found',
-      provider: 'batchdata',
-    };
-  }
-
-  console.log(`[Skip Trace] BatchData found: name=${fullName}, phones=${phones.length}, emails=${emails.length}`);
-
-  return {
-    success: true,
-    data: {
-      fullName,
-      firstName: owner.firstName || owner.first_name || name?.firstName || null,
-      lastName: owner.lastName || owner.last_name || name?.lastName || null,
-      phones,
-      emails,
-      propertyAddress: {
-        street: addressData.street,
-        city: addressData.city || '',
-        state: addressData.state || '',
-        zip: addressData.zip || '',
-      },
-      confidence: owner.confidence || (phones.length > 0 || emails.length > 0 ? 80 : 0),
-    },
-    provider: 'batchdata',
-  };
+  const r = await batchDataSkipTrace({ street: addressData.street, city: addressData.city, state: addressData.state, zip: addressData.zip });
+  lastProvider = { http_status: r.httpStatus, body: r.rawSummary };
+  if (!r.ok) { console.error('[Skip Trace] BatchData failed:', r.error); return null; }
+  return { success: true, provider: 'batchdata', data: { fullName: r.fullName, firstName: r.firstName, lastName: r.lastName, phones: r.phones, emails: r.emails } };
 }
 
 // NOTE: Tracerfy has been removed from the real-estate enrichment process.
@@ -285,7 +78,7 @@ Deno.serve(async (req) => {
   }
 
   let auditId: string | null = null;
-  let auditClient: ReturnType<typeof createClient> | null = null;
+  let auditClient: any = null;
   try {
     // Authentication check
     const authHeader = req.headers.get('Authorization');
@@ -405,12 +198,12 @@ Deno.serve(async (req) => {
 
     // Reuse a contact already revealed to this user, without another charge.
     let result: SkipTraceResult | null = listing && (listing.owner_phone || listing.owner_email) ? {
-      success: true, data: { fullName: listing.owner_name || null, firstName: null, lastName: null,
+      success: true, data: { fullName: ownerNameString(listing.owner_name), firstName: null, lastName: null,
         phones: listing.owner_phone ? [{ number: listing.owner_phone, type: 'primary' }] : [],
         emails: listing.owner_email ? [{ address: listing.owner_email }] : [] },
     } : await tryBatchData(addressData);
     const found = contactFound(result?.data);
-    const next = listing ? { ...listing, owner_name: result?.data?.fullName || listing.owner_name,
+    const next = listing ? { ...listing, owner_name: ownerNameString(result?.data?.fullName) || ownerNameString(listing.owner_name),
       owner_phone: found.phone ? result?.data?.phones.find(p => p.number.replace(/\D/g, '').length >= 7)?.number : null,
       owner_email: found.email ? result?.data?.emails.find(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.address))?.address : null,
       contact_status: found.phone && found.email ? 'phone_email' : found.phone ? 'phone_only' : found.email ? 'email_only' : 'none',
@@ -418,6 +211,7 @@ Deno.serve(async (req) => {
     const { data: charge, error: finishError } = await admin.rpc('finish_owner_contact_lookup', {
       p_id: auditId, p_phone: found.phone, p_email: found.email, p_listing: next,
       p_error: result ? null : 'provider_unavailable',
+      p_provider_response: !(found.phone || found.email) && lastProvider ? lastProvider : null,
     });
     if (finishError) throw finishError;
     if (!charge?.success) return new Response(JSON.stringify({ success: false, error: charge?.error === 'insufficient_credits' ? 'Not enough credits. Upgrade to get more contact lookups.' : 'Contact lookup is temporarily unavailable. No lookup or credits charged.', credits_spent: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

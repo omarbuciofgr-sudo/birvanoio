@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { batchDataSkipTrace } from '../_shared/batchData.ts';
 import { z } from 'https://esm.sh/zod@3.23.8';
 
 const corsHeaders = {
@@ -190,38 +191,22 @@ function parseAddressForSkipTrace(address: string): { street: string; city: stri
 async function enrichWithSkipTrace(address: string, batchDataApiKey?: string): Promise<EnrichmentResult | null> {
   const parsed = parseAddressForSkipTrace(address);
   if (!batchDataApiKey) return null;
-  try {
-    console.log('[SkipTrace-BatchData] Looking up:', address);
-    const response = await fetch('https://api.batchdata.com/api/v1/property/skip-trace', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${batchDataApiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ propertyAddress: { street: parsed.street, city: parsed.city, state: parsed.state, zip: parsed.zip } }] }),
-    });
-    if (response.ok) {
-      const data = await response.json();
-      const result = data.results?.success?.[0] || data.results?.[0];
-      if (result) {
-        const owner = result.people?.[0] || result.owner || {};
-        const fieldsEnriched: string[] = [];
-        const fullName = owner.fullName || owner.name || [owner.firstName, owner.lastName].filter(Boolean).join(' ');
-        const phones = owner.phones || owner.phoneNumbers || [];
-        const emails = owner.emails || owner.emailAddresses || [];
-        if (fullName) fieldsEnriched.push('full_name');
-        if (phones.length > 0) fieldsEnriched.push('phone');
-        if (emails.length > 0) fieldsEnriched.push('email');
-        if (fieldsEnriched.length > 0) {
-          return {
-            full_name: fullName || undefined,
-            phone: typeof phones[0] === 'object' ? phones[0].number : phones[0],
-            mobile_phone: phones.find((p: any) => p.type?.toLowerCase().includes('mobile'))?.number,
-            email: typeof emails[0] === 'object' ? emails[0].address : emails[0],
-            provider: 'batchdata_skip_trace',
-            fields_enriched: fieldsEnriched,
-          };
-        }
-      }
-    }
-  } catch (error) { console.error('[SkipTrace-BatchData] Error:', error); }
+  const r = await batchDataSkipTrace(parsed, batchDataApiKey);
+  if (!r.ok) { console.error('[SkipTrace-BatchData] Error:', r.error); return null; }
+  const fieldsEnriched: string[] = [];
+  if (r.fullName) fieldsEnriched.push('full_name');
+  if (r.phones.length) fieldsEnriched.push('phone');
+  if (r.emails.length) fieldsEnriched.push('email');
+  if (fieldsEnriched.length > 0) {
+    return {
+      full_name: r.fullName || undefined,
+      phone: r.phones[0]?.number,
+      mobile_phone: r.phones.find(p => p.type.toLowerCase().includes('mobile'))?.number,
+      email: r.emails[0]?.address,
+      provider: 'batchdata_skip_trace',
+      fields_enriched: fieldsEnriched,
+    };
+  }
   return null;
 }
 
