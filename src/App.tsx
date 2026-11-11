@@ -1,4 +1,5 @@
 import * as React from "react";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -74,6 +75,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <AppErrorBoundary>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
@@ -135,6 +137,7 @@ const App = React.forwardRef<HTMLDivElement>((_props, ref) => (
               <Route path="/who-we-help/:audience" element={<RealEstateAudience />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             </Routes>
+            </AppErrorBoundary>
           </BrowserRouter>
         </TooltipProvider>
       </SubscriptionProvider>

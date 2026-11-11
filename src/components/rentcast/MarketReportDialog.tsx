@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ownerNameText } from "@/lib/ownerName";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -146,7 +147,7 @@ export function MarketReportDialog({ open, onOpenChange, row, photoUrl, leadId, 
     setBusy("email");
     try {
       const pdfBase64 = buildMarketReportPdf({ ...base, summary }).output("datauristring").split(",")[1];
-      await pay("email", { leadId, pdfBase64, subject, message: `Hi${row.owner_name ? ` ${row.owner_name.split(" ")[0]}` : ""}, I put together a short market report for ${row.address}. It's attached as a PDF. Happy to answer any questions.` });
+      await pay("email", { leadId, pdfBase64, subject, message: `Hi${ownerNameText(row.owner_name) ? ` ${ownerNameText(row.owner_name)!.split(" ")[0]}` : ""}, I put together a short market report for ${row.address}. It's attached as a PDF. Happy to answer any questions.` });
       toast.success("Report emailed to the owner.");
     } catch (e) {
       toast.error((e as Error).message);

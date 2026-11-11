@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ownerNameText } from "@/lib/ownerName";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ListingLinkButton } from "@/components/rentcast/ListingLinkButton";
 import { listingLink } from "@/lib/listingLink";
@@ -1295,7 +1296,7 @@ export default function RentCastListingsContent({
                       </div>
                       <div className="text-muted-foreground">
                         {p.listing_kind} · {p.property_type || "—"} · {p.qualification || "—"} ·{" "}
-                        {p.owner_name || "Not yet identified"} · Match: {p.owner_match_status || "—"}
+                        {ownerNameText(p.owner_name) || "Not yet identified"} · Match: {p.owner_match_status || "—"}
                       </div>
                       {!!p.score_breakdown?.length && (
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -1438,7 +1439,7 @@ export default function RentCastListingsContent({
                       <TableCell className="text-xs whitespace-nowrap">{formatListedDate(row.listed_date)}</TableCell>
                       <TableCell><Badge variant={rowScore(row) >= 70 ? "default" : "secondary"}>{rowScore(row) >= 70 ? "High" : "Medium"}</Badge></TableCell>
                       <TableCell className="text-xs max-w-[200px]">
-                        <div className="truncate">{row.owner_name || "Not yet identified"}</div>
+                        <div className="truncate">{ownerNameText(row.owner_name) || "Not yet identified"}</div>
                         <div className="text-muted-foreground truncate">
                           {row.owner_phone || row.owner_email || row.owner_mailing_address || ""}
                         </div>
@@ -1599,7 +1600,7 @@ export default function RentCastListingsContent({
                 <div>
                   <div className="text-xs font-medium mb-2">Owner & contact</div>
                   <div className="space-y-1 text-xs">
-                    <div>Name: {detailRow.owner_name || "Not yet identified"}</div>
+                    <div>Name: {ownerNameText(detailRow.owner_name) || "Not yet identified"}</div>
                     <div>Owner match: {ownerMatchLabel(detailRow.owner_match_status)}</div>
                     <div>Contact: {contactStatusLabel(detailRow.contact_status)}</div>
                     <div>

@@ -1,4 +1,5 @@
 import { findOwnerContact } from '@/lib/api/ownerContactLookup';
+import { ownerNameText } from "@/lib/ownerName";
 import { FreeLookupCounter } from '@/components/rentcast/FreeLookupCounter';
 import { OwnerContactSuccess } from '@/components/rentcast/OwnerContactSuccess';
 import { LeadPlanCard } from "@/components/plans/LeadPlanCard";
@@ -101,7 +102,7 @@ export default function OwnerDetail() {
           ext = match?.external_id ?? null;
           listing = {
             ...listing,
-            owner_name: listing!.owner_name || lead.contact_name,
+            owner_name: ownerNameText(listing!.owner_name) || lead.contact_name,
             owner_phone: listing!.owner_phone || lead.phone,
             owner_email: listing!.owner_email || lead.email,
             imported_lead_id: lead.id,
@@ -338,7 +339,7 @@ export default function OwnerDetail() {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">Owner</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <p className="font-medium">{row.owner_name || "Not yet identified"}</p>
+                <p className="font-medium">{ownerNameText(row.owner_name) || "Not yet identified"}</p>
                 {hasContact ? (
                   <OwnerContactSuccess row={row} dnc={dnc} />
                 ) : externalId || row.rentcast_id ? (
@@ -354,7 +355,7 @@ export default function OwnerDetail() {
                 {dnc && <Badge variant="destructive">Do not contact</Badge>}
                 <CallScriptDialog
                   className="min-h-11 w-full gap-1.5 text-xs md:min-h-9"
-                  lead={{ id: leadId, contact_name: row.owner_name, business_name: row.address, city: row.city, listing_type: leadInfo?.listing_type, do_not_contact: dnc }}
+                  lead={{ id: leadId, contact_name: ownerNameText(row.owner_name), business_name: row.address, city: row.city, listing_type: leadInfo?.listing_type, do_not_contact: dnc }}
                   fallbackType={rental ? "frbo" : "fsbo"}
                 />
                 {leadId && (
