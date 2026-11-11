@@ -72,16 +72,32 @@ serve(async (req) => {
         const { error: claimError } = await db.from('signup_welcome_emails').insert({ user_id: user.id });
         if (claimError) return new Response(JSON.stringify({ success: true, already_queued: true }), { headers: corsHeaders });
       }
-      if (defaultSenderEmail.endsWith('@resend.dev')) return new Response(JSON.stringify({ error: 'Verified sender required' }), { status: 503, headers: corsHeaders });
-      const response = await fetch('https://api.resend.com/emails', {
+      const failWelcome = async (error_message: string, http_status: number | null = null) => {
+        console.error('[signup_welcome] failed:', http_status, error_message);
+        await db.from('signup_welcome_emails').update({ status: 'failed', error_message: error_message.slice(0, 1000), http_status }).eq('user_id', user.id);
+      };
+      if (defaultSenderEmail.endsWith('@resend.dev')) {
+        await failWelcome('sender_not_verified: RESEND_FROM_EMAIL uses resend.dev');
+        return new Response(JSON.stringify({ error: 'Verified sender required' }), { status: 503, headers: corsHeaders });
+      }
+      let response: Response;
+      try {
+        response = await fetch('https://api.resend.com/emails', {
         method: 'POST', headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `contact-welcome-${user.id}` },
         body: JSON.stringify({ from: `Brivano <${defaultSenderEmail}>`, to: [user.email],
           subject: 'How to get owner contact info in Brivano',
           text: "Thanks for signing up! Search any city, pick a listing, and press Find contact info. That gives you the owner's phone number and email. You have 5 free lookups to start." }),
       });
-      const sent = await response.json();
+      } catch (e) {
+        await failWelcome(`fetch_exception: ${e instanceof Error ? e.message : String(e)}`);
+        return new Response(JSON.stringify({ error: 'Welcome email failed' }), { status: 502, headers: corsHeaders });
+      }
+      const rawText = await response.text();
+      let sent: any = {};
+      try { sent = JSON.parse(rawText); } catch { /* non-JSON body */ }
       if (!response.ok) {
-        await db.from('signup_welcome_emails').update({ status: 'failed' }).eq('user_id', user.id);
+        const msg = typeof sent?.message === 'string' ? (sent.name ? `${sent.name}: ${sent.message}` : sent.message) : rawText.slice(0, 1000);
+        await failWelcome(msg || 'empty_response', response.status);
         return new Response(JSON.stringify({ error: 'Welcome email failed', status: response.status }), { status: 502, headers: corsHeaders });
       }
       await db.from('signup_welcome_emails').update({ status: 'sent', provider_id: sent.id, sent_at: new Date().toISOString() }).eq('user_id', user.id);
