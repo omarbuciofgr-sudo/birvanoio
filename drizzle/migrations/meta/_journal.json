@@ -57,6 +57,13 @@
       "when": 1794962772372,
       "tag": "0007_tighten_plan_limits_geocode_contact_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794962844198,
+      "tag": "0008_owner_lookup_unlimited_users",
+      "breakpoints": true
     }
   ]
 }
