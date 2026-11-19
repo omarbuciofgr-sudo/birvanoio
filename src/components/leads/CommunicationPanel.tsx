@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { usePhoneWarning } from '@/components/compliance/OwnerPhone';
 import { Phone, Mail, MessageSquare, Clock, Plus, Loader2, Send, Sparkles, Play, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -91,6 +92,7 @@ export function CommunicationPanel({
   businessName,
 }: CommunicationPanelProps) {
   const { requireAcceptance, complianceDialog } = useCommunicationCompliance();
+  const phoneWarning = usePhoneWarning(leadPhone);
   const [logs, setLogs] = useState<ConversationLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -170,7 +172,7 @@ export function CommunicationPanel({
     }
   };
 
-  const handleCall = () => requireAcceptance(() => { void startCall(); });
+  const handleCall = () => phoneWarning.request('call', () => requireAcceptance(() => { void startCall(); }));
 
   const handleEndCall = () => {
     fetchLogs();
@@ -254,7 +256,7 @@ export function CommunicationPanel({
     setSmsDialogOpen(true);
   };
 
-  const handleSMS = () => requireAcceptance(openSmsComposer);
+  const handleSMS = () => phoneWarning.request('text', () => requireAcceptance(openSmsComposer));
 
   const sendSMS = async () => {
     if (!leadPhone) {
@@ -378,7 +380,7 @@ export function CommunicationPanel({
     }
   };
 
-  const sendRecapSms = () => requireAcceptance(() => { void sendRecapSmsNow(); });
+  const sendRecapSms = () => phoneWarning.request('text', () => requireAcceptance(() => { void sendRecapSmsNow(); }));
 
   const saveLog = async () => {
     const validation = logSchema.safeParse(newLog);
@@ -452,6 +454,7 @@ export function CommunicationPanel({
   return (
     <>
       {complianceDialog}
+      {phoneWarning.warningDialog}
       {/* Call Dialog */}
       <CallDialog
         open={callDialogOpen}
@@ -494,7 +497,7 @@ export function CommunicationPanel({
             <Button variant="ghost" onClick={() => setSmsDialogOpen(false)} disabled={isSending}>
               Cancel
             </Button>
-            <Button onClick={sendSMS} disabled={isSending || !smsMessage}>
+            <Button onClick={sendSMS} disabled={isSending || !smsMessage || phoneWarning.disabled}>
               {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               Send SMS · 1 credit
             </Button>
@@ -602,7 +605,7 @@ export function CommunicationPanel({
                   <Button 
                     size="sm" 
                     onClick={sendRecapSms}
-                    disabled={isSending || !leadPhone || !recapSms}
+                    disabled={isSending || !leadPhone || !recapSms || phoneWarning.disabled}
                   >
                     {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
                     Send SMS · 1 credit
@@ -639,7 +642,7 @@ export function CommunicationPanel({
             variant="outline"
             size="sm"
             onClick={handleCall}
-            disabled={!leadPhone || isSending}
+            disabled={!leadPhone || isSending || phoneWarning.disabled}
             className="flex-1 gap-2"
           >
             {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
@@ -659,7 +662,7 @@ export function CommunicationPanel({
             variant="outline"
             size="sm"
             onClick={handleSMS}
-            disabled={!leadPhone}
+            disabled={!leadPhone || phoneWarning.disabled}
             className="flex-1 gap-2"
           >
             <MessageSquare className="w-4 h-4" />

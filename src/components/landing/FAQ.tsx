@@ -8,6 +8,7 @@ import {
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { usePricingSettings } from "@/hooks/usePricingSettings";
+import { DNC_HELP } from '@/lib/phoneCompliance';
 
 const questions = (ownerCost: number) => [
   {
@@ -19,8 +20,8 @@ const questions = (ownerCost: number) => [
     answer: `No. Press Find contact info on a listing to request available owner contacts. You may get a phone number, an email, both or neither. Free users start with five successful lookups. After the free allowance, a successful paid lookup uses ${ownerCost} credits. If neither a phone nor an email is found, you use no credits or free lookups. A returned contact is not a guarantee that the number is current or that the person will respond.`,
   },
   {
-    question: "Does Brivano scrub the Do Not Call registry or make outreach TCPA-compliant?",
-    answer: "Brivano does not automatically scrub numbers against the national Do Not Call registry or guarantee TCPA compliance. Before app-initiated calling or texting, you must accept the outreach notice. Brivano maintains internal do-not-contact controls and processes STOP, UNSUBSCRIBE and CANCEL text replies to block further app texts. AI Voice Agent is Beta and requires a lead you have marked as having given consent. You must still check applicable DNC lists, consent requirements and calling hours before outreach. Calls or texts made through your phone's own apps are outside Brivano's sending controls.",
+    question: "What does DNC flagged mean?",
+    answer: `${DNC_HELP} A flag is not a guarantee of compliance or permission to contact a number. Before app-initiated calling or texting, you must accept the outreach notice. Brivano processes STOP, UNSUBSCRIBE and CANCEL text replies to block further app texts. AI Voice Agent is Beta and requires recorded lead consent.`,
   },
   {
     question: "What does smart match scoring tell me?",

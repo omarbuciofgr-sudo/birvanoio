@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PhoneOutreachAction, usePhoneWarning } from '@/components/compliance/OwnerPhone';
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2, Phone, RefreshCw, Send, Copy, FileText } from "lucide-react";
@@ -30,6 +31,7 @@ export function PlanStepDialog({ task, onClose }: { task: PlanTask | null; onClo
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<{ message: string; limit: boolean } | null>(null);
   const { requireAcceptance, complianceDialog } = useCommunicationCompliance();
+  const phoneWarning = usePhoneWarning(task?.lead.phone, !!task?.lead.do_not_contact);
 
   const draft = async () => {
     if (!task) return;
@@ -117,17 +119,16 @@ export function PlanStepDialog({ task, onClose }: { task: PlanTask | null; onClo
         <div className="flex flex-wrap justify-end gap-2 pt-2">
           <Button variant="ghost" className="min-h-11 sm:min-h-9" onClick={() => finish("Marked done")}>Mark done</Button>
           {task.channel === "call" ? (
-            <Button asChild={!!task.lead.phone && !task.lead.do_not_contact} disabled={!task.lead.phone || !!task.lead.do_not_contact} className="min-h-11 gap-1 sm:min-h-9">
-              {task.lead.phone ? <a href={`tel:${task.lead.phone}`}><Phone className="h-4 w-4" /> Call</a> : <span><Phone className="h-4 w-4" /> Call</span>}
-            </Button>
+            <PhoneOutreachAction phone={task.lead.phone} blocked={!!task.lead.do_not_contact} action="call" className="min-h-11 gap-1 sm:min-h-9"><Phone className="h-4 w-4" /> Call</PhoneOutreachAction>
           ) : (
-            <Button className="min-h-11 gap-1 sm:min-h-9" disabled={!!blocked || !body.trim() || sending || writing}
-              onClick={() => (task.channel === "text" ? requireAcceptance(() => { void sendNow(); }) : void sendNow())}>
+            <Button className="min-h-11 gap-1 sm:min-h-9" disabled={!!blocked || !body.trim() || sending || writing || (task.channel === 'text' && phoneWarning.disabled)}
+              onClick={() => (task.channel === "text" ? phoneWarning.request('text', () => requireAcceptance(() => { void sendNow(); })) : void sendNow())}>
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send {task.channel}
             </Button>
           )}
         </div>
         {complianceDialog}
+        {phoneWarning.warningDialog}
       </DialogContent>
     </Dialog>
   );

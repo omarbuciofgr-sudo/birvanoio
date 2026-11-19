@@ -160,6 +160,7 @@ export default function FollowUps() {
         queryClient.invalidateQueries({ queryKey: ["follow-ups-today"] }),
         queryClient.invalidateQueries({ queryKey: ["call-tracking", user?.id] }),
         queryClient.invalidateQueries({ queryKey: leadsQueryKey(user?.id) }),
+        ...(blocked ? [queryClient.invalidateQueries({ queryKey: ['phone-compliance'] })] : []),
       ]);
       toast.success(blocked ? "Logged. This owner is marked do not contact." : "Outcome logged in Call Tracking.");
       setLogging(null);

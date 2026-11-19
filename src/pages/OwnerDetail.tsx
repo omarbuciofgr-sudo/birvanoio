@@ -2,6 +2,7 @@ import { findOwnerContact } from '@/lib/api/ownerContactLookup';
 import { ownerNameText } from "@/lib/ownerName";
 import { FreeLookupCounter } from '@/components/rentcast/FreeLookupCounter';
 import { OwnerContactSuccess } from '@/components/rentcast/OwnerContactSuccess';
+import { PhoneOutreachAction } from '@/components/compliance/OwnerPhone';
 import { LeadPlanCard } from "@/components/plans/LeadPlanCard";
 import { listingLink } from "@/lib/listingLink";
 import { useEffect, useMemo, useState } from "react";
@@ -418,12 +419,12 @@ export default function OwnerDetail() {
         {dnc ? (
           <Button size="lg" className="h-12 col-span-2" variant="outline" disabled>Do not contact</Button>
         ) : row.owner_phone ? (
-          <Button asChild size="lg" className="h-12"><a href={`tel:${row.owner_phone}`}><Phone className="h-5 w-5" />Call</a></Button>
+          <PhoneOutreachAction phone={row.owner_phone} action="call" size="lg" className="h-12"><Phone className="h-5 w-5" />Call</PhoneOutreachAction>
         ) : (
           <Button size="lg" className="h-12" disabled><Phone className="h-5 w-5" />Call</Button>
         )}
         {dnc ? null : row.owner_phone ? (
-          <Button asChild size="lg" variant="outline" className="h-12"><a href={`sms:${row.owner_phone}`}><Send className="h-5 w-5" />Text</a></Button>
+          <PhoneOutreachAction phone={row.owner_phone} action="text" size="lg" variant="outline" className="h-12"><Send className="h-5 w-5" />Text</PhoneOutreachAction>
         ) : (
           <Button size="lg" variant="outline" className="h-12" disabled><Send className="h-5 w-5" />Text</Button>
         )}

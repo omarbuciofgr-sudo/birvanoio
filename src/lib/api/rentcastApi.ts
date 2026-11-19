@@ -39,6 +39,7 @@ export type RentCastListing = {
   owner_name?: string | null;
   owner_mailing_address?: string | null;
   owner_phone?: string | null;
+  all_phones?: Array<string | { number: string; dnc?: boolean; tcpa?: boolean }> | null;
   owner_email?: string | null;
   skip_trace_confidence?: number | null;
   fsbo_confidence?: number | null;

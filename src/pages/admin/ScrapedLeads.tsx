@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { HideDncSwitch, OwnerPhone, PhoneExportDialog } from '@/components/compliance/OwnerPhone';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,7 @@ export default function ScrapedLeads() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('leads');
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [hideDnc, setHideDnc] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [jobFilter, setJobFilter] = useState<string>('all');
@@ -303,22 +305,18 @@ export default function ScrapedLeads() {
     setSelectedLeads(newSelected);
   };
 
-  const handleExportCsv = async () => {
-    try {
-      const csv = await scrapedLeadsApi.exportToCsv({
-        job_id: jobFilter !== 'all' ? jobFilter : undefined,
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `leads-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Export completed');
-    } catch (error) {
-      toast.error('Failed to export leads');
-    }
+  const handleExportCsv = async (excludeDnc: boolean) => {
+    const csv = await scrapedLeadsApi.exportToCsv({
+      job_id: jobFilter !== 'all' ? jobFilter : undefined,
+    }, excludeDnc);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leads-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Export completed');
   };
 
   const handleExportJson = async () => {
@@ -348,6 +346,10 @@ export default function ScrapedLeads() {
           <div>
             <h1 className="text-3xl font-bold">Scraped Leads</h1>
             <p className="text-muted-foreground">Review, validate, and assign scraped leads</p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <HideDncSwitch checked={hideDnc} onChange={setHideDnc} />
+            <PhoneExportDialog onExport={handleExportCsv}><Button variant="outline" size="sm" disabled={!totalLeads}>Export CSV</Button></PhoneExportDialog>
           </div>
         </div>
 
@@ -687,7 +689,7 @@ export default function ScrapedLeads() {
                       </TableCell>
                       <TableCell onClick={() => setSelectedLead(lead)}>
                         <div className="flex items-center gap-2">
-                          <span>{lead.best_phone || '-'}</span>
+                          {lead.best_phone ? <OwnerPhone phone={lead.best_phone} hideDnc={hideDnc} blocked={!!lead.is_suppressed} /> : '-'}
                           {lead.phone_validation_status && lead.phone_validation_status !== 'unverified' && (
                             <Badge className={validationColors[lead.phone_validation_status]} variant="outline">
                               {lead.phone_validation_status === 'verified' && <Check className="h-3 w-3" />}

@@ -10,6 +10,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ExternalLink, Mail, Phone, Globe, User, Building, MapPin, Linkedin, Check, X, AlertCircle, Cpu, Star, MessageSquareText, Radar, TrendingUp, Fingerprint } from 'lucide-react';
 import { ScrapedLead } from '@/types/scraper';
 import { FieldEvidencePanel } from './FieldEvidencePanel';
+import { OwnerPhone } from '@/components/compliance/OwnerPhone';
+import { collectPhones } from '@/lib/phoneCompliance';
 
 interface LeadDetailSheetProps {
   lead: ScrapedLead | null;
@@ -159,19 +161,10 @@ export function LeadDetailSheet({ lead, onClose }: LeadDetailSheetProps) {
                       <ValidationBadge status={lead.phone_validation_status} />
                     </div>
                   </div>
-                  {lead.best_phone ? (
-                    <a href={`tel:${lead.best_phone}`} className="text-sm font-medium text-primary hover:underline">
-                      {lead.best_phone}
-                    </a>
+                  {collectPhones(lead.best_phone, lead.all_phones).length ? (
+                    <div className="space-y-2">{collectPhones(lead.best_phone, lead.all_phones).map(phone => <OwnerPhone key={phone} phone={phone} />)}</div>
                   ) : (
                     <p className="text-sm text-muted-foreground">Not found</p>
-                  )}
-                  {lead.all_phones.length > 1 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {lead.all_phones.filter(p => p !== lead.best_phone).map((phone, i) => (
-                        <span key={i} className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{phone}</span>
-                      ))}
-                    </div>
                   )}
                 </div>
 

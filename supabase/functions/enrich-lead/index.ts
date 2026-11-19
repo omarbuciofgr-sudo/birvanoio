@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { batchDataSkipTrace } from '../_shared/batchData.ts';
+import { batchDataSkipTrace, type BatchDataPhone } from '../_shared/batchData.ts';
+import { checkPhones } from '../_shared/checkPhones.ts';
 import { z } from 'https://esm.sh/zod@3.23.8';
 
 const corsHeaders = {
@@ -25,6 +26,7 @@ interface EnrichmentResult {
   phone?: string;
   direct_phone?: string;
   mobile_phone?: string;
+  skip_trace_phones?: BatchDataPhone[];
   company_name?: string;
   job_title?: string;
   seniority_level?: string;
@@ -202,6 +204,7 @@ async function enrichWithSkipTrace(address: string, batchDataApiKey?: string): P
       full_name: r.fullName || undefined,
       phone: r.phones[0]?.number,
       mobile_phone: r.phones.find(p => p.type.toLowerCase().includes('mobile'))?.number,
+      skip_trace_phones: r.phones,
       email: r.emails[0]?.address,
       provider: 'batchdata_skip_trace',
       fields_enriched: fieldsEnriched,
@@ -656,7 +659,7 @@ Deno.serve(async (req) => {
             if ((skipTraceResult.phone || skipTraceResult.mobile_phone) && needsPhone) {
               updates.best_phone = skipTraceResult.mobile_phone || skipTraceResult.phone;
               const allPhones = lead.all_phones || [];
-              const newPhones = [skipTraceResult.phone, skipTraceResult.mobile_phone].filter(Boolean) as string[];
+              const newPhones = (skipTraceResult.skip_trace_phones ?? []).map(p => p.number);
               updates.all_phones = [...new Set([...allPhones, ...newPhones])];
             }
             console.log(`[SkipTrace] Found: name=${!!skipTraceResult.full_name}, phone=${!!skipTraceResult.phone}, email=${!!skipTraceResult.email}`);
@@ -996,6 +999,11 @@ Deno.serve(async (req) => {
       }
 
       // Apply updates
+      if (isRealEstateLead(lead) && enrichments.length) {
+        const hints = enrichments.flatMap(result => result.skip_trace_phones ?? []);
+        const phones = [updates.best_phone ?? lead.best_phone, ...(Array.isArray(updates.all_phones ?? lead.all_phones) ? (updates.all_phones ?? lead.all_phones) : []), ...hints.map(p => p.number)];
+        await checkPhones(supabase, phones.map(p => typeof p === 'object' && p ? p.number : p), hints).catch(() => console.error('[Enrich Lead] Phone check unavailable'));
+      }
       if (Object.keys(updates).length > 0) {
         const { error: updateError } = await supabase.from('scraped_leads').update(updates).eq('id', leadId);
         if (updateError) console.error(`Error updating lead ${leadId}:`, updateError);

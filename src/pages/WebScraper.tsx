@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { firecrawlApi } from '@/lib/api/firecrawl';
 import { skipTraceApi } from '@/lib/api/skipTrace';
+import { collectPhones, fetchPhoneChecks, normalizeUsPhone, phoneExportColumns } from '@/lib/phoneCompliance';
 import OwnerIntelBadges from '@/components/realtor/OwnerIntelBadges';
 import { computeListingIntel, recordListingSnapshots, readSnapshotStore } from '@/lib/realEstateOwnerIntel';
 import { cacheRecentListings } from '@/lib/ownerIntelTasks';
@@ -672,13 +673,6 @@ function withApartmentsListingContactPrefill(listing: any): any {
     all_phones: listing.all_phones?.length ? listing.all_phones : alt.phones,
     all_emails: listing.all_emails?.length ? listing.all_emails : alt.emails,
   };
-}
-
-function formatUsPhoneForDisplay(raw: string): string {
-  const d = String(raw).replace(/\D/g, '');
-  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-  if (d.length === 11 && d[0] === '1') return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
-  return String(raw).trim();
 }
 
 /** Stable key so backend refetches / progressive scrape polls can merge client skip-trace state onto the same row. */
@@ -3080,10 +3074,11 @@ export default function WebScraper() {
 
   const forceRefreshTitle = 'Bypass saved cache and pull live listings now (1 credit)';
 
-  const exportListingsToCSV = () => {
+  const exportListingsToCSV = async (excludeDnc = true) => {
     if (reListings.length === 0) return;
-    const headers = ['Address', 'Bedrooms', 'Bathrooms', 'Price', 'Days on Market', 'Favorites', 'Views', 'Listing Type', 'Property Type', 'Sq Ft', 'Year Built', 'Owner Name', 'Owner Phone', 'Owner Email', 'Source URL'];
-    const rows = reListings.map(l => [l.address || '', l.bedrooms || '', l.bathrooms || '', l.price || '', l.days_on_market || '', l.favorites_count || '', l.views_count || '', l.listing_type || '', l.property_type || '', l.square_feet || '', l.year_built || '', l.owner_name || '', l.owner_phone || '', l.owner_email || '', l.source_url || '']);
+    const checks = await fetchPhoneChecks(reListings.map(l => l.owner_phone));
+    const headers = ['Address', 'Bedrooms', 'Bathrooms', 'Price', 'Days on Market', 'Favorites', 'Views', 'Listing Type', 'Property Type', 'Sq Ft', 'Year Built', 'Owner Name', 'Owner Phone', 'DNC', 'DNC checked', 'Owner Email', 'Source URL'];
+    const rows = reListings.map(l => [l.address || '', l.bedrooms || '', l.bathrooms || '', l.price || '', l.days_on_market || '', l.favorites_count || '', l.views_count || '', l.listing_type || '', l.property_type || '', l.square_feet || '', l.year_built || '', l.owner_name || '', ...phoneExportColumns(l.owner_phone, checks[normalizeUsPhone(l.owner_phone) ?? ''], excludeDnc), l.owner_email || '', l.source_url || '']);
     const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     downloadAsFile(csv, `fsbo-listings-${new Date().toISOString().split('T')[0]}.csv`);
     toast.success('Exported listings to CSV');
@@ -3116,6 +3111,7 @@ export default function WebScraper() {
           (isQuasiPublicEntityDisplayName(traceName) ||
             (strictFrbo && isCorporateLandlordDisplayName(traceName, true)));
         const updated = buildListingAfterSkipTrace(latest, data, sp, providers);
+        await fetchPhoneChecks(collectPhones(updated.owner_phone, updated.all_phones)).catch(() => console.error('[Scraper] Phone check unavailable'));
         let saved = false;
         if (user?.id) {
           try {
@@ -3157,7 +3153,6 @@ export default function WebScraper() {
         );
         const label =
           updated.owner_name?.trim() ||
-          (updated.owner_phone ? formatUsPhoneForDisplay(String(updated.owner_phone)) : '') ||
           updated.owner_email ||
           'Contact found';
         if (fromApartmentsListing) {
@@ -3260,6 +3255,7 @@ export default function WebScraper() {
           const { data, fromApartmentsListing } = merged;
           const providers = fromApartmentsListing ? ['apartments_listing_contact'] : ['batchdata'];
           const updated = buildListingAfterSkipTrace(listing, data, sp, providers);
+          await fetchPhoneChecks(collectPhones(updated.owner_phone, updated.all_phones)).catch(() => console.error('[Scraper] Phone check unavailable'));
           setReListings(prev => prev.map((l, i) => i !== index ? l : updated));
           successCount++;
           if (user?.id) {

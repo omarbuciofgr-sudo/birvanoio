@@ -64,6 +64,20 @@
       "when": 1794962844198,
       "tag": "0008_owner_lookup_unlimited_users",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795051594155,
+      "tag": "0009_owner_phone_compliance",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795051885349,
+      "tag": "0010_restrict_owner_phone_compliance_grants",
+      "breakpoints": true
     }
   ]
 }

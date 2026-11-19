@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
+import { OwnerPhone } from '@/components/compliance/OwnerPhone';
 import { 
   Copy, 
   Merge, 
@@ -245,9 +246,9 @@ export function LeadDeduplicationPanel() {
                       {getMatchIcon(group.matchField)}
                       <span className="ml-1">{group.matchField}</span>
                     </Badge>
-                    <code className="text-sm bg-muted px-2 py-0.5 rounded">
+                    {group.matchField === 'phone' ? <OwnerPhone phone={group.matchValue} hideDnc /> : <code className="text-sm bg-muted px-2 py-0.5 rounded">
                       {group.matchValue}
-                    </code>
+                    </code>}
                     <span className="text-sm text-muted-foreground">
                       {group.leads.length} matches
                     </span>

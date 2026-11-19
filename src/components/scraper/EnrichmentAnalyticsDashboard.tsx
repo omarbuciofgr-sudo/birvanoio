@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -42,6 +43,17 @@ const PROVIDER_COLORS: Record<string, string> = {
 };
 
 export function EnrichmentAnalyticsDashboard() {
+  const { isAdmin } = useIsAdmin();
+  const { data: dncCounts, isError: dncError } = useQuery({
+    queryKey: ['phone-compliance-counts'],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('phone_compliance_counts');
+      if (error) throw error;
+      return data?.[0];
+    },
+  });
+  const share = (flagged: number, known: number) => known ? `${(100 * flagged / known).toFixed(1)}%` : '—';
   // Fetch enrichment logs for analytics
   const { data: enrichmentLogs = [] } = useQuery({
     queryKey: ['enrichment-analytics'],
@@ -142,6 +154,14 @@ export function EnrichmentAnalyticsDashboard() {
 
   return (
     <div className="space-y-6">
+      {isAdmin && <Card>
+        <CardHeader><CardTitle className="text-sm">Phone compliance</CardTitle><CardDescription>Last 31 days. Percentages exclude unknown results.</CardDescription></CardHeader>
+        <CardContent>{dncCounts ? <dl className="grid grid-cols-3 gap-3 text-sm">
+          <div><dt>Numbers checked</dt><dd className="font-semibold">{dncCounts.checked.toLocaleString()}</dd></div>
+          <div><dt>On DNC</dt><dd className="font-semibold">{share(dncCounts.on_dnc, dncCounts.dnc_known)}</dd></div>
+          <div><dt>TCPA litigators</dt><dd className="font-semibold">{share(dncCounts.litigators, dncCounts.tcpa_known)}</dd></div>
+        </dl> : <p className="text-sm text-muted-foreground">{dncError ? 'Phone compliance counts unavailable' : 'Loading phone compliance counts…'}</p>}</CardContent>
+      </Card>}
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

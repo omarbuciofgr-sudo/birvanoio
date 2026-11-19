@@ -1,6 +1,6 @@
 // Single BatchData v1 property skip-trace client shared by all functions.
 export interface BatchDataAddress { street: string; city?: string; state?: string; zip?: string }
-export interface BatchDataPhone { number: string; type: string; lineType?: string; dnc?: boolean }
+export interface BatchDataPhone { number: string; type: string; lineType?: string; dnc?: boolean; tcpa?: boolean }
 export interface BatchDataEmail { address: string; type?: string }
 export interface BatchDataResult {
   fullName: string | null; firstName: string | null; lastName: string | null;
@@ -39,8 +39,13 @@ export function parseBatchDataBody(data: any): Omit<BatchDataResult, 'httpStatus
     for (const ph of [...(p?.phoneNumbers || []), ...(p?.phones || [])]) {
       const number = typeof ph === 'string' ? ph : str(ph?.number) ?? str(ph?.phoneNumber);
       if (!number || number.replace(/\D/g, '').length < 7) continue;
-      if (ph?.dnc === true) continue; // only skip when explicitly flagged
-      if (!phones.some(x => x.number === number)) phones.push({ number, type: str(ph?.type) ?? str(ph?.phoneType) ?? 'unknown', lineType: str(ph?.carrierType) ?? undefined });
+      const dnc = typeof ph?.dnc === 'boolean' ? ph.dnc : undefined;
+      const tcpa = typeof ph?.tcpa === 'boolean' ? ph.tcpa : undefined;
+      const existing = phones.find(x => x.number === number);
+      if (existing) {
+        existing.dnc = existing.dnc === true || dnc === true ? true : existing.dnc ?? dnc;
+        existing.tcpa = existing.tcpa === true || tcpa === true ? true : existing.tcpa ?? tcpa;
+      } else phones.push({ number, type: str(ph?.type) ?? str(ph?.phoneType) ?? 'unknown', lineType: str(ph?.carrierType) ?? undefined, dnc, tcpa });
     }
     for (const e of [...(p?.emails || []), ...(p?.emailAddresses || [])]) {
       const address = typeof e === 'string' ? e : str(e?.email) ?? str(e?.emailAddress) ?? str(e?.address);
@@ -61,7 +66,7 @@ export async function batchDataSkipTrace(address: BatchDataAddress, apiKey = Den
     });
     const text = await res.text();
     const rawSummary = text.slice(0, 4000);
-    console.log('[BatchData] status', res.status, 'body', text.slice(0, 1000));
+    console.log('[BatchData] status', res.status);
     if (!res.ok) return { ...empty, ok: false, httpStatus: res.status, rawSummary, error: `BatchData API error: ${res.status}` };
     let data: unknown = null;
     try { data = JSON.parse(text); } catch { return { ...empty, ok: false, httpStatus: res.status, rawSummary, error: 'Invalid BatchData response' }; }

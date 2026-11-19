@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ownerNameText } from "@/lib/ownerName";
+import { OwnerPhone } from '@/components/compliance/OwnerPhone';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -7,7 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css';
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Mail, ExternalLink, MapPin } from 'lucide-react';
+import { Mail, ExternalLink, MapPin } from 'lucide-react';
 import {
   scraperBackendApi,
   normalizeStateToAbbrev,
@@ -410,11 +411,7 @@ export default function ListingsMap({
                   <p className="font-medium pt-1 border-t border-border/40">{ownerNameText(listing.owner_name)}</p>
                 )}
                 <div className="flex items-center gap-3">
-                  {listing.owner_phone && (
-                    <a href={`tel:${listing.owner_phone}`} className="text-primary hover:underline flex items-center gap-0.5">
-                      <Phone className="h-2.5 w-2.5" /> {listing.owner_phone}
-                    </a>
-                  )}
+                  {listing.owner_phone && <OwnerPhone phone={listing.owner_phone} hideDnc />}
                   {listing.owner_email && (
                     <a href={`mailto:${listing.owner_email}`} className="text-primary hover:underline flex items-center gap-0.5">
                       <Mail className="h-2.5 w-2.5" /> {listing.owner_email}

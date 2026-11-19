@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { scraperBackendApi } from '@/lib/api/scraperBackend';
+import { fetchPhoneChecks } from '@/lib/phoneCompliance';
 
 export interface SkipTraceInput {
   address: string;
@@ -22,6 +23,8 @@ export interface SkipTraceResult {
       number: string;
       type: string;
       lineType?: string;
+      dnc?: boolean;
+      tcpa?: boolean;
     }>;
     emails: Array<{
       address: string;
@@ -130,7 +133,11 @@ async function lookupViaSupabaseEdgeFunction(
 export const skipTraceApi = {
   async lookupOwner(input: SkipTraceInput): Promise<SkipTraceResult> {
     const fromBackend = await lookupViaScraperBackend(input);
-    if (fromBackend !== null) return fromBackend;
+    if (fromBackend !== null) {
+      const phones = fromBackend.success ? fromBackend.data?.phones?.map(p => p.number) ?? [] : [];
+      if (phones.length) await fetchPhoneChecks(phones).catch(() => console.error('[Skip Trace] Phone check unavailable'));
+      return fromBackend;
+    }
 
     const accessToken = await getUserAccessTokenForEdgeFunction();
     if (!accessToken) {

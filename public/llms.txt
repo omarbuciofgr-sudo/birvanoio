@@ -4,7 +4,7 @@
 
 Brivano serves real estate agents, investors, leasing agents and property managers prospecting for-sale-by-owner (FSBO) and for-rent-by-owner (FRBO) properties. Search by city, review listing links and match scores, use Find contact info for available phone numbers or emails, save owners to My Leads, and track call outcomes, appointments and follow-ups.
 
-The Playbook includes role-specific FSBO/FRBO scripts. AI-written first messages, talking points and follow-up suggestions are editable drafts, never automatically sent. AI Voice Agent is Beta and requires recorded lead consent. A match score does not verify ownership or contact accuracy. Listings and contacts may be incomplete, cached or outdated. Brivano does not provide automatic national Do Not Call registry scrubbing; users must check applicable calling, consent and opt-out rules.
+The Playbook includes role-specific FSBO/FRBO scripts. AI-written first messages, talking points and follow-up suggestions are editable drafts, never automatically sent. AI Voice Agent is Beta and requires recorded lead consent. A match score does not verify ownership or contact accuracy. Listings and contacts may be incomplete, cached or outdated. Brivano flags known National Do Not Call Registry numbers and known TCPA litigators; flags do not replace the user's own compliance checks.
 
 Plans, monthly credits and action costs are shown on the pricing page. Paid owner-contact lookups consume credits only when a phone number or email is found; misses consume neither credits nor free lookups. AI writing is credit-free with monthly per-seat limits. Contact availability and business outcomes are not guaranteed.
 

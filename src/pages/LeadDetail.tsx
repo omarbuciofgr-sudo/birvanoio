@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { OwnerPhone, PhoneOutreachAction } from '@/components/compliance/OwnerPhone';
+import { usePhoneCompliance } from '@/hooks/usePhoneCompliance';
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -88,6 +90,7 @@ export default function LeadDetail() {
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const phoneCheck = usePhoneCompliance(lead?.phone);
   const [saving, setSaving] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [emails, setEmails] = useState<ConvLog[]>([]);
@@ -255,9 +258,7 @@ export default function LeadDetail() {
             <Separator orientation="vertical" className="h-6" />
             {lead.do_not_contact && <Badge variant="destructive">Do not contact</Badge>}
             {lead.phone && !lead.do_not_contact && (
-              <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" asChild>
-                <a href={`tel:${lead.phone}`}><Phone className="w-3.5 h-3.5" /> Call</a>
-              </Button>
+              <PhoneOutreachAction phone={lead.phone} action="call" variant="outline" size="sm" className="h-8 gap-1 text-xs"><Phone className="w-3.5 h-3.5" /> Call</PhoneOutreachAction>
             )}
             <CallScriptDialog lead={lead} className="h-8 gap-1 text-xs" />
             {!lead.do_not_contact && <LogContactButton leadId={lead.id} />}
@@ -281,7 +282,7 @@ export default function LeadDetail() {
                 <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contact</h3>
                 <div className="space-y-2">
                   <ContactRow icon={<Mail className="w-3.5 h-3.5" />} value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
-                  <ContactRow icon={<Phone className="w-3.5 h-3.5" />} value={lead.phone} href={lead.phone && !lead.do_not_contact ? `tel:${lead.phone}` : undefined} />
+                  {lead.phone && <OwnerPhone phone={lead.phone} blocked={lead.do_not_contact} />}
                   <ContactRow
                     icon={<Globe className="w-3.5 h-3.5" />}
                     value={lead.website}
@@ -310,7 +311,7 @@ export default function LeadDetail() {
                 <div className="space-y-2">
                   <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Contact name" className="h-8 text-xs" />
                   <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="h-8 text-xs" />
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="h-8 text-xs" />
+                  <Input value={(phoneCheck.pending || phoneCheck.unavailable || phoneCheck.check?.suppressed || phoneCheck.check?.tcpa_litigator) && phone === lead.phone ? '' : phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="h-8 text-xs" />
                 </div>
                 <div className="flex justify-end">
                   <Button size="sm" className="h-7 text-xs gap-1" onClick={saveContact} disabled={saving}>

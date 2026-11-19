@@ -3146,6 +3146,33 @@ export type Database = {
         }
         Relationships: []
       }
+      phone_compliance_checks: {
+        Row: {
+          checked_at: string
+          line_type: string | null
+          on_national_dnc: boolean | null
+          phone: string
+          source: string
+          tcpa_litigator: boolean | null
+        }
+        Insert: {
+          checked_at?: string
+          line_type?: string | null
+          on_national_dnc?: boolean | null
+          phone: string
+          source?: string
+          tcpa_litigator?: boolean | null
+        }
+        Update: {
+          checked_at?: string
+          line_type?: string | null
+          on_national_dnc?: boolean | null
+          phone?: string
+          source?: string
+          tcpa_litigator?: boolean | null
+        }
+        Relationships: []
+      }
       pipeline_stages: {
         Row: {
           color: string
@@ -4903,6 +4930,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_dnc_numbers: {
+        Row: {
+          created_at: string
+          phone: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          phone: string
+          reason?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          phone?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_email_accounts: {
         Row: {
           created_at: string
@@ -5725,6 +5773,16 @@ export type Database = {
       normalize_city_key: { Args: { p_location: string }; Returns: string }
       normalize_email: { Args: { p_email: string }; Returns: string }
       normalize_phone: { Args: { p_phone: string }; Returns: string }
+      phone_compliance_counts: {
+        Args: never
+        Returns: {
+          checked: number
+          dnc_known: number
+          litigators: number
+          on_dnc: number
+          tcpa_known: number
+        }[]
+      }
       stop_lead_plans: {
         Args: { p_lead: string; p_reason: string }
         Returns: undefined

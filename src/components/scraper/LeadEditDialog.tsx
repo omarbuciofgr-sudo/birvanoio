@@ -18,6 +18,8 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import type { ScrapedLead, ScrapedLeadStatus } from '@/types/scraper';
+import { OwnerPhone } from '@/components/compliance/OwnerPhone';
+import { usePhoneCompliance } from '@/hooks/usePhoneCompliance';
 
 interface LeadEditDialogProps {
   lead: ScrapedLead | null;
@@ -28,6 +30,8 @@ interface LeadEditDialogProps {
 const STATUS_OPTIONS: ScrapedLeadStatus[] = ['new', 'review', 'approved', 'assigned', 'in_progress', 'won', 'lost', 'rejected'];
 
 export function LeadEditDialog({ lead, open, onClose }: LeadEditDialogProps) {
+  const { check, pending, unavailable } = usePhoneCompliance(open ? lead?.best_phone : null);
+  const phoneHidden = pending || unavailable || check?.tcpa_litigator || check?.suppressed;
   const queryClient = useQueryClient();
   const [editReason, setEditReason] = useState('');
   const [formData, setFormData] = useState<Partial<ScrapedLead>>({});
@@ -204,9 +208,10 @@ export function LeadEditDialog({ lead, open, onClose }: LeadEditDialogProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="best_phone">Phone</Label>
+                {lead.best_phone && <OwnerPhone phone={lead.best_phone} blocked={!!lead.is_suppressed} />}
                 <Input
                   id="best_phone"
-                  value={formData.best_phone ?? lead.best_phone ?? ''}
+                  value={phoneHidden && formData.best_phone === lead.best_phone ? '' : formData.best_phone ?? ''}
                   onChange={(e) => setFormData({ ...formData, best_phone: e.target.value })}
                   placeholder="Phone number"
                 />

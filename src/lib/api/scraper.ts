@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { collectPhones, fetchPhoneChecks, normalizeUsPhone, phoneExportColumns } from '@/lib/phoneCompliance';
 import type { Json } from '@/integrations/supabase/types';
 import type {
   SchemaTemplate,
@@ -482,7 +483,7 @@ export const scrapedLeadsApi = {
   async exportToCsv(filters?: {
     job_id?: string;
     assigned_to_org?: string;
-  }): Promise<string> {
+  }, excludeDnc = true): Promise<string> {
     const allLeads: ScrapedLead[] = [];
     let page = 1;
     const pageSize = 1000;
@@ -497,17 +498,18 @@ export const scrapedLeadsApi = {
     if (leads.length === 0) {
       return '';
     }
+    const checks = await fetchPhoneChecks(leads.map(lead => lead.best_phone));
 
     // Define CSV columns
     const universalColumns = [
-      'id', 'domain', 'source_url', 'full_name', 'best_email', 'best_phone',
+      'id', 'domain', 'source_url', 'full_name', 'best_email', 'best_phone', 'DNC', 'DNC checked',
       'contact_form_url', 'linkedin_search_url', 'confidence_score', 'qc_flag',
       'email_validation_status', 'phone_validation_status', 'status', 'scraped_at'
     ];
 
     // Get schema fields from first lead if available
     const schemaFields = leads[0]?.schema_template?.fields || [];
-    const schemaColumns = schemaFields.map((f: { field_name: string }) => f.field_name);
+    const schemaColumns = schemaFields.map((f: { field_name: string }) => f.field_name).filter(field => !/phone|mobile|telephone/i.test(field));
     
     const allColumns = [...universalColumns, ...schemaColumns];
     
@@ -516,10 +518,14 @@ export const scrapedLeadsApi = {
     rows.push(allColumns.join(','));
     
     for (const lead of leads) {
+      const [phone, dnc, checked] = phoneExportColumns(lead.best_phone, checks[normalizeUsPhone(lead.best_phone) ?? ''], excludeDnc, !!lead.is_suppressed);
       const row = allColumns.map(col => {
         let value: unknown;
         
-        if (universalColumns.includes(col)) {
+        if (col === 'best_phone') value = phone;
+        else if (col === 'DNC') value = dnc;
+        else if (col === 'DNC checked') value = checked;
+        else if (universalColumns.includes(col)) {
           value = lead[col as keyof ScrapedLead];
         } else {
           value = lead.schema_data?.[col];
@@ -552,7 +558,15 @@ export const scrapedLeadsApi = {
       if (allLeads.length >= total || data.length === 0) break;
       page++;
     }
-    return JSON.stringify(allLeads, null, 2);
+    const checks = await fetchPhoneChecks(allLeads.flatMap(lead => collectPhones(lead.best_phone, lead.all_phones)));
+    const safe = (phone: string, blocked: boolean) => !!phoneExportColumns(phone, checks[normalizeUsPhone(phone) ?? ''], true, blocked)[0];
+    return JSON.stringify(allLeads.map(lead => ({ ...lead,
+      best_phone: lead.best_phone && safe(lead.best_phone, !!lead.is_suppressed) ? lead.best_phone : null,
+      all_phones: collectPhones(lead.all_phones).filter(phone => safe(phone, !!lead.is_suppressed)),
+      schema_data: lead.schema_data ? Object.fromEntries(Object.entries(lead.schema_data).filter(([field]) => !/phone|mobile|telephone/i.test(field))) : lead.schema_data,
+      enrichment_data: undefined,
+      phone_verification_result: undefined,
+    })), null, 2);
   },
 };
 

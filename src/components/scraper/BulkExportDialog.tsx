@@ -8,6 +8,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Download, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ScrapedLead } from '@/types/scraper';
+import { DncExportOption } from '@/components/compliance/OwnerPhone';
+import { fetchPhoneChecks, normalizeUsPhone, phoneExportColumns } from '@/lib/phoneCompliance';
 
 const EXPORT_FIELDS = [
   { key: 'domain', label: 'Domain', default: true },
@@ -43,6 +45,7 @@ export function BulkExportDialog({ leads, selectedIds, filters }: BulkExportDial
   );
   const [exportScope, setExportScope] = useState<'all' | 'selected' | 'filtered'>('all');
   const [format, setFormat] = useState<'csv' | 'json'>('csv');
+  const [excludeDnc, setExcludeDnc] = useState(true);
 
   const exportMutation = useMutation({
     mutationFn: async () => {
@@ -52,10 +55,16 @@ export function BulkExportDialog({ leads, selectedIds, filters }: BulkExportDial
         dataToExport = leads.filter(l => selectedIds.includes(l.id));
       }
       
-      // Apply field selection
+      const checks = selectedFields.includes('best_phone') ? await fetchPhoneChecks(dataToExport.map(lead => lead.best_phone)) : {};
+      const fields = format === 'csv' ? [...selectedFields, 'DNC', 'DNC checked'] : selectedFields;
       const exportData = dataToExport.map(lead => {
         const row: Record<string, unknown> = {};
-        selectedFields.forEach(field => {
+        const [phone, dnc, checked] = phoneExportColumns(lead.best_phone, checks[normalizeUsPhone(lead.best_phone) ?? ''], excludeDnc, !!lead.is_suppressed);
+        const includesPhone = selectedFields.includes('best_phone');
+        fields.forEach(field => {
+          if (field === 'best_phone') { row[field] = phone; return; }
+          if (field === 'DNC') { row[field] = includesPhone ? dnc : ''; return; }
+          if (field === 'DNC checked') { row[field] = includesPhone ? checked : ''; return; }
           const value = lead[field as keyof ScrapedLead];
           if (field === 'tags' && Array.isArray(value)) {
             row[field] = value.join(', ');
@@ -73,14 +82,14 @@ export function BulkExportDialog({ leads, selectedIds, filters }: BulkExportDial
       }
 
       // CSV format
-      const headers = selectedFields.map(f => {
+      const headers = fields.map(f => {
         const fieldDef = EXPORT_FIELDS.find(ef => ef.key === f);
         return fieldDef?.label || f;
       });
       
       const csvRows = [headers.join(',')];
       exportData.forEach(row => {
-        const values = selectedFields.map(field => {
+        const values = fields.map(field => {
           const val = row[field];
           if (val === null || val === undefined) return '';
           const str = String(val);
@@ -128,7 +137,7 @@ export function BulkExportDialog({ leads, selectedIds, filters }: BulkExportDial
   const selectNone = () => setSelectedFields([]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={next => { setOpen(next); if (next) setExcludeDnc(true); }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Download className="h-4 w-4 mr-2" />
@@ -211,6 +220,7 @@ export function BulkExportDialog({ leads, selectedIds, filters }: BulkExportDial
         </div>
 
         <DialogFooter>
+          <DncExportOption checked={excludeDnc} onChange={setExcludeDnc} />
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>

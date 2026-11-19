@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { PhoneOutreachAction } from '@/components/compliance/OwnerPhone';
 import { useState } from "react";
 import { PlanStepDialog, type PlanTask } from "@/components/plans/PlanStepDialog";
 import type { PlanChannel } from "@/lib/followUpPlans";
@@ -90,12 +91,8 @@ export function TodaysFollowUps({ userId }: { userId: string }) {
                       </Button>
                     )}
                     {!l?.do_not_contact && <>
-                    <Button asChild={!!l?.phone} size="sm" variant="outline" className="h-8 px-2" disabled={!l?.phone} title={l?.phone ? "Call" : "No phone saved"}>
-                      {l?.phone ? <a href={`tel:${l.phone}`} aria-label="Call"><Phone className="h-3.5 w-3.5" /></a> : <Phone className="h-3.5 w-3.5" />}
-                    </Button>
-                    <Button asChild={!!l?.phone} size="sm" variant="outline" className="h-8 px-2" disabled={!l?.phone} title={l?.phone ? "Text" : "No phone saved"}>
-                      {l?.phone ? <a href={`sms:${l.phone}`} aria-label="Text"><MessageSquare className="h-3.5 w-3.5" /></a> : <MessageSquare className="h-3.5 w-3.5" />}
-                    </Button>
+                    <PhoneOutreachAction phone={l?.phone} action="call" label="Call" size="sm" variant="outline" className="h-8 px-2"><Phone className="h-3.5 w-3.5" /></PhoneOutreachAction>
+                    <PhoneOutreachAction phone={l?.phone} action="text" label="Text" size="sm" variant="outline" className="h-8 px-2"><MessageSquare className="h-3.5 w-3.5" /></PhoneOutreachAction>
                     </>}
                     <Button asChild={!!l?.email} size="sm" variant="outline" className="h-8 px-2" disabled={!l?.email} title={l?.email ? "Email" : "No email saved"}>
                       {l?.email ? <a href={`mailto:${l.email}`} aria-label="Email"><Mail className="h-3.5 w-3.5" /></a> : <Mail className="h-3.5 w-3.5" />}

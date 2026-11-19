@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { contactFound } from '../_shared/ownerContact.ts';
 import { batchDataSkipTrace } from '../_shared/batchData.ts';
 import { ownerNameString } from '../_shared/ownerName.ts';
+import { checkPhones } from '../_shared/checkPhones.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +29,8 @@ interface SkipTraceResult {
       number: string;
       type: string;
       lineType?: string;
+      dnc?: boolean;
+      tcpa?: boolean;
     }>;
     emails: Array<{
       address: string;
@@ -199,12 +202,13 @@ Deno.serve(async (req) => {
     // Reuse a contact already revealed to this user, without another charge.
     let result: SkipTraceResult | null = listing && (listing.owner_phone || listing.owner_email) ? {
       success: true, data: { fullName: ownerNameString(listing.owner_name), firstName: null, lastName: null,
-        phones: listing.owner_phone ? [{ number: listing.owner_phone, type: 'primary' }] : [],
+        phones: Array.isArray(listing.all_phones) && listing.all_phones.length ? listing.all_phones : listing.owner_phone ? [{ number: listing.owner_phone, type: 'primary' }] : [],
         emails: listing.owner_email ? [{ address: listing.owner_email }] : [] },
     } : await tryBatchData(addressData);
     const found = contactFound(result?.data);
     const next = listing ? { ...listing, owner_name: ownerNameString(result?.data?.fullName) || ownerNameString(listing.owner_name),
       owner_phone: found.phone ? result?.data?.phones.find(p => p.number.replace(/\D/g, '').length >= 7)?.number : null,
+      all_phones: result?.data?.phones ?? [],
       owner_email: found.email ? result?.data?.emails.find(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.address))?.address : null,
       contact_status: found.phone && found.email ? 'phone_email' : found.phone ? 'phone_only' : found.email ? 'email_only' : 'none',
       enriched_at: new Date().toISOString() } : null;
@@ -215,6 +219,8 @@ Deno.serve(async (req) => {
     });
     if (finishError) throw finishError;
     if (!charge?.success) return new Response(JSON.stringify({ success: false, error: charge?.error === 'insufficient_credits' ? 'Not enough credits. Upgrade to get more contact lookups.' : 'Contact lookup is temporarily unavailable. No lookup or credits charged.', credits_spent: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const phones = result?.data?.phones ?? [];
+    if (phones.length) await checkPhones(admin, phones.map(p => p.number), phones).catch(() => console.error('[Skip Trace] Phone check unavailable'));
     return new Response(JSON.stringify({ ...result, success: true, matched: found.phone || found.email,
       listing: next, credits_spent: charge.spent, free_lookup_used: charge.free_used,
       message: found.phone || found.email ? 'Owner contact found.' : "We couldn't find contact info for this owner. No lookup or credits charged. Try another listing." }),

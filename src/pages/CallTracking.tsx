@@ -113,6 +113,7 @@ export default function CallTracking() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["call-tracking", user?.id] }),
         queryClient.invalidateQueries({ queryKey: leadsQueryKey(user?.id) }),
+        ...(outcome === 'do_not_call' ? [queryClient.invalidateQueries({ queryKey: ['phone-compliance'] })] : []),
       ]);
       toast.success(blocked ? "Call logged. No follow-up scheduled." : followUpDate ? "Call logged and follow-up scheduled." : "Call logged.");
     } catch {

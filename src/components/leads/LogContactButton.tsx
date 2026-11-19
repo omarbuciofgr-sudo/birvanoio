@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from '@tanstack/react-query';
 import { PhoneCall } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 /** Log a call outcome with an optional follow-up date. */
 export function LogContactButton({ leadId, onLogged, label = "Log call" }: { leadId: string; onLogged?: (o: CallOutcome) => void; label?: string }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [outcome, setOutcome] = useState<CallOutcome | null>(null);
   const [date, setDate] = useState("");
@@ -28,6 +30,7 @@ export function LogContactButton({ leadId, onLogged, label = "Log call" }: { lea
     const { error } = await logCallOutcome(leadId, outcome, { note, followUpDate: date || null });
     setSaving(false);
     if (error) return toast.error(error);
+    if (outcome === 'do_not_call') void queryClient.invalidateQueries({ queryKey: ['phone-compliance'] });
     toast.success(outcome === "do_not_call" ? "Marked do not contact" : date ? "Call logged and follow-up set" : "Call logged");
     onLogged?.(outcome);
     setOutcome(null); setNote(""); setDate(""); setOpen(false);

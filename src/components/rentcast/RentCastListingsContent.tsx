@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ownerNameText } from "@/lib/ownerName";
+import { HideDncSwitch, OwnerPhone } from '@/components/compliance/OwnerPhone';
+import { collectPhones } from '@/lib/phoneCompliance';
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ListingLinkButton } from "@/components/rentcast/ListingLinkButton";
 import { listingLink } from "@/lib/listingLink";
@@ -321,6 +323,7 @@ export default function RentCastListingsContent({
   embedded = false,
 }: RentCastListingsContentProps) {
   const [location, setLocation] = useState("");
+  const [hideDnc, setHideDnc] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const lookupAllowance = useOwnerLookups();
   const { actionCosts } = usePricingSettings();
@@ -1121,6 +1124,7 @@ export default function RentCastListingsContent({
               </Tooltip>
             </>
           )}
+          <HideDncSwitch checked={hideDnc} onChange={setHideDnc} />
           <Button
             variant="outline"
             onClick={onImportSelected}
@@ -1441,8 +1445,9 @@ export default function RentCastListingsContent({
                       <TableCell className="text-xs max-w-[200px]">
                         <div className="truncate">{ownerNameText(row.owner_name) || "Not yet identified"}</div>
                         <div className="text-muted-foreground truncate">
-                          {row.owner_phone || row.owner_email || row.owner_mailing_address || ""}
+                          {row.owner_email || row.owner_mailing_address || ""}
                         </div>
+                        {row.owner_phone && <OwnerPhone phone={row.owner_phone} hideDnc={hideDnc} />}
                         <OwnerStatusBadges row={row} />
                         {lookupButton(row, index)}
                       </TableCell>
@@ -1501,6 +1506,7 @@ export default function RentCastListingsContent({
                     <p className="mt-3 text-lg font-semibold">{money(row.price)}</p>
                     <OwnerFlagBadges flags={flagsFor(row)} className="mt-2" />
                     <ListingLinkButton row={row} className="mt-2 min-h-11" />
+                    {row.owner_phone && <OwnerPhone phone={row.owner_phone} hideDnc={hideDnc} />}
                     {lookupButton(row, index)}
                   </div>
                 </div>
@@ -1627,7 +1633,7 @@ export default function RentCastListingsContent({
                     {detailRow.owner_portfolio_count != null && (
                       <div>Owner active rentals (batch): {detailRow.owner_portfolio_count}</div>
                     )}
-                    <div>Phone: {detailRow.owner_phone || "—"}</div>
+                    <div>Phone: {collectPhones(detailRow.owner_phone, detailRow.all_phones).map(phone => <OwnerPhone key={phone} phone={phone} />)}</div>
                     <div>Email: {detailRow.owner_email || "—"}</div>
                     <div>Mailing: {detailRow.owner_mailing_address || "—"}</div>
                     {detailRow.skip_trace_confidence != null && (

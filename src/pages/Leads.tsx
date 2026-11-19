@@ -70,6 +70,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { useLeadsData } from "@/hooks/useLeadsData";
 import { usePersona } from "@/hooks/usePersona";
 import DataPageSkeleton from "@/components/dashboard/DataPageSkeleton";
+import { HideDncSwitch, OwnerPhone, PhoneExportDialog } from '@/components/compliance/OwnerPhone';
+import { fetchPhoneChecks, normalizeUsPhone, phoneExportColumns } from '@/lib/phoneCompliance';
 
 const notesSchema = z.string().max(5000, "Notes must be less than 5000 characters");
 
@@ -100,6 +102,7 @@ type SortField = "business_name" | "created_at" | "status" | "lead_score" | "cit
 type SortDir = "asc" | "desc";
 
 const Leads = () => {
+  const [hideDnc, setHideDnc] = useState(true);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { isRealtor } = usePersona();
@@ -117,6 +120,7 @@ const Leads = () => {
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneEdited, setPhoneEdited] = useState(false);
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -160,6 +164,7 @@ const Leads = () => {
     setContactName(selectedLead.contact_name || "");
     setEmail(selectedLead.email || "");
     setPhone(selectedLead.phone || "");
+    setPhoneEdited(false);
   }, [selectedLead]);
 
   const fetchLeads = async () => {
@@ -333,22 +338,23 @@ const Leads = () => {
     });
     const validation = contactSchema.safeParse({ contact_name: contactName, email, phone });
     if (!validation.success) { toast.error(validation.error.errors[0].message); return; }
-    const payload = { contact_name: contactName.trim() || null, email: email.trim() || null, phone: phone.trim() || null };
+    const payload = { contact_name: contactName.trim() || null, email: email.trim() || null, ...(phoneEdited ? { phone: phone.trim() || null } : {}) };
     setIsUpdating(true);
     const { error } = await supabase.from("leads").update(payload).eq("id", selectedLead.id);
     if (error) toast.error("Failed to save contact info");
-    else { toast.success("Contact info saved"); fetchLeads(); setSelectedLead({ ...selectedLead, ...payload }); }
+    else { toast.success("Contact info saved"); fetchLeads(); setSelectedLead({ ...selectedLead, ...payload }); setPhoneEdited(false); }
     setIsUpdating(false);
   };
 
-  const exportLeads = () => {
+  const exportLeads = async (excludeDnc: boolean) => {
     const rows = selectedLeads.size > 0
       ? leads.filter(l => selectedLeads.has(l.id))
       : filteredLeads;
+    const checks = await fetchPhoneChecks(rows.map(lead => lead.phone));
     const csv = [
-      [isRealtor ? "Address" : "Business Name", "Contact", "Email", "Phone", "City", "State", "Industry", "Status", "Score", "Source URL", "Created"],
+      [isRealtor ? "Address" : "Business Name", "Contact", "Email", "Phone", "DNC", "DNC checked", "City", "State", "Industry", "Status", "Score", "Source URL", "Created"],
       ...rows.map(l => [
-        l.business_name, l.contact_name || "", l.email || "", l.phone || "",
+        l.business_name, l.contact_name || "", l.email || "", ...phoneExportColumns(l.phone, checks[normalizeUsPhone(l.phone) ?? ''], excludeDnc, l.do_not_contact),
         l.city || "", l.state || "", l.industry || "", l.status,
         l.lead_score?.toString() || "", l.source_url || "",
         new Date(l.created_at).toLocaleDateString(),
@@ -406,9 +412,10 @@ const Leads = () => {
             <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0">
               <Upload className="w-3.5 h-3.5" /> Import
             </Button>
-            <Button onClick={exportLeads} variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0">
+            <HideDncSwitch checked={hideDnc} onChange={setHideDnc} />
+            <PhoneExportDialog onExport={exportLeads}><Button variant="outline" size="sm" className="min-h-11 gap-1.5 text-xs sm:h-8 sm:min-h-0">
               <Download className="w-3.5 h-3.5" /> Export
-            </Button>
+            </Button></PhoneExportDialog>
           </div>
         </div>
 
@@ -771,10 +778,8 @@ const Leads = () => {
                           )}
                           {visibleColumns.phone && (
                             <TableCell className="hidden lg:table-cell">
-                              {lead.phone && lead.do_not_contact ? <span className="text-xs text-muted-foreground">Do not contact</span> : lead.phone ? (
-                                <a href={`tel:${lead.phone}`} onClick={e => e.stopPropagation()} className="text-xs text-primary hover:underline">
-                                  {lead.phone}
-                                </a>
+                              {lead.phone ? (
+                                <OwnerPhone phone={lead.phone} hideDnc={hideDnc} blocked={lead.do_not_contact} />
                               ) : <span className="text-xs text-muted-foreground">—</span>}
                             </TableCell>
                           )}
@@ -848,7 +853,7 @@ const Leads = () => {
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {details.kind && <Badge variant="secondary">{details.kind === "sale" ? "Selling" : "Renting"}</Badge>}
                         <Badge variant="outline" className={status.color}>{status.label}</Badge>
-                        {lead.phone && <Badge variant="outline">Phone</Badge>}
+                        {lead.phone && <OwnerPhone phone={lead.phone} hideDnc={hideDnc} blocked={lead.do_not_contact} />}
                         {lead.email && <Badge variant="outline">Email</Badge>}
                       </div>
                       {details.price && <p className="mt-3 text-lg font-semibold">{details.price}</p>}
@@ -961,7 +966,9 @@ const Leads = () => {
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">Phone</label>
-                          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="h-8 text-xs" />
+                          {selectedLead.phone && <OwnerPhone phone={selectedLead.phone} blocked={selectedLead.do_not_contact} />}
+                          <Input value={phoneEdited ? phone : ''} onChange={(e) => { setPhoneEdited(true); setPhone(e.target.value); }} placeholder={selectedLead.phone ? 'Replace phone' : 'Phone'} className="h-8 text-xs" />
+                          {selectedLead.phone && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setPhoneEdited(true); setPhone(''); }}>Clear phone</Button>}
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">Location</label>
@@ -969,7 +976,7 @@ const Leads = () => {
                         </div>
                       </div>
                       <div className="flex justify-end">
-                        <Button onClick={updateLeadContactInfo} disabled={isUpdating || (contactName === (selectedLead.contact_name || "") && email === (selectedLead.email || "") && phone === (selectedLead.phone || ""))} size="sm" variant="outline" className="h-7 text-xs">
+                        <Button onClick={updateLeadContactInfo} disabled={isUpdating || (contactName === (selectedLead.contact_name || "") && email === (selectedLead.email || "") && (!phoneEdited || phone === (selectedLead.phone || "")))} size="sm" variant="outline" className="h-7 text-xs">
                           Save Contact
                         </Button>
                       </div>

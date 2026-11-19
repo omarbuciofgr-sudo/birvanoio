@@ -1,5 +1,10 @@
 # Roadmap
 
+## Owner phone DNC flagging
+- [x] Preserve provider flags and add shared phone verification, private suppression, and admin totals.
+- [x] Add badges, flagged-number warnings, default hiding, and CSV controls.
+- [ ] Verify a live provider lookup end to end (blocked: no signed-in preview session or test-user approval).
+
 ## HeyCatch analytics
 - [x] Install the latest stable SDK and initialize once in the shared client entry point
 - [x] Identify authenticated sessions/reset on sign-out once in the shared entry; verified SDK 0.8.5 prod initialization, no runtime errors, SPA short-link forwarding and published /x HTTP 200

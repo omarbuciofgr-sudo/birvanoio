@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.22.4";
+import { phoneOutreachBlock } from '../_shared/phoneOutreachBlock.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,6 +69,8 @@ serve(async (req) => {
     if (!lead || lead.client_id !== userId || !lead.voice_consent_at || lead.do_not_contact) return new Response(JSON.stringify({ error: "AI Voice Agent calls require recorded consent from this lead." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const { data: membership } = await serviceClient.from("workspace_memberships").select("workspace_id").eq("user_id", userId).limit(1).maybeSingle();
     const normalizedPhone = (lead.phone || "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    const phoneBlock = await phoneOutreachBlock(serviceClient, userId, lead.phone);
+    if (phoneBlock) return new Response(JSON.stringify({ error: phoneBlock }), { status: 409, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
     if (membership?.workspace_id && normalizedPhone) {
       const { data: blocked } = await serviceClient.from("contact_suppression").select("id").eq("workspace_id", membership.workspace_id).eq("value_type", "phone").eq("value_normalized", normalizedPhone).maybeSingle();
       if (blocked) return new Response(JSON.stringify({ error: "This number is on your workspace do-not-contact list." }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });

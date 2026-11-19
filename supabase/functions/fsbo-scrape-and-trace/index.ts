@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { batchDataSkipTrace } from '../_shared/batchData.ts';
+import { checkPhones } from '../_shared/checkPhones.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1884,6 +1885,7 @@ Deno.serve(async (req) => {
 
     // Step 2: Skip trace listings using BatchData only
     if (enableSkipTrace && batchDataApiKey && allListings.length > 0) {
+      const tracePhones: { number: string; dnc?: boolean; tcpa?: boolean }[] = [];
       console.log('\n[Skip Trace] Starting with BatchData...');
       
       for (const listing of allListings) {
@@ -1894,6 +1896,7 @@ Deno.serve(async (req) => {
         }
 
         if (listing.owner_name && listing.owner_phone) {
+          tracePhones.push({ number: listing.owner_phone }, ...(listing.all_phones ?? []));
           listing.skip_trace_status = 'success';
           listing.skip_trace_confidence = 100;
           continue;
@@ -1913,6 +1916,7 @@ Deno.serve(async (req) => {
             }
             
             if (data.phones && data.phones.length > 0) {
+              tracePhones.push(...data.phones);
               listing.owner_phone = data.phones[0].number;
               listing.all_phones = data.phones;
             }
@@ -1944,6 +1948,7 @@ Deno.serve(async (req) => {
         }
       }
       
+      await checkPhones(adminSupabase, tracePhones.map(p => p.number), tracePhones).catch(() => console.error('[FSBO] Phone check unavailable'));
       console.log(`[Skip Trace] ${skipTraceCount} attempted, ${skipTraceSuccessCount} successful`);
     }
 

@@ -12,6 +12,7 @@ import { Copy, Loader2, Mail, MessageSquare, Phone, RefreshCw, Send } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { AIWritingError, splitEmailDraft, writeForOwner, type AITone, type AIWritingTask } from "@/lib/ai/claudeWriter";
 import { useCommunicationCompliance } from "@/hooks/useCommunicationCompliance";
+import { usePhoneWarning } from '@/components/compliance/OwnerPhone';
 import { addFollowUp, daysFromNow, prettyDate } from "@/lib/followUps";
 
 type Kind = "call" | "text" | "email";
@@ -35,6 +36,7 @@ export function OwnerScripts({ selling, leadId, listingId, phone, email }: Props
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<{ message: string; limit: boolean } | null>(null);
   const { requireAcceptance, complianceDialog } = useCommunicationCompliance();
+  const phoneWarning = usePhoneWarning(phone);
 
   const generate = async (k: Kind, t: AITone = tone) => {
     setKind(k);
@@ -87,12 +89,13 @@ export function OwnerScripts({ selling, leadId, listingId, phone, email }: Props
     }
   };
 
-  const onSend = () => (kind === "text" ? requireAcceptance(() => { void sendNow(); }) : void sendNow());
+  const onSend = () => (kind === "text" ? phoneWarning.request('text', () => requireAcceptance(() => { void sendNow(); })) : void sendNow());
 
   const sendBlock = (() => {
     if (kind === "call" || !kind) return null;
     if (!leadId) return "Save this owner to My Leads to send from the app.";
     if (kind === "text" && !phone) return "No phone number yet. Get contact info first.";
+    if (kind === 'text' && phoneWarning.disabled) return 'Texting this number is unavailable.';
     if (kind === "email" && !email) return "No email yet. Get contact info first.";
     return null;
   })();
@@ -155,6 +158,7 @@ export function OwnerScripts({ selling, leadId, listingId, phone, email }: Props
           </div>
         ) : null)}
         {complianceDialog}
+        {phoneWarning.warningDialog}
       </CardContent>
     </Card>
   );

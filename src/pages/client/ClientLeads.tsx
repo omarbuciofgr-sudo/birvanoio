@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { HideDncSwitch, OwnerPhone, PhoneExportDialog } from '@/components/compliance/OwnerPhone';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,6 +72,7 @@ const validationColors = {
 };
 
 export default function ClientLeads() {
+  const [hideDnc, setHideDnc] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLead, setSelectedLead] = useState<ScrapedLead | null>(null);
@@ -199,11 +201,10 @@ export default function ClientLeads() {
     return scoreB - scoreA;
   });
 
-  const handleExportCsv = async () => {
-    try {
+  const handleExportCsv = async (excludeDnc: boolean) => {
       const csv = await scrapedLeadsApi.exportToCsv({
         assigned_to_org: userOrg || undefined,
-      });
+      }, excludeDnc);
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -212,9 +213,6 @@ export default function ClientLeads() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Export completed');
-    } catch (error) {
-      toast.error('Failed to export leads');
-    }
   };
 
   const handleExportJson = async () => {
@@ -275,10 +273,10 @@ export default function ClientLeads() {
                 AI Score Leads
               </Button>
             )}
-            <Button variant="outline" onClick={handleExportCsv}>
+            <PhoneExportDialog onExport={handleExportCsv}><Button variant="outline">
               <Download className="h-4 w-4 mr-2" />
               Export CSV
-            </Button>
+            </Button></PhoneExportDialog>
             <Button variant="outline" onClick={handleExportJson}>
               <FileJson className="h-4 w-4 mr-2" />
               Export JSON
@@ -290,6 +288,7 @@ export default function ClientLeads() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-wrap gap-4">
+              <HideDncSwitch checked={hideDnc} onChange={setHideDnc} />
               <div className="flex-1 min-w-[200px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -477,7 +476,7 @@ export default function ClientLeads() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <span>{lead.best_phone || '-'}</span>
+                              {lead.best_phone ? <OwnerPhone phone={lead.best_phone} hideDnc={hideDnc} blocked={!!lead.is_suppressed} /> : '-'}
                               {lead.phone_validation_status && lead.phone_validation_status !== 'unverified' && (
                                 <Badge className={validationColors[lead.phone_validation_status]} variant="outline">
                                   {lead.phone_validation_status === 'verified' && <Check className="h-3 w-3" />}

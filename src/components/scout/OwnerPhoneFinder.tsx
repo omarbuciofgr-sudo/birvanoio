@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Loader2, Phone, Search, Mail, User } from "lucide-react";
+import { OwnerPhone } from '@/components/compliance/OwnerPhone';
 import { toast } from "sonner";
 import { skipTraceApi, type SkipTraceResult } from "@/lib/api/skipTrace";
 
@@ -87,17 +88,7 @@ export const OwnerPhoneFinder = () => {
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Phones</p>
               {data.phones?.length ? (
                 data.phones.map((p) => (
-                  <div key={p.number} className="flex items-center gap-2 text-sm">
-                    <a href={`tel:${p.number}`} className="text-primary hover:underline">
-                      {p.number}
-                    </a>
-                    <Badge variant="outline" className="text-[10px] capitalize">
-                      {p.lineType || p.type || "phone"}
-                    </Badge>
-                    <Button size="sm" variant="ghost" className="h-6 text-[11px]" asChild>
-                      <a href={`sms:${p.number}`}>Text</a>
-                    </Button>
-                  </div>
+                  <OwnerPhone key={p.number} phone={p.number} actions />
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground">No phone on record.</p>
